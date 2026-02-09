@@ -7,10 +7,15 @@ import Properties from './pages/Properties';
 import PropertyDetail from './pages/PropertyDetail';
 import Landlords from './pages/Landlords';
 import LandlordDetail from './pages/LandlordDetail';
+import LandlordsBDM from './pages/LandlordsBDM';
+import LandlordBDMDetail from './pages/LandlordBDMDetail';
 import Tenants from './pages/Tenants';
 import TenantDetail from './pages/TenantDetail';
+import TenantEnquiries from './pages/TenantEnquiries';
+import TenantEnquiryDetail from './pages/TenantEnquiryDetail';
 import Maintenance from './pages/Maintenance';
 import Transactions from './pages/Transactions';
+import Tasks from './pages/Tasks';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -53,14 +58,35 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      
+      {/* Properties */}
       <Route path="/properties" element={<ProtectedRoute><Properties /></ProtectedRoute>} />
       <Route path="/properties/:id" element={<ProtectedRoute><PropertyDetail /></ProtectedRoute>} />
+      
+      {/* Landlords */}
       <Route path="/landlords" element={<ProtectedRoute><Landlords /></ProtectedRoute>} />
       <Route path="/landlords/:id" element={<ProtectedRoute><LandlordDetail /></ProtectedRoute>} />
+      
+      {/* Landlords BDM */}
+      <Route path="/landlords-bdm" element={<ProtectedRoute><LandlordsBDM /></ProtectedRoute>} />
+      <Route path="/landlords-bdm/:id" element={<ProtectedRoute><LandlordBDMDetail /></ProtectedRoute>} />
+      
+      {/* Tenants */}
       <Route path="/tenants" element={<ProtectedRoute><Tenants /></ProtectedRoute>} />
       <Route path="/tenants/:id" element={<ProtectedRoute><TenantDetail /></ProtectedRoute>} />
+      
+      {/* Tenant Enquiries */}
+      <Route path="/tenant-enquiries" element={<ProtectedRoute><TenantEnquiries /></ProtectedRoute>} />
+      <Route path="/tenant-enquiries/:id" element={<ProtectedRoute><TenantEnquiryDetail /></ProtectedRoute>} />
+      
+      {/* Maintenance */}
       <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
+      
+      {/* Transactions */}
       <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
+      
+      {/* Tasks */}
+      <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
     </Routes>
   );
 }

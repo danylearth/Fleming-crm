@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Home, Building2, Users, UserCheck, Wrench, PoundSterling, LogOut, Menu, X, ChevronRight } from 'lucide-react';
+import { Home, Building2, Users, UserCheck, Wrench, PoundSterling, LogOut, Menu, X, ChevronRight, ClipboardList, UserPlus, Briefcase, CheckSquare } from 'lucide-react';
 import { useState } from 'react';
 
 interface LayoutProps {
@@ -21,12 +21,20 @@ export default function Layout({ children }: LayoutProps) {
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: Home },
+    { path: '/tenant-enquiries', label: 'Enquiries', icon: ClipboardList },
+    { path: '/tenants', label: 'Tenants', icon: Users },
     { path: '/properties', label: 'Properties', icon: Building2 },
     { path: '/landlords', label: 'Landlords', icon: UserCheck },
-    { path: '/tenants', label: 'Tenants', icon: Users },
+    { path: '/landlords-bdm', label: 'BDM', icon: Briefcase },
     { path: '/maintenance', label: 'Maintenance', icon: Wrench },
-    { path: '/transactions', label: 'Transactions', icon: PoundSterling },
+    { path: '/tasks', label: 'Tasks', icon: CheckSquare },
+    { path: '/transactions', label: 'Financials', icon: PoundSterling },
   ];
+
+  const isActive = (path: string) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname.startsWith(path);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -50,7 +58,7 @@ export default function Layout({ children }: LayoutProps) {
                   key={item.path}
                   to={item.path}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    location.pathname === item.path
+                    isActive(item.path)
                       ? 'bg-white/10 text-white'
                       : 'text-navy-200 hover:text-white hover:bg-white/5'
                   }`}
@@ -97,7 +105,7 @@ export default function Layout({ children }: LayoutProps) {
       {mobileMenuOpen && (
         <div className="lg:hidden fixed inset-0 z-50 bg-navy-900/95 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)}>
           <div className="pt-20 px-4">
-            <div className="bg-white rounded-2xl shadow-2xl p-4 space-y-1">
+            <div className="bg-white rounded-2xl shadow-2xl p-4 space-y-1 max-h-[80vh] overflow-y-auto">
               <div className="px-4 py-3 border-b border-gray-100 mb-2">
                 <p className="font-semibold text-navy-900">{user?.name}</p>
                 <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
@@ -108,7 +116,7 @@ export default function Layout({ children }: LayoutProps) {
                   to={item.path}
                   onClick={() => setMobileMenuOpen(false)}
                   className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
-                    location.pathname === item.path
+                    isActive(item.path)
                       ? 'bg-navy-900 text-white'
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
