@@ -66,7 +66,7 @@ export default function TenantEnquiryDetail() {
 
   const handleConvert = async () => {
     try {
-      const result = await api.post(`/tenant-enquiries/${id}/convert`, convertData);
+      const result = await api.post(`/api/tenant-enquiries/${id}/convert`, convertData);
       alert('Enquiry converted to tenant successfully');
       navigate(`/tenants/${result.tenant_id}`);
     } catch (err: any) {
@@ -80,7 +80,7 @@ export default function TenantEnquiryDetail() {
       return;
     }
     try {
-      await api.post('/property-viewings', {
+      await api.post('/api/property-viewings', {
         property_id: enquiry.linked_property_id,
         enquiry_id: id,
         viewer_name: `${enquiry.first_name_1} ${enquiry.last_name_1}`,
