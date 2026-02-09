@@ -28,9 +28,9 @@ export default function PropertyDetail() {
   const loadData = async () => {
     try {
       const [propertyData, allMaintenance, allLandlords] = await Promise.all([
-        api.get(`/properties/${id}`),
-        api.get('/maintenance'),
-        api.get('/landlords')
+        api.get(`/api/properties/${id}`),
+        api.get('/api/maintenance'),
+        api.get('/api/landlords')
       ]);
       setProperty(propertyData);
       setLandlords(allLandlords);
@@ -45,7 +45,7 @@ export default function PropertyDetail() {
 
   const handleSave = async () => {
     try {
-      await api.put(`/properties/${id}`, editForm);
+      await api.put(`/api/properties/${id}`, editForm);
       setEditing(false);
       loadData();
     } catch (err: any) {
@@ -61,7 +61,7 @@ export default function PropertyDetail() {
       : `[${timestamp}]\n${newNote}`;
     
     try {
-      await api.put(`/properties/${id}`, { ...editForm, notes: updatedNotes });
+      await api.put(`/api/properties/${id}`, { ...editForm, notes: updatedNotes });
       setShowNoteModal(false);
       setNewNote('');
       loadData();

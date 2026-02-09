@@ -49,8 +49,8 @@ export default function LandlordDetail() {
   const loadData = async () => {
     try {
       const [landlordData, allProperties] = await Promise.all([
-        api.get(`/landlords/${id}`),
-        api.get('/properties')
+        api.get(`/api/landlords/${id}`),
+        api.get('/api/properties')
       ]);
       setLandlord(landlordData);
       setProperties(allProperties.filter((p: Property) => p.landlord_id === parseInt(id!)));
@@ -77,7 +77,7 @@ export default function LandlordDetail() {
 
   const handleSave = async () => {
     try {
-      await api.put(`/landlords/${id}`, editForm);
+      await api.put(`/api/landlords/${id}`, editForm);
       setEditing(false);
       loadData();
     } catch (err: any) {
@@ -93,7 +93,7 @@ export default function LandlordDetail() {
       : `[${timestamp}]\n${newNote}`;
     
     try {
-      await api.put(`/landlords/${id}`, { ...editForm, notes: updatedNotes });
+      await api.put(`/api/landlords/${id}`, { ...editForm, notes: updatedNotes });
       setShowNoteModal(false);
       setNewNote('');
       loadData();

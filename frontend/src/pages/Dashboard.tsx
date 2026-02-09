@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
-import { Building2, Users, Wrench, AlertTriangle, UserCheck } from 'lucide-react';
+import { Building2, Users, Wrench, AlertTriangle, UserCheck, UserPlus, ClipboardList, Calendar, CheckCircle, AlertCircle, Flame, Zap, FileText, TrendingUp, Clock } from 'lucide-react';
 
 interface DashboardStats {
   properties: number;
@@ -12,6 +12,25 @@ interface DashboardStats {
   openMaintenance: number;
   monthlyIncome: number;
   outstandingRent: number;
+  // New fields
+  bdmProspects: number;
+  bdmNew: number;
+  bdmContacted: number;
+  bdmInterested: number;
+  enquiries: number;
+  enquiriesNew: number;
+  enquiriesViewing: number;
+  enquiriesOnboarding: number;
+  tasksOverdue: number;
+  tasksDueToday: number;
+  tasksUpcoming: number;
+  complianceAlerts: Array<{
+    property_id: number;
+    address: string;
+    type: string;
+    expiry_date: string;
+    status: 'expired' | 'expiring';
+  }>;
   recentMaintenance: Array<{
     id: number;
     title: string;
@@ -19,6 +38,13 @@ interface DashboardStats {
     status: string;
     address: string;
     created_at: string;
+  }>;
+  recentTasks: Array<{
+    id: number;
+    title: string;
+    priority: string;
+    due_date: string;
+    related_to: string;
   }>;
 }
 
@@ -51,6 +77,40 @@ export default function Dashboard() {
         <h1 className="text-2xl font-bold text-navy-900">Dashboard</h1>
         <p className="text-gray-500 mt-1">Overview of your property portfolio</p>
       </div>
+
+      {/* Compliance Alerts Banner */}
+      {stats.complianceAlerts && stats.complianceAlerts.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+          <div className="flex items-center gap-2 text-red-800 font-semibold mb-3">
+            <AlertTriangle className="w-5 h-5" />
+            Compliance Alerts ({stats.complianceAlerts.length})
+          </div>
+          <div className="space-y-2">
+            {stats.complianceAlerts.slice(0, 5).map((alert, i) => (
+              <Link 
+                key={i} 
+                to={`/properties/${alert.property_id}`}
+                className="flex items-center justify-between p-3 bg-white rounded-xl hover:bg-red-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  {alert.type === 'Gas Safety' && <Flame className="w-4 h-4 text-orange-500" />}
+                  {alert.type === 'EICR' && <Zap className="w-4 h-4 text-blue-500" />}
+                  {alert.type === 'EPC' && <FileText className="w-4 h-4 text-green-500" />}
+                  <span className="text-sm font-medium text-navy-900">{alert.address}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">{alert.type}</span>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    alert.status === 'expired' ? 'bg-red-200 text-red-800' : 'bg-yellow-200 text-yellow-800'
+                  }`}>
+                    {alert.status === 'expired' ? 'EXPIRED' : 'Expiring Soon'}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -88,6 +148,118 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* Pipeline Summary Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* BDM Pipeline */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-purple-500" />
+              <h3 className="font-semibold text-navy-900">Landlord BDM Pipeline</h3>
+            </div>
+            <Link to="/bdm" className="text-sm text-gold-600 hover:text-gold-700 font-medium">View all →</Link>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            <div className="text-center p-3 bg-gray-50 rounded-xl">
+              <p className="text-2xl font-bold text-navy-900">{stats.bdmNew || 0}</p>
+              <p className="text-xs text-gray-500">New</p>
+            </div>
+            <div className="text-center p-3 bg-blue-50 rounded-xl">
+              <p className="text-2xl font-bold text-blue-600">{stats.bdmContacted || 0}</p>
+              <p className="text-xs text-blue-600">Contacted</p>
+            </div>
+            <div className="text-center p-3 bg-yellow-50 rounded-xl">
+              <p className="text-2xl font-bold text-yellow-600">{stats.bdmInterested || 0}</p>
+              <p className="text-xs text-yellow-600">Interested</p>
+            </div>
+            <div className="text-center p-3 bg-purple-50 rounded-xl">
+              <p className="text-2xl font-bold text-purple-600">{stats.bdmProspects || 0}</p>
+              <p className="text-xs text-purple-600">Total</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Enquiries Pipeline */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-green-500" />
+              <h3 className="font-semibold text-navy-900">Tenant Enquiries</h3>
+            </div>
+            <Link to="/enquiries" className="text-sm text-gold-600 hover:text-gold-700 font-medium">View all →</Link>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            <div className="text-center p-3 bg-gray-50 rounded-xl">
+              <p className="text-2xl font-bold text-navy-900">{stats.enquiriesNew || 0}</p>
+              <p className="text-xs text-gray-500">New</p>
+            </div>
+            <div className="text-center p-3 bg-blue-50 rounded-xl">
+              <p className="text-2xl font-bold text-blue-600">{stats.enquiriesViewing || 0}</p>
+              <p className="text-xs text-blue-600">Viewing</p>
+            </div>
+            <div className="text-center p-3 bg-yellow-50 rounded-xl">
+              <p className="text-2xl font-bold text-yellow-600">{stats.enquiriesOnboarding || 0}</p>
+              <p className="text-xs text-yellow-600">Onboarding</p>
+            </div>
+            <div className="text-center p-3 bg-green-50 rounded-xl">
+              <p className="text-2xl font-bold text-green-600">{stats.enquiries || 0}</p>
+              <p className="text-xs text-green-600">Total</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tasks Summary */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="w-5 h-5 text-navy-500" />
+            <h3 className="font-semibold text-navy-900">Tasks Overview</h3>
+          </div>
+          <Link to="/tasks" className="text-sm text-gold-600 hover:text-gold-700 font-medium">View all →</Link>
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <div className={`p-4 rounded-xl ${stats.tasksOverdue > 0 ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
+            <div className="flex items-center gap-2 mb-1">
+              <AlertCircle className={`w-4 h-4 ${stats.tasksOverdue > 0 ? 'text-red-500' : 'text-gray-400'}`} />
+              <span className={`text-sm font-medium ${stats.tasksOverdue > 0 ? 'text-red-700' : 'text-gray-500'}`}>Overdue</span>
+            </div>
+            <p className={`text-3xl font-bold ${stats.tasksOverdue > 0 ? 'text-red-600' : 'text-gray-400'}`}>{stats.tasksOverdue || 0}</p>
+          </div>
+          <div className={`p-4 rounded-xl ${stats.tasksDueToday > 0 ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50'}`}>
+            <div className="flex items-center gap-2 mb-1">
+              <Clock className={`w-4 h-4 ${stats.tasksDueToday > 0 ? 'text-yellow-500' : 'text-gray-400'}`} />
+              <span className={`text-sm font-medium ${stats.tasksDueToday > 0 ? 'text-yellow-700' : 'text-gray-500'}`}>Due Today</span>
+            </div>
+            <p className={`text-3xl font-bold ${stats.tasksDueToday > 0 ? 'text-yellow-600' : 'text-gray-400'}`}>{stats.tasksDueToday || 0}</p>
+          </div>
+          <div className="p-4 rounded-xl bg-green-50">
+            <div className="flex items-center gap-2 mb-1">
+              <Calendar className="w-4 h-4 text-green-500" />
+              <span className="text-sm font-medium text-green-700">Upcoming</span>
+            </div>
+            <p className="text-3xl font-bold text-green-600">{stats.tasksUpcoming || 0}</p>
+          </div>
+        </div>
+        {/* Recent Tasks List */}
+        {stats.recentTasks && stats.recentTasks.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+            {stats.recentTasks.slice(0, 3).map(task => (
+              <Link key={task.id} to="/tasks" className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className={`w-2 h-2 rounded-full ${
+                    task.priority === 'high' ? 'bg-red-500' :
+                    task.priority === 'medium' ? 'bg-yellow-500' : 'bg-gray-300'
+                  }`} />
+                  <span className="text-sm font-medium text-navy-900">{task.title}</span>
+                </div>
+                <span className="text-xs text-gray-500">{task.due_date ? new Date(task.due_date).toLocaleDateString('en-GB') : ''}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Financial Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="bg-gradient-to-br from-navy-900 to-navy-800 rounded-2xl p-6 text-white lg:col-span-2">
@@ -95,13 +267,13 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-6">
             <div>
               <p className="text-navy-300 text-sm">Monthly Income</p>
-              <p className="text-3xl font-bold text-gold-500">£{stats.monthlyIncome.toLocaleString()}</p>
+              <p className="text-3xl font-bold text-gold-500">£{stats.monthlyIncome?.toLocaleString() || 0}</p>
               <p className="text-navy-400 text-xs mt-1">Collected this month</p>
             </div>
             <div>
               <p className="text-navy-300 text-sm">Outstanding Rent</p>
               <p className={`text-3xl font-bold ${stats.outstandingRent > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                £{stats.outstandingRent.toLocaleString()}
+                £{stats.outstandingRent?.toLocaleString() || 0}
               </p>
               <p className="text-navy-400 text-xs mt-1">
                 {stats.outstandingRent > 0 ? 'Awaiting payment' : 'All collected'}

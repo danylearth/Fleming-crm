@@ -17,7 +17,7 @@ export default function LandlordBDMDetail() {
 
   const loadProspect = async () => {
     try {
-      const data = await api.get(`/landlords-bdm/${id}`);
+      const data = await api.get(`/api/landlords-bdm/${id}`);
       setProspect(data);
     } catch (err) {
       console.error('Failed to load prospect:', err);
@@ -29,7 +29,7 @@ export default function LandlordBDMDetail() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put(`/landlords-bdm/${id}`, prospect);
+      await api.put(`/api/landlords-bdm/${id}`, prospect);
       alert('Saved successfully');
     } catch (err: any) {
       alert(err.message || 'Failed to save');
@@ -40,7 +40,7 @@ export default function LandlordBDMDetail() {
 
   const handleStatusChange = async (newStatus: string) => {
     try {
-      await api.put(`/landlords-bdm/${id}`, { ...prospect, status: newStatus });
+      await api.put(`/api/landlords-bdm/${id}`, { ...prospect, status: newStatus });
       setProspect({ ...prospect, status: newStatus });
     } catch (err: any) {
       alert(err.message || 'Failed to update status');

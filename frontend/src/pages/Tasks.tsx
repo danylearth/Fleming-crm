@@ -60,8 +60,8 @@ export default function Tasks() {
   const loadData = async () => {
     try {
       const [tasksData, usersData] = await Promise.all([
-        api.get('/tasks?status=active'),
-        api.get('/users').catch(() => []) // May fail if not admin
+        api.get('/api/tasks?status=active'),
+        api.get('/api/users').catch(() => []) // May fail if not admin
       ]);
       setTasks(tasksData);
       setUsers(usersData);
@@ -75,7 +75,7 @@ export default function Tasks() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/tasks', {
+      await api.post('/api/tasks', {
         ...formData,
         assigned_to: formData.assigned_to ? parseInt(formData.assigned_to) : null,
         task_type: 'manual'
@@ -92,7 +92,7 @@ export default function Tasks() {
     try {
       const task = tasks.find(t => t.id === taskId);
       if (task) {
-        await api.put(`/tasks/${taskId}`, { ...task, status: 'completed' });
+        await api.put(`/api/tasks/${taskId}`, { ...task, status: 'completed' });
         loadData();
       }
     } catch (err: any) {

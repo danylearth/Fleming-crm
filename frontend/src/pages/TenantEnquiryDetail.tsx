@@ -31,8 +31,8 @@ export default function TenantEnquiryDetail() {
   const loadData = async () => {
     try {
       const [enquiryData, propertiesData] = await Promise.all([
-        api.get(`/tenant-enquiries/${id}`),
-        api.get('/properties')
+        api.get(`/api/tenant-enquiries/${id}`),
+        api.get('/api/properties')
       ]);
       setEnquiry(enquiryData);
       setProperties(propertiesData.filter((p: Property) => p.status === 'available'));
@@ -46,7 +46,7 @@ export default function TenantEnquiryDetail() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put(`/tenant-enquiries/${id}`, enquiry);
+      await api.put(`/api/tenant-enquiries/${id}`, enquiry);
       alert('Saved successfully');
     } catch (err: any) {
       alert(err.message || 'Failed to save');
@@ -57,7 +57,7 @@ export default function TenantEnquiryDetail() {
 
   const handleStatusChange = async (newStatus: string) => {
     try {
-      await api.put(`/tenant-enquiries/${id}`, { ...enquiry, status: newStatus });
+      await api.put(`/api/tenant-enquiries/${id}`, { ...enquiry, status: newStatus });
       setEnquiry({ ...enquiry, status: newStatus });
     } catch (err: any) {
       alert(err.message || 'Failed to update status');

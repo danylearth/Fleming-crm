@@ -49,7 +49,7 @@ export default function LandlordsBDM() {
 
   const loadProspects = async () => {
     try {
-      const data = await api.get('/landlords-bdm');
+      const data = await api.get('/api/landlords-bdm');
       setProspects(data);
     } catch (err) {
       console.error('Failed to load prospects:', err);
@@ -61,7 +61,7 @@ export default function LandlordsBDM() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/landlords-bdm', formData);
+      await api.post('/api/landlords-bdm', formData);
       setShowForm(false);
       setFormData({ name: '', email: '', phone: '', address: '', source: '', notes: '' });
       loadProspects();

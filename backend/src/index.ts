@@ -116,9 +116,17 @@ app.get('/api/dashboard', authMiddleware, (req: AuthRequest, res) => {
     stats.activeTenancies = (db.prepare("SELECT COUNT(*) as c FROM tenancies WHERE status = 'active'").get() as any).c;
     stats.openMaintenance = (db.prepare("SELECT COUNT(*) as c FROM maintenance WHERE status IN ('open', 'in_progress')").get() as any).c;
     
-    // Enquiries pipeline
-    stats.tenantEnquiries = (db.prepare("SELECT COUNT(*) as c FROM tenant_enquiries WHERE status NOT IN ('rejected', 'converted')").get() as any).c;
-    stats.landlordsBdm = (db.prepare("SELECT COUNT(*) as c FROM landlords_bdm WHERE status NOT IN ('onboarded', 'not_interested')").get() as any).c;
+    // BDM Pipeline counts
+    stats.bdmProspects = (db.prepare("SELECT COUNT(*) as c FROM landlords_bdm WHERE status NOT IN ('onboarded', 'not_interested')").get() as any).c;
+    stats.bdmNew = (db.prepare("SELECT COUNT(*) as c FROM landlords_bdm WHERE status = 'new'").get() as any).c;
+    stats.bdmContacted = (db.prepare("SELECT COUNT(*) as c FROM landlords_bdm WHERE status = 'contacted'").get() as any).c;
+    stats.bdmInterested = (db.prepare("SELECT COUNT(*) as c FROM landlords_bdm WHERE status = 'interested'").get() as any).c;
+    
+    // Enquiries pipeline counts
+    stats.enquiries = (db.prepare("SELECT COUNT(*) as c FROM tenant_enquiries WHERE status NOT IN ('rejected', 'converted')").get() as any).c;
+    stats.enquiriesNew = (db.prepare("SELECT COUNT(*) as c FROM tenant_enquiries WHERE status = 'new'").get() as any).c;
+    stats.enquiriesViewing = (db.prepare("SELECT COUNT(*) as c FROM tenant_enquiries WHERE status = 'viewing_booked'").get() as any).c;
+    stats.enquiriesOnboarding = (db.prepare("SELECT COUNT(*) as c FROM tenant_enquiries WHERE status = 'onboarding'").get() as any).c;
     
     // Monthly income
     const incomeResult = db.prepare(`
@@ -127,26 +135,56 @@ app.get('/api/dashboard', authMiddleware, (req: AuthRequest, res) => {
     `).get() as any;
     stats.monthlyIncome = incomeResult.total;
     
-    // Total portfolio rent (properties owned by Fleming)
-    const portfolioRent = db.prepare(`
-      SELECT COALESCE(SUM(rent_amount), 0) as total FROM properties WHERE landlord_id = 1
+    // Outstanding rent (pending rent payments)
+    const outstandingResult = db.prepare(`
+      SELECT COALESCE(SUM(amount_due - COALESCE(amount_paid, 0)), 0) as total 
+      FROM rent_payments WHERE status IN ('pending', 'partial')
     `).get() as any;
-    stats.portfolioRent = portfolioRent.total;
+    stats.outstandingRent = outstandingResult.total;
     
-    // Tasks due
-    stats.tasksDue = (db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status = 'pending' AND (due_date IS NULL OR due_date <= date('now', '+7 days'))").get() as any).c;
+    // Tasks counts
+    const today = new Date().toISOString().split('T')[0];
+    stats.tasksOverdue = (db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status IN ('pending', 'in_progress') AND due_date < date('now')").get() as any).c;
+    stats.tasksDueToday = (db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status IN ('pending', 'in_progress') AND due_date = date('now')").get() as any).c;
+    stats.tasksUpcoming = (db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status IN ('pending', 'in_progress') AND due_date > date('now') AND due_date <= date('now', '+7 days')").get() as any).c;
     
-    // Compliance alerts (due within 14 days)
-    stats.complianceAlerts = (db.prepare(`
-      SELECT COUNT(*) as c FROM properties WHERE 
+    // Compliance alerts (detailed)
+    stats.complianceAlerts = db.prepare(`
+      SELECT id as property_id, address, 
+        CASE 
+          WHEN eicr_expiry_date IS NOT NULL AND eicr_expiry_date < date('now') THEN 'EICR'
+          WHEN eicr_expiry_date IS NOT NULL AND eicr_expiry_date <= date('now', '+14 days') THEN 'EICR'
+          WHEN epc_expiry_date IS NOT NULL AND epc_expiry_date < date('now') THEN 'EPC'
+          WHEN epc_expiry_date IS NOT NULL AND epc_expiry_date <= date('now', '+14 days') THEN 'EPC'
+          WHEN has_gas = 1 AND gas_safety_expiry_date IS NOT NULL AND gas_safety_expiry_date < date('now') THEN 'Gas Safety'
+          WHEN has_gas = 1 AND gas_safety_expiry_date IS NOT NULL AND gas_safety_expiry_date <= date('now', '+14 days') THEN 'Gas Safety'
+          ELSE 'Unknown'
+        END as type,
+        COALESCE(
+          CASE 
+            WHEN eicr_expiry_date IS NOT NULL AND eicr_expiry_date <= date('now', '+14 days') THEN eicr_expiry_date
+            WHEN epc_expiry_date IS NOT NULL AND epc_expiry_date <= date('now', '+14 days') THEN epc_expiry_date
+            WHEN has_gas = 1 AND gas_safety_expiry_date IS NOT NULL AND gas_safety_expiry_date <= date('now', '+14 days') THEN gas_safety_expiry_date
+          END, ''
+        ) as expiry_date,
+        CASE 
+          WHEN eicr_expiry_date IS NOT NULL AND eicr_expiry_date < date('now') THEN 'expired'
+          WHEN epc_expiry_date IS NOT NULL AND epc_expiry_date < date('now') THEN 'expired'
+          WHEN has_gas = 1 AND gas_safety_expiry_date IS NOT NULL AND gas_safety_expiry_date < date('now') THEN 'expired'
+          ELSE 'expiring'
+        END as status
+      FROM properties WHERE 
         (eicr_expiry_date IS NOT NULL AND eicr_expiry_date <= date('now', '+14 days')) OR
         (epc_expiry_date IS NOT NULL AND epc_expiry_date <= date('now', '+14 days')) OR
-        (has_gas = 1 AND gas_safety_expiry_date IS NOT NULL AND gas_safety_expiry_date <= date('now', '+14 days')) OR
-        (has_end_date = 1 AND tenancy_end_date IS NOT NULL AND tenancy_end_date <= date('now', '+30 days'))
-    `).get() as any).c;
-    
-    // Rent payments pending this month
-    stats.rentPaymentsPending = (db.prepare("SELECT COUNT(*) as c FROM rent_payments WHERE status = 'pending' AND due_date <= date('now', 'start of month', '+1 month')").get() as any).c;
+        (has_gas = 1 AND gas_safety_expiry_date IS NOT NULL AND gas_safety_expiry_date <= date('now', '+14 days'))
+      ORDER BY 
+        CASE 
+          WHEN eicr_expiry_date < date('now') OR epc_expiry_date < date('now') OR gas_safety_expiry_date < date('now') THEN 0
+          ELSE 1
+        END,
+        COALESCE(eicr_expiry_date, epc_expiry_date, gas_safety_expiry_date)
+      LIMIT 10
+    `).all();
     
     // Recent maintenance
     stats.recentMaintenance = db.prepare(`
@@ -157,22 +195,17 @@ app.get('/api/dashboard', authMiddleware, (req: AuthRequest, res) => {
                m.created_at DESC LIMIT 5
     `).all();
     
-    // Upcoming viewings (next 7 days)
-    stats.upcomingViewings = db.prepare(`
-      SELECT v.*, p.address FROM property_viewings v
-      JOIN properties p ON p.id = v.property_id
-      WHERE v.status = 'scheduled' AND v.viewing_date BETWEEN date('now') AND date('now', '+7 days')
-      ORDER BY v.viewing_date
-    `).all();
-    
-    // Tasks/To-do list
-    stats.tasks = db.prepare(`
-      SELECT t.*, u.name as assigned_to_name FROM tasks t
-      LEFT JOIN users u ON u.id = t.assigned_to
+    // Recent tasks
+    stats.recentTasks = db.prepare(`
+      SELECT t.id, t.title, t.priority, t.due_date, 
+        COALESCE(t.entity_type || ' #' || t.entity_id, '') as related_to
+      FROM tasks t
       WHERE t.status IN ('pending', 'in_progress')
-      ORDER BY CASE t.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
-               t.due_date NULLS LAST
-      LIMIT 10
+      ORDER BY 
+        CASE WHEN t.due_date < date('now') THEN 0 ELSE 1 END,
+        t.due_date NULLS LAST,
+        CASE t.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END
+      LIMIT 5
     `).all();
     
     logAudit(req.user?.id, req.user?.email, 'view', 'dashboard');

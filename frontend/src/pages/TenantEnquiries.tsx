@@ -56,7 +56,7 @@ export default function TenantEnquiries() {
 
   const loadEnquiries = async () => {
     try {
-      const data = await api.get('/tenant-enquiries');
+      const data = await api.get('/api/tenant-enquiries');
       setEnquiries(data);
     } catch (err) {
       console.error('Failed to load enquiries:', err);
@@ -68,7 +68,7 @@ export default function TenantEnquiries() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/tenant-enquiries', formData);
+      await api.post('/api/tenant-enquiries', formData);
       setShowForm(false);
       setFormData({
         title_1: '', first_name_1: '', last_name_1: '', email_1: '', phone_1: '',

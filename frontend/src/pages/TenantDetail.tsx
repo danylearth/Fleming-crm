@@ -29,9 +29,9 @@ export default function TenantDetail() {
   const loadData = async () => {
     try {
       const [tenantData, allTenancies, allProperties] = await Promise.all([
-        api.get(`/tenants/${id}`),
-        api.get('/tenancies'),
-        api.get('/properties')
+        api.get(`/api/tenants/${id}`),
+        api.get('/api/tenancies'),
+        api.get('/api/properties')
       ]);
       setTenant(tenantData);
       setTenancies(allTenancies.filter((t: any) => t.tenant_id === parseInt(id!)));
@@ -46,7 +46,7 @@ export default function TenantDetail() {
 
   const handleSave = async () => {
     try {
-      await api.put(`/tenants/${id}`, editForm);
+      await api.put(`/api/tenants/${id}`, editForm);
       setEditing(false);
       loadData();
     } catch (err: any) {
@@ -62,7 +62,7 @@ export default function TenantDetail() {
       : `[${timestamp}]\n${newNote}`;
     
     try {
-      await api.put(`/tenants/${id}`, { ...editForm, notes: updatedNotes });
+      await api.put(`/api/tenants/${id}`, { ...editForm, notes: updatedNotes });
       setShowNoteModal(false);
       setNewNote('');
       loadData();
