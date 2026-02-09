@@ -1,15 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
-import { ArrowLeft, Mail, Phone, MapPin, Building2, Edit2, Save, X, Plus } from 'lucide-react';
-import { DocumentsSection } from '../components/DocumentsSection';
+import { ArrowLeft, Mail, Phone, MapPin, Building2, Edit2, Save, X, Plus, CheckCircle, XCircle } from 'lucide-react';
+import DocumentsSection from '../components/DocumentsSection';
 
 interface Landlord {
   id: number;
   name: string;
   email: string;
   phone: string;
-  address: string;
+  alt_email: string;
+  date_of_birth: string;
+  home_address: string;
+  marketing_post: number;
+  marketing_email: number;
+  marketing_phone: number;
+  marketing_sms: number;
+  kyc_completed: number;
   notes: string;
   property_count: number;
 }
@@ -31,7 +38,7 @@ export default function LandlordDetail() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', address: '', notes: '' });
+  const [editForm, setEditForm] = useState<any>({});
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [newNote, setNewNote] = useState('');
 
@@ -42,16 +49,23 @@ export default function LandlordDetail() {
   const loadData = async () => {
     try {
       const [landlordData, allProperties] = await Promise.all([
-        api.get(`/api/landlords/${id}`),
-        api.get('/api/properties')
+        api.get(`/landlords/${id}`),
+        api.get('/properties')
       ]);
       setLandlord(landlordData);
       setProperties(allProperties.filter((p: Property) => p.landlord_id === parseInt(id!)));
       setEditForm({
-        name: landlordData.name,
+        name: landlordData.name || '',
         email: landlordData.email || '',
         phone: landlordData.phone || '',
-        address: landlordData.address || '',
+        alt_email: landlordData.alt_email || '',
+        date_of_birth: landlordData.date_of_birth || '',
+        home_address: landlordData.home_address || '',
+        marketing_post: landlordData.marketing_post || 0,
+        marketing_email: landlordData.marketing_email || 0,
+        marketing_phone: landlordData.marketing_phone || 0,
+        marketing_sms: landlordData.marketing_sms || 0,
+        kyc_completed: landlordData.kyc_completed || 0,
         notes: landlordData.notes || ''
       });
     } catch (err) {
@@ -63,7 +77,7 @@ export default function LandlordDetail() {
 
   const handleSave = async () => {
     try {
-      await api.put(`/api/landlords/${id}`, editForm);
+      await api.put(`/landlords/${id}`, editForm);
       setEditing(false);
       loadData();
     } catch (err: any) {
@@ -79,7 +93,7 @@ export default function LandlordDetail() {
       : `[${timestamp}]\n${newNote}`;
     
     try {
-      await api.put(`/api/landlords/${id}`, { ...editForm, notes: updatedNotes });
+      await api.put(`/landlords/${id}`, { ...editForm, notes: updatedNotes });
       setShowNoteModal(false);
       setNewNote('');
       loadData();
@@ -114,7 +128,18 @@ export default function LandlordDetail() {
           <ArrowLeft className="w-5 h-5 text-gray-500" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-navy-900">{landlord.name}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-navy-900">{landlord.name}</h1>
+            {landlord.kyc_completed ? (
+              <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                <CheckCircle className="w-3 h-3" /> KYC
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
+                <XCircle className="w-3 h-3" /> KYC Pending
+              </span>
+            )}
+          </div>
           <p className="text-gray-500">Landlord • {properties.length} properties</p>
         </div>
         {!editing ? (
@@ -153,14 +178,25 @@ export default function LandlordDetail() {
             <h2 className="font-semibold text-navy-900 mb-4">Contact Details</h2>
             {editing ? (
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  <input
-                    type="text"
-                    value={editForm.name}
-                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gold-500"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                    <input
+                      type="text"
+                      value={editForm.name}
+                      onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gold-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                    <input
+                      type="date"
+                      value={editForm.date_of_birth}
+                      onChange={e => setEditForm({ ...editForm, date_of_birth: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gold-500"
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -173,21 +209,30 @@ export default function LandlordDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Alternative Email</label>
                     <input
-                      type="tel"
-                      value={editForm.phone}
-                      onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                      type="email"
+                      value={editForm.alt_email}
+                      onChange={e => setEditForm({ ...editForm, alt_email: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gold-500"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={editForm.phone}
+                    onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gold-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Home Address</label>
                   <input
                     type="text"
-                    value={editForm.address}
-                    onChange={e => setEditForm({ ...editForm, address: e.target.value })}
+                    value={editForm.home_address}
+                    onChange={e => setEditForm({ ...editForm, home_address: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gold-500"
                   />
                 </div>
@@ -200,21 +245,119 @@ export default function LandlordDetail() {
                     <a href={`mailto:${landlord.email}`} className="hover:text-gold-600">{landlord.email}</a>
                   </div>
                 )}
+                {landlord.alt_email && (
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <Mail className="w-5 h-5 text-gray-400" />
+                    <a href={`mailto:${landlord.alt_email}`} className="hover:text-gold-600">{landlord.alt_email} (alt)</a>
+                  </div>
+                )}
                 {landlord.phone && (
                   <div className="flex items-center gap-3 text-gray-600">
                     <Phone className="w-5 h-5 text-gray-400" />
                     <a href={`tel:${landlord.phone}`} className="hover:text-gold-600">{landlord.phone}</a>
                   </div>
                 )}
-                {landlord.address && (
+                {landlord.home_address && (
                   <div className="flex items-center gap-3 text-gray-600">
                     <MapPin className="w-5 h-5 text-gray-400" />
-                    <span>{landlord.address}</span>
+                    <span>{landlord.home_address}</span>
                   </div>
                 )}
-                {!landlord.email && !landlord.phone && !landlord.address && (
+                {landlord.date_of_birth && (
+                  <div className="text-sm text-gray-500">
+                    DOB: {new Date(landlord.date_of_birth).toLocaleDateString('en-GB')}
+                  </div>
+                )}
+                {!landlord.email && !landlord.phone && !landlord.home_address && (
                   <p className="text-gray-400 text-sm">No contact details added</p>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* KYC & Marketing */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h2 className="font-semibold text-navy-900 mb-4">KYC & Marketing Preferences</h2>
+            {editing ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={editForm.kyc_completed === 1}
+                      onChange={e => setEditForm({ ...editForm, kyc_completed: e.target.checked ? 1 : 0 })}
+                      className="w-4 h-4 rounded border-gray-300"
+                    />
+                    <span className="font-medium">KYC Completed</span>
+                  </label>
+                </div>
+                <div className="border-t pt-4">
+                  <p className="text-sm font-medium text-gray-700 mb-3">Marketing Preferences</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={editForm.marketing_post === 1}
+                        onChange={e => setEditForm({ ...editForm, marketing_post: e.target.checked ? 1 : 0 })}
+                        className="w-4 h-4 rounded border-gray-300"
+                      />
+                      <span>Post</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={editForm.marketing_email === 1}
+                        onChange={e => setEditForm({ ...editForm, marketing_email: e.target.checked ? 1 : 0 })}
+                        className="w-4 h-4 rounded border-gray-300"
+                      />
+                      <span>Email</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={editForm.marketing_phone === 1}
+                        onChange={e => setEditForm({ ...editForm, marketing_phone: e.target.checked ? 1 : 0 })}
+                        className="w-4 h-4 rounded border-gray-300"
+                      />
+                      <span>Phone</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={editForm.marketing_sms === 1}
+                        onChange={e => setEditForm({ ...editForm, marketing_sms: e.target.checked ? 1 : 0 })}
+                        className="w-4 h-4 rounded border-gray-300"
+                      />
+                      <span>SMS</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  {landlord.kyc_completed ? (
+                    <span className="flex items-center gap-2 text-green-700">
+                      <CheckCircle className="w-5 h-5" /> KYC Completed
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2 text-red-600">
+                      <XCircle className="w-5 h-5" /> KYC Pending
+                    </span>
+                  )}
+                </div>
+                <div className="border-t pt-4">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Marketing Preferences</p>
+                  <div className="flex flex-wrap gap-2">
+                    {landlord.marketing_post ? <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">Post</span> : null}
+                    {landlord.marketing_email ? <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">Email</span> : null}
+                    {landlord.marketing_phone ? <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">Phone</span> : null}
+                    {landlord.marketing_sms ? <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">SMS</span> : null}
+                    {!landlord.marketing_post && !landlord.marketing_email && !landlord.marketing_phone && !landlord.marketing_sms && (
+                      <span className="text-gray-400 text-sm">No marketing consent</span>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -293,7 +436,14 @@ export default function LandlordDetail() {
                 Add
               </button>
             </div>
-            {landlord.notes ? (
+            {editing ? (
+              <textarea
+                value={editForm.notes}
+                onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                rows={6}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gold-500 text-sm"
+              />
+            ) : landlord.notes ? (
               <div className="text-sm text-gray-600 whitespace-pre-wrap bg-gray-50 rounded-xl p-4 max-h-64 overflow-y-auto">
                 {landlord.notes}
               </div>
