@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
-import { ArrowLeft, MapPin, Bed, PoundSterling, User, UserCheck, Wrench, Edit2, Save, X, Plus, Phone, Mail, AlertTriangle, CheckCircle, Calendar, Flame, Zap, FileText } from 'lucide-react';
+import { ArrowLeft, Bed, User, UserCheck, Wrench, Edit2, Save, X, Plus, Phone, Mail, AlertTriangle, CheckCircle, Flame, Zap, FileText } from 'lucide-react';
 import DocumentsSection from '../components/DocumentsSection';
 
 interface Landlord {

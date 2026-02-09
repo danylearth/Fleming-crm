@@ -47,7 +47,6 @@ export default function Tasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<string>('active');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     title: '', description: '', priority: 'medium', assigned_to: '', due_date: ''

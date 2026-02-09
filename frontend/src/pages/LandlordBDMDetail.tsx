@@ -50,7 +50,7 @@ export default function LandlordBDMDetail() {
   const handleConvert = async () => {
     if (!confirm('Convert this prospect to a full landlord record?')) return;
     try {
-      const result = await api.post(`/api/landlords-bdm/${id}/convert`);
+      const result = await api.post(`/api/landlords-bdm/${id}/convert`, {});
       alert('Prospect converted to landlord successfully');
       navigate(`/landlords/${result.landlord_id}`);
     } catch (err: any) {

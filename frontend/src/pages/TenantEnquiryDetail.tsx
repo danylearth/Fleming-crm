@@ -6,6 +6,7 @@ import DocumentsSection from '../components/DocumentsSection';
 interface Property {
   id: number;
   address: string;
+  status: string;
 }
 
 export default function TenantEnquiryDetail() {

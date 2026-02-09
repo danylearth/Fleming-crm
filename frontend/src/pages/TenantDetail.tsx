@@ -15,7 +15,6 @@ export default function TenantDetail() {
   const api = useApi();
   const [tenant, setTenant] = useState<any>(null);
   const [properties, setProperties] = useState<Property[]>([]);
-  const [tenancies, setTenancies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
@@ -28,13 +27,11 @@ export default function TenantDetail() {
 
   const loadData = async () => {
     try {
-      const [tenantData, allTenancies, allProperties] = await Promise.all([
+      const [tenantData, allProperties] = await Promise.all([
         api.get(`/api/tenants/${id}`),
-        api.get('/api/tenancies'),
         api.get('/api/properties')
       ]);
       setTenant(tenantData);
-      setTenancies(allTenancies.filter((t: any) => t.tenant_id === parseInt(id!)));
       setProperties(allProperties);
       setEditForm({ ...tenantData });
     } catch (err) {
@@ -102,7 +99,6 @@ export default function TenantDetail() {
   }
 
   const completion = calculateCompletion();
-  const activeTenancy = tenancies.find(t => t.status === 'active');
 
   return (
     <div className="space-y-6">

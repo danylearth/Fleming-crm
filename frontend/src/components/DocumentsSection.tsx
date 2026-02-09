@@ -11,12 +11,12 @@ interface Document {
 }
 
 interface Props {
-  entityType: 'landlord' | 'tenant' | 'property';
+  entityType: 'landlord' | 'landlord_bdm' | 'tenant' | 'tenant_enquiry' | 'property' | 'maintenance';
   entityId: number;
   title?: string;
 }
 
-export function DocumentsSection({ entityType, entityId, title }: Props) {
+export default function DocumentsSection({ entityType, entityId, title }: Props) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [docTypes, setDocTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
-import { Building2, Users, Wrench, AlertTriangle, UserCheck, UserPlus, ClipboardList, Calendar, CheckCircle, AlertCircle, Flame, Zap, FileText, TrendingUp, Clock } from 'lucide-react';
+import { Building2, Users, Wrench, AlertTriangle, UserCheck, UserPlus, ClipboardList, Calendar, AlertCircle, Flame, Zap, FileText, TrendingUp, Clock } from 'lucide-react';
 
 interface DashboardStats {
   properties: number;

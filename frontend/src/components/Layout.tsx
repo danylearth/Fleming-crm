@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Home, Building2, Users, UserCheck, Wrench, PoundSterling, LogOut, Menu, X, ChevronRight, ClipboardList, UserPlus, Briefcase, CheckSquare } from 'lucide-react';
+import { Home, Building2, Users, UserCheck, Wrench, PoundSterling, LogOut, Menu, X, ChevronRight, ClipboardList, Briefcase, CheckSquare } from 'lucide-react';
 import { useState } from 'react';
 
 interface LayoutProps {
