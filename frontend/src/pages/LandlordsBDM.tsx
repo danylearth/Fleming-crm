@@ -87,7 +87,7 @@ export default function LandlordsBDM() {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="bg-[#102a43] text-white px-4 py-2 rounded hover:bg-[#1a3a5c]"
+          className="bg-[#DC006C] text-white px-4 py-2 rounded hover:bg-[#be185d]"
         >
           + Add Prospect
         </button>
@@ -99,7 +99,7 @@ export default function LandlordsBDM() {
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-3 py-1 rounded text-sm ${filter === f ? 'bg-[#102a43] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            className={`px-3 py-1 rounded text-sm ${filter === f ? 'bg-[#DC006C] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
           >
             {f === 'active' ? 'Active' : f === 'all' ? 'All' : statusLabels[f] || f}
           </button>
@@ -167,7 +167,7 @@ export default function LandlordsBDM() {
                 <td className="px-6 py-4">
                   <Link
                     to={`/landlords-bdm/${prospect.id}`}
-                    className="text-[#102a43] hover:underline"
+                    className="text-[#DC006C] hover:underline"
                   >
                     View
                   </Link>
@@ -255,7 +255,7 @@ export default function LandlordsBDM() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#102a43] text-white rounded hover:bg-[#1a3a5c]"
+                  className="px-4 py-2 bg-[#DC006C] text-white rounded hover:bg-[#be185d]"
                 >
                   Add Prospect
                 </button>

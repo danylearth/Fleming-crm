@@ -134,7 +134,7 @@ export default function DocumentsSection({ entityType, entityId, title }: Props)
       boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ margin: 0, color: '#102a43', fontSize: '18px' }}>{sectionTitle}</h3>
+        <h3 style={{ margin: 0, color: '#DC006C', fontSize: '18px' }}>{sectionTitle}</h3>
         <button
           onClick={() => setShowUpload(!showUpload)}
           style={{
@@ -142,7 +142,7 @@ export default function DocumentsSection({ entityType, entityId, title }: Props)
             alignItems: 'center',
             gap: '6px',
             padding: '8px 16px',
-            background: '#102a43',
+            background: '#DC006C',
             color: '#fff',
             border: 'none',
             borderRadius: '6px',
@@ -256,7 +256,7 @@ export default function DocumentsSection({ entityType, entityId, title }: Props)
                   background: 'transparent',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#102a43'
+                  color: '#DC006C'
                 }}
                 title="Download"
               >

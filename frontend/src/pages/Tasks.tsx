@@ -139,7 +139,7 @@ export default function Tasks() {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="bg-[#102a43] text-white px-4 py-2 rounded hover:bg-[#1a3a5c]"
+          className="bg-[#DC006C] text-white px-4 py-2 rounded hover:bg-[#be185d]"
         >
           + Add Task
         </button>
@@ -211,7 +211,7 @@ export default function Tasks() {
                             <span>Assigned to: {task.assigned_to_name}</span>
                           )}
                           {link && (
-                            <Link to={link} className="text-[#102a43] hover:underline">
+                            <Link to={link} className="text-[#DC006C] hover:underline">
                               View {task.entity_type}
                             </Link>
                           )}
@@ -299,7 +299,7 @@ export default function Tasks() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#102a43] text-white rounded hover:bg-[#1a3a5c]"
+                  className="px-4 py-2 bg-[#DC006C] text-white rounded hover:bg-[#be185d]"
                 >
                   Add Task
                 </button>

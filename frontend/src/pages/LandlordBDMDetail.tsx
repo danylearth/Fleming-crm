@@ -83,7 +83,7 @@ export default function LandlordBDMDetail() {
     <div className="p-6 max-w-4xl">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <Link to="/landlords-bdm" className="text-[#102a43] hover:underline mb-2 inline-block">
+          <Link to="/landlords-bdm" className="text-[#DC006C] hover:underline mb-2 inline-block">
             ← Back to BDM
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">{prospect.name}</h1>
@@ -126,7 +126,7 @@ export default function LandlordBDMDetail() {
             {prospect.status === 'interested' && (
               <button
                 onClick={handleConvert}
-                className="px-4 py-2 bg-[#102a43] text-white rounded hover:bg-[#1a3a5c]"
+                className="px-4 py-2 bg-[#DC006C] text-white rounded hover:bg-[#be185d]"
               >
                 Convert to Landlord
               </button>
@@ -231,7 +231,7 @@ export default function LandlordBDMDetail() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-6 py-2 bg-[#102a43] text-white rounded hover:bg-[#1a3a5c] disabled:opacity-50"
+          className="px-6 py-2 bg-[#DC006C] text-white rounded hover:bg-[#be185d] disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
