@@ -11,6 +11,6 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "include": ["src/index-pg.ts", "src/db-pg.ts", "src/auth.ts"],
+  "exclude": ["node_modules", "src/index.ts", "src/db.ts"]
 }

@@ -1,11 +1,22 @@
+databases:
+  - name: fleming-db
+    plan: free
+    databaseName: fleming
+    user: fleming
+
 services:
   - type: web
-    name: fleming-crm-api
-    env: node
+    name: fleming-api
+    runtime: node
+    plan: free
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
-      - key: NODE_ENV
-        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fleming-db
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
+      - key: NODE_ENV
+        value: production
