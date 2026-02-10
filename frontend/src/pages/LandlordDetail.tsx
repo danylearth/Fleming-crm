@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
-import { ArrowLeft, Mail, Phone, MapPin, Building2, Edit2, Save, X, Plus, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, Edit2, Save, X, Plus, CheckCircle, XCircle } from 'lucide-react';
 import DocumentsSection from '../components/DocumentsSection';
 
 interface Landlord {
@@ -11,7 +11,7 @@ interface Landlord {
   phone: string;
   alt_email: string;
   date_of_birth: string;
-  home_address: string;
+  address: string;
   marketing_post: number;
   marketing_email: number;
   marketing_phone: number;
@@ -21,21 +21,10 @@ interface Landlord {
   property_count: number;
 }
 
-interface Property {
-  id: number;
-  landlord_id: number;
-  address: string;
-  postcode: string;
-  rent_amount: number;
-  status: string;
-  current_tenant: string | null;
-}
-
 export default function LandlordDetail() {
   const { id } = useParams();
   const api = useApi();
   const [landlord, setLandlord] = useState<Landlord | null>(null);
-  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
@@ -48,19 +37,15 @@ export default function LandlordDetail() {
 
   const loadData = async () => {
     try {
-      const [landlordData, allProperties] = await Promise.all([
-        api.get(`/api/landlords/${id}`),
-        api.get('/api/properties')
-      ]);
+      const landlordData = await api.get(`/api/landlords/${id}`);
       setLandlord(landlordData);
-      setProperties(allProperties.filter((p: Property) => p.landlord_id === parseInt(id!)));
       setEditForm({
         name: landlordData.name || '',
         email: landlordData.email || '',
         phone: landlordData.phone || '',
         alt_email: landlordData.alt_email || '',
         date_of_birth: landlordData.date_of_birth || '',
-        home_address: landlordData.home_address || '',
+        address: landlordData.address || '',
         marketing_post: landlordData.marketing_post || 0,
         marketing_email: landlordData.marketing_email || 0,
         marketing_phone: landlordData.marketing_phone || 0,
@@ -102,12 +87,6 @@ export default function LandlordDetail() {
     }
   };
 
-  const statusColors: Record<string, string> = {
-    available: 'bg-green-50 text-green-700',
-    let: 'bg-blue-50 text-blue-700',
-    maintenance: 'bg-amber-50 text-amber-700'
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -140,7 +119,7 @@ export default function LandlordDetail() {
               </span>
             )}
           </div>
-          <p className="text-gray-500">Landlord • {properties.length} properties</p>
+          <p className="text-gray-500">Landlord</p>
         </div>
         {!editing ? (
           <button
@@ -231,8 +210,8 @@ export default function LandlordDetail() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Home Address</label>
                   <input
                     type="text"
-                    value={editForm.home_address}
-                    onChange={e => setEditForm({ ...editForm, home_address: e.target.value })}
+                    value={editForm.address}
+                    onChange={e => setEditForm({ ...editForm, address: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gold-500"
                   />
                 </div>
@@ -257,10 +236,10 @@ export default function LandlordDetail() {
                     <a href={`tel:${landlord.phone}`} className="hover:text-gold-600">{landlord.phone}</a>
                   </div>
                 )}
-                {landlord.home_address && (
+                {landlord.address && (
                   <div className="flex items-center gap-3 text-gray-600">
                     <MapPin className="w-5 h-5 text-gray-400" />
-                    <span>{landlord.home_address}</span>
+                    <span>{landlord.address}</span>
                   </div>
                 )}
                 {landlord.date_of_birth && (
@@ -268,7 +247,7 @@ export default function LandlordDetail() {
                     DOB: {new Date(landlord.date_of_birth).toLocaleDateString('en-GB')}
                   </div>
                 )}
-                {!landlord.email && !landlord.phone && !landlord.home_address && (
+                {!landlord.email && !landlord.phone && !landlord.address && (
                   <p className="text-gray-400 text-sm">No contact details added</p>
                 )}
               </div>
@@ -362,68 +341,10 @@ export default function LandlordDetail() {
             )}
           </div>
 
-          {/* Properties */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-navy-900">Properties</h2>
-              <Link to="/properties" className="text-sm text-gold-600 hover:text-gold-700 font-medium">
-                Add property →
-              </Link>
-            </div>
-            {properties.length === 0 ? (
-              <p className="text-gray-400 text-sm">No properties linked to this landlord</p>
-            ) : (
-              <div className="space-y-3">
-                {properties.map(property => (
-                  <Link
-                    key={property.id}
-                    to={`/properties/${property.id}`}
-                    className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Building2 className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-navy-900">{property.address}</p>
-                      <p className="text-sm text-gray-500">{property.postcode} • £{property.rent_amount}/mo</p>
-                    </div>
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[property.status]}`}>
-                      {property.status}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            )}
           </div>
-        </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Quick Stats */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="font-semibold text-navy-900 mb-4">Summary</h2>
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Total Properties</span>
-                <span className="font-semibold text-navy-900">{properties.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Currently Let</span>
-                <span className="font-semibold text-navy-900">{properties.filter(p => p.status === 'let').length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Available</span>
-                <span className="font-semibold text-navy-900">{properties.filter(p => p.status === 'available').length}</span>
-              </div>
-              <div className="flex justify-between border-t pt-4">
-                <span className="text-gray-500">Monthly Rent</span>
-                <span className="font-semibold text-green-600">
-                  £{properties.filter(p => p.status === 'let').reduce((sum, p) => sum + p.rent_amount, 0).toLocaleString()}
-                </span>
-              </div>
-            </div>
-          </div>
-
           {/* Notes */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between mb-4">
