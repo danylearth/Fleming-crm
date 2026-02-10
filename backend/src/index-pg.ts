@@ -313,11 +313,22 @@ app.get('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
 app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
-    await run(`
-      UPDATE tenant_enquiries SET title_1=$1, first_name_1=$2, last_name_1=$3, email_1=$4, phone_1=$5,
-      status=$6, follow_up_date=$7, viewing_date=$8, linked_property_id=$9, notes=$10, updated_at=CURRENT_TIMESTAMP WHERE id=$11
-    `, [d.title_1, d.first_name_1, d.last_name_1, d.email_1, d.phone_1, d.status, d.follow_up_date, d.viewing_date, d.linked_property_id, d.notes, req.params.id]);
-    res.json({ success: true });
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','employment_status_1','employer_1','income_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','linked_property_id','notes','rejection_reason'];
+    for (const key of allowed) {
+      if (key in d) {
+        fields.push(`${key}=$${idx++}`);
+        values.push(d[key]);
+      }
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    fields.push(`updated_at=CURRENT_TIMESTAMP`);
+    values.push(req.params.id);
+    await run(`UPDATE tenant_enquiries SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+    const updated = await get(`SELECT te.*, p.address as property_address FROM tenant_enquiries te LEFT JOIN properties p ON p.id = te.linked_property_id WHERE te.id=$1`, [req.params.id]);
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Failed to update enquiry' });
   }

@@ -112,42 +112,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={Building2}
-          label="Properties"
-          value={stats.properties.toString()}
-          subtext={`${stats.propertiesLet} currently let`}
-          color="blue"
-          href="/properties"
-        />
-        <StatCard
-          icon={UserCheck}
-          label="Landlords"
-          value={stats.landlords.toString()}
-          subtext="Active clients"
-          color="purple"
-          href="/landlords"
-        />
-        <StatCard
-          icon={Users}
-          label="Tenants"
-          value={stats.tenants.toString()}
-          subtext={`${stats.activeTenancies} active tenancies`}
-          color="green"
-          href="/tenants"
-        />
-        <StatCard
-          icon={Wrench}
-          label="Maintenance"
-          value={stats.openMaintenance.toString()}
-          subtext="Open requests"
-          color={stats.openMaintenance > 0 ? 'amber' : 'gray'}
-          href="/maintenance"
-        />
-      </div>
-
       {/* Pipeline Summary Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* BDM Pipeline */}
@@ -186,7 +150,7 @@ export default function Dashboard() {
               <UserPlus className="w-5 h-5 text-green-500" />
               <h3 className="font-semibold text-navy-900">Tenant Enquiries</h3>
             </div>
-            <Link to="/enquiries" className="text-sm text-gold-600 hover:text-gold-700 font-medium">View all →</Link>
+            <Link to="/tenant-enquiries" className="text-sm text-gold-600 hover:text-gold-700 font-medium">View all →</Link>
           </div>
           <div className="grid grid-cols-4 gap-2">
             <div className="text-center p-3 bg-gray-50 rounded-xl">
