@@ -4,6 +4,7 @@ import V3Layout from '../components/V3Layout';
 import { GlassCard, SearchBar, Select, StatusDot, EmptyState, Tag } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { Building2, LayoutGrid, List, ArrowRight } from 'lucide-react';
+import { getPropertyImage } from '../utils/propertyImages';
 import PropertyMap from '../components/v3/PropertyMap';
 
 interface Property {
@@ -96,7 +97,7 @@ export default function PropertiesV3() {
                 {filtered.map(prop => (
                   <GlassCard key={prop.id} onClick={() => navigate(`/v3/properties/${prop.id}`)} className="overflow-hidden">
                     <img
-                      src={`https://picsum.photos/seed/prop${prop.id}/400/200`}
+                      src={getPropertyImage(prop.id, 400, 200)}
                       alt={prop.address}
                       className="h-32 w-full object-cover"
                       loading="lazy"

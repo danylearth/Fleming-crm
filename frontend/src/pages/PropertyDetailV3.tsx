@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { Card, GlassCard, Button, ProgressRing, SectionHeader, StatusDot, EmptyState, Avatar, Tag } from '../components/v3';
 import { useApi } from '../hooks/useApi';
+import { getPropertyImage } from '../utils/propertyImages';
 import {
   Building2, Bed, PoundSterling, MapPin, User, Users,
   CheckCircle2, Clock, FileText, FileSpreadsheet, FileImage,
@@ -92,7 +93,7 @@ export default function PropertyDetailV3() {
         {/* Hero */}
         <div className="relative h-40 md:h-56 rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
           <img
-            src={`https://picsum.photos/seed/prop${property.id}/1200/400`}
+            src={getPropertyImage(property.id, 1200, 400)}
             alt={property.address}
             className="absolute inset-0 w-full h-full object-cover"
             loading="lazy"

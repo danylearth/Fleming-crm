@@ -4,6 +4,7 @@ import V3Layout from '../components/V3Layout';
 import { Card, GlassCard, SectionHeader, StatusDot, EmptyState, Tag } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
+import { getPropertyImage } from '../utils/propertyImages';
 import {
   Building2, Users, Wrench, MessageSquare, AlertTriangle,
   ChevronRight, Clock, CheckCircle2, ArrowRight
@@ -229,7 +230,7 @@ export default function DashboardV3() {
                   className="min-w-[280px] max-w-[280px] shrink-0 overflow-hidden"
                 >
                   <img
-                    src={`https://picsum.photos/seed/prop${prop.id}/400/240`}
+                    src={getPropertyImage(prop.id, 400, 240)}
                     alt={prop.address}
                     className="h-36 w-full object-cover"
                     loading="lazy"

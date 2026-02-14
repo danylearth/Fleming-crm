@@ -4,6 +4,7 @@ import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Avatar, SectionHeader, EmptyState, Card } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { Pencil, Save, X, Mail, Phone, MapPin, Building2, FileText } from 'lucide-react';
+import { getPropertyImage } from '../utils/propertyImages';
 
 interface Landlord {
   id: number; name: string; email: string; phone: string; address: string; notes: string; property_count: number;
@@ -119,7 +120,7 @@ export default function LandlordDetailV3() {
               {properties.map(p => (
                 <Card key={p.id} hover onClick={() => navigate(`/v3/properties/${p.id}`)} className="overflow-hidden">
                   <img
-                    src={`https://picsum.photos/seed/prop${p.id}/400/160`}
+                    src={getPropertyImage(p.id, 400, 160)}
                     alt={p.address}
                     className="h-24 w-full object-cover"
                     loading="lazy"
