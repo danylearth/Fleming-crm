@@ -6,6 +6,7 @@ import {
   Briefcase, Wrench, CheckSquare, PoundSterling, Settings,
   Menu, LogOut, ChevronRight
 } from 'lucide-react';
+import FloatingAI from './v3/FloatingAI';
 
 const navItems = [
   { to: '/v3', icon: LayoutDashboard, label: 'Dashboard' },
@@ -127,6 +128,9 @@ export default function V3Layout({ children, title, breadcrumb, hideTopBar }: V3
           {children}
         </main>
       </div>
+
+      {/* Floating AI */}
+      <FloatingAI />
     </div>
   );
 }
