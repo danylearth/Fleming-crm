@@ -37,6 +37,13 @@ const upload = multer({
 app.use(cors());
 app.use(express.json());
 
+// Health check
+app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+app.get('/', (req, res, next) => {
+  if (req.headers.accept?.includes('text/html')) return next();
+  res.json({ status: 'ok' });
+});
+
 // Serve static files
 app.use(express.static(path.join(__dirname, '../../frontend/dist')));
 
