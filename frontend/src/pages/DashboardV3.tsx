@@ -228,10 +228,12 @@ export default function DashboardV3() {
                   onClick={() => navigate(`/v3/properties/${prop.id}`)}
                   className="min-w-[280px] max-w-[280px] shrink-0 overflow-hidden"
                 >
-                  {/* Image placeholder */}
-                  <div className="h-36 bg-gradient-to-br from-[var(--glass-from)] to-[var(--glass-to)] flex items-center justify-center">
-                    <Building2 size={32} className="text-[var(--text-faint)]" />
-                  </div>
+                  <img
+                    src={`https://picsum.photos/seed/prop${prop.id}/400/240`}
+                    alt={prop.address}
+                    className="h-36 w-full object-cover"
+                    loading="lazy"
+                  />
                   <div className="p-4">
                     <div className="flex items-center gap-2 mb-1">
                       <StatusDot status={prop.status === 'active' ? 'active' : 'inactive'} />

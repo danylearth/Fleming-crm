@@ -90,10 +90,13 @@ export default function PropertyDetailV3() {
     >
       <div className="p-4 md:p-6 space-y-6 max-w-6xl">
         {/* Hero */}
-        <div className="relative h-40 md:h-56 rounded-2xl overflow-hidden bg-gradient-to-br from-orange-500/20 via-pink-500/10 to-purple-500/20 border border-[var(--border-subtle)]">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Building2 size={64} className="text-[var(--text-faint)]" />
-          </div>
+        <div className="relative h-40 md:h-56 rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
+          <img
+            src={`https://picsum.photos/seed/prop${property.id}/1200/400`}
+            alt={property.address}
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+          />
           <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/60 to-transparent">
             <div className="flex items-center gap-2 mb-1">
               <StatusDot status={property.status === 'active' ? 'active' : 'inactive'} size="md" />

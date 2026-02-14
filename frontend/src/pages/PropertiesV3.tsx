@@ -95,9 +95,12 @@ export default function PropertiesV3() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filtered.map(prop => (
                   <GlassCard key={prop.id} onClick={() => navigate(`/v3/properties/${prop.id}`)} className="overflow-hidden">
-                    <div className="h-32 bg-gradient-to-br from-[var(--glass-from)] to-[var(--glass-to)] flex items-center justify-center">
-                      <Building2 size={28} className="text-[var(--text-faint)]" />
-                    </div>
+                    <img
+                      src={`https://picsum.photos/seed/prop${prop.id}/400/200`}
+                      alt={prop.address}
+                      className="h-32 w-full object-cover"
+                      loading="lazy"
+                    />
                     <div className="p-4">
                       <p className="font-semibold text-sm truncate">{prop.address}</p>
                       <p className="text-xs text-[var(--text-muted)] mt-0.5">{prop.postcode}</p>

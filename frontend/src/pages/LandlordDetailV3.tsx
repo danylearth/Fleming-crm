@@ -117,15 +117,16 @@ export default function LandlordDetailV3() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {properties.map(p => (
-                <Card key={p.id} hover onClick={() => navigate(`/v3/properties/${p.id}`)} className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
-                      <Building2 size={18} className="text-[var(--text-muted)]" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{p.address}</p>
-                      {p.type && <p className="text-xs text-[var(--text-muted)]">{p.type}</p>}
-                    </div>
+                <Card key={p.id} hover onClick={() => navigate(`/v3/properties/${p.id}`)} className="overflow-hidden">
+                  <img
+                    src={`https://picsum.photos/seed/prop${p.id}/400/160`}
+                    alt={p.address}
+                    className="h-24 w-full object-cover"
+                    loading="lazy"
+                  />
+                  <div className="p-3">
+                    <p className="text-sm font-medium truncate">{p.address}</p>
+                    {p.type && <p className="text-xs text-[var(--text-muted)]">{p.type}</p>}
                   </div>
                 </Card>
               ))}
