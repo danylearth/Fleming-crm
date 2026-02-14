@@ -17,8 +17,19 @@ import Maintenance from './pages/Maintenance';
 import Transactions from './pages/Transactions';
 import Tasks from './pages/Tasks';
 import ApplicantConcept from './pages/ApplicantConcept';
+import AILayout from './components/AILayout';
+import DashboardV2 from './pages/DashboardV2';
+import EnquiriesV2 from './pages/EnquiriesV2';
+import EnquiriesListV2 from './pages/EnquiriesListV2';
+import TenantsV2 from './pages/TenantsV2';
+import BDMV2 from './pages/BDMV2';
+import MaintenanceV2 from './pages/MaintenanceV2';
+import TasksV2 from './pages/TasksV2';
+import TransactionsV2 from './pages/TransactionsV2';
+import PropertiesV2 from './pages/PropertiesV2';
+import LandlordsV2 from './pages/LandlordsV2';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children, bare }: { children: React.ReactNode; bare?: boolean }) {
   const { user, loading } = useAuth();
   
   if (loading) {
@@ -33,6 +44,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
   
+  if (bare) return <>{children}</>;
   return <Layout>{children}</Layout>;
 }
 
@@ -89,8 +101,19 @@ function AppRoutes() {
       {/* Tasks */}
       <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
       
-      {/* Concept Pages */}
-      <Route path="/applicant-concept" element={<ProtectedRoute><ApplicantConcept /></ProtectedRoute>} />
+      {/* V2 — AI-first design */}
+      <Route path="/v2" element={<ProtectedRoute bare><AILayout><DashboardV2 /></AILayout></ProtectedRoute>} />
+      <Route path="/v2/enquiries" element={<ProtectedRoute bare><AILayout><EnquiriesV2 /></AILayout></ProtectedRoute>} />
+      <Route path="/v2/enquiries/list" element={<ProtectedRoute bare><EnquiriesListV2 /></ProtectedRoute>} />
+      <Route path="/v2/tenants" element={<ProtectedRoute bare><AILayout><TenantsV2 /></AILayout></ProtectedRoute>} />
+      <Route path="/v2/bdm" element={<ProtectedRoute bare><AILayout><BDMV2 /></AILayout></ProtectedRoute>} />
+      <Route path="/v2/maintenance" element={<ProtectedRoute bare><AILayout><MaintenanceV2 /></AILayout></ProtectedRoute>} />
+      <Route path="/v2/tasks" element={<ProtectedRoute bare><AILayout><TasksV2 /></AILayout></ProtectedRoute>} />
+      <Route path="/v2/transactions" element={<ProtectedRoute bare><AILayout><TransactionsV2 /></AILayout></ProtectedRoute>} />
+      <Route path="/v2/properties" element={<ProtectedRoute bare><AILayout><PropertiesV2 /></AILayout></ProtectedRoute>} />
+      <Route path="/v2/landlords" element={<ProtectedRoute bare><AILayout><LandlordsV2 /></AILayout></ProtectedRoute>} />
+      
+      <Route path="/applicant-concept" element={<ProtectedRoute bare><ApplicantConcept /></ProtectedRoute>} />
     </Routes>
   );
 }
