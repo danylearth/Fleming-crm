@@ -29,6 +29,21 @@ import TransactionsV2 from './pages/TransactionsV2';
 import PropertiesV2 from './pages/PropertiesV2';
 import LandlordsV2 from './pages/LandlordsV2';
 
+// V3
+import DashboardV3 from './pages/DashboardV3';
+import PropertiesV3 from './pages/PropertiesV3';
+import PropertyDetailV3 from './pages/PropertyDetailV3';
+import LandlordsV3 from './pages/LandlordsV3';
+import LandlordDetailV3 from './pages/LandlordDetailV3';
+import TenantsV3 from './pages/TenantsV3';
+import TenantDetailV3 from './pages/TenantDetailV3';
+import EnquiriesV3 from './pages/EnquiriesV3';
+import BDMV3 from './pages/BDMV3';
+import MaintenanceV3 from './pages/MaintenanceV3';
+import TasksV3 from './pages/TasksV3';
+import TransactionsV3 from './pages/TransactionsV3';
+import SettingsV3 from './pages/SettingsV3';
+
 function ProtectedRoute({ children, bare }: { children: React.ReactNode; bare?: boolean }) {
   const { user, loading } = useAuth();
   
@@ -114,6 +129,21 @@ function AppRoutes() {
       <Route path="/v2/landlords" element={<ProtectedRoute bare><LandlordsV2 /></ProtectedRoute>} />
       
       <Route path="/applicant-concept" element={<ProtectedRoute bare><ApplicantConcept /></ProtectedRoute>} />
+
+      {/* V3 — Dark mode redesign */}
+      <Route path="/v3" element={<ProtectedRoute bare><DashboardV3 /></ProtectedRoute>} />
+      <Route path="/v3/properties" element={<ProtectedRoute bare><PropertiesV3 /></ProtectedRoute>} />
+      <Route path="/v3/properties/:id" element={<ProtectedRoute bare><PropertyDetailV3 /></ProtectedRoute>} />
+      <Route path="/v3/landlords" element={<ProtectedRoute bare><LandlordsV3 /></ProtectedRoute>} />
+      <Route path="/v3/landlords/:id" element={<ProtectedRoute bare><LandlordDetailV3 /></ProtectedRoute>} />
+      <Route path="/v3/tenants" element={<ProtectedRoute bare><TenantsV3 /></ProtectedRoute>} />
+      <Route path="/v3/tenants/:id" element={<ProtectedRoute bare><TenantDetailV3 /></ProtectedRoute>} />
+      <Route path="/v3/enquiries" element={<ProtectedRoute bare><EnquiriesV3 /></ProtectedRoute>} />
+      <Route path="/v3/bdm" element={<ProtectedRoute bare><BDMV3 /></ProtectedRoute>} />
+      <Route path="/v3/maintenance" element={<ProtectedRoute bare><MaintenanceV3 /></ProtectedRoute>} />
+      <Route path="/v3/tasks" element={<ProtectedRoute bare><TasksV3 /></ProtectedRoute>} />
+      <Route path="/v3/financials" element={<ProtectedRoute bare><TransactionsV3 /></ProtectedRoute>} />
+      <Route path="/v3/settings" element={<ProtectedRoute bare><SettingsV3 /></ProtectedRoute>} />
     </Routes>
   );
 }
