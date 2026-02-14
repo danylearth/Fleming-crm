@@ -18,23 +18,16 @@ export default function Login() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if setup is needed
     fetch(`${API_URL}/api/auth/me`)
       .then(res => {
         if (res.status === 401) {
-          // Try setup endpoint to check if users exist
           return fetch(`${API_URL}/api/auth/setup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
         }
         return res;
       })
       .then(res => {
-        if (res.status === 400) {
-          // Setup already done, show login
-          setIsSetup(false);
-        } else if (res.status === 500 || res.status === 200) {
-          // No users yet, show setup
-          setIsSetup(true);
-        }
+        if (res.status === 400) setIsSetup(false);
+        else if (res.status === 500 || res.status === 200) setIsSetup(true);
       })
       .catch(() => setIsSetup(false))
       .finally(() => setCheckingSetup(false));
@@ -44,56 +37,47 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
     try {
       if (isSetup) {
-        // Create first admin
         const res = await fetch(`${API_URL}/api/auth/setup`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password, name })
         });
         if (!res.ok) throw new Error('Setup failed');
         setIsSetup(false);
       }
-      
       await login(email, password);
       navigate('/');
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err: any) { setError(err.message || 'Login failed'); }
+    finally { setLoading(false); }
   };
 
-  if (checkingSetup) {
-    return (
-      <div className="min-h-screen bg-navy-900 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-gold-500/30 border-t-gold-500 rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (checkingSetup) return (
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-gray-600 border-t-white rounded-full animate-spin" />
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-gold-500 rounded-xl flex items-center justify-center">
-              <Home className="w-7 h-7 text-navy-900" />
+            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center">
+              <Home className="w-7 h-7 text-gray-900" />
             </div>
             <div className="text-left">
               <h1 className="text-2xl font-bold text-white">Fleming Lettings</h1>
-              <p className="text-navy-300 text-sm">Property Management System</p>
+              <p className="text-gray-400 text-sm">Property Management System</p>
             </div>
           </div>
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+        <div className="bg-white rounded-lg p-8">
           <div className="mb-6">
-            <h2 className="text-xl font-bold text-navy-900">
+            <h2 className="text-xl font-bold text-gray-900">
               {isSetup ? 'Create Admin Account' : 'Staff Login'}
             </h2>
             <p className="text-gray-500 text-sm mt-1">
@@ -102,79 +86,51 @@ export default function Login() {
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl mb-6 text-sm">
-              {error}
-            </div>
+            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6 text-sm">{error}</div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSetup && (
               <div>
-                <label className="block text-sm font-medium text-navy-700 mb-1.5">Full Name</label>
+                <label className="block text-xs text-gray-500 mb-1.5">Full Name</label>
                 <div className="relative">
-                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Your name"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gold-500 focus:border-gold-500 focus:bg-white transition-all"
-                    required
-                  />
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input type="text" placeholder="Your name" value={name} onChange={e => setName(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-200 focus:outline-none focus:bg-white transition-all text-sm" required />
                 </div>
               </div>
             )}
             
             <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1.5">Email</label>
+              <label className="block text-xs text-gray-500 mb-1.5">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="email"
-                  placeholder="you@fleminglettings.co.uk"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gold-500 focus:border-gold-500 focus:bg-white transition-all"
-                  required
-                />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input type="email" placeholder="you@fleminglettings.co.uk" value={email} onChange={e => setEmail(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-200 focus:outline-none focus:bg-white transition-all text-sm" required />
               </div>
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1.5">Password</label>
+              <label className="block text-xs text-gray-500 mb-1.5">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gold-500 focus:border-gold-500 focus:bg-white transition-all"
-                  required
-                />
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-200 focus:outline-none focus:bg-white transition-all text-sm" required />
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-navy-900 hover:bg-navy-800 text-white font-semibold py-3.5 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-6"
-            >
+            <button type="submit" disabled={loading}
+              className="w-full bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3 rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-6">
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <>
-                  {isSetup ? 'Create Account' : 'Sign In'}
-                  <ArrowRight className="w-4 h-4" />
-                </>
+                <>{isSetup ? 'Create Account' : 'Sign In'}<ArrowRight className="w-4 h-4" /></>
               )}
             </button>
           </form>
         </div>
         
-        <p className="text-center text-navy-400 text-sm mt-6">
-          Internal use only • © 2026 Fleming Lettings
-        </p>
+        <p className="text-center text-gray-500 text-sm mt-6">Internal use only • © 2026 Fleming Lettings</p>
       </div>
     </div>
   );
