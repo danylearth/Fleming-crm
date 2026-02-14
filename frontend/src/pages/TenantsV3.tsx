@@ -49,8 +49,8 @@ export default function TenantsV3() {
 
   return (
     <V3Layout title="Tenants" breadcrumb={[{ label: 'Tenants' }]}>
-      <div className="p-8 space-y-6">
-        <div className="flex items-center gap-4">
+      <div className="p-4 md:p-8 space-y-6">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
           <div className="flex-1"><SearchBar value={search} onChange={setSearch} placeholder="Search tenants..." /></div>
           <Button variant="gradient" onClick={() => setShowModal(true)}>
             <Plus size={16} className="mr-2" /> Add Tenant
@@ -108,8 +108,8 @@ export default function TenantsV3() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowModal(false)}>
-          <div className="bg-[#232323] border border-white/[0.1] rounded-2xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowModal(false)}>
+          <div className="bg-[#232323] border border-white/[0.1] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Add Tenant</h2>
               <button onClick={() => setShowModal(false)} className="text-white/40 hover:text-white"><X size={18} /></button>

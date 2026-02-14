@@ -78,13 +78,13 @@ export default function TransactionsV3() {
 
   return (
     <V3Layout title="Financials" breadcrumb={[{ label: 'Financials' }]}>
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         {loading ? (
           <div className="text-center text-white/30 py-16">Loading...</div>
         ) : (
           <>
             {/* Summary Cards */}
-            <div className="grid grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
               {[
                 { label: 'Total Monthly Rent', value: fmt(totalMonthlyRent), icon: <PoundSterling size={20} />, color: 'from-blue-500 to-blue-600' },
                 { label: 'Collected', value: fmt(collected), icon: <TrendingUp size={20} />, color: 'from-emerald-500 to-emerald-600' },
@@ -103,19 +103,19 @@ export default function TransactionsV3() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Rent Payments Table */}
               <Card className="p-5">
                 <h3 className="text-lg font-semibold mb-4">Recent Payments</h3>
                 {payments.length === 0 ? (
                   <EmptyState message="No payment records yet" icon={<PoundSterling size={24} />} />
                 ) : (
-                  <div className="space-y-1">
-                    <div className="grid grid-cols-4 gap-2 text-[11px] text-white/30 font-medium uppercase tracking-wider pb-2 border-b border-white/[0.06]">
+                  <div className="space-y-1 overflow-x-auto">
+                    <div className="grid grid-cols-4 gap-2 min-w-[500px] text-[11px] text-white/30 font-medium uppercase tracking-wider pb-2 border-b border-white/[0.06]">
                       <span>Tenant</span><span>Property</span><span className="text-right">Amount</span><span className="text-right">Date</span>
                     </div>
                     {payments.slice(0, 15).map(p => (
-                      <div key={p.id} className="grid grid-cols-4 gap-2 py-2.5 border-b border-white/[0.04] text-sm">
+                      <div key={p.id} className="grid grid-cols-4 gap-2 min-w-[500px] py-2.5 border-b border-white/[0.04] text-sm">
                         <span className="truncate">{p.tenant_name || '—'}</span>
                         <span className="truncate text-white/50">{p.property_address || '—'}</span>
                         <span className="text-right font-medium text-emerald-400">{fmt(p.amount)}</span>

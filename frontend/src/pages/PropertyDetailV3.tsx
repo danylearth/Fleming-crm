@@ -88,9 +88,9 @@ export default function PropertyDetailV3() {
         { label: property.address },
       ]}
     >
-      <div className="p-6 space-y-6 max-w-6xl">
+      <div className="p-4 md:p-6 space-y-6 max-w-6xl">
         {/* Hero */}
-        <div className="relative h-56 rounded-2xl overflow-hidden bg-gradient-to-br from-orange-500/20 via-pink-500/10 to-purple-500/20 border border-white/[0.06]">
+        <div className="relative h-40 md:h-56 rounded-2xl overflow-hidden bg-gradient-to-br from-orange-500/20 via-pink-500/10 to-purple-500/20 border border-white/[0.06]">
           <div className="absolute inset-0 flex items-center justify-center">
             <Building2 size={64} className="text-white/10" />
           </div>
@@ -110,7 +110,7 @@ export default function PropertyDetailV3() {
             {/* Compliance Rings */}
             <Card className="p-6">
               <SectionHeader title="Compliance Overview" />
-              <div className="flex items-center gap-8 flex-wrap">
+              <div className="grid grid-cols-2 md:flex md:items-center gap-6 md:gap-8">
                 <div className="flex flex-col items-center">
                   <ProgressRing value={compliancePercent(property.eicr_expiry_date)} size={80} strokeWidth={6} />
                   <span className="text-xs text-white/50 mt-2">EICR</span>
@@ -170,7 +170,7 @@ export default function PropertyDetailV3() {
             {/* Documents Placeholder */}
             <Card className="p-6">
               <SectionHeader title="Documents" />
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
                   { icon: FileText, label: 'Tenancy Agreement', color: 'text-blue-400' },
                   { icon: FileSpreadsheet, label: 'EPC Certificate', color: 'text-emerald-400' },

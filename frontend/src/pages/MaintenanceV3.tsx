@@ -81,9 +81,9 @@ export default function MaintenanceV3() {
 
   return (
     <V3Layout title="Maintenance" breadcrumb={[{ label: 'Maintenance' }]}>
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         {/* Stats Strip */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
           {[
             { label: 'Open', count: counts.open, icon: <AlertCircle size={20} />, color: 'text-red-400' },
             { label: 'In Progress', count: counts.in_progress, icon: <Clock size={20} />, color: 'text-amber-400' },
@@ -100,19 +100,21 @@ export default function MaintenanceV3() {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 mb-6">
           <div className="flex-1">
             <SearchBar value={search} onChange={setSearch} placeholder="Search maintenance..." />
           </div>
-          <Select value={filterStatus} onChange={setFilterStatus} options={[
-            { value: 'all', label: 'All Status' }, ...Object.entries(STATUS_LABELS).map(([v, l]) => ({ value: v, label: l }))
-          ]} className="w-40" />
-          <Select value={filterPriority} onChange={setFilterPriority} options={[
-            { value: 'all', label: 'All Priority' }, ...Object.entries(PRIORITY_LABELS).map(([v, l]) => ({ value: v, label: l }))
-          ]} className="w-40" />
-          <Button variant="gradient" size="sm" onClick={() => setShowAdd(true)}>
-            <Plus size={14} className="mr-1.5" /> Report Issue
-          </Button>
+          <div className="flex flex-wrap gap-2 sm:gap-3">
+            <Select value={filterStatus} onChange={setFilterStatus} options={[
+              { value: 'all', label: 'All Status' }, ...Object.entries(STATUS_LABELS).map(([v, l]) => ({ value: v, label: l }))
+            ]} className="w-full sm:w-40" />
+            <Select value={filterPriority} onChange={setFilterPriority} options={[
+              { value: 'all', label: 'All Priority' }, ...Object.entries(PRIORITY_LABELS).map(([v, l]) => ({ value: v, label: l }))
+            ]} className="w-full sm:w-40" />
+            <Button variant="gradient" size="sm" onClick={() => setShowAdd(true)}>
+              <Plus size={14} className="mr-1.5" /> Report Issue
+            </Button>
+          </div>
         </div>
 
         {/* List */}
@@ -168,8 +170,8 @@ export default function MaintenanceV3() {
 
         {/* Add Modal */}
         {showAdd && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowAdd(false)}>
-            <div className="bg-[#232323] rounded-2xl border border-white/[0.1] w-[480px] p-6" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center z-50" onClick={() => setShowAdd(false)}>
+            <div className="bg-[#232323] rounded-t-2xl md:rounded-2xl border border-white/[0.1] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold">Report Issue</h3>
                 <button onClick={() => setShowAdd(false)} className="text-white/40 hover:text-white"><X size={18} /></button>

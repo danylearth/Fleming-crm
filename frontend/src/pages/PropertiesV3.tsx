@@ -52,7 +52,7 @@ export default function PropertiesV3() {
     <V3Layout title="Properties" breadcrumb={[{ label: 'Properties' }]}>
       <div className="flex h-full">
         {/* Left: Search + Grid/List */}
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 p-4 md:p-6 overflow-y-auto">
           {/* Search */}
           <SearchBar value={search} onChange={setSearch} placeholder="Search properties..." />
 
@@ -62,13 +62,13 @@ export default function PropertiesV3() {
               value={statusFilter}
               onChange={setStatusFilter}
               options={statuses.map(s => ({ value: s, label: s === 'all' ? 'All Status' : s.charAt(0).toUpperCase() + s.slice(1) }))}
-              className="w-40"
+              className="w-full sm:w-40"
             />
             <Select
               value={typeFilter}
               onChange={setTypeFilter}
               options={types.map(t => ({ value: t, label: t === 'all' ? 'All Types' : t.charAt(0).toUpperCase() + t.slice(1) }))}
-              className="w-40"
+              className="w-full sm:w-40"
             />
             <div className="ml-auto flex items-center gap-1 bg-white/[0.05] rounded-xl p-1">
               <button

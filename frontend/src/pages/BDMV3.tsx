@@ -73,7 +73,7 @@ export default function BDMV3() {
 
   return (
     <V3Layout title="BDM Pipeline" breadcrumb={[{ label: 'BDM' }]}>
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <p className="text-white/50 text-sm">{prospects.length} prospect{prospects.length !== 1 ? 's' : ''} in pipeline</p>
@@ -85,9 +85,9 @@ export default function BDMV3() {
         {loading ? (
           <div className="text-center text-white/30 py-16">Loading...</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 overflow-x-auto pb-4 md:pb-0 md:overflow-visible">
             {grouped.map(col => (
-              <div key={col.key}>
+              <div key={col.key} className="min-w-[250px] md:min-w-0">
                 <div className={`bg-gradient-to-b ${col.color} rounded-xl border p-3 mb-3`}>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold">{col.label}</span>
@@ -134,8 +134,8 @@ export default function BDMV3() {
 
         {/* Add Modal */}
         {showAdd && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowAdd(false)}>
-            <div className="bg-[#232323] rounded-2xl border border-white/[0.1] w-[480px] max-h-[85vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center z-50 p-0 md:p-4" onClick={() => setShowAdd(false)}>
+            <div className="bg-[#232323] rounded-t-2xl md:rounded-2xl border border-white/[0.1] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold">Add Prospect</h3>
                 <button onClick={() => setShowAdd(false)} className="text-white/40 hover:text-white"><X size={18} /></button>

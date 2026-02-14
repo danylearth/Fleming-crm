@@ -195,7 +195,7 @@ export default function FloatingAI() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center shadow-lg shadow-pink-500/20 hover:shadow-pink-500/40 hover:scale-105 transition-all group"
+          className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-50 w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center shadow-lg shadow-pink-500/20 hover:shadow-pink-500/40 hover:scale-105 transition-all group"
         >
           <Sparkles size={22} className="text-white" />
           {hasUnread && (
@@ -208,7 +208,7 @@ export default function FloatingAI() {
 
       {/* Chat Panel */}
       {open && (
-        <div className="fixed bottom-6 right-6 z-50 w-[380px] h-[560px] flex flex-col rounded-2xl border border-white/[0.1] bg-[#1e1e1e] shadow-2xl shadow-black/50 overflow-hidden animate-in slide-in-from-bottom-4">
+        <div className="fixed bottom-0 right-0 z-50 w-full h-[85vh] md:bottom-6 md:right-6 md:w-[380px] md:h-[560px] flex flex-col md:rounded-2xl rounded-t-2xl border border-white/[0.1] bg-[#1e1e1e] shadow-2xl shadow-black/50 overflow-hidden animate-in slide-in-from-bottom-4">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08] bg-gradient-to-r from-[#232323] to-[#1e1e1e]">
             <div className="flex items-center gap-3">

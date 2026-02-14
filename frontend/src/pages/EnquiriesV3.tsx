@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Avatar, SearchBar, Input, Select, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, Mail, Phone, Building2, X, Clock } from 'lucide-react';
+import { Plus, Mail, Phone, Building2, X, Clock, ArrowLeft } from 'lucide-react';
 
 interface Enquiry {
   id: number;
@@ -96,8 +96,8 @@ export default function EnquiriesV3() {
   return (
     <V3Layout hideTopBar>
       <div className="flex h-full">
-        {/* Left Panel */}
-        <div className="w-[350px] shrink-0 border-r border-white/[0.06] flex flex-col">
+        {/* Left Panel - hidden on mobile when detail selected */}
+        <div className={`w-full md:w-[350px] shrink-0 border-r border-white/[0.06] flex flex-col ${selected ? 'hidden md:flex' : 'flex'}`}>
           {/* Header */}
           <div className="flex items-center justify-between px-5 h-16 border-b border-white/[0.06]">
             <div className="flex items-center gap-3">
@@ -164,12 +164,16 @@ export default function EnquiriesV3() {
           </div>
         </div>
 
-        {/* Right Panel */}
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* Right Panel - full width on mobile when selected */}
+        <div className={`flex-1 flex flex-col min-w-0 ${selected ? 'flex' : 'hidden md:flex'}`}>
           {selected ? (
             <>
               {/* Detail Header */}
-              <div className="flex items-center gap-4 px-8 h-16 border-b border-white/[0.06] shrink-0">
+              <div className="flex items-center gap-4 px-4 md:px-8 h-16 border-b border-white/[0.06] shrink-0">
+                {/* Back button on mobile */}
+                <button onClick={() => setSelected(null)} className="text-white/50 hover:text-white md:hidden mr-1">
+                  <ArrowLeft size={20} />
+                </button>
                 <Avatar name={selected.name} size="md" />
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-semibold">{selected.name}</h3>
@@ -180,7 +184,7 @@ export default function EnquiriesV3() {
               </div>
 
               {/* Detail Content */}
-              <div className="flex-1 overflow-y-auto p-8 space-y-6">
+              <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
                 {/* Contact Info */}
                 <GlassCard className="p-5">
                   <h4 className="text-xs text-white/40 font-medium uppercase tracking-wider mb-3">Contact Information</h4>
@@ -242,8 +246,8 @@ export default function EnquiriesV3() {
 
         {/* Add Modal */}
         {showAdd && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowAdd(false)}>
-            <div className="bg-[#232323] rounded-2xl border border-white/[0.1] w-[480px] max-h-[85vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowAdd(false)}>
+            <div className="bg-[#232323] rounded-2xl border border-white/[0.1] w-full max-w-[480px] max-h-[85vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold">Add Enquiry</h3>
                 <button onClick={() => setShowAdd(false)} className="text-white/40 hover:text-white"><X size={18} /></button>

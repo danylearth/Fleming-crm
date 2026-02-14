@@ -76,9 +76,9 @@ export default function TasksV3() {
 
   return (
     <V3Layout title="Tasks" breadcrumb={[{ label: 'Tasks' }]}>
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         {/* Stats Strip */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
           {[
             { label: 'Done', count: counts.completed, icon: <CheckCircle2 size={20} />, color: 'text-emerald-400' },
             { label: 'In Progress', count: counts.in_progress, icon: <Clock size={20} />, color: 'text-amber-400' },
@@ -98,17 +98,20 @@ export default function TasksV3() {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4 mb-6">
-          <Select value={filterStatus} onChange={setFilterStatus} options={[
-            { value: 'all', label: 'All Status' }, ...Object.entries(STATUS_LABELS).map(([v, l]) => ({ value: v, label: l }))
-          ]} className="w-40" />
-          <Select value={filterPriority} onChange={setFilterPriority} options={[
-            { value: 'all', label: 'All Priority' }, ...Object.entries(PRIORITY_LABELS).map(([v, l]) => ({ value: v, label: l }))
-          ]} className="w-40" />
-          <div className="flex-1" />
-          <Button variant="gradient" size="sm" onClick={() => setShowAdd(true)}>
-            <Plus size={14} className="mr-1.5" /> Add Task
-          </Button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 mb-6">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
+            <Select value={filterStatus} onChange={setFilterStatus} options={[
+              { value: 'all', label: 'All Status' }, ...Object.entries(STATUS_LABELS).map(([v, l]) => ({ value: v, label: l }))
+            ]} className="w-full sm:w-40" />
+            <Select value={filterPriority} onChange={setFilterPriority} options={[
+              { value: 'all', label: 'All Priority' }, ...Object.entries(PRIORITY_LABELS).map(([v, l]) => ({ value: v, label: l }))
+            ]} className="w-full sm:w-40" />
+          </div>
+          <div className="sm:ml-auto">
+            <Button variant="gradient" size="sm" onClick={() => setShowAdd(true)}>
+              <Plus size={14} className="mr-1.5" /> Add Task
+            </Button>
+          </div>
         </div>
 
         {/* Task List */}
@@ -122,33 +125,37 @@ export default function TasksV3() {
               const overdue = isOverdue(task);
               const taskPct = task.status === 'completed' ? 100 : task.status === 'in_progress' ? 50 : 0;
               return (
-                <Card key={task.id} className={`p-5 ${overdue ? 'border-red-500/40' : ''}`} hover>
-                  <div className="flex items-center gap-4">
-                    <ProgressRing value={taskPct} size={40} strokeWidth={3} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-white/40' : ''}`}>{task.title}</p>
-                        {overdue && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">Overdue</span>}
+                <Card key={task.id} className={`p-4 md:p-5 ${overdue ? 'border-red-500/40' : ''}`} hover>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <ProgressRing value={taskPct} size={40} strokeWidth={3} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-white/40' : ''}`}>{task.title}</p>
+                          {overdue && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">Overdue</span>}
+                        </div>
+                        {task.description && <p className="text-xs text-white/40 mt-0.5 truncate">{task.description}</p>}
                       </div>
-                      {task.description && <p className="text-xs text-white/40 mt-0.5 truncate">{task.description}</p>}
                     </div>
-                    {task.assigned_to && <Avatar name={task.assigned_to} size="xs" />}
-                    <span className={`text-[10px] px-2.5 py-1 rounded-full font-medium ${PRIORITY_COLORS[task.priority]}`}>
-                      {PRIORITY_LABELS[task.priority] || task.priority}
-                    </span>
-                    {task.due_date && (
-                      <div className={`flex items-center gap-1 text-xs ${overdue ? 'text-red-400' : 'text-white/30'}`}>
-                        <Calendar size={12} />
-                        {new Date(task.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                    <div className="flex items-center gap-2 flex-wrap pl-[52px] sm:pl-0">
+                      {task.assigned_to && <Avatar name={task.assigned_to} size="xs" />}
+                      <span className={`text-[10px] px-2.5 py-1 rounded-full font-medium ${PRIORITY_COLORS[task.priority]}`}>
+                        {PRIORITY_LABELS[task.priority] || task.priority}
+                      </span>
+                      {task.due_date && (
+                        <div className={`flex items-center gap-1 text-xs ${overdue ? 'text-red-400' : 'text-white/30'}`}>
+                          <Calendar size={12} />
+                          {new Date(task.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                        </div>
+                      )}
+                      <div className="flex gap-1">
+                        {task.status !== 'in_progress' && task.status !== 'completed' && (
+                          <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'in_progress')}>Start</Button>
+                        )}
+                        {task.status !== 'completed' && (
+                          <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'completed')}>Done</Button>
+                        )}
                       </div>
-                    )}
-                    <div className="flex gap-1">
-                      {task.status !== 'in_progress' && task.status !== 'completed' && (
-                        <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'in_progress')}>Start</Button>
-                      )}
-                      {task.status !== 'completed' && (
-                        <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'completed')}>Done</Button>
-                      )}
                     </div>
                   </div>
                 </Card>
@@ -159,8 +166,8 @@ export default function TasksV3() {
 
         {/* Add Modal */}
         {showAdd && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowAdd(false)}>
-            <div className="bg-[#232323] rounded-2xl border border-white/[0.1] w-[480px] p-6" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center z-50" onClick={() => setShowAdd(false)}>
+            <div className="bg-[#232323] rounded-t-2xl md:rounded-2xl border border-white/[0.1] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold">Add Task</h3>
                 <button onClick={() => setShowAdd(false)} className="text-white/40 hover:text-white"><X size={18} /></button>

@@ -22,7 +22,7 @@ export default function SettingsV3() {
 
   return (
     <V3Layout title="Settings" breadcrumb={[{ label: 'Settings' }]}>
-      <div className="p-8 space-y-8 max-w-2xl">
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-2xl">
         {/* Profile */}
         <GlassCard className="p-6">
           <SectionHeader title="Profile" />

@@ -95,10 +95,10 @@ export default function DashboardV3() {
 
   return (
     <V3Layout hideTopBar>
-      <div className="p-8 space-y-8">
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Greeting */}
-        <div>
-          <h1 className="text-4xl font-bold">Hello, {firstName} 👋</h1>
+        <div className="pt-10 md:pt-0">
+          <h1 className="text-2xl md:text-4xl font-bold">Hello, {firstName} 👋</h1>
           <p className="text-white/50 mt-1 text-sm">Here's what's happening with your properties today.</p>
         </div>
 

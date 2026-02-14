@@ -58,10 +58,10 @@ export default function LandlordDetailV3() {
         { label: landlord.name },
       ]}
     >
-      <div className="p-8 space-y-8">
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Hero */}
         <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-orange-500/20 via-pink-500/20 to-purple-500/20 border border-white/[0.08]">
-          <div className="p-8 flex items-center gap-6">
+          <div className="p-4 md:p-8 flex flex-col sm:flex-row items-start sm:items-center gap-4 md:gap-6">
             <Avatar name={landlord.name} size="xl" />
             <div className="flex-1">
               <h1 className="text-2xl font-bold">{landlord.name}</h1>

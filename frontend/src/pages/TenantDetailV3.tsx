@@ -51,9 +51,9 @@ export default function TenantDetailV3() {
 
   return (
     <V3Layout breadcrumb={[{ label: 'Tenants', to: '/v3/tenants' }, { label: tenant.name }]}>
-      <div className="p-8 space-y-8">
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Header */}
-        <div className="flex items-center gap-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
           <Avatar name={tenant.name} size="xl" />
           <div className="flex-1">
             <div className="flex items-center gap-3">
