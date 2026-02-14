@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, SearchBar, Select, StatusDot, EmptyState, Tag } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Building2, LayoutGrid, List, MapPin, ArrowRight } from 'lucide-react';
+import { Building2, LayoutGrid, List, ArrowRight } from 'lucide-react';
+import PropertyMap from '../components/v3/PropertyMap';
 
 interface Property {
   id: number; address: string; postcode: string; rent_amount: number;
@@ -154,11 +155,9 @@ export default function PropertiesV3() {
           )}
         </div>
 
-        {/* Right: Map Placeholder */}
-        <div className="hidden lg:flex w-80 xl:w-96 border-l border-[var(--border-subtle)] flex-col items-center justify-center bg-[var(--bg-subtle)]">
-          <MapPin size={40} className="text-[var(--text-faint)] mb-3" />
-          <p className="text-sm text-[var(--text-muted)]">Map coming soon</p>
-          <p className="text-xs text-[var(--text-faint)] mt-1">Mapbox integration</p>
+        {/* Right: Map */}
+        <div className="hidden lg:block w-80 xl:w-96 border-l border-[var(--border-subtle)]">
+          <PropertyMap properties={filtered} onPropertyClick={(id) => navigate(`/v3/properties/${id}`)} />
         </div>
       </div>
     </V3Layout>
