@@ -93,7 +93,7 @@ export default function MaintenanceV3() {
               <div className={`${s.color}`}>{s.icon}</div>
               <div>
                 <p className="text-2xl font-bold">{s.count}</p>
-                <p className="text-xs text-white/50">{s.label}</p>
+                <p className="text-xs text-[var(--text-secondary)]">{s.label}</p>
               </div>
             </GlassCard>
           ))}
@@ -119,7 +119,7 @@ export default function MaintenanceV3() {
 
         {/* List */}
         {loading ? (
-          <div className="text-center text-white/30 py-16">Loading...</div>
+          <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
         ) : filtered.length === 0 ? (
           <EmptyState message="No maintenance items found" icon={<Wrench size={32} />} />
         ) : (
@@ -128,15 +128,15 @@ export default function MaintenanceV3() {
               <Card key={item.id} className="p-5" hover onClick={() => setExpanded(expanded === item.id ? null : item.id)}>
                 <div className="flex items-center gap-4">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    item.priority === 'urgent' ? 'bg-red-500/20' : item.priority === 'high' ? 'bg-orange-500/20' : 'bg-white/[0.06]'
+                    item.priority === 'urgent' ? 'bg-red-500/20' : item.priority === 'high' ? 'bg-orange-500/20' : 'bg-[var(--bg-hover)]'
                   }`}>
-                    <Wrench size={18} className={item.priority === 'urgent' ? 'text-red-400' : 'text-white/50'} />
+                    <Wrench size={18} className={item.priority === 'urgent' ? 'text-red-400' : 'text-[var(--text-secondary)]'} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{item.title}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <MapPin size={11} className="text-white/30" />
-                      <span className="text-xs text-white/40 truncate">{item.address}</span>
+                      <MapPin size={11} className="text-[var(--text-muted)]" />
+                      <span className="text-xs text-[var(--text-muted)] truncate">{item.address}</span>
                     </div>
                   </div>
                   <span className={`text-[10px] px-2.5 py-1 rounded-full font-medium ${PRIORITY_COLORS[item.priority]}`}>
@@ -145,13 +145,13 @@ export default function MaintenanceV3() {
                   <span className={`text-[10px] px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[item.status]}`}>
                     {STATUS_LABELS[item.status] || item.status}
                   </span>
-                  <span className="text-xs text-white/30">{new Date(item.reported_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
-                  {expanded === item.id ? <ChevronUp size={16} className="text-white/30" /> : <ChevronDown size={16} className="text-white/30" />}
+                  <span className="text-xs text-[var(--text-muted)]">{new Date(item.reported_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                  {expanded === item.id ? <ChevronUp size={16} className="text-[var(--text-muted)]" /> : <ChevronDown size={16} className="text-[var(--text-muted)]" />}
                 </div>
 
                 {expanded === item.id && (
-                  <div className="mt-4 pt-4 border-t border-white/[0.06] space-y-3">
-                    {item.description && <p className="text-sm text-white/60">{item.description}</p>}
+                  <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] space-y-3">
+                    {item.description && <p className="text-sm text-[var(--text-secondary)]">{item.description}</p>}
                     {item.resolved_date && <p className="text-xs text-emerald-400">Resolved: {new Date(item.resolved_date).toLocaleDateString('en-GB')}</p>}
                     <div className="flex gap-2">
                       {item.status !== 'in_progress' && (
@@ -170,11 +170,11 @@ export default function MaintenanceV3() {
 
         {/* Add Modal */}
         {showAdd && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center z-50" onClick={() => setShowAdd(false)}>
-            <div className="bg-[#232323] rounded-t-2xl md:rounded-2xl border border-white/[0.1] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-end md:items-center justify-center z-50" onClick={() => setShowAdd(false)}>
+            <div className="bg-[var(--bg-card)] rounded-t-2xl md:rounded-2xl border border-[var(--border-input)] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold">Report Issue</h3>
-                <button onClick={() => setShowAdd(false)} className="text-white/40 hover:text-white"><X size={18} /></button>
+                <button onClick={() => setShowAdd(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
               </div>
               <div className="space-y-4">
                 <Input label="Title" value={form.title} onChange={v => setForm(p => ({ ...p, title: v }))} placeholder="Issue title" />

@@ -67,7 +67,7 @@ export default function TenantsV3() {
         </div>
 
         {loading ? (
-          <div className="text-center py-16 text-white/30 text-sm">Loading...</div>
+          <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
         ) : filtered.length === 0 ? (
           <EmptyState message={search || statusFilter !== 'all' ? 'No tenants match your filters' : 'No tenants yet'} />
         ) : (
@@ -82,7 +82,7 @@ export default function TenantsV3() {
                       <StatusDot status={t.status === 'active' ? 'active' : 'inactive'} />
                     </div>
                     {t.email && (
-                      <p className="text-xs text-white/50 truncate flex items-center gap-1 mt-1">
+                      <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1 mt-1">
                         <Mail size={11} /> {t.email}
                       </p>
                     )}
@@ -90,12 +90,12 @@ export default function TenantsV3() {
                 </div>
                 <div className="mt-4 space-y-1.5">
                   {t.property_address && (
-                    <p className="text-xs text-white/40 flex items-center gap-1.5 truncate">
+                    <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5 truncate">
                       <Building2 size={12} /> {t.property_address}
                     </p>
                   )}
                   {t.move_in_date && (
-                    <p className="text-xs text-white/40 flex items-center gap-1.5">
+                    <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
                       <Calendar size={12} /> {new Date(t.move_in_date).toLocaleDateString()}
                     </p>
                   )}
@@ -108,11 +108,11 @@ export default function TenantsV3() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowModal(false)}>
-          <div className="bg-[#232323] border border-white/[0.1] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm" onClick={() => setShowModal(false)}>
+          <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Add Tenant</h2>
-              <button onClick={() => setShowModal(false)} className="text-white/40 hover:text-white"><X size={18} /></button>
+              <button onClick={() => setShowModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
             </div>
             <Input label="Name" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="Full name" />
             <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} placeholder="email@example.com" type="email" />

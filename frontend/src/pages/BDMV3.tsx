@@ -76,14 +76,14 @@ export default function BDMV3() {
       <div className="p-4 md:p-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <p className="text-white/50 text-sm">{prospects.length} prospect{prospects.length !== 1 ? 's' : ''} in pipeline</p>
+          <p className="text-[var(--text-secondary)] text-sm">{prospects.length} prospect{prospects.length !== 1 ? 's' : ''} in pipeline</p>
           <Button variant="gradient" size="sm" onClick={() => setShowAdd(true)}>
             <Plus size={14} className="mr-1.5" /> Add Prospect
           </Button>
         </div>
 
         {loading ? (
-          <div className="text-center text-white/30 py-16">Loading...</div>
+          <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
         ) : (
           <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 overflow-x-auto pb-4 md:pb-0 md:overflow-visible">
             {grouped.map(col => (
@@ -91,35 +91,35 @@ export default function BDMV3() {
                 <div className={`bg-gradient-to-b ${col.color} rounded-xl border p-3 mb-3`}>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold">{col.label}</span>
-                    <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full">{col.items.length}</span>
+                    <span className="text-xs bg-[var(--bg-input)] px-2 py-0.5 rounded-full">{col.items.length}</span>
                   </div>
                 </div>
                 <div className="space-y-3">
                   {col.items.length === 0 ? (
-                    <p className="text-xs text-white/20 text-center py-4">No prospects</p>
+                    <p className="text-xs text-[var(--text-faint)] text-center py-4">No prospects</p>
                   ) : (
                     col.items.map(p => (
                       <GlassCard key={p.id} className="p-4" onClick={() => setExpanded(expanded === p.id ? null : p.id)}>
                         <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-[10px] font-bold shrink-0">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
                             {p.company_name?.[0]?.toUpperCase() || '?'}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium truncate">{p.company_name}</p>
-                            <p className="text-xs text-white/50 truncate">{p.contact_name}</p>
+                            <p className="text-xs text-[var(--text-secondary)] truncate">{p.contact_name}</p>
                           </div>
                         </div>
                         {p.source && <Tag>{p.source}</Tag>}
 
                         {expanded === p.id && (
-                          <div className="mt-3 pt-3 border-t border-white/[0.08] space-y-2">
-                            <div className="flex items-center gap-2 text-xs text-white/60">
+                          <div className="mt-3 pt-3 border-t border-[var(--border-color)] space-y-2">
+                            <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                               <Mail size={12} /> {p.email}
                             </div>
-                            <div className="flex items-center gap-2 text-xs text-white/60">
+                            <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                               <Phone size={12} /> {p.phone}
                             </div>
-                            {p.notes && <p className="text-xs text-white/40 mt-2">{p.notes}</p>}
+                            {p.notes && <p className="text-xs text-[var(--text-muted)] mt-2">{p.notes}</p>}
                             <Select label="Change Status" value={p.status} onChange={v => updateStatus(p.id, v)} options={STATUS_OPTIONS} className="mt-2" />
                           </div>
                         )}
@@ -134,11 +134,11 @@ export default function BDMV3() {
 
         {/* Add Modal */}
         {showAdd && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center z-50 p-0 md:p-4" onClick={() => setShowAdd(false)}>
-            <div className="bg-[#232323] rounded-t-2xl md:rounded-2xl border border-white/[0.1] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-end md:items-center justify-center z-50 p-0 md:p-4" onClick={() => setShowAdd(false)}>
+            <div className="bg-[var(--bg-card)] rounded-t-2xl md:rounded-2xl border border-[var(--border-input)] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold">Add Prospect</h3>
-                <button onClick={() => setShowAdd(false)} className="text-white/40 hover:text-white"><X size={18} /></button>
+                <button onClick={() => setShowAdd(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
               </div>
               <div className="space-y-4">
                 <Input label="Company Name" value={form.company_name} onChange={v => setForm(p => ({ ...p, company_name: v }))} placeholder="Company" />

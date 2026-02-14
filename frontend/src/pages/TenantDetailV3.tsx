@@ -46,8 +46,8 @@ export default function TenantDetailV3() {
     if (tenant) setForm({ name: tenant.name, email: tenant.email || '', phone: tenant.phone || '', move_in_date: tenant.move_in_date || '', status: tenant.status || 'active', notes: tenant.notes || '' });
   };
 
-  if (loading) return <V3Layout title="Loading..."><div className="p-8 text-white/30 text-sm">Loading...</div></V3Layout>;
-  if (!tenant) return <V3Layout title="Not Found"><div className="p-8 text-white/30">Tenant not found</div></V3Layout>;
+  if (loading) return <V3Layout title="Loading..."><div className="p-8 text-[var(--text-muted)] text-sm">Loading...</div></V3Layout>;
+  if (!tenant) return <V3Layout title="Not Found"><div className="p-8 text-[var(--text-muted)]">Tenant not found</div></V3Layout>;
 
   return (
     <V3Layout breadcrumb={[{ label: 'Tenants', to: '/v3/tenants' }, { label: tenant.name }]}>
@@ -59,10 +59,10 @@ export default function TenantDetailV3() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">{tenant.name}</h1>
               <StatusDot status={tenant.status === 'active' ? 'active' : 'inactive'} size="md" />
-              <span className="text-xs text-white/40 capitalize">{tenant.status}</span>
+              <span className="text-xs text-[var(--text-muted)] capitalize">{tenant.status}</span>
             </div>
             {tenant.property_address && (
-              <p className="text-sm text-white/50 mt-1 flex items-center gap-1.5">
+              <p className="text-sm text-[var(--text-secondary)] mt-1 flex items-center gap-1.5">
                 <Building2 size={14} /> {tenant.property_address}
               </p>
             )}
@@ -96,11 +96,11 @@ export default function TenantDetailV3() {
                 { icon: Calendar, label: 'Move-in Date', value: tenant.move_in_date ? new Date(tenant.move_in_date).toLocaleDateString() : null },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-white/[0.06] flex items-center justify-center">
-                    <Icon size={16} className="text-white/40" />
+                  <div className="w-9 h-9 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
+                    <Icon size={16} className="text-[var(--text-muted)]" />
                   </div>
                   <div>
-                    <p className="text-xs text-white/40">{label}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{label}</p>
                     <p className="text-sm">{value || '—'}</p>
                   </div>
                 </div>
@@ -114,13 +114,13 @@ export default function TenantDetailV3() {
           <GlassCard className="p-6">
             <SectionHeader title="Property" />
             <button onClick={() => navigate(`/v3/properties/${tenant.property_id}`)}
-              className="flex items-center gap-3 hover:bg-white/[0.04] rounded-xl p-3 -m-3 transition-colors w-full text-left">
-              <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center">
-                <Building2 size={18} className="text-white/40" />
+              className="flex items-center gap-3 hover:bg-[var(--bg-subtle)] rounded-xl p-3 -m-3 transition-colors w-full text-left">
+              <div className="w-10 h-10 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
+                <Building2 size={18} className="text-[var(--text-muted)]" />
               </div>
               <div>
                 <p className="text-sm font-medium">{tenant.property_address || `Property #${tenant.property_id}`}</p>
-                <p className="text-xs text-white/40">Click to view property</p>
+                <p className="text-xs text-[var(--text-muted)]">Click to view property</p>
               </div>
             </button>
           </GlassCard>
@@ -131,10 +131,10 @@ export default function TenantDetailV3() {
           <SectionHeader title="Notes" />
           {editing ? (
             <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={4}
-              className="w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/[0.25] transition-colors resize-none"
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors resize-none"
               placeholder="Notes..." />
           ) : (
-            <p className="text-sm text-white/60">{tenant.notes || 'No notes'}</p>
+            <p className="text-sm text-[var(--text-secondary)]">{tenant.notes || 'No notes'}</p>
           )}
         </GlassCard>
 

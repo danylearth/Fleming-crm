@@ -97,13 +97,13 @@ export default function EnquiriesV3() {
     <V3Layout hideTopBar>
       <div className="flex h-full">
         {/* Left Panel - hidden on mobile when detail selected */}
-        <div className={`w-full md:w-[350px] shrink-0 border-r border-white/[0.06] flex flex-col ${selected ? 'hidden md:flex' : 'flex'}`}>
+        <div className={`w-full md:w-[350px] shrink-0 border-r border-[var(--border-subtle)] flex flex-col ${selected ? 'hidden md:flex' : 'flex'}`}>
           {/* Header */}
-          <div className="flex items-center justify-between px-5 h-16 border-b border-white/[0.06]">
+          <div className="flex items-center justify-between px-5 h-16 border-b border-[var(--border-subtle)]">
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-bold">Enquiries</h2>
               {newEnquiries.length > 0 && (
-                <span className="bg-blue-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
+                <span className="bg-blue-500 text-[var(--text-primary)] text-[11px] font-bold px-2 py-0.5 rounded-full">
                   {newEnquiries.length} new
                 </span>
               )}
@@ -115,14 +115,14 @@ export default function EnquiriesV3() {
 
           {/* New enquiries horizontal scroll */}
           {newEnquiries.length > 0 && (
-            <div className="px-5 py-3 border-b border-white/[0.06]">
-              <p className="text-[11px] text-white/40 font-medium uppercase tracking-wider mb-2">New Enquiries</p>
+            <div className="px-5 py-3 border-b border-[var(--border-subtle)]">
+              <p className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">New Enquiries</p>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {newEnquiries.map(e => (
                   <div key={e.id} onClick={() => setSelected(e)}
                     className="shrink-0 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2 cursor-pointer hover:bg-blue-500/20 transition-colors min-w-[120px]">
                     <p className="text-xs font-medium truncate">{e.name}</p>
-                    <p className="text-[10px] text-white/40 mt-0.5">{formatTime(e.created_at)}</p>
+                    <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{formatTime(e.created_at)}</p>
                   </div>
                 ))}
               </div>
@@ -137,23 +137,23 @@ export default function EnquiriesV3() {
           {/* List */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
-              <div className="flex items-center justify-center py-16 text-white/30 text-sm">Loading...</div>
+              <div className="flex items-center justify-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
             ) : filtered.length === 0 ? (
               <EmptyState message="No enquiries found" />
             ) : (
               filtered.map(e => (
                 <div key={e.id} onClick={() => setSelected(e)}
-                  className={`flex items-center gap-3 px-5 py-3 cursor-pointer transition-colors border-b border-white/[0.04] ${
-                    selected?.id === e.id ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]'
+                  className={`flex items-center gap-3 px-5 py-3 cursor-pointer transition-colors border-b border-[var(--border-subtle)] ${
+                    selected?.id === e.id ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-subtle)]'
                   }`}>
                   <Avatar name={e.name} size="sm" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium truncate">{e.name}</p>
-                      <span className="text-[10px] text-white/30 shrink-0 ml-2">{formatTime(e.created_at)}</span>
+                      <span className="text-[10px] text-[var(--text-muted)] shrink-0 ml-2">{formatTime(e.created_at)}</span>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[e.status] || 'bg-white/10 text-white/50'}`}>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[e.status] || 'bg-[var(--bg-input)] text-[var(--text-secondary)]'}`}>
                         {STATUS_LABELS[e.status] || e.status}
                       </span>
                     </div>
@@ -169,9 +169,9 @@ export default function EnquiriesV3() {
           {selected ? (
             <>
               {/* Detail Header */}
-              <div className="flex items-center gap-4 px-4 md:px-8 h-16 border-b border-white/[0.06] shrink-0">
+              <div className="flex items-center gap-4 px-4 md:px-8 h-16 border-b border-[var(--border-subtle)] shrink-0">
                 {/* Back button on mobile */}
-                <button onClick={() => setSelected(null)} className="text-white/50 hover:text-white md:hidden mr-1">
+                <button onClick={() => setSelected(null)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden mr-1">
                   <ArrowLeft size={20} />
                 </button>
                 <Avatar name={selected.name} size="md" />
@@ -187,25 +187,25 @@ export default function EnquiriesV3() {
               <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
                 {/* Contact Info */}
                 <GlassCard className="p-5">
-                  <h4 className="text-xs text-white/40 font-medium uppercase tracking-wider mb-3">Contact Information</h4>
+                  <h4 className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Contact Information</h4>
                   <div className="space-y-2">
                     <div className="flex items-center gap-3 text-sm">
-                      <Mail size={14} className="text-white/40" />
+                      <Mail size={14} className="text-[var(--text-muted)]" />
                       <span>{selected.email}</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm">
-                      <Phone size={14} className="text-white/40" />
+                      <Phone size={14} className="text-[var(--text-muted)]" />
                       <span>{selected.phone}</span>
                     </div>
                     {selected.property_address && (
                       <div className="flex items-center gap-3 text-sm">
-                        <Building2 size={14} className="text-white/40" />
+                        <Building2 size={14} className="text-[var(--text-muted)]" />
                         <span className="text-orange-400">{selected.property_address}</span>
                       </div>
                     )}
                     <div className="flex items-center gap-3 text-sm">
-                      <Clock size={14} className="text-white/40" />
-                      <span className="text-white/60">Source: {selected.source || 'N/A'}</span>
+                      <Clock size={14} className="text-[var(--text-muted)]" />
+                      <span className="text-[var(--text-secondary)]">Source: {selected.source || 'N/A'}</span>
                     </div>
                   </div>
                 </GlassCard>
@@ -213,11 +213,11 @@ export default function EnquiriesV3() {
                 {/* Notes */}
                 {selected.notes && (
                   <div>
-                    <h4 className="text-xs text-white/40 font-medium uppercase tracking-wider mb-3">Notes</h4>
+                    <h4 className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Notes</h4>
                     <div className="space-y-2">
-                      <div className="bg-white/[0.04] rounded-2xl rounded-tl-sm px-4 py-3 max-w-[80%]">
-                        <p className="text-sm text-white/80">{selected.notes}</p>
-                        <p className="text-[10px] text-white/30 mt-1">{new Date(selected.created_at).toLocaleDateString('en-GB')}</p>
+                      <div className="bg-[var(--bg-subtle)] rounded-2xl rounded-tl-sm px-4 py-3 max-w-[80%]">
+                        <p className="text-sm text-[var(--text-primary)]">{selected.notes}</p>
+                        <p className="text-[10px] text-[var(--text-muted)] mt-1">{new Date(selected.created_at).toLocaleDateString('en-GB')}</p>
                       </div>
                     </div>
                   </div>
@@ -225,7 +225,7 @@ export default function EnquiriesV3() {
 
                 {/* Status Actions */}
                 <div>
-                  <h4 className="text-xs text-white/40 font-medium uppercase tracking-wider mb-3">Update Status</h4>
+                  <h4 className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Update Status</h4>
                   <div className="flex flex-wrap gap-2">
                     {STATUS_OPTIONS.filter(s => s.value !== selected.status).map(s => (
                       <button key={s.value} onClick={() => updateStatus(selected.id, s.value)}
@@ -246,11 +246,11 @@ export default function EnquiriesV3() {
 
         {/* Add Modal */}
         {showAdd && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowAdd(false)}>
-            <div className="bg-[#232323] rounded-2xl border border-white/[0.1] w-full max-w-[480px] max-h-[85vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowAdd(false)}>
+            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-[480px] max-h-[85vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold">Add Enquiry</h3>
-                <button onClick={() => setShowAdd(false)} className="text-white/40 hover:text-white"><X size={18} /></button>
+                <button onClick={() => setShowAdd(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
               </div>
               <div className="space-y-4">
                 <Input label="Name" value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="Full name" />

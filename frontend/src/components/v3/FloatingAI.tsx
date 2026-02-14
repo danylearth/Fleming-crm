@@ -208,23 +208,23 @@ export default function FloatingAI() {
 
       {/* Chat Panel */}
       {open && (
-        <div className="fixed bottom-0 right-0 z-50 w-full h-[85vh] md:bottom-6 md:right-6 md:w-[380px] md:h-[560px] flex flex-col md:rounded-2xl rounded-t-2xl border border-white/[0.1] bg-[#1e1e1e] shadow-2xl shadow-black/50 overflow-hidden animate-in slide-in-from-bottom-4">
+        <div className="fixed bottom-0 right-0 z-50 w-full h-[85vh] md:bottom-6 md:right-6 md:w-[380px] md:h-[560px] flex flex-col md:rounded-2xl rounded-t-2xl border border-[var(--border-input)] bg-[var(--chat-bg)] shadow-2xl shadow-black/50 overflow-hidden animate-in slide-in-from-bottom-4">
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08] bg-gradient-to-r from-[#232323] to-[#1e1e1e]">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-color)] bg-gradient-to-r from-[#232323] to-[#1e1e1e]">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center">
                 <Sparkles size={16} className="text-white" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">DOT</p>
-                <p className="text-[11px] text-white/40">AI Assistant</p>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">DOT</p>
+                <p className="text-[11px] text-[var(--text-muted)]">AI Assistant</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/[0.06] transition-colors">
+              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
                 <ChevronDown size={18} />
               </button>
-              <button onClick={() => { setOpen(false); setMessages([{ role: 'assistant', text: getGreeting(location.pathname), time: now() }]); }} className="p-1.5 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/[0.06] transition-colors">
+              <button onClick={() => { setOpen(false); setMessages([{ role: 'assistant', text: getGreeting(location.pathname), time: now() }]); }} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
                 <X size={18} />
               </button>
             </div>
@@ -240,18 +240,18 @@ export default function FloatingAI() {
                       <div className="w-5 h-5 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center">
                         <Sparkles size={10} className="text-white" />
                       </div>
-                      <span className="text-[11px] text-white/30">DOT · {msg.time}</span>
+                      <span className="text-[11px] text-[var(--text-muted)]">DOT · {msg.time}</span>
                     </div>
                   )}
                   <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line ${
                     msg.role === 'user'
-                      ? 'bg-gradient-to-br from-orange-500/20 to-pink-500/20 border border-orange-500/20 text-white'
-                      : 'bg-white/[0.05] border border-white/[0.06] text-white/90'
+                      ? 'bg-gradient-to-br from-orange-500/20 to-pink-500/20 border border-orange-500/20 text-[var(--text-primary)]'
+                      : 'bg-[var(--bg-input)] border border-[var(--border-subtle)] text-[var(--text-primary)]'
                   }`}>
                     {msg.text}
                   </div>
                   {msg.role === 'user' && (
-                    <p className="text-[11px] text-white/30 text-right mt-1">{msg.time}</p>
+                    <p className="text-[11px] text-[var(--text-muted)] text-right mt-1">{msg.time}</p>
                   )}
                 </div>
               </div>
@@ -261,7 +261,7 @@ export default function FloatingAI() {
                 <div className="w-5 h-5 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center">
                   <Sparkles size={10} className="text-white" />
                 </div>
-                <div className="bg-white/[0.05] border border-white/[0.06] rounded-2xl px-4 py-3">
+                <div className="bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-2xl px-4 py-3">
                   <div className="flex gap-1">
                     <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                     <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -278,7 +278,7 @@ export default function FloatingAI() {
             <div className="px-5 pb-3 flex flex-wrap gap-1.5">
               {suggestions.slice(0, 3).map((s, i) => (
                 <button key={i} onClick={() => handleSend(s)}
-                  className="px-3 py-1.5 rounded-full text-[11px] font-medium bg-white/[0.06] text-white/60 hover:text-white hover:bg-white/[0.1] border border-white/[0.06] transition-colors">
+                  className="px-3 py-1.5 rounded-full text-[11px] font-medium bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] border border-[var(--border-subtle)] transition-colors">
                   {s}
                 </button>
               ))}
@@ -286,18 +286,18 @@ export default function FloatingAI() {
           )}
 
           {/* Input */}
-          <div className="px-4 py-3 border-t border-white/[0.08]">
-            <div className="flex items-center gap-2 bg-white/[0.05] border border-white/[0.08] rounded-xl px-4 py-2.5">
+          <div className="px-4 py-3 border-t border-[var(--border-color)]">
+            <div className="flex items-center gap-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl px-4 py-2.5">
               <input
                 ref={inputRef}
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSend()}
                 placeholder='Ask DOT anything...'
-                className="flex-1 bg-transparent text-sm text-white placeholder:text-white/30 focus:outline-none"
+                className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
               />
               <button onClick={() => handleSend()}
-                className={`p-1.5 rounded-lg transition-colors ${input.trim() ? 'text-orange-400 hover:text-orange-300' : 'text-white/20'}`}>
+                className={`p-1.5 rounded-lg transition-colors ${input.trim() ? 'text-orange-400 hover:text-orange-300' : 'text-[var(--text-faint)]'}`}>
                 <Send size={16} />
               </button>
             </div>

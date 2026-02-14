@@ -87,7 +87,7 @@ export default function DashboardV3() {
     return (
       <V3Layout hideTopBar>
         <div className="flex items-center justify-center h-full">
-          <div className="w-8 h-8 border-2 border-white/20 border-t-orange-500 rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-[var(--border-input)] border-t-orange-500 rounded-full animate-spin" />
         </div>
       </V3Layout>
     );
@@ -99,7 +99,7 @@ export default function DashboardV3() {
         {/* Greeting */}
         <div className="pt-10 md:pt-0">
           <h1 className="text-2xl md:text-4xl font-bold">Hello, {firstName} 👋</h1>
-          <p className="text-white/50 mt-1 text-sm">Here's what's happening with your properties today.</p>
+          <p className="text-[var(--text-secondary)] mt-1 text-sm">Here's what's happening with your properties today.</p>
         </div>
 
         {/* Stats Row */}
@@ -119,7 +119,7 @@ export default function DashboardV3() {
               <p className={`text-3xl font-bold bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}>
                 {stat.value}
               </p>
-              <p className="text-xs text-white/50 mt-1">{stat.label}</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">{stat.label}</p>
             </GlassCard>
           ))}
         </div>
@@ -132,12 +132,12 @@ export default function DashboardV3() {
             {dashboard?.complianceAlerts?.length ? (
               <div className="space-y-3">
                 {dashboard.complianceAlerts.slice(0, 5).map((alert, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] transition-colors">
+                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors">
                     <div className="flex items-center gap-3">
                       <AlertTriangle size={16} className={urgencyColor(alert.expiry_date)} />
                       <div>
                         <p className="text-sm font-medium">{alert.property_address}</p>
-                        <p className="text-xs text-white/40">{alert.type}</p>
+                        <p className="text-xs text-[var(--text-muted)]">{alert.type}</p>
                       </div>
                     </div>
                     <div className="text-right">
@@ -146,7 +146,7 @@ export default function DashboardV3() {
                           ? `${Math.abs(daysUntil(alert.expiry_date))}d overdue`
                           : `${daysUntil(alert.expiry_date)}d left`}
                       </p>
-                      <p className="text-xs text-white/30">{new Date(alert.expiry_date).toLocaleDateString()}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{new Date(alert.expiry_date).toLocaleDateString()}</p>
                     </div>
                   </div>
                 ))}
@@ -167,10 +167,10 @@ export default function DashboardV3() {
               ].map(stage => (
                 <div key={stage.label}>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm text-white/70">{stage.label}</span>
+                    <span className="text-sm text-[var(--text-secondary)]">{stage.label}</span>
                     <span className="text-sm font-bold">{stage.count}</span>
                   </div>
-                  <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
+                  <div className="h-2 rounded-full bg-[var(--bg-hover)] overflow-hidden">
                     <div
                       className={`h-full rounded-full ${stage.color} transition-all duration-500`}
                       style={{ width: `${enquiries.length ? (stage.count / enquiries.length) * 100 : 0}%` }}
@@ -178,7 +178,7 @@ export default function DashboardV3() {
                   </div>
                 </div>
               ))}
-              <p className="text-xs text-white/30 pt-1">{enquiries.length} total enquiries</p>
+              <p className="text-xs text-[var(--text-muted)] pt-1">{enquiries.length} total enquiries</p>
             </div>
           </Card>
         </div>
@@ -189,17 +189,17 @@ export default function DashboardV3() {
           {tasks.length ? (
             <div className="space-y-2">
               {tasks.slice(0, 5).map(task => (
-                <div key={task.id} className="flex items-center gap-4 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] transition-colors">
+                <div key={task.id} className="flex items-center gap-4 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
                     task.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400'
                     : task.priority === 'high' ? 'bg-red-500/20 text-red-400'
-                    : 'bg-white/[0.06] text-white/50'
+                    : 'bg-[var(--bg-hover)] text-[var(--text-secondary)]'
                   }`}>
                     {task.status === 'completed' ? <CheckCircle2 size={16} /> : <Clock size={16} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{task.title}</p>
-                    <p className="text-xs text-white/40 truncate">{task.property_address || task.description}</p>
+                    <p className="text-xs text-[var(--text-muted)] truncate">{task.property_address || task.description}</p>
                   </div>
                   <div className="text-right shrink-0">
                     <Tag active={task.priority === 'high'}>{task.priority}</Tag>
@@ -229,21 +229,21 @@ export default function DashboardV3() {
                   className="min-w-[280px] max-w-[280px] shrink-0 overflow-hidden"
                 >
                   {/* Image placeholder */}
-                  <div className="h-36 bg-gradient-to-br from-white/[0.06] to-white/[0.02] flex items-center justify-center">
-                    <Building2 size={32} className="text-white/20" />
+                  <div className="h-36 bg-gradient-to-br from-[var(--glass-from)] to-[var(--glass-to)] flex items-center justify-center">
+                    <Building2 size={32} className="text-[var(--text-faint)]" />
                   </div>
                   <div className="p-4">
                     <div className="flex items-center gap-2 mb-1">
                       <StatusDot status={prop.status === 'active' ? 'active' : 'inactive'} />
-                      <span className="text-xs text-white/40 capitalize">{prop.status}</span>
+                      <span className="text-xs text-[var(--text-muted)] capitalize">{prop.status}</span>
                     </div>
                     <p className="font-semibold text-sm truncate">{prop.address}</p>
-                    <p className="text-xs text-white/40">{prop.postcode}</p>
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.06]">
+                    <p className="text-xs text-[var(--text-muted)]">{prop.postcode}</p>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-subtle)]">
                       <span className="text-sm font-bold bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent">
                         £{prop.rent_amount?.toLocaleString()}/mo
                       </span>
-                      <ArrowRight size={14} className="text-white/30" />
+                      <ArrowRight size={14} className="text-[var(--text-muted)]" />
                     </div>
                   </div>
                 </GlassCard>

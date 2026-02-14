@@ -7,8 +7,8 @@ export function Card({ children, className = '', onClick, hover }: {
   return (
     <div
       onClick={onClick}
-      className={`bg-[#232323] rounded-2xl border border-white/[0.08] ${
-        hover ? 'hover:border-white/[0.15] hover:brightness-110 cursor-pointer transition-all' : ''
+      className={`bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] ${
+        hover ? 'hover:border-[var(--border-input)] hover:brightness-110 cursor-pointer transition-all' : ''
       } ${onClick ? 'cursor-pointer' : ''} ${className}`}
     >
       {children}
@@ -23,8 +23,8 @@ export function GlassCard({ children, className = '', onClick }: {
   return (
     <div
       onClick={onClick}
-      className={`bg-gradient-to-br from-white/[0.06] to-white/[0.02] rounded-2xl border border-white/[0.08] backdrop-blur-sm ${
-        onClick ? 'cursor-pointer hover:border-white/[0.15] transition-all' : ''
+      className={`bg-gradient-to-br from-[var(--glass-from)] to-[var(--glass-to)] rounded-2xl border border-[var(--border-color)] backdrop-blur-sm ${
+        onClick ? 'cursor-pointer hover:border-[var(--border-input)] transition-all' : ''
       } ${className}`}
     >
       {children}
@@ -40,10 +40,10 @@ export function Button({ children, onClick, variant = 'primary', size = 'md', cl
   const base = 'inline-flex items-center justify-center font-medium transition-all rounded-full';
   const sizes = { sm: 'px-4 py-1.5 text-xs', md: 'px-6 py-2.5 text-sm', lg: 'px-8 py-3 text-base' };
   const variants = {
-    primary: 'bg-white text-black hover:bg-white/90',
-    ghost: 'text-white/70 hover:text-white hover:bg-white/[0.06]',
-    gradient: 'bg-gradient-to-r from-orange-500 to-pink-500 text-white hover:opacity-90',
-    outline: 'border border-white/20 text-white hover:bg-white/[0.06]',
+    primary: 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] hover:opacity-90',
+    ghost: 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]',
+    gradient: 'bg-gradient-to-r from-orange-500 to-pink-500 text-[var(--text-primary)] hover:opacity-90',
+    outline: 'border border-[var(--border-input)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]',
   };
   return (
     <button type={type} onClick={onClick} disabled={disabled}
@@ -60,9 +60,9 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
 }) {
   return (
     <div className={className}>
-      {label && <label className="block text-xs text-white/50 mb-1.5 font-medium">{label}</label>}
+      {label && <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">{label}</label>}
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/[0.25] transition-colors" />
+        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors" />
     </div>
   );
 }
@@ -74,9 +74,9 @@ export function Select({ label, value, onChange, options, className = '' }: {
 }) {
   return (
     <div className={className}>
-      {label && <label className="block text-xs text-white/50 mb-1.5 font-medium">{label}</label>}
+      {label && <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">{label}</label>}
       <select value={value} onChange={e => onChange(e.target.value)}
-        className="w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-2.5 text-sm text-white appearance-none focus:outline-none focus:border-white/[0.25] transition-colors">
+        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] appearance-none focus:outline-none focus:border-[var(--border-input)] transition-colors">
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
@@ -90,7 +90,7 @@ export function Tag({ children, active, onClick }: {
   return (
     <span onClick={onClick}
       className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-        active ? 'bg-white/[0.15] text-white' : 'bg-white/[0.06] text-white/60 hover:text-white/80'
+        active ? 'bg-[var(--bg-input)] text-[var(--text-primary)]' : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
       } ${onClick ? 'cursor-pointer' : ''}`}>
       {children}
     </span>
@@ -106,7 +106,7 @@ export function Avatar({ name, src, size = 'md', className = '' }: {
     return <img src={src} alt={name} className={`${sizes[size]} rounded-full object-cover ${className}`} />;
   }
   return (
-    <div className={`${sizes[size]} rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center font-bold shrink-0 ${className}`}>
+    <div className={`${sizes[size]} rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center font-bold text-white shrink-0 ${className}`}>
       {name?.[0]?.toUpperCase() || '?'}
     </div>
   );
@@ -114,7 +114,7 @@ export function Avatar({ name, src, size = 'md', className = '' }: {
 
 // ─── Status Dot ───
 export function StatusDot({ status, size = 'sm' }: { status: 'active' | 'inactive' | 'warning' | 'error'; size?: 'sm' | 'md' }) {
-  const colors = { active: 'bg-emerald-400', inactive: 'bg-white/30', warning: 'bg-amber-400', error: 'bg-red-400' };
+  const colors = { active: 'bg-emerald-400', inactive: 'bg-[var(--text-muted)]', warning: 'bg-amber-400', error: 'bg-red-400' };
   const sizes = { sm: 'w-2 h-2', md: 'w-3 h-3' };
   return <span className={`${sizes[size]} ${colors[status]} rounded-full inline-block`} />;
 }
@@ -131,7 +131,7 @@ export function ProgressRing({ value, size = 64, strokeWidth = 5, gradient = tru
   return (
     <div className="flex flex-col items-center gap-1">
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={strokeWidth} />
+        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="var(--border-subtle)" strokeWidth={strokeWidth} />
         {gradient && (
           <defs>
             <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
@@ -146,7 +146,7 @@ export function ProgressRing({ value, size = 64, strokeWidth = 5, gradient = tru
           strokeLinecap="round" className="transition-all duration-500" />
       </svg>
       <span className="text-lg font-bold -mt-[calc(50%+8px)] absolute">{value}%</span>
-      {label && <span className="text-[11px] text-white/50 font-medium uppercase tracking-wide">{label}</span>}
+      {label && <span className="text-[11px] text-[var(--text-secondary)] font-medium uppercase tracking-wide">{label}</span>}
     </div>
   );
 }
@@ -168,8 +168,8 @@ export function SectionHeader({ title, action, actionLabel }: {
 // ─── Empty State ───
 export function EmptyState({ message, icon }: { message: string; icon?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-white/30">
-      {icon && <div className="mb-3 text-white/20">{icon}</div>}
+    <div className="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+      {icon && <div className="mb-3 text-[var(--text-faint)]">{icon}</div>}
       <p className="text-sm">{message}</p>
     </div>
   );
@@ -181,11 +181,11 @@ export function SearchBar({ value, onChange, placeholder = 'Search...' }: {
 }) {
   return (
     <div className="relative">
-      <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
       <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/[0.2] transition-colors" />
+        className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl pl-11 pr-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors" />
     </div>
   );
 }

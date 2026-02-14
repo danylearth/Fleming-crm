@@ -88,7 +88,7 @@ export default function TasksV3() {
               <div className={`${s.color}`}>{s.icon}</div>
               <div>
                 <p className="text-2xl font-bold">{s.count}</p>
-                <p className="text-xs text-white/50">{s.label}</p>
+                <p className="text-xs text-[var(--text-secondary)]">{s.label}</p>
               </div>
             </GlassCard>
           ))}
@@ -116,7 +116,7 @@ export default function TasksV3() {
 
         {/* Task List */}
         {loading ? (
-          <div className="text-center text-white/30 py-16">Loading...</div>
+          <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
         ) : filtered.length === 0 ? (
           <EmptyState message="No tasks found" icon={<CheckCircle2 size={32} />} />
         ) : (
@@ -131,10 +131,10 @@ export default function TasksV3() {
                       <ProgressRing value={taskPct} size={40} strokeWidth={3} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-white/40' : ''}`}>{task.title}</p>
+                          <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-[var(--text-muted)]' : ''}`}>{task.title}</p>
                           {overdue && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">Overdue</span>}
                         </div>
-                        {task.description && <p className="text-xs text-white/40 mt-0.5 truncate">{task.description}</p>}
+                        {task.description && <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">{task.description}</p>}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap pl-[52px] sm:pl-0">
@@ -143,7 +143,7 @@ export default function TasksV3() {
                         {PRIORITY_LABELS[task.priority] || task.priority}
                       </span>
                       {task.due_date && (
-                        <div className={`flex items-center gap-1 text-xs ${overdue ? 'text-red-400' : 'text-white/30'}`}>
+                        <div className={`flex items-center gap-1 text-xs ${overdue ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
                           <Calendar size={12} />
                           {new Date(task.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                         </div>
@@ -166,11 +166,11 @@ export default function TasksV3() {
 
         {/* Add Modal */}
         {showAdd && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center z-50" onClick={() => setShowAdd(false)}>
-            <div className="bg-[#232323] rounded-t-2xl md:rounded-2xl border border-white/[0.1] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-end md:items-center justify-center z-50" onClick={() => setShowAdd(false)}>
+            <div className="bg-[var(--bg-card)] rounded-t-2xl md:rounded-2xl border border-[var(--border-input)] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold">Add Task</h3>
-                <button onClick={() => setShowAdd(false)} className="text-white/40 hover:text-white"><X size={18} /></button>
+                <button onClick={() => setShowAdd(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
               </div>
               <div className="space-y-4">
                 <Input label="Title" value={form.title} onChange={v => setForm(p => ({ ...p, title: v }))} placeholder="Task title" />

@@ -80,7 +80,7 @@ export default function TransactionsV3() {
     <V3Layout title="Financials" breadcrumb={[{ label: 'Financials' }]}>
       <div className="p-4 md:p-8">
         {loading ? (
-          <div className="text-center text-white/30 py-16">Loading...</div>
+          <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
         ) : (
           <>
             {/* Summary Cards */}
@@ -93,7 +93,7 @@ export default function TransactionsV3() {
               ].map(card => (
                 <GlassCard key={card.label} className="p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-white/40 font-medium uppercase tracking-wider">{card.label}</span>
+                    <span className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">{card.label}</span>
                     <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${card.color} flex items-center justify-center`}>
                       {card.icon}
                     </div>
@@ -111,15 +111,15 @@ export default function TransactionsV3() {
                   <EmptyState message="No payment records yet" icon={<PoundSterling size={24} />} />
                 ) : (
                   <div className="space-y-1 overflow-x-auto">
-                    <div className="grid grid-cols-4 gap-2 min-w-[500px] text-[11px] text-white/30 font-medium uppercase tracking-wider pb-2 border-b border-white/[0.06]">
+                    <div className="grid grid-cols-4 gap-2 min-w-[500px] text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider pb-2 border-b border-[var(--border-subtle)]">
                       <span>Tenant</span><span>Property</span><span className="text-right">Amount</span><span className="text-right">Date</span>
                     </div>
                     {payments.slice(0, 15).map(p => (
-                      <div key={p.id} className="grid grid-cols-4 gap-2 min-w-[500px] py-2.5 border-b border-white/[0.04] text-sm">
+                      <div key={p.id} className="grid grid-cols-4 gap-2 min-w-[500px] py-2.5 border-b border-[var(--border-subtle)] text-sm">
                         <span className="truncate">{p.tenant_name || '—'}</span>
-                        <span className="truncate text-white/50">{p.property_address || '—'}</span>
+                        <span className="truncate text-[var(--text-secondary)]">{p.property_address || '—'}</span>
                         <span className="text-right font-medium text-emerald-400">{fmt(p.amount)}</span>
-                        <span className="text-right text-white/40">{new Date(p.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                        <span className="text-right text-[var(--text-muted)]">{new Date(p.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
                       </div>
                     ))}
                   </div>
@@ -134,18 +134,18 @@ export default function TransactionsV3() {
                 ) : (
                   <div className="space-y-3">
                     {Object.entries(statusGroups).map(([status, data]) => (
-                      <div key={status} className="flex items-center justify-between p-3 bg-white/[0.03] rounded-xl">
+                      <div key={status} className="flex items-center justify-between p-3 bg-[var(--bg-subtle)] rounded-xl">
                         <div>
                           <p className="text-sm font-medium capitalize">{status.replace(/_/g, ' ')}</p>
-                          <p className="text-xs text-white/40">{data.count} propert{data.count !== 1 ? 'ies' : 'y'}</p>
+                          <p className="text-xs text-[var(--text-muted)]">{data.count} propert{data.count !== 1 ? 'ies' : 'y'}</p>
                         </div>
-                        <p className="text-sm font-semibold">{fmt(data.rent)}<span className="text-white/30 text-xs">/mo</span></p>
+                        <p className="text-sm font-semibold">{fmt(data.rent)}<span className="text-[var(--text-muted)] text-xs">/mo</span></p>
                       </div>
                     ))}
                     {/* Total */}
                     <div className="flex items-center justify-between p-3 bg-gradient-to-r from-orange-500/10 to-pink-500/10 rounded-xl border border-orange-500/20">
                       <p className="text-sm font-semibold">Total Portfolio</p>
-                      <p className="text-sm font-bold">{fmt(totalMonthlyRent)}<span className="text-white/30 text-xs">/mo</span></p>
+                      <p className="text-sm font-bold">{fmt(totalMonthlyRent)}<span className="text-[var(--text-muted)] text-xs">/mo</span></p>
                     </div>
                   </div>
                 )}
@@ -157,14 +157,14 @@ export default function TransactionsV3() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold mb-1">Vacancy Rate</h3>
-                  <p className="text-xs text-white/40">{totalCount - occupiedCount} of {totalCount} properties vacant</p>
+                  <p className="text-xs text-[var(--text-muted)]">{totalCount - occupiedCount} of {totalCount} properties vacant</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-48 h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                  <div className="w-48 h-2 bg-[var(--bg-hover)] rounded-full overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-orange-500 to-pink-500 rounded-full transition-all" style={{ width: `${100 - vacancyRate}%` }} />
                   </div>
                   <span className="text-sm font-bold">{(100 - vacancyRate).toFixed(0)}%</span>
-                  <span className="text-xs text-white/40">occupied</span>
+                  <span className="text-xs text-[var(--text-muted)]">occupied</span>
                 </div>
               </div>
             </GlassCard>

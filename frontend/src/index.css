@@ -1,5 +1,65 @@
 @import "tailwindcss";
 
+/* Theme CSS Variables */
+:root {
+  --bg-page: #f5f5f5;
+  --bg-card: #ffffff;
+  --bg-elevated: #fafafa;
+  --bg-input: rgba(0,0,0,0.04);
+  --bg-hover: rgba(0,0,0,0.06);
+  --bg-subtle: rgba(0,0,0,0.03);
+  --border-color: rgba(0,0,0,0.08);
+  --border-input: rgba(0,0,0,0.1);
+  --border-subtle: rgba(0,0,0,0.06);
+  --text-primary: #1a1a1a;
+  --text-secondary: rgba(0,0,0,0.5);
+  --text-muted: rgba(0,0,0,0.35);
+  --text-faint: rgba(0,0,0,0.2);
+  --sidebar-bg: #ffffff;
+  --btn-primary-bg: #1a1a1a;
+  --btn-primary-text: #ffffff;
+  --glass-from: rgba(0,0,0,0.04);
+  --glass-to: rgba(0,0,0,0.01);
+  --overlay-bg: rgba(0,0,0,0.4);
+  --chat-bg: #f5f5f5;
+  --chat-header: #eeeeee;
+}
+
+[data-theme="dark"] {
+  --bg-page: #1a1a1a;
+  --bg-card: #232323;
+  --bg-elevated: #2a2a2a;
+  --bg-input: rgba(255,255,255,0.05);
+  --bg-hover: rgba(255,255,255,0.06);
+  --bg-subtle: rgba(255,255,255,0.03);
+  --border-color: rgba(255,255,255,0.08);
+  --border-input: rgba(255,255,255,0.1);
+  --border-subtle: rgba(255,255,255,0.06);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255,255,255,0.6);
+  --text-muted: rgba(255,255,255,0.4);
+  --text-faint: rgba(255,255,255,0.2);
+  --sidebar-bg: #1a1a1a;
+  --btn-primary-bg: #ffffff;
+  --btn-primary-text: #000000;
+  --glass-from: rgba(255,255,255,0.06);
+  --glass-to: rgba(255,255,255,0.02);
+  --overlay-bg: rgba(0,0,0,0.6);
+  --chat-bg: #1e1e1e;
+  --chat-header: #232323;
+}
+
+/* Scrollbar theming */
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #333;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
+
 @theme {
   --color-navy-50: #fdf2f7;
   --color-navy-100: #fce7f1;

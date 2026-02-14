@@ -42,7 +42,7 @@ export default function PropertiesV3() {
     return (
       <V3Layout title="Properties" breadcrumb={[{ label: 'Properties' }]}>
         <div className="flex items-center justify-center h-64">
-          <div className="w-8 h-8 border-2 border-white/20 border-t-orange-500 rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-[var(--border-input)] border-t-orange-500 rounded-full animate-spin" />
         </div>
       </V3Layout>
     );
@@ -70,23 +70,23 @@ export default function PropertiesV3() {
               options={types.map(t => ({ value: t, label: t === 'all' ? 'All Types' : t.charAt(0).toUpperCase() + t.slice(1) }))}
               className="w-full sm:w-40"
             />
-            <div className="ml-auto flex items-center gap-1 bg-white/[0.05] rounded-xl p-1">
+            <div className="ml-auto flex items-center gap-1 bg-[var(--bg-input)] rounded-xl p-1">
               <button
                 onClick={() => setView('grid')}
-                className={`p-2 rounded-lg transition-colors ${view === 'grid' ? 'bg-white/[0.1] text-white' : 'text-white/40 hover:text-white/70'}`}
+                className={`p-2 rounded-lg transition-colors ${view === 'grid' ? 'bg-[var(--bg-input)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
               >
                 <LayoutGrid size={16} />
               </button>
               <button
                 onClick={() => setView('list')}
-                className={`p-2 rounded-lg transition-colors ${view === 'list' ? 'bg-white/[0.1] text-white' : 'text-white/40 hover:text-white/70'}`}
+                className={`p-2 rounded-lg transition-colors ${view === 'list' ? 'bg-[var(--bg-input)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
               >
                 <List size={16} />
               </button>
             </div>
           </div>
 
-          <p className="text-xs text-white/30 mt-3 mb-4">{filtered.length} properties</p>
+          <p className="text-xs text-[var(--text-muted)] mt-3 mb-4">{filtered.length} properties</p>
 
           {/* Grid View */}
           {view === 'grid' && (
@@ -94,26 +94,26 @@ export default function PropertiesV3() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filtered.map(prop => (
                   <GlassCard key={prop.id} onClick={() => navigate(`/v3/properties/${prop.id}`)} className="overflow-hidden">
-                    <div className="h-32 bg-gradient-to-br from-white/[0.06] to-white/[0.02] flex items-center justify-center">
-                      <Building2 size={28} className="text-white/15" />
+                    <div className="h-32 bg-gradient-to-br from-[var(--glass-from)] to-[var(--glass-to)] flex items-center justify-center">
+                      <Building2 size={28} className="text-[var(--text-faint)]" />
                     </div>
                     <div className="p-4">
                       <p className="font-semibold text-sm truncate">{prop.address}</p>
-                      <p className="text-xs text-white/40 mt-0.5">{prop.postcode}</p>
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5">{prop.postcode}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <StatusDot status={prop.status === 'active' ? 'active' : 'inactive'} />
-                        <span className="text-xs text-white/50 capitalize">{prop.status}</span>
-                        <span className="text-xs text-white/30 ml-auto">{prop.bedrooms} bed • {prop.property_type}</span>
+                        <span className="text-xs text-[var(--text-secondary)] capitalize">{prop.status}</span>
+                        <span className="text-xs text-[var(--text-muted)] ml-auto">{prop.bedrooms} bed • {prop.property_type}</span>
                       </div>
-                      <div className="mt-3 pt-3 border-t border-white/[0.06] flex items-center justify-between">
+                      <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between">
                         <span className="text-sm font-bold bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent">
                           £{prop.rent_amount?.toLocaleString()}/mo
                         </span>
-                        <ArrowRight size={14} className="text-white/30" />
+                        <ArrowRight size={14} className="text-[var(--text-muted)]" />
                       </div>
                       <div className="mt-2 space-y-0.5">
-                        {prop.landlord_name && <p className="text-xs text-white/40">Landlord: {prop.landlord_name}</p>}
-                        {prop.current_tenant && <p className="text-xs text-white/40">Tenant: {prop.current_tenant}</p>}
+                        {prop.landlord_name && <p className="text-xs text-[var(--text-muted)]">Landlord: {prop.landlord_name}</p>}
+                        {prop.current_tenant && <p className="text-xs text-[var(--text-muted)]">Tenant: {prop.current_tenant}</p>}
                       </div>
                     </div>
                   </GlassCard>
@@ -132,19 +132,19 @@ export default function PropertiesV3() {
                   <div
                     key={prop.id}
                     onClick={() => navigate(`/v3/properties/${prop.id}`)}
-                    className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] cursor-pointer transition-colors border border-white/[0.05]"
+                    className="flex items-center gap-4 p-4 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors border border-[var(--border-subtle)]"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0">
-                      <Building2 size={18} className="text-white/40" />
+                    <div className="w-10 h-10 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center shrink-0">
+                      <Building2 size={18} className="text-[var(--text-muted)]" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{prop.address}</p>
-                      <p className="text-xs text-white/40">{prop.postcode}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{prop.postcode}</p>
                     </div>
-                    <span className="text-xs text-white/40 capitalize">{prop.property_type}</span>
+                    <span className="text-xs text-[var(--text-muted)] capitalize">{prop.property_type}</span>
                     <StatusDot status={prop.status === 'active' ? 'active' : 'inactive'} />
                     <span className="text-sm font-semibold w-24 text-right">£{prop.rent_amount?.toLocaleString()}</span>
-                    <ArrowRight size={14} className="text-white/20" />
+                    <ArrowRight size={14} className="text-[var(--text-faint)]" />
                   </div>
                 ))}
               </div>
@@ -155,10 +155,10 @@ export default function PropertiesV3() {
         </div>
 
         {/* Right: Map Placeholder */}
-        <div className="hidden lg:flex w-80 xl:w-96 border-l border-white/[0.06] flex-col items-center justify-center bg-white/[0.02]">
-          <MapPin size={40} className="text-white/10 mb-3" />
-          <p className="text-sm text-white/30">Map coming soon</p>
-          <p className="text-xs text-white/15 mt-1">Mapbox integration</p>
+        <div className="hidden lg:flex w-80 xl:w-96 border-l border-[var(--border-subtle)] flex-col items-center justify-center bg-[var(--bg-subtle)]">
+          <MapPin size={40} className="text-[var(--text-faint)] mb-3" />
+          <p className="text-sm text-[var(--text-muted)]">Map coming soon</p>
+          <p className="text-xs text-[var(--text-faint)] mt-1">Mapbox integration</p>
         </div>
       </div>
     </V3Layout>

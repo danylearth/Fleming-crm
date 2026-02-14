@@ -67,7 +67,7 @@ export default function LandlordsV3() {
 
         {/* Grid */}
         {loading ? (
-          <div className="text-center py-16 text-white/30 text-sm">Loading...</div>
+          <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
         ) : filtered.length === 0 ? (
           <EmptyState message={search ? 'No landlords match your search' : 'No landlords yet. Add your first one!'} />
         ) : (
@@ -79,14 +79,14 @@ export default function LandlordsV3() {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-sm truncate">{l.name}</h3>
                     {l.email && (
-                      <p className="text-xs text-white/50 truncate flex items-center gap-1 mt-1">
+                      <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1 mt-1">
                         <Mail size={11} /> {l.email}
                       </p>
                     )}
                   </div>
                 </div>
                 <div className="mt-4 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs text-white/40">
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
                     <Building2 size={13} />
                     <span>{l.property_count || 0} {l.property_count === 1 ? 'property' : 'properties'}</span>
                   </div>
@@ -102,11 +102,11 @@ export default function LandlordsV3() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowModal(false)}>
-          <div className="bg-[#232323] border border-white/[0.1] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm" onClick={() => setShowModal(false)}>
+          <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Add Landlord</h2>
-              <button onClick={() => setShowModal(false)} className="text-white/40 hover:text-white"><X size={18} /></button>
+              <button onClick={() => setShowModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
             </div>
             <Input label="Name" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="Full name" />
             <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} placeholder="email@example.com" type="email" />

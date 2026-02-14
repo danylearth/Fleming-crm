@@ -27,7 +27,7 @@ export default function LoginV3() {
   };
 
   return (
-    <div className="min-h-screen bg-[#1a1a1a] font-[Lufga] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[var(--bg-page)] font-[Lufga] flex items-center justify-center px-4">
       {/* Background gradient orbs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 -left-32 w-96 h-96 bg-orange-500/10 rounded-full blur-[128px]" />
@@ -40,43 +40,43 @@ export default function LoginV3() {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center mb-5 shadow-lg shadow-pink-500/20">
             <span className="text-2xl font-bold text-white">F</span>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-1">Fleming Lettings</h1>
-          <p className="text-white/40 text-sm">Property management, simplified</p>
+          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-1">Fleming Lettings</h1>
+          <p className="text-[var(--text-muted)] text-sm">Property management, simplified</p>
         </div>
 
         {/* Card */}
-        <div className="bg-[#232323] rounded-2xl border border-white/[0.08] p-8">
-          <h2 className="text-xl font-semibold text-white mb-1">Welcome back</h2>
-          <p className="text-sm text-white/40 mb-6">Sign in to your account</p>
+        <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] p-8">
+          <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-1">Welcome back</h2>
+          <p className="text-sm text-[var(--text-muted)] mb-6">Sign in to your account</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs text-white/50 mb-1.5 font-medium">Email</label>
+              <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/[0.25] transition-colors"
+                className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs text-white/50 mb-1.5 font-medium">Password</label>
+              <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/[0.25] transition-colors"
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 pr-11 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -92,7 +92,7 @@ export default function LoginV3() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-white text-black font-medium py-3 rounded-full hover:bg-white/90 transition-colors disabled:opacity-40 text-sm"
+              className="w-full bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] font-medium py-3 rounded-full hover:opacity-90 transition-colors disabled:opacity-40 text-sm"
             >
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
@@ -100,7 +100,7 @@ export default function LoginV3() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-center gap-2 mt-8 text-white/20 text-xs">
+        <div className="flex items-center justify-center gap-2 mt-8 text-[var(--text-faint)] text-xs">
           <Sparkles size={12} />
           <span>Powered by DOT AI</span>
         </div>

@@ -64,7 +64,7 @@ export default function PropertyDetailV3() {
     return (
       <V3Layout title="Property" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: 'Loading...' }]}>
         <div className="flex items-center justify-center h-64">
-          <div className="w-8 h-8 border-2 border-white/20 border-t-orange-500 rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-[var(--border-input)] border-t-orange-500 rounded-full animate-spin" />
         </div>
       </V3Layout>
     );
@@ -90,17 +90,17 @@ export default function PropertyDetailV3() {
     >
       <div className="p-4 md:p-6 space-y-6 max-w-6xl">
         {/* Hero */}
-        <div className="relative h-40 md:h-56 rounded-2xl overflow-hidden bg-gradient-to-br from-orange-500/20 via-pink-500/10 to-purple-500/20 border border-white/[0.06]">
+        <div className="relative h-40 md:h-56 rounded-2xl overflow-hidden bg-gradient-to-br from-orange-500/20 via-pink-500/10 to-purple-500/20 border border-[var(--border-subtle)]">
           <div className="absolute inset-0 flex items-center justify-center">
-            <Building2 size={64} className="text-white/10" />
+            <Building2 size={64} className="text-[var(--text-faint)]" />
           </div>
           <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/60 to-transparent">
             <div className="flex items-center gap-2 mb-1">
               <StatusDot status={property.status === 'active' ? 'active' : 'inactive'} size="md" />
-              <span className="text-sm text-white/70 capitalize">{property.status}</span>
+              <span className="text-sm text-[var(--text-secondary)] capitalize">{property.status}</span>
             </div>
             <h1 className="text-2xl font-bold">{property.address}</h1>
-            <p className="text-white/50 text-sm">{property.postcode}</p>
+            <p className="text-[var(--text-secondary)] text-sm">{property.postcode}</p>
           </div>
         </div>
 
@@ -113,7 +113,7 @@ export default function PropertyDetailV3() {
               <div className="grid grid-cols-2 md:flex md:items-center gap-6 md:gap-8">
                 <div className="flex flex-col items-center">
                   <ProgressRing value={compliancePercent(property.eicr_expiry_date)} size={80} strokeWidth={6} />
-                  <span className="text-xs text-white/50 mt-2">EICR</span>
+                  <span className="text-xs text-[var(--text-secondary)] mt-2">EICR</span>
                   <span className={`text-xs mt-0.5 ${
                     complianceColor(property.eicr_expiry_date) === 'error' ? 'text-red-400'
                     : complianceColor(property.eicr_expiry_date) === 'warning' ? 'text-amber-400'
@@ -122,7 +122,7 @@ export default function PropertyDetailV3() {
                 </div>
                 <div className="flex flex-col items-center">
                   <ProgressRing value={compliancePercent(property.epc_expiry_date)} size={80} strokeWidth={6} />
-                  <span className="text-xs text-white/50 mt-2">EPC</span>
+                  <span className="text-xs text-[var(--text-secondary)] mt-2">EPC</span>
                   <span className={`text-xs mt-0.5 ${
                     complianceColor(property.epc_expiry_date) === 'error' ? 'text-red-400'
                     : complianceColor(property.epc_expiry_date) === 'warning' ? 'text-amber-400'
@@ -132,7 +132,7 @@ export default function PropertyDetailV3() {
                 {property.has_gas && (
                   <div className="flex flex-col items-center">
                     <ProgressRing value={compliancePercent(property.gas_safety_expiry_date)} size={80} strokeWidth={6} />
-                    <span className="text-xs text-white/50 mt-2">Gas Safety</span>
+                    <span className="text-xs text-[var(--text-secondary)] mt-2">Gas Safety</span>
                     <span className={`text-xs mt-0.5 ${
                       complianceColor(property.gas_safety_expiry_date) === 'error' ? 'text-red-400'
                       : complianceColor(property.gas_safety_expiry_date) === 'warning' ? 'text-amber-400'
@@ -149,9 +149,9 @@ export default function PropertyDetailV3() {
               {propertyTasks.length ? (
                 <div className="space-y-2">
                   {propertyTasks.map(task => (
-                    <div key={task.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03]">
+                    <div key={task.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)]">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                        task.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/[0.06] text-white/40'
+                        task.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'
                       }`}>
                         {task.status === 'completed' ? <CheckCircle2 size={14} /> : <Clock size={14} />}
                       </div>
@@ -177,9 +177,9 @@ export default function PropertyDetailV3() {
                   { icon: FileText, label: 'EICR Report', color: 'text-amber-400' },
                   { icon: FileImage, label: 'Property Photos', color: 'text-pink-400' },
                 ].map((doc, i) => (
-                  <div key={i} className="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] cursor-pointer transition-colors">
+                  <div key={i} className="flex flex-col items-center gap-2 p-4 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
                     <doc.icon size={24} className={doc.color} />
-                    <span className="text-xs text-white/50 text-center">{doc.label}</span>
+                    <span className="text-xs text-[var(--text-secondary)] text-center">{doc.label}</span>
                   </div>
                 ))}
               </div>
@@ -199,11 +199,11 @@ export default function PropertyDetailV3() {
                   { icon: MapPin, label: 'Postcode', value: property.postcode },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center">
-                      <item.icon size={15} className="text-white/40" />
+                    <div className="w-8 h-8 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center">
+                      <item.icon size={15} className="text-[var(--text-muted)]" />
                     </div>
                     <div>
-                      <p className="text-xs text-white/40">{item.label}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{item.label}</p>
                       <p className="text-sm font-medium capitalize">{item.value}</p>
                     </div>
                   </div>
@@ -217,17 +217,17 @@ export default function PropertyDetailV3() {
               {property.landlord_name ? (
                 <div
                   onClick={() => property.landlord_id && navigate(`/v3/landlords/${property.landlord_id}`)}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] cursor-pointer transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
                 >
                   <Avatar name={property.landlord_name} size="md" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{property.landlord_name}</p>
-                    <p className="text-xs text-white/40">Landlord</p>
+                    <p className="text-xs text-[var(--text-muted)]">Landlord</p>
                   </div>
-                  <ChevronRight size={16} className="text-white/30" />
+                  <ChevronRight size={16} className="text-[var(--text-muted)]" />
                 </div>
               ) : (
-                <p className="text-sm text-white/30">No landlord linked</p>
+                <p className="text-sm text-[var(--text-muted)]">No landlord linked</p>
               )}
             </Card>
 
@@ -237,17 +237,17 @@ export default function PropertyDetailV3() {
               {property.current_tenant ? (
                 <div
                   onClick={() => property.tenant_id && navigate(`/v3/tenants/${property.tenant_id}`)}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] cursor-pointer transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
                 >
                   <Avatar name={property.current_tenant} size="md" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{property.current_tenant}</p>
-                    <p className="text-xs text-white/40">Current Tenant</p>
+                    <p className="text-xs text-[var(--text-muted)]">Current Tenant</p>
                   </div>
-                  <ChevronRight size={16} className="text-white/30" />
+                  <ChevronRight size={16} className="text-[var(--text-muted)]" />
                 </div>
               ) : (
-                <p className="text-sm text-white/30">No tenant assigned</p>
+                <p className="text-sm text-[var(--text-muted)]">No tenant assigned</p>
               )}
             </Card>
           </div>

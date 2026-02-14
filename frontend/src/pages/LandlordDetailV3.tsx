@@ -48,8 +48,8 @@ export default function LandlordDetailV3() {
     setSaving(false);
   };
 
-  if (loading) return <V3Layout title="Loading..."><div className="p-8 text-white/30 text-sm">Loading...</div></V3Layout>;
-  if (!landlord) return <V3Layout title="Not Found"><div className="p-8 text-white/30">Landlord not found</div></V3Layout>;
+  if (loading) return <V3Layout title="Loading..."><div className="p-8 text-[var(--text-muted)] text-sm">Loading...</div></V3Layout>;
+  if (!landlord) return <V3Layout title="Not Found"><div className="p-8 text-[var(--text-muted)]">Landlord not found</div></V3Layout>;
 
   return (
     <V3Layout
@@ -60,12 +60,12 @@ export default function LandlordDetailV3() {
     >
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Hero */}
-        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-orange-500/20 via-pink-500/20 to-purple-500/20 border border-white/[0.08]">
+        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-orange-500/20 via-pink-500/20 to-purple-500/20 border border-[var(--border-color)]">
           <div className="p-4 md:p-8 flex flex-col sm:flex-row items-start sm:items-center gap-4 md:gap-6">
             <Avatar name={landlord.name} size="xl" />
             <div className="flex-1">
               <h1 className="text-2xl font-bold">{landlord.name}</h1>
-              <p className="text-white/50 text-sm mt-1">{landlord.property_count || 0} properties managed</p>
+              <p className="text-[var(--text-secondary)] text-sm mt-1">{landlord.property_count || 0} properties managed</p>
             </div>
             <Button variant={editing ? 'ghost' : 'outline'} onClick={() => { if (editing) { setEditing(false); setForm({ name: landlord.name, email: landlord.email || '', phone: landlord.phone || '', address: landlord.address || '', notes: landlord.notes || '' }); } else setEditing(true); }}>
               {editing ? <><X size={14} className="mr-2" />Cancel</> : <><Pencil size={14} className="mr-2" />Edit</>}
@@ -96,11 +96,11 @@ export default function LandlordDetailV3() {
                 { icon: MapPin, label: 'Address', value: landlord.address },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-white/[0.06] flex items-center justify-center">
-                    <Icon size={16} className="text-white/40" />
+                  <div className="w-9 h-9 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
+                    <Icon size={16} className="text-[var(--text-muted)]" />
                   </div>
                   <div>
-                    <p className="text-xs text-white/40">{label}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{label}</p>
                     <p className="text-sm">{value || '—'}</p>
                   </div>
                 </div>
@@ -119,12 +119,12 @@ export default function LandlordDetailV3() {
               {properties.map(p => (
                 <Card key={p.id} hover onClick={() => navigate(`/v3/properties/${p.id}`)} className="p-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center">
-                      <Building2 size={18} className="text-white/40" />
+                    <div className="w-10 h-10 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
+                      <Building2 size={18} className="text-[var(--text-muted)]" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{p.address}</p>
-                      {p.type && <p className="text-xs text-white/40">{p.type}</p>}
+                      {p.type && <p className="text-xs text-[var(--text-muted)]">{p.type}</p>}
                     </div>
                   </div>
                 </Card>
@@ -141,11 +141,11 @@ export default function LandlordDetailV3() {
               value={form.notes}
               onChange={e => setForm({ ...form, notes: e.target.value })}
               rows={4}
-              className="w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/[0.25] transition-colors resize-none"
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors resize-none"
               placeholder="Notes..."
             />
           ) : (
-            <p className="text-sm text-white/60">{landlord.notes || 'No notes'}</p>
+            <p className="text-sm text-[var(--text-secondary)]">{landlord.notes || 'No notes'}</p>
           )}
         </GlassCard>
 

@@ -29,13 +29,13 @@ export default function SettingsV3() {
           <div className="flex items-center gap-6">
             <div className="relative group">
               <Avatar name={user?.name} size="xl" />
-              <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer">
-                <Camera size={20} className="text-white/80" />
+              <div className="absolute inset-0 rounded-full bg-[var(--overlay-bg)] opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer">
+                <Camera size={20} className="text-[var(--text-primary)]" />
               </div>
             </div>
             <div>
               <h2 className="text-lg font-semibold">{user?.name || 'User'}</h2>
-              <p className="text-sm text-white/50">{user?.email || ''}</p>
+              <p className="text-sm text-[var(--text-secondary)]">{user?.email || ''}</p>
             </div>
           </div>
         </GlassCard>
@@ -60,19 +60,19 @@ export default function SettingsV3() {
         {/* Preferences Placeholder */}
         <GlassCard className="p-6">
           <SectionHeader title="Preferences" />
-          <div className="space-y-4 text-sm text-white/50">
+          <div className="space-y-4 text-sm text-[var(--text-secondary)]">
             <div className="flex items-center justify-between py-2">
               <div className="flex items-center gap-3">
-                <Bell size={16} className="text-white/40" />
+                <Bell size={16} className="text-[var(--text-muted)]" />
                 <span>Email Notifications</span>
               </div>
-              <div className="w-10 h-6 bg-white/[0.1] rounded-full relative cursor-pointer">
+              <div className="w-10 h-6 bg-[var(--bg-input)] rounded-full relative cursor-pointer">
                 <div className="w-4 h-4 bg-white/40 rounded-full absolute top-1 left-1" />
               </div>
             </div>
             <div className="flex items-center justify-between py-2">
               <div className="flex items-center gap-3">
-                <Palette size={16} className="text-white/40" />
+                <Palette size={16} className="text-[var(--text-muted)]" />
                 <span>Dark Mode</span>
               </div>
               <div className="w-10 h-6 bg-emerald-500/30 rounded-full relative cursor-pointer">
