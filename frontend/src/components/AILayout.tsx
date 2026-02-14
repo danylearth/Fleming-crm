@@ -24,7 +24,7 @@ const AIContext = createContext<AIContextType>({ setPageContext: () => {} });
 export const useAI = () => useContext(AIContext);
 
 const NAV_ITEMS = [
-  { icon: LayoutDashboard, href: '/', label: 'Dashboard' },
+  { icon: LayoutDashboard, href: '/v2', label: 'Dashboard' },
   { icon: UserPlus, href: '/v2/enquiries', label: 'Enquiries' },
   { icon: Users, href: '/v2/tenants', label: 'Tenants' },
   { icon: Building2, href: '/v2/landlords', label: 'Landlords' },

@@ -105,13 +105,13 @@ function AppRoutes() {
       <Route path="/v2" element={<ProtectedRoute bare><AILayout><DashboardV2 /></AILayout></ProtectedRoute>} />
       <Route path="/v2/enquiries" element={<ProtectedRoute bare><AILayout><EnquiriesV2 /></AILayout></ProtectedRoute>} />
       <Route path="/v2/enquiries/list" element={<ProtectedRoute bare><EnquiriesListV2 /></ProtectedRoute>} />
-      <Route path="/v2/tenants" element={<ProtectedRoute bare><AILayout><TenantsV2 /></AILayout></ProtectedRoute>} />
+      <Route path="/v2/tenants" element={<ProtectedRoute bare><TenantsV2 /></ProtectedRoute>} />
       <Route path="/v2/bdm" element={<ProtectedRoute bare><AILayout><BDMV2 /></AILayout></ProtectedRoute>} />
       <Route path="/v2/maintenance" element={<ProtectedRoute bare><AILayout><MaintenanceV2 /></AILayout></ProtectedRoute>} />
       <Route path="/v2/tasks" element={<ProtectedRoute bare><AILayout><TasksV2 /></AILayout></ProtectedRoute>} />
       <Route path="/v2/transactions" element={<ProtectedRoute bare><AILayout><TransactionsV2 /></AILayout></ProtectedRoute>} />
-      <Route path="/v2/properties" element={<ProtectedRoute bare><AILayout><PropertiesV2 /></AILayout></ProtectedRoute>} />
-      <Route path="/v2/landlords" element={<ProtectedRoute bare><AILayout><LandlordsV2 /></AILayout></ProtectedRoute>} />
+      <Route path="/v2/properties" element={<ProtectedRoute bare><PropertiesV2 /></ProtectedRoute>} />
+      <Route path="/v2/landlords" element={<ProtectedRoute bare><LandlordsV2 /></ProtectedRoute>} />
       
       <Route path="/applicant-concept" element={<ProtectedRoute bare><ApplicantConcept /></ProtectedRoute>} />
     </Routes>

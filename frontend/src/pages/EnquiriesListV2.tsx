@@ -12,14 +12,14 @@ import {
 
 const NAV_ITEMS = [
   { icon: LayoutDashboard, href: '/v2', label: 'Dashboard' },
-  { icon: UserPlus, href: '/v2/enquiries', label: 'Enquiries' },
-  { icon: UsersIcon, href: '/tenants', label: 'Tenants' },
-  { icon: Building2, href: '/landlords', label: 'Landlords' },
-  { icon: BarChart3, href: '/landlords-bdm', label: 'BDM' },
-  { icon: Home, href: '/properties', label: 'Properties' },
-  { icon: Wrench, href: '/maintenance', label: 'Maintenance' },
-  { icon: ClipboardList, href: '/tasks', label: 'Tasks' },
-  { icon: Receipt, href: '/transactions', label: 'Financials' },
+  { icon: UserPlus, href: '/v2/enquiries/list', label: 'Enquiries' },
+  { icon: UsersIcon, href: '/v2/tenants', label: 'Tenants' },
+  { icon: Building2, href: '/v2/landlords', label: 'Landlords' },
+  { icon: BarChart3, href: '/v2/bdm', label: 'BDM' },
+  { icon: Home, href: '/v2/properties', label: 'Properties' },
+  { icon: Wrench, href: '/v2/maintenance', label: 'Maintenance' },
+  { icon: ClipboardList, href: '/v2/tasks', label: 'Tasks' },
+  { icon: Receipt, href: '/v2/transactions', label: 'Financials' },
 ];
 
 interface TenantEnquiry {
