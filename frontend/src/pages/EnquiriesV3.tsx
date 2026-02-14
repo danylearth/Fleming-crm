@@ -5,6 +5,22 @@ import { GlassCard, Button, Avatar, SearchBar, Input, Select, EmptyState } from 
 import { useApi } from '../hooks/useApi';
 import { Plus, Mail, Phone, Building2, X, Clock, ArrowLeft } from 'lucide-react';
 
+interface EnquiryRaw {
+  id: number;
+  first_name_1: string;
+  last_name_1: string;
+  email_1: string;
+  phone_1: string;
+  status: string;
+  employment_status_1: string;
+  income_1: number;
+  linked_property_id: number | null;
+  property_address: string | null;
+  notes: string;
+  created_at: string;
+  [key: string]: any;
+}
+
 interface Enquiry {
   id: number;
   name: string;
@@ -16,6 +32,21 @@ interface Enquiry {
   property_address: string | null;
   notes: string;
   created_at: string;
+}
+
+function mapEnquiry(raw: EnquiryRaw): Enquiry {
+  return {
+    id: raw.id,
+    name: [raw.first_name_1, raw.last_name_1].filter(Boolean).join(' ') || 'Unknown',
+    email: raw.email_1 || '',
+    phone: raw.phone_1 || '',
+    status: raw.status || 'new',
+    source: raw.employment_status_1 || '',
+    linked_property_id: raw.linked_property_id,
+    property_address: raw.property_address,
+    notes: raw.notes || '',
+    created_at: raw.created_at,
+  };
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -60,7 +91,8 @@ export default function EnquiriesV3() {
   const load = async () => {
     try {
       const data = await api.get('/api/tenant-enquiries');
-      setEnquiries(Array.isArray(data) ? data : data.enquiries || []);
+      const raw = Array.isArray(data) ? data : data.enquiries || [];
+      setEnquiries(raw.map(mapEnquiry));
     } catch { setEnquiries([]); }
     setLoading(false);
   };
@@ -83,9 +115,15 @@ export default function EnquiriesV3() {
 
   const addEnquiry = async () => {
     try {
+      const [firstName, ...lastParts] = form.name.trim().split(' ');
       await api.post('/api/tenant-enquiries', {
-        ...form,
+        first_name_1: firstName || '',
+        last_name_1: lastParts.join(' ') || '',
+        email_1: form.email,
+        phone_1: form.phone,
+        status: form.status,
         linked_property_id: form.linked_property_id ? Number(form.linked_property_id) : null,
+        notes: form.notes,
       });
       setShowAdd(false);
       setForm({ name: '', email: '', phone: '', status: 'new', source: '', linked_property_id: '', notes: '' });
