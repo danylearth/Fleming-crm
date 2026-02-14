@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Home, Building2, Users, UserCheck, Wrench, PoundSterling, LogOut, Menu, X, ChevronRight, ClipboardList, Briefcase, CheckSquare } from 'lucide-react';
+import {
+  Home, Building2, Users, UserCheck, Wrench, PoundSterling, LogOut,
+  ClipboardList, Briefcase, CheckSquare, ChevronLeft, Search, Bell, Settings
+} from 'lucide-react';
 import { useState } from 'react';
 
 interface LayoutProps {
@@ -12,23 +15,41 @@ export default function Layout({ children }: LayoutProps) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const navItems = [
-    { path: '/', label: 'Dashboard', icon: Home },
-    { path: '/tenant-enquiries', label: 'Enquiries', icon: ClipboardList },
-    { path: '/tenants', label: 'Tenants', icon: Users },
-    { path: '/properties', label: 'Properties', icon: Building2 },
-    { path: '/landlords', label: 'Landlords', icon: UserCheck },
-    { path: '/landlords-bdm', label: 'BDM', icon: Briefcase },
-    { path: '/maintenance', label: 'Maintenance', icon: Wrench },
-    { path: '/tasks', label: 'Tasks', icon: CheckSquare },
-    { path: '/transactions', label: 'Financials', icon: PoundSterling },
+  const navSections = [
+    {
+      items: [
+        { path: '/', label: 'Overview', icon: Home },
+      ],
+    },
+    {
+      label: 'Contacts',
+      items: [
+        { path: '/tenant-enquiries', label: 'Enquiries', icon: ClipboardList },
+        { path: '/tenants', label: 'Tenants', icon: Users },
+        { path: '/landlords', label: 'Landlords', icon: UserCheck },
+        { path: '/landlords-bdm', label: 'BDM', icon: Briefcase },
+      ],
+    },
+    {
+      label: 'Property',
+      items: [
+        { path: '/properties', label: 'Properties', icon: Building2 },
+        { path: '/maintenance', label: 'Maintenance', icon: Wrench },
+      ],
+    },
+    {
+      items: [
+        { path: '/tasks', label: 'Tasks', icon: CheckSquare },
+        { path: '/transactions', label: 'Financials', icon: PoundSterling },
+      ],
+    },
   ];
 
   const isActive = (path: string) => {
@@ -37,113 +58,107 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-navy-900 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gold-500 rounded-lg flex items-center justify-center">
-                <Home className="w-5 h-5 text-navy-900" />
-              </div>
-              <div className="hidden sm:block">
-                <h1 className="text-lg font-bold text-white">Fleming Lettings</h1>
-              </div>
+    <div className="h-screen flex bg-white overflow-hidden">
+      {/* Sidebar */}
+      <aside
+        className={`flex flex-col border-r border-gray-200 bg-white transition-all duration-200 flex-shrink-0 ${
+          collapsed ? 'w-16' : 'w-56'
+        }`}
+      >
+        {/* Logo */}
+        <div className="flex items-center gap-2.5 px-4 h-14 border-b border-gray-100 flex-shrink-0">
+          <div className="w-8 h-8 bg-navy-600 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Home className="w-4 h-4 text-white" />
+          </div>
+          {!collapsed && (
+            <span className="font-bold text-gray-900 text-sm tracking-tight">Fleming</span>
+          )}
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto py-3 px-2">
+          {navSections.map((section, si) => (
+            <div key={si} className={si > 0 ? 'mt-4' : ''}>
+              {section.label && !collapsed && (
+                <div className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                  {section.label}
+                </div>
+              )}
+              {section.items.map(item => {
+                const active = isActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    title={collapsed ? item.label : undefined}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors mb-0.5 ${
+                      active
+                        ? 'bg-gray-100 text-gray-900'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                    } ${collapsed ? 'justify-center' : ''}`}
+                  >
+                    <item.icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-gray-900' : ''}`} />
+                    {!collapsed && item.label}
+                  </Link>
+                );
+              })}
             </div>
-            
-            {/* Desktop Nav */}
-            <nav className="hidden lg:flex items-center gap-1">
-              {navItems.map(item => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    isActive(item.path)
-                      ? 'bg-white/10 text-white'
-                      : 'text-navy-200 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <item.icon className="w-4 h-4" />
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
+          ))}
+        </nav>
 
-            <div className="flex items-center gap-4">
-              <div className="hidden sm:flex items-center gap-3">
-                <div className="text-right">
-                  <p className="text-sm font-medium text-white">{user?.name}</p>
-                  <p className="text-xs text-navy-300 capitalize">{user?.role}</p>
-                </div>
-                <div className="w-9 h-9 bg-navy-700 rounded-full flex items-center justify-center">
-                  <span className="text-sm font-semibold text-gold-500">
-                    {user?.name?.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-              </div>
-              
-              <button
-                onClick={handleLogout}
-                className="hidden sm:flex items-center gap-2 px-3 py-2 text-navy-300 hover:text-white hover:bg-white/5 rounded-lg transition-all text-sm"
-                title="Sign out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+        {/* Bottom */}
+        <div className="border-t border-gray-100 px-2 py-3 space-y-0.5">
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50 w-full transition-colors ${
+              collapsed ? 'justify-center' : ''
+            }`}
+          >
+            <ChevronLeft className={`w-[18px] h-[18px] transition-transform ${collapsed ? 'rotate-180' : ''}`} />
+            {!collapsed && 'Collapse'}
+          </button>
+          <button
+            onClick={handleLogout}
+            title="Sign out"
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-gray-400 hover:text-red-600 hover:bg-red-50 w-full transition-colors ${
+              collapsed ? 'justify-center' : ''
+            }`}
+          >
+            <LogOut className="w-[18px] h-[18px]" />
+            {!collapsed && 'Sign Out'}
+          </button>
+        </div>
+      </aside>
 
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="lg:hidden p-2 text-white hover:bg-white/10 rounded-lg"
-              >
-                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
+      {/* Main area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top bar */}
+        <header className="flex items-center justify-between h-14 px-6 border-b border-gray-100 bg-white flex-shrink-0">
+          <div className="relative w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search or type a command"
+              className="w-full pl-10 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-500/20 focus:border-navy-400"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+              <Bell className="w-[18px] h-[18px]" />
+            </button>
+            <div className="w-8 h-8 bg-navy-600 rounded-full flex items-center justify-center">
+              <span className="text-xs font-semibold text-white">
+                {user?.name?.charAt(0).toUpperCase()}
+              </span>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-navy-900/95 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)}>
-          <div className="pt-20 px-4">
-            <div className="bg-white rounded-2xl shadow-2xl p-4 space-y-1 max-h-[80vh] overflow-y-auto">
-              <div className="px-4 py-3 border-b border-gray-100 mb-2">
-                <p className="font-semibold text-navy-900">{user?.name}</p>
-                <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
-              </div>
-              {navItems.map(item => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
-                    isActive(item.path)
-                      ? 'bg-navy-900 text-white'
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <item.icon className="w-5 h-5" />
-                    {item.label}
-                  </div>
-                  <ChevronRight className="w-4 h-4 opacity-50" />
-                </Link>
-              ))}
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl w-full mt-2"
-              >
-                <LogOut className="w-5 h-5" />
-                Sign Out
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
-      </main>
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto p-6">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
