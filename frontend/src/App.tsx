@@ -16,6 +16,7 @@ import TenantEnquiryDetail from './pages/TenantEnquiryDetail';
 import Maintenance from './pages/Maintenance';
 import Transactions from './pages/Transactions';
 import Tasks from './pages/Tasks';
+import ApplicantConcept from './pages/ApplicantConcept';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -87,6 +88,9 @@ function AppRoutes() {
       
       {/* Tasks */}
       <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
+      
+      {/* Concept Pages */}
+      <Route path="/applicant-concept" element={<ProtectedRoute><ApplicantConcept /></ProtectedRoute>} />
     </Routes>
   );
 }
