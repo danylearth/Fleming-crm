@@ -30,6 +30,7 @@ import PropertiesV2 from './pages/PropertiesV2';
 import LandlordsV2 from './pages/LandlordsV2';
 
 // V3
+import LoginV3 from './pages/LoginV3';
 import DashboardV3 from './pages/DashboardV3';
 import PropertiesV3 from './pages/PropertiesV3';
 import PropertyDetailV3 from './pages/PropertyDetailV3';
@@ -75,7 +76,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
   
   if (user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/v3" replace />;
   }
   
   return <>{children}</>;
@@ -84,8 +85,8 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-      <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/login" element={<PublicRoute><LoginV3 /></PublicRoute>} />
+      <Route path="/" element={<Navigate to="/v3" replace />} />
       
       {/* Properties */}
       <Route path="/properties" element={<ProtectedRoute><Properties /></ProtectedRoute>} />
