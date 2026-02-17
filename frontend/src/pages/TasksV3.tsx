@@ -232,10 +232,12 @@ export default function TasksV3() {
                   <List size={13} /> List
                 </button>
                 <div className="w-px h-4 bg-[var(--border-color)]" />
-                {(['month','week','day'] as const).map(m => (
-                  <button key={m} onClick={() => { setViewMode('calendar'); setCalViewMode(m); }}
-                    className="px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-all capitalize">{m}</button>
-                ))}
+                <button onClick={() => { setViewMode('calendar'); setCalViewMode('month'); }}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-all">Month</button>
+                <button onClick={() => { setViewMode('calendar'); setCalViewMode('week'); }}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-all">Week</button>
+                <button onClick={() => { setViewMode('calendar'); setCalViewMode('day'); }}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-all">Day</button>
               </div>
               <FilterDropdown icon={Building2} label="Property" value={filterProperty}
                 displayValue={properties.find(p => p.id === filterProperty)?.address} onClear={() => setFilterProperty(null)}
