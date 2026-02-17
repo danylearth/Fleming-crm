@@ -71,7 +71,7 @@ export default function BDMV3() {
     const matchSearch = !search || [p.name, p.email, p.phone, p.address, p.source]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
     let matchStatus = true;
-    if (statusFilter === 'active') matchStatus = !['onboarded', 'not_interested'].includes(p.status);
+    if (statusFilter === 'active') matchStatus = !['not_interested'].includes(p.status);
     else if (statusFilter !== 'all') matchStatus = p.status === statusFilter;
     return matchSearch && matchStatus;
   });
