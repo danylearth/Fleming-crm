@@ -1,8 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import V3Layout from '../components/V3Layout';
 import { Card, GlassCard, Button, Input, Avatar, ProgressRing, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, CheckCircle2, Clock, Inbox, Calendar, Search, ChevronDown, ChevronLeft, ChevronRight, Building2, Users, UserCircle, Tag, List, CalendarDays } from 'lucide-react';
+import {
+  Plus, X, CheckCircle2, Clock, Inbox, Calendar, Search, ChevronDown,
+  ChevronLeft, ChevronRight, Building2, Users, UserCircle, Tag,
+  List, CalendarDays, MoreVertical
+} from 'lucide-react';
 
 interface Task {
   id: number; title: string; description: string; assigned_to: string;
@@ -15,11 +19,35 @@ const PRIORITY_COLORS: Record<string, string> = {
   medium: 'bg-amber-500/20 text-amber-400',
   high: 'bg-red-500/20 text-red-400',
 };
-
 const STATUS_LABELS: Record<string, string> = { pending: 'Pending', in_progress: 'In Progress', completed: 'Completed' };
 const PRIORITY_LABELS: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High' };
 const TASK_TYPES = ['manual', 'viewing', 'follow_up', 'document', 'maintenance', 'onboarding', 'compliance', 'other'];
 
+const TEAM = [
+  { id: 'all', name: 'Everyone', role: 'All Team', color: 'from-orange-500 to-pink-500', initials: 'All' },
+  { id: 'danyl', name: 'Danyl', role: 'Director', color: 'from-violet-500 to-purple-500', initials: 'D' },
+  { id: 'sarah', name: 'Sarah Chen', role: 'Property Manager', color: 'from-cyan-500 to-blue-500', initials: 'SC' },
+  { id: 'alex', name: 'Alex Morgan', role: 'Lettings Negotiator', color: 'from-emerald-500 to-teal-500', initials: 'AM' },
+  { id: 'mike', name: 'Mike Ross', role: 'Maintenance Lead', color: 'from-amber-500 to-orange-500', initials: 'MR' },
+];
+
+const HOURS = Array.from({ length: 13 }, (_, i) => i + 7); // 7AM–7PM
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+function fmtDate(y: number, m: number, d: number) {
+  return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+function getMonthGrid(year: number, month: number) {
+  const first = new Date(year, month, 1);
+  let startDow = first.getDay() - 1; if (startDow < 0) startDow = 6;
+  const last = new Date(year, month + 1, 0);
+  const days: (number | null)[] = [];
+  for (let i = 0; i < startDow; i++) days.push(null);
+  for (let d = 1; d <= last.getDate(); d++) days.push(d);
+  while (days.length % 7 !== 0) days.push(null);
+  return days;
+}
 function isOverdue(task: Task) {
   return task.status !== 'completed' && task.due_date && new Date(task.due_date) < new Date();
 }
@@ -32,15 +60,11 @@ function FilterDropdown({ icon: Icon, label, value, displayValue, onClear, items
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('mousedown', handler); return () => document.removeEventListener('mousedown', handler);
   }, []);
-
   const filtered = items.filter(i => i.label.toLowerCase().includes(search.toLowerCase()));
-
   return (
     <div ref={ref} className="relative">
       <button onClick={() => setOpen(!open)}
@@ -48,18 +72,15 @@ function FilterDropdown({ icon: Icon, label, value, displayValue, onClear, items
           value ? 'bg-[var(--accent-orange)]/10 border-[var(--accent-orange)]/30 text-[var(--accent-orange)]'
             : 'bg-[var(--bg-card)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
         }`}>
-        <Icon size={14} />
-        <span className="max-w-[120px] truncate">{value ? displayValue : label}</span>
-        {value ? <X size={12} className="hover:text-white" onClick={e => { e.stopPropagation(); onClear(); }} />
-          : <ChevronDown size={12} className={open ? 'rotate-180' : ''} />}
+        <Icon size={14} /><span className="max-w-[120px] truncate">{value ? displayValue : label}</span>
+        {value ? <X size={12} className="hover:text-white" onClick={e => { e.stopPropagation(); onClear(); }} /> : <ChevronDown size={12} className={open ? 'rotate-180' : ''} />}
       </button>
       {open && (
         <div className="absolute z-50 mt-1 w-64 bg-[var(--bg-card)] border border-[var(--border-input)] rounded-xl shadow-2xl overflow-hidden right-0">
           <div className="p-2 border-b border-[var(--border-subtle)]">
             <div className="flex items-center gap-2 bg-[var(--bg-input)] rounded-lg px-3 py-2">
               <Search size={14} className="text-[var(--text-muted)]" />
-              <input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder={`Search ${label.toLowerCase()}...`}
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${label.toLowerCase()}...`}
                 className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none" autoFocus />
             </div>
           </div>
@@ -78,23 +99,6 @@ function FilterDropdown({ icon: Icon, label, value, displayValue, onClear, items
   );
 }
 
-/* ========== Status/Priority Filter Tags ========== */
-function FilterTags({ options, value, onChange }: { options: { key: string; label: string }[]; value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map(o => (
-        <button key={o.key} onClick={() => onChange(o.key)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-            value === o.key ? 'bg-[var(--accent-orange)]/15 text-[var(--accent-orange)] border border-[var(--accent-orange)]/30'
-              : 'bg-[var(--bg-subtle)] text-[var(--text-muted)] border border-[var(--border-subtle)] hover:text-[var(--text-secondary)]'
-          }`}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export default function TasksV3() {
   const api = useApi();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -109,33 +113,32 @@ export default function TasksV3() {
   const [filterLandlord, setFilterLandlord] = useState<number | null>(null);
   const [filterTenant, setFilterTenant] = useState<number | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
-  const [calMonth, setCalMonth] = useState(new Date().getMonth());
-  const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending', due_date: '', task_type: 'manual' });
+
+  // View mode
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+
+  // Calendar state
+  const now = new Date();
+  const todayStr = fmtDate(now.getFullYear(), now.getMonth(), now.getDate());
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [calYear, setCalYear] = useState(now.getFullYear());
+  const [calMonth, setCalMonth] = useState(now.getMonth());
+  const [selectedMember, setSelectedMember] = useState('all');
+  const [calViewMode, setCalViewMode] = useState<'day' | 'week' | 'month'>('day');
 
   const load = async () => {
     try {
       const [data, props, lands, tens] = await Promise.all([
-        api.get('/api/tasks'),
-        api.get('/api/properties'),
-        api.get('/api/landlords'),
-        api.get('/api/tenants'),
+        api.get('/api/tasks'), api.get('/api/properties'), api.get('/api/landlords'), api.get('/api/tenants'),
       ]);
       setTasks(Array.isArray(data) ? data : data.tasks || []);
-      setProperties(props);
-      setLandlords(lands);
-      setTenants(tens);
+      setProperties(props); setLandlords(lands); setTenants(tens);
     } catch { setTasks([]); }
     setLoading(false);
   };
-
   useEffect(() => { load(); }, []);
-
-  // Build lookup maps
-  const propertyLandlordMap = properties.reduce((acc, p) => { if (p.landlord_id) acc[p.id] = p.landlord_id; return acc; }, {} as Record<number, number>);
-  const tenantPropertyMap = tenants.reduce((acc, t) => { if (t.property_id) acc[t.id] = t.property_id; return acc; }, {} as Record<number, number>);
 
   const counts = {
     completed: tasks.filter(t => t.status === 'completed').length,
@@ -150,15 +153,12 @@ export default function TasksV3() {
     if (filterType && t.task_type !== filterType) return false;
     if (filterProperty && !(t.entity_type === 'property' && t.entity_id === filterProperty)) return false;
     if (filterLandlord) {
-      // Match tasks linked to landlord directly, or to properties owned by this landlord
       const landlordPropertyIds = properties.filter(p => p.landlord_id === filterLandlord).map(p => p.id);
-      const match = (t.entity_type === 'landlord' && t.entity_id === filterLandlord) ||
-        (t.entity_type === 'property' && landlordPropertyIds.includes(t.entity_id!));
+      const match = (t.entity_type === 'landlord' && t.entity_id === filterLandlord) || (t.entity_type === 'property' && landlordPropertyIds.includes(t.entity_id!));
       if (!match) return false;
     }
     if (filterTenant) {
-      const match = (t.entity_type === 'tenant' && t.entity_id === filterTenant) ||
-        (t.entity_type === 'tenant_enquiry' && t.entity_id === filterTenant);
+      const match = (t.entity_type === 'tenant' && t.entity_id === filterTenant) || (t.entity_type === 'tenant_enquiry' && t.entity_id === filterTenant);
       if (!match) return false;
     }
     return true;
@@ -167,18 +167,31 @@ export default function TasksV3() {
   const updateStatus = async (id: number, status: string) => {
     try { await api.put(`/api/tasks/${id}`, { status }); await load(); } catch {}
   };
-
   const addTask = async () => {
-    try {
-      await api.post('/api/tasks', form);
-      setShowAdd(false);
-      setForm({ title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending', due_date: '', task_type: 'manual' });
-      await load();
-    } catch {}
+    try { await api.post('/api/tasks', form); setShowAdd(false); setForm({ title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending', due_date: '', task_type: 'manual' }); await load(); } catch {}
   };
 
   const completionPct = tasks.length > 0 ? Math.round((counts.completed / tasks.length) * 100) : 0;
   const hasFilters = filterProperty || filterLandlord || filterTenant || filterType;
+
+  // Calendar helpers
+  const miniGrid = getMonthGrid(calYear, calMonth);
+  const prevMonth = () => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y-1); } else setCalMonth(m => m-1); };
+  const nextMonth = () => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y+1); } else setCalMonth(m => m+1); };
+  const prevDay = () => { const d = new Date(selectedDate+'T00:00:00'); d.setDate(d.getDate()-1); setSelectedDate(fmtDate(d.getFullYear(),d.getMonth(),d.getDate())); setCalYear(d.getFullYear()); setCalMonth(d.getMonth()); };
+  const nextDay = () => { const d = new Date(selectedDate+'T00:00:00'); d.setDate(d.getDate()+1); setSelectedDate(fmtDate(d.getFullYear(),d.getMonth(),d.getDate())); setCalYear(d.getFullYear()); setCalMonth(d.getMonth()); };
+
+  // Tasks for selected day
+  const dayTasks = filtered.filter(t => t.due_date?.slice(0,10) === selectedDate);
+  // Tasks by date for dots
+  const tasksByDate = useMemo(() => {
+    const m: Record<string, Task[]> = {};
+    filtered.forEach(t => { if (t.due_date) { const d = t.due_date.slice(0,10); if (!m[d]) m[d] = []; m[d].push(t); } });
+    return m;
+  }, [filtered]);
+
+  const dayInfo = (() => { const d = new Date(selectedDate+'T00:00:00'); return { weekday: d.toLocaleDateString('en-GB',{weekday:'long'}), day: d.getDate() }; })();
+  const isSelectedToday = selectedDate === todayStr;
 
   return (
     <V3Layout title="Tasks" breadcrumb={[{ label: 'Tasks' }]}>
@@ -192,10 +205,7 @@ export default function TasksV3() {
           ].map(s => (
             <GlassCard key={s.label} className="p-5 flex items-center gap-4">
               <div className={s.color}>{s.icon}</div>
-              <div>
-                <p className="text-2xl font-bold">{s.count}</p>
-                <p className="text-xs text-[var(--text-secondary)]">{s.label}</p>
-              </div>
+              <div><p className="text-2xl font-bold">{s.count}</p><p className="text-xs text-[var(--text-secondary)]">{s.label}</p></div>
             </GlassCard>
           ))}
           <GlassCard className="p-5 flex flex-col items-center justify-center">
@@ -204,7 +214,7 @@ export default function TasksV3() {
           </GlassCard>
         </div>
 
-        {/* Search + Filters */}
+        {/* Search + Filters + View Toggle */}
         <div className="flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="flex-1">
@@ -216,170 +226,283 @@ export default function TasksV3() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <FilterDropdown icon={CheckCircle2} label="Status" value={filterStatus === 'all' ? null : filterStatus}
-                displayValue={filterStatus !== 'all' ? STATUS_LABELS[filterStatus] : undefined}
-                onClear={() => setFilterStatus('all')}
-                items={Object.entries(STATUS_LABELS).map(([k, v]) => ({ id: k, label: v }))}
-                onSelect={id => setFilterStatus(id)} />
-              <FilterDropdown icon={Tag} label="Priority" value={filterPriority === 'all' ? null : filterPriority}
-                displayValue={filterPriority !== 'all' ? PRIORITY_LABELS[filterPriority] : undefined}
-                onClear={() => setFilterPriority('all')}
-                items={Object.entries(PRIORITY_LABELS).map(([k, v]) => ({ id: k, label: v }))}
-                onSelect={id => setFilterPriority(id)} />
+              {/* View toggle */}
+              <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-0.5 mr-1">
+                <button onClick={() => setViewMode('list')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    viewMode === 'list' ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}><List size={13} /> List</button>
+                <button onClick={() => setViewMode('calendar')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    viewMode === 'calendar' ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}><CalendarDays size={13} /> Calendar</button>
+              </div>
               <FilterDropdown icon={Building2} label="Property" value={filterProperty}
-                displayValue={properties.find(p => p.id === filterProperty)?.address}
-                onClear={() => setFilterProperty(null)}
-                items={properties.map(p => ({ id: p.id, label: p.address }))}
-                onSelect={id => setFilterProperty(id)} />
+                displayValue={properties.find(p => p.id === filterProperty)?.address} onClear={() => setFilterProperty(null)}
+                items={properties.map(p => ({ id: p.id, label: p.address }))} onSelect={id => setFilterProperty(id)} />
               <FilterDropdown icon={UserCircle} label="Landlord" value={filterLandlord}
-                displayValue={landlords.find(l => l.id === filterLandlord)?.name}
-                onClear={() => setFilterLandlord(null)}
-                items={landlords.map(l => ({ id: l.id, label: l.name }))}
-                onSelect={id => setFilterLandlord(id)} />
+                displayValue={landlords.find(l => l.id === filterLandlord)?.name} onClear={() => setFilterLandlord(null)}
+                items={landlords.map(l => ({ id: l.id, label: l.name }))} onSelect={id => setFilterLandlord(id)} />
               <FilterDropdown icon={Users} label="Tenant" value={filterTenant}
-                displayValue={tenants.find(t => t.id === filterTenant)?.name}
-                onClear={() => setFilterTenant(null)}
-                items={tenants.map(t => ({ id: t.id, label: t.name }))}
-                onSelect={id => setFilterTenant(id)} />
+                displayValue={tenants.find(t => t.id === filterTenant)?.name} onClear={() => setFilterTenant(null)}
+                items={tenants.map(t => ({ id: t.id, label: t.name }))} onSelect={id => setFilterTenant(id)} />
               <FilterDropdown icon={Tag} label="Type" value={filterType}
-                displayValue={filterType ? filterType.replace('_', ' ') : undefined}
-                onClear={() => setFilterType(null)}
-                items={TASK_TYPES.map(t => ({ id: t, label: t.replace('_', ' ').replace(/^\w/, c => c.toUpperCase()) }))}
-                onSelect={id => setFilterType(id)} />
-              <Button variant="gradient" onClick={() => setShowAdd(true)}>
-                <Plus size={14} className="mr-1.5" /> Add Task
-              </Button>
+                displayValue={filterType ? filterType.replace('_',' ') : undefined} onClear={() => setFilterType(null)}
+                items={TASK_TYPES.map(t => ({ id: t, label: t.replace('_',' ').replace(/^\w/,c=>c.toUpperCase()) }))} onSelect={id => setFilterType(id)} />
+              <Button variant="gradient" onClick={() => setShowAdd(true)}><Plus size={14} className="mr-1.5" /> Add Task</Button>
             </div>
           </div>
-          {/* Status/Priority tags removed — now in dropdowns above */}
         </div>
 
-        {/* Task List + Calendar side by side */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2">
-        {loading ? (
-          <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
-        ) : filtered.length === 0 ? (
-          <EmptyState message={hasFilters || search ? 'No tasks match your filters' : 'No tasks yet'} icon={<CheckCircle2 size={32} />} />
-        ) : (
-          <div className="space-y-3">
-            {filtered.map(task => {
-              const overdue = isOverdue(task);
-              const taskPct = task.status === 'completed' ? 100 : task.status === 'in_progress' ? 50 : 0;
-              return (
-                <Card key={task.id} className={`p-4 md:p-5 ${overdue ? 'border-red-500/40' : ''}`} hover>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <ProgressRing value={taskPct} size={40} strokeWidth={3} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-[var(--text-muted)]' : ''}`}>{task.title}</p>
-                          {overdue && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">Overdue</span>}
-                          {task.task_type && task.task_type !== 'manual' && (
-                            <span className="text-[10px] bg-[var(--bg-hover)] text-[var(--text-muted)] px-2 py-0.5 rounded-full">
-                              {task.task_type.replace('_', ' ')}
-                            </span>
+        {/* ═══ LIST VIEW ═══ */}
+        {viewMode === 'list' && (
+          loading ? (
+            <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
+          ) : filtered.length === 0 ? (
+            <EmptyState message={hasFilters || search ? 'No tasks match your filters' : 'No tasks yet'} icon={<CheckCircle2 size={32} />} />
+          ) : (
+            <div className="space-y-3">
+              {filtered.map(task => {
+                const overdue = isOverdue(task);
+                const taskPct = task.status === 'completed' ? 100 : task.status === 'in_progress' ? 50 : 0;
+                return (
+                  <Card key={task.id} className={`p-4 md:p-5 ${overdue ? 'border-red-500/40' : ''}`} hover>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <ProgressRing value={taskPct} size={40} strokeWidth={3} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-[var(--text-muted)]' : ''}`}>{task.title}</p>
+                            {overdue && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">Overdue</span>}
+                            {task.task_type && task.task_type !== 'manual' && (
+                              <span className="text-[10px] bg-[var(--bg-hover)] text-[var(--text-muted)] px-2 py-0.5 rounded-full">{task.task_type.replace('_',' ')}</span>
+                            )}
+                          </div>
+                          {task.description && <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">{task.description}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap pl-[52px] sm:pl-0">
+                        {task.assigned_to && <Avatar name={task.assigned_to} size="xs" />}
+                        <span className={`text-[10px] px-2.5 py-1 rounded-full font-medium ${PRIORITY_COLORS[task.priority]}`}>{PRIORITY_LABELS[task.priority] || task.priority}</span>
+                        {task.due_date && (
+                          <div className={`flex items-center gap-1 text-xs ${overdue ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
+                            <Calendar size={12} />{new Date(task.due_date).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
+                          </div>
+                        )}
+                        <div className="flex gap-1">
+                          {task.status !== 'in_progress' && task.status !== 'completed' && (
+                            <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'in_progress')}>Start</Button>
+                          )}
+                          {task.status !== 'completed' && (
+                            <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'completed')}>Done</Button>
                           )}
                         </div>
-                        {task.description && <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">{task.description}</p>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap pl-[52px] sm:pl-0">
-                      {task.assigned_to && <Avatar name={task.assigned_to} size="xs" />}
-                      <span className={`text-[10px] px-2.5 py-1 rounded-full font-medium ${PRIORITY_COLORS[task.priority]}`}>
-                        {PRIORITY_LABELS[task.priority] || task.priority}
-                      </span>
-                      {task.due_date && (
-                        <div className={`flex items-center gap-1 text-xs ${overdue ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
-                          <Calendar size={12} />
-                          {new Date(task.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                  </Card>
+                );
+              })}
+            </div>
+          )
+        )}
+
+        {/* ═══ CALENDAR VIEW ═══ */}
+        {viewMode === 'calendar' && !loading && (
+          <div className="space-y-4">
+            {/* Top bar: Today + nav + Day/Week/Month */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button onClick={() => { setSelectedDate(todayStr); setCalYear(now.getFullYear()); setCalMonth(now.getMonth()); }}
+                  className="px-4 py-2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-medium hover:opacity-90 transition-opacity">Today</button>
+                <div className="flex items-center gap-1">
+                  <button onClick={prevDay} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={16} /></button>
+                  <button onClick={nextDay} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={16} /></button>
+                </div>
+                <span className="text-lg font-semibold">{new Date(selectedDate+'T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</span>
+              </div>
+              <div className="hidden md:flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-1">
+                {(['month','week','day'] as const).map(m => (
+                  <button key={m} onClick={() => setCalViewMode(m)}
+                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all capitalize ${
+                      calViewMode === m ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                    }`}>{m}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Team selector */}
+            <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
+              {TEAM.map(member => {
+                const active = selectedMember === member.id;
+                return (
+                  <button key={member.id} onClick={() => setSelectedMember(member.id)}
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl border transition-all shrink-0 ${
+                      active ? 'border-orange-500/50 bg-orange-500/10' : 'border-[var(--border-color)] bg-[var(--bg-card)] hover:border-[var(--border-input)]'
+                    }`}>
+                    <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${member.color} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{member.initials}</div>
+                    <div className="text-left hidden sm:block">
+                      <p className={`text-sm font-medium ${active ? 'text-orange-400' : ''}`}>{member.name}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{member.role}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Day view + sidebar */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
+              {/* Day schedule */}
+              <Card className="p-0 overflow-hidden">
+                <div className="flex items-center justify-center gap-3 py-4 border-b border-[var(--border-subtle)]">
+                  <button onClick={prevDay} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={16} /></button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[var(--text-secondary)] text-sm">{dayInfo.weekday}</span>
+                    <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
+                      isSelectedToday ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white' : 'bg-[var(--bg-subtle)]'
+                    }`}>{dayInfo.day}</span>
+                  </div>
+                  <button onClick={nextDay} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={16} /></button>
+                </div>
+
+                <div className="relative overflow-y-auto max-h-[600px]">
+                  <div className="sticky top-0 z-10 bg-[var(--bg-card)] border-b border-[var(--border-subtle)] px-4 py-2 text-xs text-[var(--text-muted)]">GMT +00:00</div>
+                  {HOURS.map(hour => {
+                    const hourTasks = dayTasks.filter(t => {
+                      // Distribute tasks across hours based on ID
+                      const assignedHour = 9 + (t.id % 8);
+                      return assignedHour === hour;
+                    });
+                    const timeLabel = `${hour > 12 ? hour-12 : hour === 0 ? 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`;
+                    const endHourLabel = (h: number) => `${h > 12 ? h-12 : h === 0 ? 12 : h}:00 ${h >= 12 ? 'PM' : 'AM'}`;
+
+                    return (
+                      <div key={hour} className="flex border-b border-[var(--border-subtle)] border-dashed min-h-[80px]">
+                        <div className="w-20 shrink-0 px-4 py-3 text-xs text-[var(--text-muted)] text-right border-r border-[var(--border-subtle)]">{timeLabel}</div>
+                        <div className="flex-1 p-2 flex flex-col gap-2">
+                          {hourTasks.map(task => {
+                            const colorMap: Record<string, { border: string; bg: string }> = {
+                              high: { border: 'border-red-500/60', bg: 'bg-red-500/10' },
+                              medium: { border: 'border-amber-500/60', bg: 'bg-amber-500/10' },
+                              low: { border: 'border-blue-500/60', bg: 'bg-blue-500/10' },
+                            };
+                            const c = colorMap[task.priority] || colorMap.low;
+                            return (
+                              <div key={task.id} className={`${c.bg} border-l-[3px] ${c.border} rounded-xl p-3 cursor-pointer hover:brightness-110 transition-all`}>
+                                <div className="flex items-start justify-between">
+                                  <div>
+                                    <p className="text-[10px] text-[var(--text-muted)] mb-1">{timeLabel} - {endHourLabel(hour+1)}</p>
+                                    <p className="text-sm font-medium">{task.title}</p>
+                                    {task.description && <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-2">{task.description}</p>}
+                                  </div>
+                                  <button className="w-6 h-6 rounded-full hover:bg-white/10 flex items-center justify-center shrink-0">
+                                    <MoreVertical size={14} className="text-[var(--text-muted)]" />
+                                  </button>
+                                </div>
+                                <div className="flex items-center gap-2 mt-2">
+                                  {task.assigned_to && (
+                                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold border-2 border-[var(--bg-card)]">
+                                      {task.assigned_to.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${PRIORITY_COLORS[task.priority]}`}>
+                                    {PRIORITY_LABELS[task.priority]}
+                                  </span>
+                                  {task.status !== 'completed' && (
+                                    <button onClick={() => updateStatus(task.id, 'completed')}
+                                      className="text-[10px] text-emerald-400 hover:text-emerald-300 ml-auto">✓ Done</button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      )}
-                      <div className="flex gap-1">
-                        {task.status !== 'in_progress' && task.status !== 'completed' && (
-                          <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'in_progress')}>Start</Button>
-                        )}
-                        {task.status !== 'completed' && (
-                          <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'completed')}>Done</Button>
-                        )}
                       </div>
-                    </div>
+                    );
+                  })}
+                </div>
+              </Card>
+
+              {/* Right sidebar */}
+              <div className="space-y-5">
+                {/* Mini calendar */}
+                <Card className="p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <button onClick={prevMonth} className="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={14} /></button>
+                    <span className="text-sm font-semibold">{MONTHS[calMonth]} {calYear}</span>
+                    <button onClick={nextMonth} className="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={14} /></button>
+                  </div>
+                  <div className="grid grid-cols-7 mb-1">
+                    {DAYS_SHORT.map(d => <div key={d} className="text-center text-[10px] text-[var(--text-muted)] font-medium py-1">{d}</div>)}
+                  </div>
+                  <div className="grid grid-cols-7 gap-y-1">
+                    {miniGrid.map((day, i) => {
+                      if (day === null) return <div key={i} />;
+                      const dateStr = fmtDate(calYear, calMonth, day);
+                      const isSel = dateStr === selectedDate;
+                      const isTod = dateStr === todayStr;
+                      const dayEvts = tasksByDate[dateStr] || [];
+                      return (
+                        <button key={i} onClick={() => setSelectedDate(dateStr)} className="flex flex-col items-center py-1">
+                          <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
+                            isSel ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white'
+                            : isTod ? 'ring-1 ring-orange-500/50 text-orange-400'
+                            : 'hover:bg-[var(--bg-hover)]'
+                          }`}>{day}</span>
+                          {dayEvts.length > 0 && (
+                            <div className="flex gap-0.5 mt-0.5">
+                              {dayEvts.slice(0,3).map((t,j) => (
+                                <div key={j} className={`w-1 h-1 rounded-full ${
+                                  t.priority === 'high' ? 'bg-red-500' : t.priority === 'medium' ? 'bg-amber-500' : 'bg-blue-500'
+                                }`} />
+                              ))}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </Card>
-              );
-            })}
+
+                {/* Day summary */}
+                <Card className="p-5">
+                  <h3 className="text-sm font-semibold mb-3">
+                    {isSelectedToday ? "Today's Tasks" : new Date(selectedDate+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}
+                  </h3>
+                  {dayTasks.length > 0 ? (
+                    <div className="space-y-2">
+                      {dayTasks.map(t => (
+                        <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg bg-[var(--bg-subtle)]">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${
+                            t.priority === 'high' ? 'bg-red-500' : t.priority === 'medium' ? 'bg-amber-500' : 'bg-blue-500'
+                          }`} />
+                          <p className={`text-xs truncate flex-1 ${t.status === 'completed' ? 'line-through text-[var(--text-muted)]' : ''}`}>{t.title}</p>
+                          <span className={`text-[10px] ${PRIORITY_COLORS[t.priority]} px-1.5 py-0.5 rounded-full`}>{t.priority}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[var(--text-muted)]">No tasks on this day</p>
+                  )}
+                </Card>
+
+                {/* Status filter */}
+                <Card className="p-5">
+                  <h3 className="text-sm font-semibold mb-3">Status</h3>
+                  <div className="space-y-2.5">
+                    {[{ key: 'all', label: 'All Tasks' }, { key: 'pending', label: 'Pending' }, { key: 'in_progress', label: 'In Progress' }, { key: 'completed', label: 'Completed' }].map(opt => (
+                      <label key={opt.key} className="flex items-center gap-3 cursor-pointer group" onClick={() => setFilterStatus(opt.key)}>
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                          filterStatus === opt.key ? 'border-orange-500' : 'border-[var(--border-input)]'
+                        }`}>{filterStatus === opt.key && <div className="w-2 h-2 rounded-full bg-orange-500" />}</div>
+                        <span className="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]">{opt.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+            </div>
           </div>
         )}
-
-        </div>
-        {/* Calendar */}
-        {!loading && (
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); } else setCalMonth(calMonth - 1); }}
-                className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-                <ChevronLeft size={18} />
-              </button>
-              <h3 className="text-lg font-semibold">
-                {new Date(calYear, calMonth).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
-              </h3>
-              <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); } else setCalMonth(calMonth + 1); }}
-                className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-                <ChevronRight size={18} />
-              </button>
-            </div>
-            {/* Day headers */}
-            <div className="grid grid-cols-7 gap-px mb-1">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-                <div key={d} className="text-center text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wider py-2">{d}</div>
-              ))}
-            </div>
-            {/* Calendar grid */}
-            <div className="grid grid-cols-7 gap-px">
-              {(() => {
-                const firstDay = new Date(calYear, calMonth, 1);
-                const lastDay = new Date(calYear, calMonth + 1, 0);
-                const startPad = (firstDay.getDay() + 6) % 7; // Monday-based
-                const totalDays = lastDay.getDate();
-                const today = new Date();
-                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-
-                const cells = [];
-                for (let i = 0; i < startPad; i++) cells.push(<div key={`pad-${i}`} className="min-h-[90px] bg-[var(--bg-subtle)]/30 rounded-lg" />);
-
-                for (let day = 1; day <= totalDays; day++) {
-                  const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                  const isToday = dateStr === todayStr;
-                  const dayTasks = filtered.filter(t => t.due_date?.startsWith(dateStr));
-
-                  cells.push(
-                    <div key={day} className={`min-h-[90px] rounded-lg p-1.5 border transition-colors ${
-                      isToday ? 'border-[var(--accent-orange)]/40 bg-[var(--accent-orange)]/5' : 'border-[var(--border-subtle)] bg-[var(--bg-subtle)]/20 hover:bg-[var(--bg-hover)]'
-                    }`}>
-                      <p className={`text-xs font-medium mb-1 ${isToday ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}>{day}</p>
-                      <div className="space-y-1">
-                        {dayTasks.slice(0, 3).map(t => (
-                          <div key={t.id} className={`text-[10px] px-1.5 py-0.5 rounded truncate ${
-                            t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 line-through' :
-                            t.priority === 'high' || t.priority === 'urgent' ? 'bg-red-500/10 text-red-400' :
-                            'bg-[var(--bg-hover)] text-[var(--text-secondary)]'
-                          }`}>
-                            {t.title}
-                          </div>
-                        ))}
-                        {dayTasks.length > 3 && (
-                          <p className="text-[9px] text-[var(--text-muted)] px-1">+{dayTasks.length - 3} more</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }
-                return cells;
-              })()}
-            </div>
-          </GlassCard>
-        )}
-        </div>
 
         {/* Add Modal */}
         {showAdd && (
@@ -390,32 +513,30 @@ export default function TasksV3() {
                 <button onClick={() => setShowAdd(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
               </div>
               <div className="space-y-4">
-                <Input label="Title" value={form.title} onChange={v => setForm(p => ({ ...p, title: v }))} placeholder="Task title" />
-                <Input label="Description" value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} placeholder="Description..." />
-                <Input label="Assigned To" value={form.assigned_to} onChange={v => setForm(p => ({ ...p, assigned_to: v }))} placeholder="Person name" />
+                <Input label="Title" value={form.title} onChange={v => setForm(p => ({...p,title:v}))} placeholder="Task title" />
+                <Input label="Description" value={form.description} onChange={v => setForm(p => ({...p,description:v}))} placeholder="Description..." />
+                <Input label="Assigned To" value={form.assigned_to} onChange={v => setForm(p => ({...p,assigned_to:v}))} placeholder="Person name" />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Priority</label>
                     <div className="flex gap-1.5">
-                      {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
-                        <button key={k} onClick={() => setForm(p => ({ ...p, priority: k }))}
+                      {Object.entries(PRIORITY_LABELS).map(([k,v]) => (
+                        <button key={k} onClick={() => setForm(p => ({...p,priority:k}))}
                           className={`flex-1 text-xs py-2 rounded-lg border font-medium transition-colors ${
-                            form.priority === k ? PRIORITY_COLORS[k] + ' border-current' : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
+                            form.priority === k ? PRIORITY_COLORS[k]+' border-current' : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
                           }`}>{v}</button>
                       ))}
                     </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Type</label>
-                    <div className="relative">
-                      <select value={form.task_type} onChange={e => setForm(p => ({ ...p, task_type: e.target.value }))}
-                        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
-                        {TASK_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())}</option>)}
-                      </select>
-                    </div>
+                    <select value={form.task_type} onChange={e => setForm(p => ({...p,task_type:e.target.value}))}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
+                      {TASK_TYPES.map(t => <option key={t} value={t}>{t.replace('_',' ').replace(/^\w/,c=>c.toUpperCase())}</option>)}
+                    </select>
                   </div>
                 </div>
-                <Input label="Due Date" value={form.due_date} onChange={v => setForm(p => ({ ...p, due_date: v }))} type="date" />
+                <Input label="Due Date" value={form.due_date} onChange={v => setForm(p => ({...p,due_date:v}))} type="date" />
                 <div className="flex gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
                   <Button variant="gradient" onClick={addTask} disabled={!form.title}>Add Task</Button>
