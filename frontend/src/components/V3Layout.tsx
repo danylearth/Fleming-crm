@@ -123,18 +123,7 @@ export default function V3Layout({ children, title, breadcrumb, hideTopBar }: V3
               <button onClick={() => setMobileOpen(true)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden mr-1">
                 <Menu size={22} />
               </button>
-              {breadcrumb && breadcrumb.map((crumb, i) => (
-                <span key={i} className="flex items-center gap-2">
-                  {i > 0 && <ChevronRight size={14} className="text-[var(--text-muted)]" />}
-                  {crumb.to ? (
-                    <button onClick={() => navigate(crumb.to!)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline text-sm">
-                      {crumb.label}
-                    </button>
-                  ) : (
-                    <span className="text-[var(--text-muted)] text-sm">{crumb.label}</span>
-                  )}
-                </span>
-              ))}
+              {/* breadcrumb removed — title only */}
               {title && <h1 className="text-xl md:text-2xl font-bold">{title}</h1>}
             </div>
             <div className="flex items-center gap-3">
