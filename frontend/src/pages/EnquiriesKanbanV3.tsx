@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { Button, Avatar, SearchBar, EmptyState, Input, Select } from '../components/v3';
@@ -333,6 +333,120 @@ function EnquiryCard({ enquiry, property, onAction }: {
   );
 }
 
+// ─── Property Dropdown ───
+function PropertyDropdown({ properties, value, onChange, enquiries, linkedPropertyIds, propMap }: {
+  properties: Property[];
+  value: string;
+  onChange: (v: string) => void;
+  enquiries: EnquiryRaw[];
+  linkedPropertyIds: Set<number>;
+  propMap: Map<number, Property>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const selectedProp = value ? propMap.get(Number(value)) : null;
+  const label = selectedProp ? selectedProp.address : 'All Properties';
+
+  const filtered = properties.filter(p =>
+    !search || p.address.toLowerCase().includes(search.toLowerCase()) || (p.postcode || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen(!open)}
+        className="flex items-center gap-2.5 pl-3.5 pr-3 py-2.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl text-sm text-[var(--text-primary)] hover:border-[var(--border-input)] transition-colors min-w-[220px]">
+        <Building2 size={14} className="text-[var(--text-muted)] shrink-0" />
+        <span className="flex-1 text-left truncate">{label}</span>
+        {value && (
+          <span className="text-[10px] bg-gradient-to-r from-orange-500 to-pink-500 text-white px-1.5 py-0.5 rounded-full font-medium shrink-0">
+            {enquiries.filter(e => e.linked_property_id === Number(value) && e.status !== 'rejected').length}
+          </span>
+        )}
+        <ChevronDown size={14} className={`text-[var(--text-muted)] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1.5 w-[320px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
+          {/* Search */}
+          <div className="p-2.5 border-b border-[var(--border-subtle)]">
+            <div className="relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+              <input
+                value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search properties..."
+                autoFocus
+                className="w-full pl-8 pr-3 py-2 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Options */}
+          <div className="max-h-[300px] overflow-y-auto py-1.5">
+            {/* All Properties */}
+            <button onClick={() => { onChange(''); setOpen(false); setSearch(''); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-[var(--bg-hover)] transition-colors ${
+                !value ? 'bg-[var(--bg-subtle)]' : ''
+              }`}>
+              <div className="w-8 h-8 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center shrink-0">
+                <Building2 size={14} className="text-[var(--text-muted)]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">All Properties</p>
+                <p className="text-[10px] text-[var(--text-muted)]">{enquiries.filter(e => e.status !== 'rejected').length} active enquiries</p>
+              </div>
+              {!value && <div className="w-2 h-2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 shrink-0" />}
+            </button>
+
+            {filtered.length === 0 && search && (
+              <p className="text-xs text-[var(--text-muted)] text-center py-4">No properties found</p>
+            )}
+
+            {filtered.map(p => {
+              const count = enquiries.filter(e => e.linked_property_id === p.id && e.status !== 'rejected').length;
+              const isSelected = value === String(p.id);
+              return (
+                <button key={p.id} onClick={() => { onChange(String(p.id)); setOpen(false); setSearch(''); }}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-[var(--bg-hover)] transition-colors ${
+                    isSelected ? 'bg-[var(--bg-subtle)]' : ''
+                  }`}>
+                  <img
+                    src={getPropertyImage(p.id, 64, 64)}
+                    alt={p.address}
+                    className="w-8 h-8 rounded-lg object-cover shrink-0"
+                    loading="lazy"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{p.address}</p>
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                      {p.postcode}{p.rent_amount ? ` · £${p.rent_amount}/mo` : ''}{p.bedrooms ? ` · ${p.bedrooms} bed` : ''}
+                    </p>
+                  </div>
+                  {count > 0 && (
+                    <span className="text-[10px] bg-[var(--bg-hover)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded-full font-medium shrink-0">
+                      {count}
+                    </span>
+                  )}
+                  {isSelected && <div className="w-2 h-2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ───
 export default function EnquiriesKanbanV3() {
   const api = useApi();
@@ -446,20 +560,15 @@ export default function EnquiriesKanbanV3() {
       <div className="flex flex-col h-full">
         {/* Top Bar */}
         <div className="flex items-center gap-3 px-4 md:px-6 py-3 border-b border-[var(--border-subtle)] shrink-0 flex-wrap">
-          {/* Property Filter */}
-          <div className="relative">
-            <Building2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <select value={filterPropId} onChange={e => setFilterPropId(e.target.value)}
-              className="pl-9 pr-8 py-2.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl text-sm text-[var(--text-primary)] appearance-none focus:outline-none focus:border-[var(--border-input)] transition-colors min-w-[200px]">
-              <option value="">All Properties</option>
-              {properties.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.address}{linkedPropertyIds.has(p.id) ? ` (${enquiries.filter(e => e.linked_property_id === p.id && e.status !== 'rejected').length})` : ''}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
-          </div>
+          {/* Property Filter — Custom Dropdown */}
+          <PropertyDropdown
+            properties={properties}
+            value={filterPropId}
+            onChange={setFilterPropId}
+            enquiries={enquiries}
+            linkedPropertyIds={linkedPropertyIds}
+            propMap={propMap}
+          />
 
           <div className="flex-1 max-w-xs">
             <SearchBar value={search} onChange={setSearch} placeholder="Search..." />
