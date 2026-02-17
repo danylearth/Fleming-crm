@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Building2, Phone, Mail, ChevronDown, Search, Check } from 'lucide-react';
+import { Plus, X, Building2, Phone, Mail, ChevronDown, Search, Check, LayoutGrid, List } from 'lucide-react';
 
 interface Landlord {
   id: number;
@@ -34,6 +34,7 @@ export default function LandlordsV3() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', notes: '' });
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('list');
 
   const load = async () => {
     try {
@@ -92,17 +93,85 @@ export default function LandlordsV3() {
           <div className="flex-1">
             <SearchBar value={search} onChange={setSearch} placeholder="Search landlords..." />
           </div>
-          <Button variant="gradient" onClick={() => setShowModal(true)}>
-            <Plus size={16} className="mr-2" /> Add Landlord
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-1">
+              <button onClick={() => setViewMode('list')}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+                <List size={16} />
+              </button>
+              <button onClick={() => setViewMode('card')}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+                <LayoutGrid size={16} />
+              </button>
+            </div>
+            <Button variant="gradient" onClick={() => setShowModal(true)}>
+              <Plus size={16} className="mr-2" /> Add Landlord
+            </Button>
+          </div>
         </div>
 
-        {/* Grid */}
+        {/* Content */}
         {loading ? (
           <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
         ) : filtered.length === 0 ? (
           <EmptyState message={search ? 'No landlords match your search' : 'No landlords yet. Add your first one!'} />
+        ) : viewMode === 'list' ? (
+          /* ==================== LIST VIEW ==================== */
+          <GlassCard className="overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[var(--border-subtle)]">
+                  {['Name', 'Contact', 'Properties', 'Address', ''].map(h => (
+                    <th key={h} className="text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider px-5 py-3">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(l => {
+                  const lProps = landlordProperties[l.id] || [];
+                  return (
+                    <tr key={l.id} onClick={() => navigate(`/v3/landlords/${l.id}`)}
+                      className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={l.name} size="sm" />
+                          <span className="text-sm font-medium">{l.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="space-y-0.5">
+                          {l.email && <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1"><Mail size={11} /> {l.email}</p>}
+                          {l.phone && <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1"><Phone size={11} /> {l.phone}</p>}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        {lProps.length > 0 ? (
+                          <div className="space-y-0.5">
+                            {lProps.slice(0, 2).map(p => (
+                              <p key={p.id} className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5 truncate max-w-[250px]">
+                                <Building2 size={11} className="text-[var(--text-muted)] shrink-0" /> {p.address}
+                              </p>
+                            ))}
+                            {lProps.length > 2 && <p className="text-[10px] text-[var(--text-muted)]">+{lProps.length - 2} more</p>}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-amber-400">No property linked</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="text-xs text-[var(--text-secondary)] truncate max-w-[200px]">{l.address || '—'}</p>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <Tag>{lProps.length} {lProps.length === 1 ? 'property' : 'properties'}</Tag>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </GlassCard>
         ) : (
+          /* ==================== CARD VIEW ==================== */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filtered.map(l => {
               const lProps = landlordProperties[l.id] || [];
@@ -119,7 +188,6 @@ export default function LandlordsV3() {
                       )}
                     </div>
                   </div>
-                  {/* Properties linked */}
                   <div className="mt-3 space-y-1.5">
                     {lProps.length > 0 ? (
                       lProps.slice(0, 3).map(p => (
