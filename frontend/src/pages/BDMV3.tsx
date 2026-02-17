@@ -4,6 +4,7 @@ import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Mail, Phone, MapPin, Calendar, ChevronDown, Search, ArrowRight, UserPlus, XCircle, LayoutGrid, List } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 
 interface Prospect {
   id: number; name: string; email: string; phone: string; address: string;
@@ -132,6 +133,26 @@ export default function BDMV3() {
     setConverting(false);
   };
 
+  const onDragEnd = async (result: DropResult) => {
+    const { draggableId, destination, source } = result;
+    if (!destination || destination.droppableId === source.droppableId) return;
+    const prospectId = parseInt(draggableId);
+    const newStatus = destination.droppableId;
+    const p = prospects.find(pr => pr.id === prospectId);
+    if (!p) return;
+    // Optimistic update
+    setProspects(prev => prev.map(pr => pr.id === prospectId ? { ...pr, status: newStatus } : pr));
+    try {
+      await api.put(`/api/landlords-bdm/${prospectId}`, {
+        name: p.name, email: p.email, phone: p.phone, address: p.address,
+        source: p.source, notes: p.notes, follow_up_date: p.follow_up_date, status: newStatus,
+      });
+    } catch {
+      // Revert on failure
+      setProspects(prev => prev.map(pr => pr.id === prospectId ? { ...pr, status: p.status } : pr));
+    }
+  };
+
   // Follow-up due count
   const followUpDue = prospects.filter(p => p.follow_up_date && isOverdue(p.follow_up_date) && !['onboarded', 'not_interested'].includes(p.status)).length;
 
@@ -191,69 +212,84 @@ export default function BDMV3() {
           <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
         ) : viewMode === 'kanban' ? (
           /* ==================== KANBAN VIEW ==================== */
-          <div className="flex gap-4 overflow-x-auto pb-4">
-            {STATUSES.filter(s => {
-              if (statusFilter === 'active') return s.key !== 'onboarded' && s.key !== 'not_interested';
-              if (statusFilter === 'all') return true;
-              return s.key === statusFilter;
-            }).map(col => {
-              const colProspects = prospects.filter(p => {
-                const matchSearch = !search || [p.name, p.email, p.phone, p.address, p.source]
-                  .some(v => v?.toLowerCase().includes(search.toLowerCase()));
-                return p.status === col.key && matchSearch;
-              });
-              return (
-                <div key={col.key} className="min-w-[280px] flex-1">
-                  {/* Column header */}
-                  <div className={`rounded-xl border px-4 py-3 mb-3 ${col.color}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold">{col.label}</span>
-                      <span className="text-xs bg-[var(--bg-input)] px-2 py-0.5 rounded-full">{colProspects.length}</span>
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="flex gap-4 overflow-x-auto pb-4">
+              {STATUSES.filter(s => {
+                if (statusFilter === 'active') return s.key !== 'onboarded' && s.key !== 'not_interested';
+                if (statusFilter === 'all') return true;
+                return s.key === statusFilter;
+              }).map(col => {
+                const colProspects = prospects.filter(p => {
+                  const matchSearch = !search || [p.name, p.email, p.phone, p.address, p.source]
+                    .some(v => v?.toLowerCase().includes(search.toLowerCase()));
+                  return p.status === col.key && matchSearch;
+                });
+                return (
+                  <div key={col.key} className="min-w-[280px] flex-1">
+                    {/* Column header */}
+                    <div className={`rounded-xl border px-4 py-3 mb-3 ${col.color}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold">{col.label}</span>
+                        <span className="text-xs bg-[var(--bg-input)] px-2 py-0.5 rounded-full">{colProspects.length}</span>
+                      </div>
                     </div>
-                  </div>
-                  {/* Cards */}
-                  <div className="space-y-3">
-                    {colProspects.length === 0 ? (
-                      <p className="text-xs text-[var(--text-muted)] text-center py-8">No prospects</p>
-                    ) : colProspects.map(p => (
-                      <GlassCard key={p.id} className="p-4 cursor-pointer hover:border-[var(--accent-orange)]/30 transition-colors"
-                        onClick={() => navigate(`/v3/bdm/${p.id}`)}>
-                        <div className="flex items-start gap-3">
-                          <Avatar name={p.name} size="sm" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{p.name}</p>
-                            {p.email && (
-                              <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5">
-                                <Mail size={10} />{p.email}
-                              </p>
-                            )}
-                            {p.phone && (
-                              <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5">
-                                <Phone size={10} />{p.phone}
-                              </p>
-                            )}
-                          </div>
+                    {/* Droppable area */}
+                    <Droppable droppableId={col.key}>
+                      {(provided, snapshot) => (
+                        <div ref={provided.innerRef} {...provided.droppableProps}
+                          className={`space-y-3 min-h-[100px] rounded-xl transition-colors ${snapshot.isDraggingOver ? 'bg-[var(--accent-orange)]/5 ring-1 ring-[var(--accent-orange)]/20' : ''}`}>
+                          {colProspects.length === 0 && !snapshot.isDraggingOver ? (
+                            <p className="text-xs text-[var(--text-muted)] text-center py-8">No prospects</p>
+                          ) : colProspects.map((p, index) => (
+                            <Draggable key={p.id} draggableId={String(p.id)} index={index}>
+                              {(provided, snapshot) => (
+                                <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
+                                  style={provided.draggableProps.style}>
+                                  <GlassCard className={`p-4 cursor-grab active:cursor-grabbing hover:border-[var(--accent-orange)]/30 transition-colors ${snapshot.isDragging ? 'ring-2 ring-[var(--accent-orange)]/40 shadow-lg' : ''}`}
+                                    onClick={() => !snapshot.isDragging && navigate(`/v3/bdm/${p.id}`)}>
+                                    <div className="flex items-start gap-3">
+                                      <Avatar name={p.name} size="sm" />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">{p.name}</p>
+                                        {p.email && (
+                                          <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5">
+                                            <Mail size={10} />{p.email}
+                                          </p>
+                                        )}
+                                        {p.phone && (
+                                          <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5">
+                                            <Phone size={10} />{p.phone}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-3 pt-2 border-t border-[var(--border-subtle)]">
+                                      {p.follow_up_date && (
+                                        <span className={`text-[10px] flex items-center gap-1 ${isOverdue(p.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-muted)]'}`}>
+                                          <Calendar size={10} />
+                                          {formatDate(p.follow_up_date)}
+                                          {isOverdue(p.follow_up_date) && ' ⚠'}
+                                        </span>
+                                      )}
+                                      <button onClick={(e) => { e.stopPropagation(); openWorkflow(p, e); }}
+                                        className="ml-auto text-[10px] px-2.5 py-1 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-medium">
+                                        Progress / Reject
+                                      </button>
+                                    </div>
+                                  </GlassCard>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
                         </div>
-                        <div className="flex items-center gap-2 mt-3 pt-2 border-t border-[var(--border-subtle)]">
-                          {p.follow_up_date && (
-                            <span className={`text-[10px] flex items-center gap-1 ${isOverdue(p.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-muted)]'}`}>
-                              <Calendar size={10} />
-                              {formatDate(p.follow_up_date)}
-                              {isOverdue(p.follow_up_date) && ' ⚠'}
-                            </span>
-                          )}
-                          <button onClick={(e) => openWorkflow(p, e)}
-                            className="ml-auto text-[10px] px-2.5 py-1 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-medium">
-                            Progress / Reject
-                          </button>
-                        </div>
-                      </GlassCard>
-                    ))}
+                      )}
+                    </Droppable>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          </DragDropContext>
         ) : filtered.length === 0 ? (
           <EmptyState message={search || statusFilter !== 'active' ? 'No prospects match your filters' : 'No prospects yet — add your first one'} />
         ) : (
