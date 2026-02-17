@@ -236,16 +236,6 @@ export default function TasksV3() {
                 onClear={() => setFilterType(null)}
                 items={TASK_TYPES.map(t => ({ id: t, label: t.replace('_', ' ').replace(/^\w/, c => c.toUpperCase()) }))}
                 onSelect={id => setFilterType(id)} />
-              <div className="flex items-center bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-1">
-                <button onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
-                  <List size={16} />
-                </button>
-                <button onClick={() => setViewMode('calendar')}
-                  className={`p-2 rounded-lg transition-colors ${viewMode === 'calendar' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
-                  <CalendarDays size={16} />
-                </button>
-              </div>
               <Button variant="gradient" onClick={() => setShowAdd(true)}>
                 <Plus size={14} className="mr-1.5" /> Add Task
               </Button>
@@ -260,11 +250,63 @@ export default function TasksV3() {
           </div>
         </div>
 
-        {/* Content */}
+        {/* Task List */}
         {loading ? (
           <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
-        ) : viewMode === 'calendar' ? (
-          /* ==================== CALENDAR VIEW ==================== */
+        ) : filtered.length === 0 ? (
+          <EmptyState message={hasFilters || search ? 'No tasks match your filters' : 'No tasks yet'} icon={<CheckCircle2 size={32} />} />
+        ) : (
+          <div className="space-y-3">
+            {filtered.map(task => {
+              const overdue = isOverdue(task);
+              const taskPct = task.status === 'completed' ? 100 : task.status === 'in_progress' ? 50 : 0;
+              return (
+                <Card key={task.id} className={`p-4 md:p-5 ${overdue ? 'border-red-500/40' : ''}`} hover>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <ProgressRing value={taskPct} size={40} strokeWidth={3} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-[var(--text-muted)]' : ''}`}>{task.title}</p>
+                          {overdue && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">Overdue</span>}
+                          {task.task_type && task.task_type !== 'manual' && (
+                            <span className="text-[10px] bg-[var(--bg-hover)] text-[var(--text-muted)] px-2 py-0.5 rounded-full">
+                              {task.task_type.replace('_', ' ')}
+                            </span>
+                          )}
+                        </div>
+                        {task.description && <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">{task.description}</p>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap pl-[52px] sm:pl-0">
+                      {task.assigned_to && <Avatar name={task.assigned_to} size="xs" />}
+                      <span className={`text-[10px] px-2.5 py-1 rounded-full font-medium ${PRIORITY_COLORS[task.priority]}`}>
+                        {PRIORITY_LABELS[task.priority] || task.priority}
+                      </span>
+                      {task.due_date && (
+                        <div className={`flex items-center gap-1 text-xs ${overdue ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
+                          <Calendar size={12} />
+                          {new Date(task.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                        </div>
+                      )}
+                      <div className="flex gap-1">
+                        {task.status !== 'in_progress' && task.status !== 'completed' && (
+                          <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'in_progress')}>Start</Button>
+                        )}
+                        {task.status !== 'completed' && (
+                          <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'completed')}>Done</Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Calendar */}
+        {!loading && (
           <GlassCard className="p-6">
             <div className="flex items-center justify-between mb-6">
               <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); } else setCalMonth(calMonth - 1); }}
@@ -329,57 +371,6 @@ export default function TasksV3() {
               })()}
             </div>
           </GlassCard>
-        ) : filtered.length === 0 ? (
-          <EmptyState message={hasFilters || search ? 'No tasks match your filters' : 'No tasks yet'} icon={<CheckCircle2 size={32} />} />
-        ) : (
-          /* ==================== LIST VIEW ==================== */
-          <div className="space-y-3">
-            {filtered.map(task => {
-              const overdue = isOverdue(task);
-              const taskPct = task.status === 'completed' ? 100 : task.status === 'in_progress' ? 50 : 0;
-              return (
-                <Card key={task.id} className={`p-4 md:p-5 ${overdue ? 'border-red-500/40' : ''}`} hover>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <ProgressRing value={taskPct} size={40} strokeWidth={3} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-[var(--text-muted)]' : ''}`}>{task.title}</p>
-                          {overdue && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">Overdue</span>}
-                          {task.task_type && task.task_type !== 'manual' && (
-                            <span className="text-[10px] bg-[var(--bg-hover)] text-[var(--text-muted)] px-2 py-0.5 rounded-full">
-                              {task.task_type.replace('_', ' ')}
-                            </span>
-                          )}
-                        </div>
-                        {task.description && <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">{task.description}</p>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap pl-[52px] sm:pl-0">
-                      {task.assigned_to && <Avatar name={task.assigned_to} size="xs" />}
-                      <span className={`text-[10px] px-2.5 py-1 rounded-full font-medium ${PRIORITY_COLORS[task.priority]}`}>
-                        {PRIORITY_LABELS[task.priority] || task.priority}
-                      </span>
-                      {task.due_date && (
-                        <div className={`flex items-center gap-1 text-xs ${overdue ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
-                          <Calendar size={12} />
-                          {new Date(task.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                        </div>
-                      )}
-                      <div className="flex gap-1">
-                        {task.status !== 'in_progress' && task.status !== 'completed' && (
-                          <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'in_progress')}>Start</Button>
-                        )}
-                        {task.status !== 'completed' && (
-                          <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'completed')}>Done</Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
         )}
 
         {/* Add Modal */}
