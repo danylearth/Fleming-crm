@@ -214,8 +214,9 @@ export default function TasksV3() {
           </GlassCard>
         </div>
 
-        {/* Search + Filters + View Toggle */}
-        <div className="flex flex-col gap-3">
+        {/* ─── Controls ─── */}
+        {viewMode === 'list' ? (
+          /* List mode: search + filters */
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="flex-1">
               <div className="flex items-center gap-2 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5">
@@ -226,7 +227,6 @@ export default function TasksV3() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {/* View toggle */}
               <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-0.5 mr-1">
                 <button onClick={() => setViewMode('list')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
@@ -252,7 +252,7 @@ export default function TasksV3() {
               <Button variant="gradient" onClick={() => setShowAdd(true)}><Plus size={14} className="mr-1.5" /> Add Task</Button>
             </div>
           </div>
-        </div>
+        ) : null /* calendar controls are rendered inline below */}
 
         {/* ═══ LIST VIEW ═══ */}
         {viewMode === 'list' && (
@@ -365,44 +365,41 @@ export default function TasksV3() {
 
           return (
             <div className="space-y-4">
-              {/* Top bar */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <button onClick={() => { setSelectedDate(todayStr); setCalYear(now.getFullYear()); setCalMonth(now.getMonth()); }}
-                    className="px-4 py-2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-medium hover:opacity-90 transition-opacity">Today</button>
-                  <div className="flex items-center gap-1">
-                    <button onClick={navPrev} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={16} /></button>
-                    <button onClick={navNext} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={16} /></button>
-                  </div>
-                  <span className="text-lg font-semibold">{navTitle}</span>
+              {/* Single toolbar: Back to List | Today | < > Title | Month Week Day | + Add Task */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* Back to list */}
+                <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-0.5">
+                  <button onClick={() => setViewMode('list')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
+                    <List size={13} /> List
+                  </button>
+                  <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gradient-to-r from-orange-500 to-pink-500 text-white">
+                    <CalendarDays size={13} /> Calendar
+                  </button>
                 </div>
-                <div className="hidden md:flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-1">
+
+                <div className="h-5 w-px bg-[var(--border-color)]" />
+
+                {/* Today + nav */}
+                <button onClick={() => { setSelectedDate(todayStr); setCalYear(now.getFullYear()); setCalMonth(now.getMonth()); }}
+                  className="px-3 py-1.5 rounded-full bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] text-xs font-medium transition-colors">Today</button>
+                <button onClick={navPrev} className="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={15} /></button>
+                <button onClick={navNext} className="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={15} /></button>
+                <span className="text-sm font-semibold">{navTitle}</span>
+
+                <div className="flex-1" />
+
+                {/* Month / Week / Day */}
+                <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-0.5">
                   {(['month','week','day'] as const).map(m => (
                     <button key={m} onClick={() => setCalViewMode(m)}
-                      className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all capitalize ${
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all capitalize ${
                         calViewMode === m ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                       }`}>{m}</button>
                   ))}
                 </div>
-              </div>
 
-              {/* Team selector */}
-              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
-                {TEAM.map(member => {
-                  const active = selectedMember === member.id;
-                  return (
-                    <button key={member.id} onClick={() => setSelectedMember(member.id)}
-                      className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl border transition-all shrink-0 ${
-                        active ? 'border-orange-500/50 bg-orange-500/10' : 'border-[var(--border-color)] bg-[var(--bg-card)] hover:border-[var(--border-input)]'
-                      }`}>
-                      <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${member.color} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{member.initials}</div>
-                      <div className="text-left hidden sm:block">
-                        <p className={`text-sm font-medium ${active ? 'text-orange-400' : ''}`}>{member.name}</p>
-                        <p className="text-xs text-[var(--text-muted)]">{member.role}</p>
-                      </div>
-                    </button>
-                  );
-                })}
+                <Button variant="gradient" size="sm" onClick={() => setShowAdd(true)}><Plus size={13} className="mr-1" /> Add Task</Button>
               </div>
 
               {/* ── MONTH VIEW ── */}
@@ -556,9 +553,28 @@ export default function TasksV3() {
                   </Card>
 
                   {/* Right sidebar */}
-                  <div className="space-y-5">
-                    <Card className="p-5">
-                      <div className="flex items-center justify-between mb-4">
+                  <div className="space-y-4">
+                    {/* Team */}
+                    <Card className="p-4">
+                      <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Team</h3>
+                      <div className="space-y-1">
+                        {TEAM.map(member => {
+                          const active = selectedMember === member.id;
+                          return (
+                            <button key={member.id} onClick={() => setSelectedMember(member.id)}
+                              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl transition-all ${
+                                active ? 'bg-orange-500/10' : 'hover:bg-[var(--bg-hover)]'
+                              }`}>
+                              <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${member.color} flex items-center justify-center text-white text-[10px] font-bold shrink-0`}>{member.initials}</div>
+                              <span className={`text-xs font-medium truncate ${active ? 'text-orange-400' : 'text-[var(--text-secondary)]'}`}>{member.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </Card>
+                    {/* Mini calendar */}
+                    <Card className="p-4">
+                      <div className="flex items-center justify-between mb-3">
                         <button onClick={prevMonth} className="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={14} /></button>
                         <span className="text-sm font-semibold">{MONTHS[calMonth]} {calYear}</span>
                         <button onClick={nextMonth} className="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={14} /></button>
