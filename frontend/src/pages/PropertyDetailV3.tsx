@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { Card, GlassCard, Button, ProgressRing, SectionHeader, StatusDot, EmptyState, Avatar, Tag } from '../components/v3';
+import { Card, GlassCard, Button, ProgressRing, SectionHeader, StatusDot, EmptyState, Avatar, Tag, Input, Select } from '../components/v3';
+import DocumentUpload from '../components/v3/DocumentUpload';
+import RentPayments from '../components/v3/RentPayments';
 import { useApi } from '../hooks/useApi';
 import { getPropertyImage } from '../utils/propertyImages';
 import {
   Building2, Bed, PoundSterling, MapPin, User, Users,
-  CheckCircle2, Clock, FileText, FileSpreadsheet, FileImage,
-  ChevronRight, ExternalLink
+  CheckCircle2, Clock, ChevronRight, Pencil, Save, X
 } from 'lucide-react';
 
 interface PropertyDetail {
@@ -31,6 +32,12 @@ export default function PropertyDetailV3() {
   const [property, setProperty] = useState<PropertyDetail | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    address: '', postcode: '', rent_amount: '', bedrooms: '', property_type: '', status: 'active',
+    eicr_expiry_date: '', epc_expiry_date: '', gas_safety_expiry_date: '',
+  });
 
   useEffect(() => {
     Promise.all([
@@ -38,10 +45,42 @@ export default function PropertyDetailV3() {
       api.get('/api/tasks').catch(() => []),
     ]).then(([prop, tks]) => {
       setProperty(prop);
+      setForm({
+        address: prop.address || '', postcode: prop.postcode || '',
+        rent_amount: String(prop.rent_amount || ''), bedrooms: String(prop.bedrooms || ''),
+        property_type: prop.property_type || '', status: prop.status || 'active',
+        eicr_expiry_date: prop.eicr_expiry_date || '', epc_expiry_date: prop.epc_expiry_date || '',
+        gas_safety_expiry_date: prop.gas_safety_expiry_date || '',
+      });
       setTasks(Array.isArray(tks) ? tks : []);
     }).catch(() => {})
     .finally(() => setLoading(false));
   }, [id]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const updated = await api.put(`/api/properties/${id}`, {
+        ...form,
+        rent_amount: parseFloat(form.rent_amount) || 0,
+        bedrooms: parseInt(form.bedrooms) || 0,
+      });
+      setProperty({ ...property!, ...updated });
+      setEditing(false);
+    } catch (e) { console.error(e); }
+    setSaving(false);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    if (property) setForm({
+      address: property.address || '', postcode: property.postcode || '',
+      rent_amount: String(property.rent_amount || ''), bedrooms: String(property.bedrooms || ''),
+      property_type: property.property_type || '', status: property.status || 'active',
+      eicr_expiry_date: property.eicr_expiry_date || '', epc_expiry_date: property.epc_expiry_date || '',
+      gas_safety_expiry_date: property.gas_safety_expiry_date || '',
+    });
+  };
 
   const compliancePercent = (expiryDate: string | null) => {
     if (!expiryDate) return 0;
@@ -101,12 +140,52 @@ export default function PropertyDetailV3() {
           <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/60 to-transparent">
             <div className="flex items-center gap-2 mb-1">
               <StatusDot status={property.status === 'active' ? 'active' : 'inactive'} size="md" />
-              <span className="text-sm text-[var(--text-secondary)] capitalize">{property.status}</span>
+              <span className="text-sm text-white/70 capitalize">{property.status}</span>
             </div>
-            <h1 className="text-2xl font-bold">{property.address}</h1>
-            <p className="text-[var(--text-secondary)] text-sm">{property.postcode}</p>
+            <h1 className="text-2xl font-bold text-white">{property.address}</h1>
+            <p className="text-white/60 text-sm">{property.postcode}</p>
+          </div>
+          {/* Edit button */}
+          <div className="absolute top-4 right-4 flex gap-2">
+            {editing ? (
+              <>
+                <Button variant="ghost" size="sm" onClick={cancelEdit} className="bg-black/40 backdrop-blur-sm text-white">
+                  <X size={14} className="mr-1" /> Cancel
+                </Button>
+                <Button variant="gradient" size="sm" onClick={handleSave} disabled={saving}>
+                  <Save size={14} className="mr-1" /> {saving ? 'Saving...' : 'Save'}
+                </Button>
+              </>
+            ) : (
+              <Button variant="ghost" size="sm" onClick={() => setEditing(true)} className="bg-black/40 backdrop-blur-sm text-white">
+                <Pencil size={14} className="mr-1" /> Edit
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Edit Form */}
+        {editing && (
+          <GlassCard className="p-6">
+            <SectionHeader title="Edit Property" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Input label="Address" value={form.address} onChange={v => setForm({ ...form, address: v })} />
+              <Input label="Postcode" value={form.postcode} onChange={v => setForm({ ...form, postcode: v })} />
+              <Input label="Rent (£/mo)" value={form.rent_amount} onChange={v => setForm({ ...form, rent_amount: v })} />
+              <Input label="Bedrooms" value={form.bedrooms} onChange={v => setForm({ ...form, bedrooms: v })} />
+              <Select label="Type" value={form.property_type} onChange={v => setForm({ ...form, property_type: v })}
+                options={[
+                  { value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' },
+                  { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' },
+                ]} />
+              <Select label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })}
+                options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'void', label: 'Void' }]} />
+              <Input label="EICR Expiry" value={form.eicr_expiry_date} onChange={v => setForm({ ...form, eicr_expiry_date: v })} placeholder="YYYY-MM-DD" />
+              <Input label="EPC Expiry" value={form.epc_expiry_date} onChange={v => setForm({ ...form, epc_expiry_date: v })} placeholder="YYYY-MM-DD" />
+              <Input label="Gas Safety Expiry" value={form.gas_safety_expiry_date} onChange={v => setForm({ ...form, gas_safety_expiry_date: v })} placeholder="YYYY-MM-DD" />
+            </div>
+          </GlassCard>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column */}
@@ -147,6 +226,9 @@ export default function PropertyDetailV3() {
               </div>
             </Card>
 
+            {/* Rent Payments */}
+            <RentPayments propertyId={property.id} compact />
+
             {/* Tasks */}
             <Card className="p-6">
               <SectionHeader title="Tasks" action={() => navigate('/v3/tasks')} actionLabel="View All" />
@@ -171,23 +253,8 @@ export default function PropertyDetailV3() {
               )}
             </Card>
 
-            {/* Documents Placeholder */}
-            <Card className="p-6">
-              <SectionHeader title="Documents" />
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {[
-                  { icon: FileText, label: 'Tenancy Agreement', color: 'text-blue-400' },
-                  { icon: FileSpreadsheet, label: 'EPC Certificate', color: 'text-emerald-400' },
-                  { icon: FileText, label: 'EICR Report', color: 'text-amber-400' },
-                  { icon: FileImage, label: 'Property Photos', color: 'text-pink-400' },
-                ].map((doc, i) => (
-                  <div key={i} className="flex flex-col items-center gap-2 p-4 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                    <doc.icon size={24} className={doc.color} />
-                    <span className="text-xs text-[var(--text-secondary)] text-center">{doc.label}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
+            {/* Documents */}
+            <DocumentUpload entityType="property" entityId={property.id} />
           </div>
 
           {/* Right Column */}

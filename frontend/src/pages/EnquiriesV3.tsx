@@ -1,23 +1,19 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Avatar, SearchBar, Input, Select, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, Mail, Phone, Building2, X, Clock, ArrowLeft } from 'lucide-react';
+import { Plus, X, Clock, ArrowLeft, Calendar, CheckCircle, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home } from 'lucide-react';
 
 interface EnquiryRaw {
   id: number;
-  first_name_1: string;
-  last_name_1: string;
-  email_1: string;
-  phone_1: string;
-  status: string;
-  employment_status_1: string;
-  income_1: number;
-  linked_property_id: number | null;
-  property_address: string | null;
-  notes: string;
-  created_at: string;
+  [key: string]: any;
+}
+
+interface Property {
+  id: number;
+  address: string;
+  postcode: string;
+  rent: number;
   [key: string]: any;
 }
 
@@ -27,10 +23,6 @@ interface Enquiry {
   email: string;
   phone: string;
   status: string;
-  source: string;
-  linked_property_id: number | null;
-  property_address: string | null;
-  notes: string;
   created_at: string;
 }
 
@@ -41,10 +33,6 @@ function mapEnquiry(raw: EnquiryRaw): Enquiry {
     email: raw.email_1 || '',
     phone: raw.phone_1 || '',
     status: raw.status || 'new',
-    source: raw.employment_status_1 || '',
-    linked_property_id: raw.linked_property_id,
-    property_address: raw.property_address,
-    notes: raw.notes || '',
     created_at: raw.created_at,
   };
 }
@@ -67,7 +55,39 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: 'Rejected',
 };
 
-const STATUS_OPTIONS = Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }));
+const TITLE_OPTIONS = [
+  { value: '', label: '-' }, { value: 'Mr', label: 'Mr' }, { value: 'Mrs', label: 'Mrs' },
+  { value: 'Ms', label: 'Ms' }, { value: 'Miss', label: 'Miss' }, { value: 'Dr', label: 'Dr' },
+];
+
+const EMPLOYMENT_OPTIONS = [
+  { value: '', label: '-' }, { value: 'Employed', label: 'Employed' }, { value: 'Self-Employed', label: 'Self-Employed' },
+  { value: 'Unemployed', label: 'Unemployed' }, { value: 'Student', label: 'Student' }, { value: 'Retired', label: 'Retired' },
+];
+
+const NATIONALITY_OPTIONS = [
+  { value: '', label: '-' }, { value: 'British', label: 'British' }, { value: 'Irish', label: 'Irish' },
+  { value: 'Polish', label: 'Polish' }, { value: 'Romanian', label: 'Romanian' }, { value: 'Indian', label: 'Indian' },
+  { value: 'Pakistani', label: 'Pakistani' }, { value: 'Bangladeshi', label: 'Bangladeshi' }, { value: 'Nigerian', label: 'Nigerian' },
+  { value: 'Chinese', label: 'Chinese' }, { value: 'Italian', label: 'Italian' }, { value: 'Portuguese', label: 'Portuguese' },
+  { value: 'Spanish', label: 'Spanish' }, { value: 'French', label: 'French' }, { value: 'German', label: 'German' },
+  { value: 'American', label: 'American' }, { value: 'Other', label: 'Other' },
+];
+
+const INDUSTRY_OPTIONS = [
+  { value: '', label: '-' }, { value: 'Accounting & Finance', label: 'Accounting & Finance' },
+  { value: 'Construction', label: 'Construction' }, { value: 'Education', label: 'Education' },
+  { value: 'Engineering', label: 'Engineering' }, { value: 'Healthcare', label: 'Healthcare' },
+  { value: 'Hospitality', label: 'Hospitality' }, { value: 'IT & Technology', label: 'IT & Technology' },
+  { value: 'Legal', label: 'Legal' }, { value: 'Manufacturing', label: 'Manufacturing' },
+  { value: 'Marketing & Media', label: 'Marketing & Media' }, { value: 'Public Sector', label: 'Public Sector' },
+  { value: 'Retail', label: 'Retail' }, { value: 'Transport & Logistics', label: 'Transport & Logistics' },
+  { value: 'Other', label: 'Other' },
+];
+
+const BEDROOMS_OPTIONS = [
+  { value: '', label: '-' }, ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+];
 
 function formatTime(d: string) {
   const date = new Date(d);
@@ -78,15 +98,455 @@ function formatTime(d: string) {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+// ─── Radio Group Component ───
+function RadioGroup({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div>
+      <label className="block text-xs text-[var(--text-secondary)] mb-2 font-medium">{label}</label>
+      <div className="flex flex-wrap gap-2">
+        {options.map(o => (
+          <button key={o.value} type="button" onClick={() => onChange(o.value)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+              value === o.value
+                ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
+                : 'bg-[var(--bg-input)] border-[var(--border-input)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
+            }`}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Section Divider ───
+function SectionDivider({ icon, title, color = 'text-orange-400', children }: {
+  icon: React.ReactNode; title: string; color?: string; children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 mb-4 mt-2">
+      <span className={color}>{icon}</span>
+      <h4 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">{title}</h4>
+      <div className="flex-1 h-px bg-[var(--border-subtle)]" />
+      {children}
+    </div>
+  );
+}
+
+// ─── Applicant Fields Block ───
+function ApplicantFields({ form, setField, suffix }: {
+  form: Record<string, any>; setField: (k: string, v: any) => void; suffix: string;
+}) {
+  const f = (name: string) => `${name}${suffix}`;
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+        <Input label="First Name" value={form[f('first_name_')] || ''} onChange={v => setField(f('first_name_'), v)} placeholder="First name" />
+        <Input label="Surname" value={form[f('last_name_')] || ''} onChange={v => setField(f('last_name_'), v)} placeholder="Surname" />
+        <Input label="Date of Birth" value={form[f('date_of_birth_')] || ''} onChange={v => setField(f('date_of_birth_'), v)} type="date" />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+        <Input label="Email" value={form[f('email_')] || ''} onChange={v => setField(f('email_'), v)} placeholder="Email" type="email" />
+        <Input label="Contact Number" value={form[f('phone_')] || ''} onChange={v => setField(f('phone_'), v)} placeholder="Phone" />
+        <Select label="Nationality" value={form[f('nationality_')] || ''} onChange={v => setField(f('nationality_'), v)} options={NATIONALITY_OPTIONS} />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="md:col-span-2">
+          <Input label="Home Address" value={form[f('current_address_')] || ''} onChange={v => setField(f('current_address_'), v)} placeholder="Full address" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Postcode" value={form[f('postcode_')] || ''} onChange={v => setField(f('postcode_'), v)} placeholder="AB1 2CD" />
+          <Input label="Years at Address" value={form[f('years_at_address_')]?.toString() || ''} onChange={v => setField(f('years_at_address_'), v ? Number(v) : null)} placeholder="0" type="number" />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Employment Fields Block ───
+function EmploymentFields({ form, setField, suffix }: {
+  form: Record<string, any>; setField: (k: string, v: any) => void; suffix: string;
+}) {
+  const f = (name: string) => `${name}${suffix}`;
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+        <Select label="Employment Status" value={form[f('employment_status_')] || ''} onChange={v => setField(f('employment_status_'), v)} options={EMPLOYMENT_OPTIONS} />
+        <Select label="Industry" value={form[f('industry_')] || ''} onChange={v => setField(f('industry_'), v)} options={INDUSTRY_OPTIONS} />
+        <Input label="Job Title" value={form[f('job_title_')] || ''} onChange={v => setField(f('job_title_'), v)} placeholder="Job title" />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+        <Input label="Years in Employment" value={form[f('years_employed_')]?.toString() || ''} onChange={v => setField(f('years_employed_'), v ? Number(v) : null)} placeholder="0" type="number" />
+        <Input label="Annual Salary £" value={form[f('income_')]?.toString() || ''} onChange={v => setField(f('income_'), v ? Number(v) : null)} placeholder="0" type="number" />
+        <Input label="Employer" value={form[f('employer_')] || ''} onChange={v => setField(f('employer_'), v)} placeholder="Employer name" />
+      </div>
+      <div className="space-y-3">
+        <RadioGroup label="Contract Type" value={form[f('contract_type_')] || ''} onChange={v => setField(f('contract_type_'), v)}
+          options={[
+            { value: 'Permanent', label: 'Permanent' },
+            { value: 'Fixed position', label: 'Fixed position' },
+            { value: 'Contract role', label: 'Contract role' },
+            { value: 'Temporary or agency', label: 'Temporary or agency' },
+          ]} />
+        <RadioGroup label="Happy to provide further info?" value={form[f('provide_further_info_')] || ''} onChange={v => setField(f('provide_further_info_'), v)}
+          options={[{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }]} />
+      </div>
+    </>
+  );
+}
+
+// ─── Detail Panel ───
+function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
+  enquiryId: number; api: any; onBack: () => void; onUpdated: () => void;
+}) {
+  const [data, setData] = useState<EnquiryRaw | null>(null);
+  const [form, setForm] = useState<Record<string, any>>({});
+  const [tab, setTab] = useState<'applicant' | 'activity' | 'notes'>('applicant');
+  const [jointApp, setJointApp] = useState(false);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [docs] = useState<string[]>([]);
+
+  const loadDetail = useCallback(async () => {
+    try {
+      const d = await api.get(`/api/tenant-enquiries/${enquiryId}`);
+      setData(d);
+      setForm({ ...d });
+      if (d.is_joint_application || d.first_name_2 || d.last_name_2 || d.email_2) setJointApp(true);
+    } catch {}
+  }, [enquiryId, api]);
+
+  useEffect(() => { loadDetail(); }, [loadDetail]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const p = await api.get('/api/properties');
+        setProperties(Array.isArray(p) ? p : p.properties || []);
+      } catch {}
+    })();
+  }, [api]);
+
+  const setField = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const save = async (extra?: Record<string, any>) => {
+    setSaving(true);
+    try {
+      const payload = { ...form, is_joint_application: jointApp, ...extra };
+      await api.put(`/api/tenant-enquiries/${enquiryId}`, payload);
+      await loadDetail();
+      onUpdated();
+    } catch {}
+    setSaving(false);
+  };
+
+  const updateStatus = async (status: string) => {
+    setField('status', status);
+    await save({ status });
+  };
+
+  const saveNote = async () => {
+    if (!noteDraft.trim()) return;
+    const existing = form.notes || '';
+    const timestamp = new Date().toLocaleString('en-GB');
+    const newNotes = existing ? `${existing}\n\n[${timestamp}]\n${noteDraft.trim()}` : `[${timestamp}]\n${noteDraft.trim()}`;
+    setField('notes', newNotes);
+    await save({ notes: newNotes });
+    setNoteDraft('');
+  };
+
+  if (!data) return <div className="flex-1 flex items-center justify-center text-[var(--text-muted)] text-sm">Loading...</div>;
+
+  const name = [data.first_name_1, data.last_name_1].filter(Boolean).join(' ') || 'Unknown';
+  const kycDone = !!form.kyc_completed_1;
+  const propertyLinked = !!form.linked_property_id;
+  const hasDocs = docs.length > 0;
+  const completionItems = [kycDone, propertyLinked, hasDocs];
+  const completionPct = Math.round((completionItems.filter(Boolean).length / completionItems.length) * 100);
+
+  const selectedProp = properties.find(p => p.id === Number(form.linked_property_id));
+
+  return (
+    <div className="flex-1 flex flex-col min-w-0">
+      {/* Header */}
+      <div className="flex items-center gap-4 px-4 md:px-6 h-16 border-b border-[var(--border-subtle)] shrink-0">
+        <button onClick={onBack} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden mr-1">
+          <ArrowLeft size={20} />
+        </button>
+        <Avatar name={name} size="md" />
+        <div className="flex-1 min-w-0">
+          <h3 className="text-lg font-semibold truncate">{name}</h3>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[form.status] || ''}`}>
+            {STATUS_LABELS[form.status] || form.status}
+          </span>
+        </div>
+        <Button variant="gradient" size="sm" onClick={() => save()} disabled={saving}>
+          <Save size={14} className="mr-1.5" />{saving ? 'Saving...' : 'Save'}
+        </Button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-hidden flex">
+        {/* Left: tabs */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex border-b border-[var(--border-subtle)] px-4 md:px-6">
+            {(['applicant', 'activity', 'notes'] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  tab === t ? 'border-orange-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                }`}>
+                {t === 'applicant' ? 'Applicant Info' : t === 'activity' ? 'Activity' : 'Notes'}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 md:p-6">
+            {/* ═══ APPLICANT TAB ═══ */}
+            {tab === 'applicant' && (
+              <div className="space-y-6 max-w-4xl">
+
+                {/* ── Applicant 1 ── */}
+                <div>
+                  <SectionDivider icon={<User size={16} />} title="Applicant 1">
+                    <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
+                      <input type="checkbox" checked={!!form.kyc_completed_1}
+                        onChange={e => setField('kyc_completed_1', e.target.checked)}
+                        className="w-4 h-4 rounded accent-orange-500" />
+                      KYC Complete
+                    </label>
+                  </SectionDivider>
+                  <ApplicantFields form={form} setField={setField} suffix="1" />
+                </div>
+
+                {/* ── Employment History 1 ── */}
+                <div>
+                  <SectionDivider icon={<Briefcase size={16} />} title="Employment History" />
+                  <EmploymentFields form={form} setField={setField} suffix="1" />
+                </div>
+
+                {/* ── Renting Requirements ── */}
+                <div>
+                  <SectionDivider icon={<Home size={16} />} title="Renting Requirements" color="text-pink-400" />
+                  <div className="space-y-4">
+                    <RadioGroup label="Tenancy Type Wanted" value={form.tenancy_type_wanted || ''} onChange={v => setField('tenancy_type_wanted', v)}
+                      options={[
+                        { value: 'Long-term', label: 'Long-term' },
+                        { value: 'Short-term', label: 'Short-term' },
+                        { value: 'Interim', label: 'Interim' },
+                      ]} />
+                    <RadioGroup label="Reason for Renting" value={form.renting_reason || ''} onChange={v => setField('renting_reason', v)}
+                      options={[
+                        { value: 'First time tenant', label: 'First time tenant' },
+                        { value: 'Family move', label: 'Family move' },
+                        { value: 'Workplace relocation', label: 'Workplace relocation' },
+                        { value: 'Studying', label: 'Studying' },
+                        { value: 'Other', label: 'Other' },
+                      ]} />
+                    <RadioGroup label="Property Type Wanted" value={form.property_type_wanted || ''} onChange={v => setField('property_type_wanted', v)}
+                      options={[
+                        { value: 'House', label: 'House' },
+                        { value: 'Bungalow', label: 'Bungalow' },
+                        { value: 'Flat', label: 'Flat' },
+                        { value: 'Studio apartment', label: 'Studio apartment' },
+                        { value: 'Shared', label: 'Shared' },
+                        { value: 'Sheltered', label: 'Sheltered' },
+                        { value: 'Other', label: 'Other' },
+                      ]} />
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <Select label="Bedrooms Required" value={form.bedrooms_required?.toString() || ''} onChange={v => setField('bedrooms_required', v ? Number(v) : null)} options={BEDROOMS_OPTIONS} />
+                      <RadioGroup label="Off Road Parking" value={form.parking_required || ''} onChange={v => setField('parking_required', v)}
+                        options={[{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }, { value: 'Preferred', label: 'Preferred' }]} />
+                      <Input label="Rent Min £" value={form.rent_min?.toString() || ''} onChange={v => setField('rent_min', v ? Number(v) : null)} placeholder="250" type="number" />
+                      <Input label="Rent Max £" value={form.rent_max?.toString() || ''} onChange={v => setField('rent_max', v ? Number(v) : null)} placeholder="2500" type="number" />
+                    </div>
+                    <Input label="Desired Locations (up to 5)" value={form.desired_locations || ''} onChange={v => setField('desired_locations', v)} placeholder="e.g. Manchester, Salford, Didsbury" />
+                  </div>
+                </div>
+
+                {/* ── Joint Application Toggle ── */}
+                <label className="flex items-center gap-3 cursor-pointer py-3 px-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] w-fit">
+                  <input type="checkbox" checked={jointApp} onChange={e => { setJointApp(e.target.checked); setField('is_joint_application', e.target.checked); }}
+                    className="w-4 h-4 rounded accent-orange-500" />
+                  <Users size={16} className="text-pink-400" />
+                  <span className="text-sm text-[var(--text-primary)] font-medium">Joint Application</span>
+                </label>
+
+                {/* ── Applicant 2 ── */}
+                {jointApp && (
+                  <>
+                    <div>
+                      <SectionDivider icon={<User size={16} />} title="Applicant 2" color="text-pink-400">
+                        <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
+                          <input type="checkbox" checked={!!form.kyc_completed_2}
+                            onChange={e => setField('kyc_completed_2', e.target.checked)}
+                            className="w-4 h-4 rounded accent-orange-500" />
+                          KYC Complete
+                        </label>
+                      </SectionDivider>
+                      <ApplicantFields form={form} setField={setField} suffix="2" />
+                    </div>
+
+                    <div>
+                      <SectionDivider icon={<Briefcase size={16} />} title="Employment History 2" color="text-pink-400" />
+                      <EmploymentFields form={form} setField={setField} suffix="2" />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ═══ ACTIVITY TAB ═══ */}
+            {tab === 'activity' && (
+              <div className="space-y-4">
+                <h4 className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Timeline</h4>
+                <div className="relative pl-6 border-l-2 border-[var(--border-subtle)] space-y-6">
+                  <div className="relative">
+                    <div className="absolute -left-[25px] w-3 h-3 rounded-full bg-orange-500" />
+                    <p className="text-sm font-medium">Current Status: {STATUS_LABELS[data.status] || data.status}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{data.updated_at ? new Date(data.updated_at).toLocaleString('en-GB') : 'N/A'}</p>
+                  </div>
+                  {data.viewing_date && (
+                    <div className="relative">
+                      <div className="absolute -left-[25px] w-3 h-3 rounded-full bg-purple-500" />
+                      <p className="text-sm font-medium">Viewing Scheduled</p>
+                      <p className="text-xs text-[var(--text-muted)]">{new Date(data.viewing_date).toLocaleString('en-GB')}</p>
+                    </div>
+                  )}
+                  <div className="relative">
+                    <div className="absolute -left-[25px] w-3 h-3 rounded-full bg-blue-500" />
+                    <p className="text-sm font-medium">Enquiry Created</p>
+                    <p className="text-xs text-[var(--text-muted)]">{new Date(data.created_at).toLocaleString('en-GB')}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ NOTES TAB ═══ */}
+            {tab === 'notes' && (
+              <div className="space-y-4">
+                <h4 className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Notes</h4>
+                {form.notes ? (
+                  <div className="bg-[var(--bg-subtle)] rounded-xl p-4 whitespace-pre-wrap text-sm text-[var(--text-primary)]">
+                    {form.notes}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--text-muted)]">No notes yet.</p>
+                )}
+                <div>
+                  <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} placeholder="Add a note..."
+                    rows={3}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none" />
+                  <Button variant="gradient" size="sm" onClick={saveNote} disabled={!noteDraft.trim()} className="mt-2">
+                    <Save size={14} className="mr-1.5" /> Add Note
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ═══ Right Sidebar ═══ */}
+        <div className="hidden lg:flex w-[300px] shrink-0 border-l border-[var(--border-subtle)] flex-col overflow-y-auto p-4 space-y-5">
+          {/* ACTIONS */}
+          <div>
+            <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Actions</h4>
+            <div className="space-y-2">
+              <button onClick={() => updateStatus('viewing_booked')}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-primary)]">
+                <Calendar size={16} className="text-purple-400" /> Book Viewing
+              </button>
+              <button onClick={() => updateStatus('awaiting_response')}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-primary)]">
+                <Clock size={16} className="text-amber-400" /> Awaiting Response
+              </button>
+              <button onClick={() => updateStatus('onboarding')}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-primary)]">
+                <CheckCircle size={16} className="text-green-400" /> Start Onboarding
+              </button>
+              <button onClick={() => updateStatus('rejected')}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium bg-red-500/10 hover:bg-red-500/20 transition-colors text-red-400">
+                <X size={16} /> Reject
+              </button>
+            </div>
+          </div>
+
+          {/* PROPERTY */}
+          <div>
+            <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Property</h4>
+            <select value={form.linked_property_id || ''} onChange={e => setField('linked_property_id', e.target.value ? Number(e.target.value) : null)}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2.5 text-sm text-[var(--text-primary)] appearance-none focus:outline-none mb-2">
+              <option value="">No property linked</option>
+              {properties.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.address}{p.postcode ? `, ${p.postcode}` : ''}{p.rent ? ` - £${p.rent}/mo` : ''}
+                </option>
+              ))}
+            </select>
+            {selectedProp && (
+              <a href="/properties" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
+                View property <ExternalLink size={12} />
+              </a>
+            )}
+          </div>
+
+          {/* DOCUMENTS */}
+          <div>
+            <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Documents</h4>
+            <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-dashed border-[var(--border-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors mb-2">
+              <Upload size={14} /> Upload
+            </button>
+            {docs.length === 0 ? (
+              <p className="text-xs text-[var(--text-muted)] text-center py-2">No documents uploaded yet</p>
+            ) : (
+              docs.map((d, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm py-1">
+                  <FileText size={14} className="text-[var(--text-muted)]" /> {d}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* APPLICATION STATUS */}
+          <div>
+            <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Application Status</h4>
+            <div className="space-y-2 mb-3">
+              {[
+                { label: 'KYC (Applicant 1)', done: kycDone },
+                { label: 'Property Linked', done: propertyLinked },
+                { label: 'Documents', done: hasDocs },
+              ].map(item => (
+                <div key={item.label} className="flex items-center gap-2 text-sm">
+                  <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${item.done ? 'bg-green-500' : 'bg-[var(--bg-input)] border border-[var(--border-input)]'}`}>
+                    {item.done && <CheckCircle size={12} className="text-white" />}
+                  </div>
+                  <span className={item.done ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}>{item.label}</span>
+                </div>
+              ))}
+            </div>
+            <div className="w-full bg-[var(--bg-input)] rounded-full h-2 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-orange-500 to-pink-500 rounded-full transition-all duration-500"
+                style={{ width: `${completionPct}%` }} />
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mt-1.5 text-center">{completionPct}% complete</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ───
 export default function EnquiriesV3() {
   const api = useApi();
-  const navigate = useNavigate();
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<Enquiry | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', status: 'new', source: '', linked_property_id: '', notes: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', status: 'new', notes: '' });
 
   const load = async () => {
     try {
@@ -105,14 +565,6 @@ export default function EnquiriesV3() {
     e.email.toLowerCase().includes(search.toLowerCase())
   );
 
-  const updateStatus = async (id: number, status: string) => {
-    try {
-      await api.put(`/api/tenant-enquiries/${id}`, { status });
-      await load();
-      if (selected?.id === id) setSelected(prev => prev ? { ...prev, status } : null);
-    } catch {}
-  };
-
   const addEnquiry = async () => {
     try {
       const [firstName, ...lastParts] = form.name.trim().split(' ');
@@ -122,21 +574,21 @@ export default function EnquiriesV3() {
         email_1: form.email,
         phone_1: form.phone,
         status: form.status,
-        linked_property_id: form.linked_property_id ? Number(form.linked_property_id) : null,
         notes: form.notes,
       });
       setShowAdd(false);
-      setForm({ name: '', email: '', phone: '', status: 'new', source: '', linked_property_id: '', notes: '' });
+      setForm({ name: '', email: '', phone: '', status: 'new', notes: '' });
       await load();
     } catch {}
   };
 
+  const STATUS_OPTIONS = Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }));
+
   return (
     <V3Layout hideTopBar>
       <div className="flex h-full">
-        {/* Left Panel - hidden on mobile when detail selected */}
-        <div className={`w-full md:w-[350px] shrink-0 border-r border-[var(--border-subtle)] flex flex-col ${selected ? 'hidden md:flex' : 'flex'}`}>
-          {/* Header */}
+        {/* Left Panel */}
+        <div className={`w-full md:w-[350px] shrink-0 border-r border-[var(--border-subtle)] flex flex-col ${selectedId != null ? 'hidden md:flex' : 'flex'}`}>
           <div className="flex items-center justify-between px-5 h-16 border-b border-[var(--border-subtle)]">
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-bold">Enquiries</h2>
@@ -151,13 +603,12 @@ export default function EnquiriesV3() {
             </Button>
           </div>
 
-          {/* New enquiries horizontal scroll */}
           {newEnquiries.length > 0 && (
             <div className="px-5 py-3 border-b border-[var(--border-subtle)]">
               <p className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">New Enquiries</p>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {newEnquiries.map(e => (
-                  <div key={e.id} onClick={() => setSelected(e)}
+                  <div key={e.id} onClick={() => setSelectedId(e.id)}
                     className="shrink-0 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2 cursor-pointer hover:bg-blue-500/20 transition-colors min-w-[120px]">
                     <p className="text-xs font-medium truncate">{e.name}</p>
                     <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{formatTime(e.created_at)}</p>
@@ -167,12 +618,10 @@ export default function EnquiriesV3() {
             </div>
           )}
 
-          {/* Search */}
           <div className="px-4 py-3">
             <SearchBar value={search} onChange={setSearch} placeholder="Search enquiries..." />
           </div>
 
-          {/* List */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
@@ -180,9 +629,9 @@ export default function EnquiriesV3() {
               <EmptyState message="No enquiries found" />
             ) : (
               filtered.map(e => (
-                <div key={e.id} onClick={() => setSelected(e)}
+                <div key={e.id} onClick={() => setSelectedId(e.id)}
                   className={`flex items-center gap-3 px-5 py-3 cursor-pointer transition-colors border-b border-[var(--border-subtle)] ${
-                    selected?.id === e.id ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-subtle)]'
+                    selectedId === e.id ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-subtle)]'
                   }`}>
                   <Avatar name={e.name} size="sm" />
                   <div className="flex-1 min-w-0">
@@ -190,11 +639,9 @@ export default function EnquiriesV3() {
                       <p className="text-sm font-medium truncate">{e.name}</p>
                       <span className="text-[10px] text-[var(--text-muted)] shrink-0 ml-2">{formatTime(e.created_at)}</span>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[e.status] || 'bg-[var(--bg-input)] text-[var(--text-secondary)]'}`}>
-                        {STATUS_LABELS[e.status] || e.status}
-                      </span>
-                    </div>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[e.status] || 'bg-[var(--bg-input)] text-[var(--text-secondary)]'}`}>
+                      {STATUS_LABELS[e.status] || e.status}
+                    </span>
                   </div>
                 </div>
               ))
@@ -202,79 +649,10 @@ export default function EnquiriesV3() {
           </div>
         </div>
 
-        {/* Right Panel - full width on mobile when selected */}
-        <div className={`flex-1 flex flex-col min-w-0 ${selected ? 'flex' : 'hidden md:flex'}`}>
-          {selected ? (
-            <>
-              {/* Detail Header */}
-              <div className="flex items-center gap-4 px-4 md:px-8 h-16 border-b border-[var(--border-subtle)] shrink-0">
-                {/* Back button on mobile */}
-                <button onClick={() => setSelected(null)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden mr-1">
-                  <ArrowLeft size={20} />
-                </button>
-                <Avatar name={selected.name} size="md" />
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold">{selected.name}</h3>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[selected.status]}`}>
-                    {STATUS_LABELS[selected.status] || selected.status}
-                  </span>
-                </div>
-              </div>
-
-              {/* Detail Content */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
-                {/* Contact Info */}
-                <GlassCard className="p-5">
-                  <h4 className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Contact Information</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3 text-sm">
-                      <Mail size={14} className="text-[var(--text-muted)]" />
-                      <span>{selected.email}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-sm">
-                      <Phone size={14} className="text-[var(--text-muted)]" />
-                      <span>{selected.phone}</span>
-                    </div>
-                    {selected.property_address && (
-                      <div className="flex items-center gap-3 text-sm">
-                        <Building2 size={14} className="text-[var(--text-muted)]" />
-                        <span className="text-orange-400">{selected.property_address}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-3 text-sm">
-                      <Clock size={14} className="text-[var(--text-muted)]" />
-                      <span className="text-[var(--text-secondary)]">Source: {selected.source || 'N/A'}</span>
-                    </div>
-                  </div>
-                </GlassCard>
-
-                {/* Notes */}
-                {selected.notes && (
-                  <div>
-                    <h4 className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Notes</h4>
-                    <div className="space-y-2">
-                      <div className="bg-[var(--bg-subtle)] rounded-2xl rounded-tl-sm px-4 py-3 max-w-[80%]">
-                        <p className="text-sm text-[var(--text-primary)]">{selected.notes}</p>
-                        <p className="text-[10px] text-[var(--text-muted)] mt-1">{new Date(selected.created_at).toLocaleDateString('en-GB')}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Status Actions */}
-                <div>
-                  <h4 className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Update Status</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {STATUS_OPTIONS.filter(s => s.value !== selected.status).map(s => (
-                      <button key={s.value} onClick={() => updateStatus(selected.id, s.value)}
-                        className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${STATUS_COLORS[s.value]} hover:brightness-125`}>
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </>
+        {/* Right Panel */}
+        <div className={`flex-1 flex flex-col min-w-0 ${selectedId != null ? 'flex' : 'hidden md:flex'}`}>
+          {selectedId != null ? (
+            <EnquiryDetail key={selectedId} enquiryId={selectedId} api={api} onBack={() => setSelectedId(null)} onUpdated={load} />
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <EmptyState message="Select an enquiry to view details" />
@@ -295,8 +673,6 @@ export default function EnquiriesV3() {
                 <Input label="Email" value={form.email} onChange={v => setForm(p => ({ ...p, email: v }))} placeholder="email@example.com" type="email" />
                 <Input label="Phone" value={form.phone} onChange={v => setForm(p => ({ ...p, phone: v }))} placeholder="Phone number" />
                 <Select label="Status" value={form.status} onChange={v => setForm(p => ({ ...p, status: v }))} options={STATUS_OPTIONS} />
-                <Input label="Source" value={form.source} onChange={v => setForm(p => ({ ...p, source: v }))} placeholder="e.g. Rightmove, Website" />
-                <Input label="Property ID (optional)" value={form.linked_property_id} onChange={v => setForm(p => ({ ...p, linked_property_id: v }))} placeholder="Property ID" />
                 <Input label="Notes" value={form.notes} onChange={v => setForm(p => ({ ...p, notes: v }))} placeholder="Initial notes..." />
                 <div className="flex gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>

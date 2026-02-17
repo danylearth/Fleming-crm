@@ -29,7 +29,9 @@ interface Task {
 }
 
 interface Enquiry {
-  id: number; status: string;
+  id: number; status: string; first_name_1?: string; last_name_1?: string;
+  property_address?: string; property_id?: number; created_at?: string;
+  email_1?: string; phone_1?: string;
 }
 
 export default function DashboardV3() {
@@ -160,27 +162,59 @@ export default function DashboardV3() {
           {/* Pipeline */}
           <Card className="p-6">
             <SectionHeader title="Enquiry Pipeline" action={() => navigate('/v3/enquiries')} actionLabel="View All" />
-            <div className="space-y-4 mt-2">
-              {[
-                { label: 'New', count: pipelineCounts.new, color: 'bg-blue-500' },
-                { label: 'In Progress', count: pipelineCounts.in_progress, color: 'bg-amber-500' },
-                { label: 'Completed', count: pipelineCounts.completed, color: 'bg-emerald-500' },
-              ].map(stage => (
-                <div key={stage.label}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm text-[var(--text-secondary)]">{stage.label}</span>
-                    <span className="text-sm font-bold">{stage.count}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-[var(--bg-hover)] overflow-hidden">
+            {enquiries.length ? (
+              <div className="space-y-3">
+                {enquiries.slice(0, 5).map((enq) => {
+                  const name = [enq.first_name_1, enq.last_name_1].filter(Boolean).join(' ') || 'Unknown';
+                  const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
+                    new: { label: 'New', color: 'text-blue-400', bg: 'bg-blue-500/20' },
+                    viewing: { label: 'Viewing', color: 'text-purple-400', bg: 'bg-purple-500/20' },
+                    awaiting: { label: 'Awaiting', color: 'text-amber-400', bg: 'bg-amber-500/20' },
+                    in_progress: { label: 'In Progress', color: 'text-amber-400', bg: 'bg-amber-500/20' },
+                    onboarding: { label: 'Onboarding', color: 'text-cyan-400', bg: 'bg-cyan-500/20' },
+                    completed: { label: 'Completed', color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
+                    converted: { label: 'Converted', color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
+                    rejected: { label: 'Rejected', color: 'text-red-400', bg: 'bg-red-500/20' },
+                    closed: { label: 'Closed', color: 'text-gray-400', bg: 'bg-gray-500/20' },
+                  };
+                  const cfg = statusConfig[enq.status] || { label: enq.status, color: 'text-gray-400', bg: 'bg-gray-500/20' };
+                  const daysAgo = enq.created_at ? Math.floor((Date.now() - new Date(enq.created_at).getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+                  return (
                     <div
-                      className={`h-full rounded-full ${stage.color} transition-all duration-500`}
-                      style={{ width: `${enquiries.length ? (stage.count / enquiries.length) * 100 : 0}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-              <p className="text-xs text-[var(--text-muted)] pt-1">{enquiries.length} total enquiries</p>
-            </div>
+                      key={enq.id}
+                      onClick={() => navigate('/v3/enquiries')}
+                      className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${cfg.bg} ${cfg.color} shrink-0`}>
+                          <MessageSquare size={14} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{name}</p>
+                          <p className="text-xs text-[var(--text-muted)] truncate">
+                            {enq.property_address || 'No property linked'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 ml-3">
+                        <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
+                        {daysAgo !== null && (
+                          <p className="text-xs text-[var(--text-muted)]">
+                            {daysAgo === 0 ? 'Today' : `${daysAgo}d ago`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {enquiries.length > 5 && (
+                  <p className="text-xs text-[var(--text-muted)] pt-1">+{enquiries.length - 5} more enquiries</p>
+                )}
+              </div>
+            ) : (
+              <EmptyState message="No enquiries yet" />
+            )}
           </Card>
         </div>
 

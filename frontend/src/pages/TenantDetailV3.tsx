@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, EmptyState } from '../components/v3';
+import DocumentUpload from '../components/v3/DocumentUpload';
+import RentPayments from '../components/v3/RentPayments';
 import { useApi } from '../hooks/useApi';
 import { Pencil, Save, X, Mail, Phone, Building2, Calendar, FileText } from 'lucide-react';
 
@@ -67,82 +69,92 @@ export default function TenantDetailV3() {
               </p>
             )}
           </div>
-          <Button variant={editing ? 'ghost' : 'outline'} onClick={() => editing ? cancelEdit() : setEditing(true)}>
-            {editing ? <><X size={14} className="mr-2" />Cancel</> : <><Pencil size={14} className="mr-2" />Edit</>}
-          </Button>
-          {editing && (
-            <Button variant="gradient" onClick={handleSave} disabled={saving}>
-              <Save size={14} className="mr-2" />{saving ? 'Saving...' : 'Save'}
+          <div className="flex gap-2">
+            <Button variant={editing ? 'ghost' : 'outline'} onClick={() => editing ? cancelEdit() : setEditing(true)}>
+              {editing ? <><X size={14} className="mr-2" />Cancel</> : <><Pencil size={14} className="mr-2" />Edit</>}
             </Button>
-          )}
+            {editing && (
+              <Button variant="gradient" onClick={handleSave} disabled={saving}>
+                <Save size={14} className="mr-2" />{saving ? 'Saving...' : 'Save'}
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Personal Info */}
-        <GlassCard className="p-6">
-          <SectionHeader title="Personal Information" />
-          {editing ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input label="Name" value={form.name} onChange={v => setForm({ ...form, name: v })} />
-              <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" />
-              <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
-              <Input label="Move-in Date" value={form.move_in_date} onChange={v => setForm({ ...form, move_in_date: v })} placeholder="YYYY-MM-DD" />
-              <Select label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { icon: Mail, label: 'Email', value: tenant.email },
-                { icon: Phone, label: 'Phone', value: tenant.phone },
-                { icon: Calendar, label: 'Move-in Date', value: tenant.move_in_date ? new Date(tenant.move_in_date).toLocaleDateString() : null },
-              ].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
-                    <Icon size={16} className="text-[var(--text-muted)]" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left column */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Personal Info */}
+            <GlassCard className="p-6">
+              <SectionHeader title="Personal Information" />
+              {editing ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input label="Name" value={form.name} onChange={v => setForm({ ...form, name: v })} />
+                  <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" />
+                  <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
+                  <Input label="Move-in Date" value={form.move_in_date} onChange={v => setForm({ ...form, move_in_date: v })} placeholder="YYYY-MM-DD" />
+                  <Select label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { icon: Mail, label: 'Email', value: tenant.email },
+                    { icon: Phone, label: 'Phone', value: tenant.phone },
+                    { icon: Calendar, label: 'Move-in Date', value: tenant.move_in_date ? new Date(tenant.move_in_date).toLocaleDateString() : null },
+                  ].map(({ icon: Icon, label, value }) => (
+                    <div key={label} className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
+                        <Icon size={16} className="text-[var(--text-muted)]" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-[var(--text-muted)]">{label}</p>
+                        <p className="text-sm">{value || '—'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </GlassCard>
+
+            {/* Rent Payments */}
+            <RentPayments tenantId={tenant.id} compact />
+
+            {/* Notes */}
+            <GlassCard className="p-6">
+              <SectionHeader title="Notes" />
+              {editing ? (
+                <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={4}
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors resize-none"
+                  placeholder="Notes..." />
+              ) : (
+                <p className="text-sm text-[var(--text-secondary)]">{tenant.notes || 'No notes'}</p>
+              )}
+            </GlassCard>
+
+            {/* Documents */}
+            <DocumentUpload entityType="tenant" entityId={tenant.id} />
+          </div>
+
+          {/* Right column */}
+          <div className="space-y-6">
+            {/* Property Link */}
+            {tenant.property_id && (
+              <GlassCard className="p-6">
+                <SectionHeader title="Property" />
+                <button onClick={() => navigate(`/v3/properties/${tenant.property_id}`)}
+                  className="flex items-center gap-3 hover:bg-[var(--bg-subtle)] rounded-xl p-3 -m-3 transition-colors w-full text-left">
+                  <div className="w-10 h-10 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
+                    <Building2 size={18} className="text-[var(--text-muted)]" />
                   </div>
                   <div>
-                    <p className="text-xs text-[var(--text-muted)]">{label}</p>
-                    <p className="text-sm">{value || '—'}</p>
+                    <p className="text-sm font-medium">{tenant.property_address || `Property #${tenant.property_id}`}</p>
+                    <p className="text-xs text-[var(--text-muted)]">Click to view property</p>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </GlassCard>
-
-        {/* Property Link */}
-        {tenant.property_id && (
-          <GlassCard className="p-6">
-            <SectionHeader title="Property" />
-            <button onClick={() => navigate(`/v3/properties/${tenant.property_id}`)}
-              className="flex items-center gap-3 hover:bg-[var(--bg-subtle)] rounded-xl p-3 -m-3 transition-colors w-full text-left">
-              <div className="w-10 h-10 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
-                <Building2 size={18} className="text-[var(--text-muted)]" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">{tenant.property_address || `Property #${tenant.property_id}`}</p>
-                <p className="text-xs text-[var(--text-muted)]">Click to view property</p>
-              </div>
-            </button>
-          </GlassCard>
-        )}
-
-        {/* Notes */}
-        <GlassCard className="p-6">
-          <SectionHeader title="Notes" />
-          {editing ? (
-            <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={4}
-              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors resize-none"
-              placeholder="Notes..." />
-          ) : (
-            <p className="text-sm text-[var(--text-secondary)]">{tenant.notes || 'No notes'}</p>
-          )}
-        </GlassCard>
-
-        {/* Documents Placeholder */}
-        <GlassCard className="p-6">
-          <SectionHeader title="Documents" />
-          <EmptyState message="Document management coming soon" icon={<FileText size={32} />} />
-        </GlassCard>
+                </button>
+              </GlassCard>
+            )}
+          </div>
+        </div>
       </div>
     </V3Layout>
   );
