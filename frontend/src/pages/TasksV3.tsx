@@ -216,6 +216,16 @@ export default function TasksV3() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <FilterDropdown icon={CheckCircle2} label="Status" value={filterStatus === 'all' ? null : filterStatus}
+                displayValue={filterStatus !== 'all' ? STATUS_LABELS[filterStatus] : undefined}
+                onClear={() => setFilterStatus('all')}
+                items={Object.entries(STATUS_LABELS).map(([k, v]) => ({ id: k, label: v }))}
+                onSelect={id => setFilterStatus(id)} />
+              <FilterDropdown icon={Tag} label="Priority" value={filterPriority === 'all' ? null : filterPriority}
+                displayValue={filterPriority !== 'all' ? PRIORITY_LABELS[filterPriority] : undefined}
+                onClear={() => setFilterPriority('all')}
+                items={Object.entries(PRIORITY_LABELS).map(([k, v]) => ({ id: k, label: v }))}
+                onSelect={id => setFilterPriority(id)} />
               <FilterDropdown icon={Building2} label="Property" value={filterProperty}
                 displayValue={properties.find(p => p.id === filterProperty)?.address}
                 onClear={() => setFilterProperty(null)}
@@ -241,13 +251,7 @@ export default function TasksV3() {
               </Button>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-            <FilterTags options={[{ key: 'all', label: 'All Status' }, ...Object.entries(STATUS_LABELS).map(([k, v]) => ({ key: k, label: v }))]}
-              value={filterStatus} onChange={setFilterStatus} />
-            <div className="hidden sm:block w-px h-5 bg-[var(--border-subtle)]" />
-            <FilterTags options={[{ key: 'all', label: 'All Priority' }, ...Object.entries(PRIORITY_LABELS).map(([k, v]) => ({ key: k, label: v }))]}
-              value={filterPriority} onChange={setFilterPriority} />
-          </div>
+          {/* Status/Priority tags removed — now in dropdowns above */}
         </div>
 
         {/* Task List + Calendar side by side */}
