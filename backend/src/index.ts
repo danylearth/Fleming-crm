@@ -805,6 +805,20 @@ app.get('/api/tasks', authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
+app.get('/api/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const task = db.prepare(`
+      SELECT t.*, u.name as assigned_to_name FROM tasks t
+      LEFT JOIN users u ON u.id = t.assigned_to
+      WHERE t.id = ?
+    `).get(req.params.id);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch task' });
+  }
+});
+
 app.post('/api/tasks', authMiddleware, (req: AuthRequest, res) => {
   try {
     const { title, description, priority, assigned_to, entity_type, entity_id, due_date, task_type } = req.body;
