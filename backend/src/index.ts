@@ -1042,7 +1042,7 @@ app.post('/api/transactions', authMiddleware, (req: AuthRequest, res) => {
 // ============ DOCUMENTS ============
 
 const DOC_TYPES: Record<string, string[]> = {
-  landlord: ['Primary Identification', 'Address Identification', 'Proof of Funds', 'Proof of Ownership', 'Mortgage Statement', 'Bank Statements', 'Council Tax Bill', 'Complaint', 'Compliments', 'Other'],
+  landlord: ['Primary Identification', 'Address Identification', 'Proof of Funds', 'Application Form(s)', 'Deed of Guarantee', 'Guarantor Forms', 'Bank Statements', 'Council Tax Bill', 'Complaint', 'Compliments', 'Proof of Ownership', 'Mortgage Statement', 'Other'],
   landlord_bdm: ['Notes', 'Other'],
   tenant: ['Primary Identification', 'Address Identification', 'Proof of Funds', 'Application Form(s)', 'Deed of Guarantee', 'Guarantor Forms', 'Bank Statements', 'Council Tax Bill', 'Complaint', 'Compliments', 'Other'],
   tenant_enquiry: ['Primary Identification', 'Address Identification', 'Application Form(s)', 'Other'],
