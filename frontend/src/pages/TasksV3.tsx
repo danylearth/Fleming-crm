@@ -250,7 +250,9 @@ export default function TasksV3() {
           </div>
         </div>
 
-        {/* Task List */}
+        {/* Task List + Calendar side by side */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2">
         {loading ? (
           <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
         ) : filtered.length === 0 ? (
@@ -305,6 +307,7 @@ export default function TasksV3() {
           </div>
         )}
 
+        </div>
         {/* Calendar */}
         {!loading && (
           <GlassCard className="p-6">
@@ -372,6 +375,7 @@ export default function TasksV3() {
             </div>
           </GlassCard>
         )}
+        </div>
 
         {/* Add Modal */}
         {showAdd && (
