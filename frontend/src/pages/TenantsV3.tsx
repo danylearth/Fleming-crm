@@ -55,9 +55,16 @@ export default function TenantsV3() {
 
   const filtered = tenants.filter(t => {
     const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.email?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'all' || t.status === statusFilter;
+    const tStatus = t.status || 'active'; // default null/empty to active
+    const matchStatus = statusFilter === 'all' || tStatus === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  const statusCounts = tenants.reduce((acc, t) => {
+    const s = t.status || 'active';
+    acc[s] = (acc[s] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
   const handleSave = async () => {
     if (!form.name.trim()) return;
@@ -85,11 +92,14 @@ export default function TenantsV3() {
 
         {/* Status filter pills */}
         <div className="flex gap-2">
-          {statusFilters.map(s => (
-            <Tag key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
-              {s.charAt(0).toUpperCase() + s.slice(1)}
-            </Tag>
-          ))}
+          {statusFilters.map(s => {
+            const count = s === 'all' ? tenants.length : (statusCounts[s] || 0);
+            return (
+              <Tag key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
+                {s.charAt(0).toUpperCase() + s.slice(1)} ({count})
+              </Tag>
+            );
+          })}
         </div>
 
         {loading ? (
