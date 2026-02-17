@@ -25,9 +25,7 @@ interface Property {
 
 interface Tenant {
   id: number;
-  title_1?: string;
-  first_name_1: string;
-  last_name_1: string;
+  name: string;
   property_id: number | null;
 }
 
@@ -52,7 +50,7 @@ export default function LandlordsV3() {
       const [data, props, tens] = await Promise.all([
         api.get('/api/landlords'),
         api.get('/api/properties'),
-        api.get('/api/tenant-enquiries'),
+        api.get('/api/tenants'),
       ]);
       setLandlords(data);
       setProperties(props);
@@ -144,9 +142,9 @@ export default function LandlordsV3() {
               icon={Users}
               label="Tenant"
               value={tenantFilter}
-              displayValue={tenants.find(t => t.id === tenantFilter) ? `${tenants.find(t => t.id === tenantFilter)?.first_name_1} ${tenants.find(t => t.id === tenantFilter)?.last_name_1}` : undefined}
+              displayValue={tenants.find(t => t.id === tenantFilter)?.name}
               onClear={() => setTenantFilter(null)}
-              items={tenants.map(t => ({ id: t.id, label: `${t.title_1 ? t.title_1 + ' ' : ''}${t.first_name_1} ${t.last_name_1}` }))}
+              items={tenants.map(t => ({ id: t.id, label: t.name }))}
               onSelect={id => setTenantFilter(id)}
             />
             <div className="flex items-center bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-1">
