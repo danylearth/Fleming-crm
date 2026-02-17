@@ -375,7 +375,23 @@ export default function TasksV3() {
                 <button onClick={navNext} className="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={15} /></button>
                 <span className="text-sm font-semibold">{navTitle}</span>
 
-                <div className="flex-1" />
+                {/* Team avatars */}
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="flex items-center gap-1">
+                    {TEAM.map(member => {
+                      const active = selectedMember === member.id;
+                      return (
+                        <button key={member.id} onClick={() => setSelectedMember(member.id)}
+                          title={member.name}
+                          className={`w-8 h-8 rounded-full bg-gradient-to-br ${member.color} flex items-center justify-center text-white text-[10px] font-bold transition-all ${
+                            active ? 'ring-2 ring-orange-500 ring-offset-2 ring-offset-[var(--bg-page)] scale-110' : 'opacity-60 hover:opacity-100'
+                          }`}>
+                          {member.initials}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 {/* Combined: List | Month | Week | Day */}
                 <div className="flex items-center bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-0.5">
