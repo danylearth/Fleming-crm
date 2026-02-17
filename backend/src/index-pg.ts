@@ -214,6 +214,18 @@ app.put('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+app.delete('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const id = req.params.id as string;
+    await run('UPDATE properties SET landlord_id = NULL WHERE landlord_id = $1', [id]);
+    await run('DELETE FROM landlords WHERE id = $1', [id]);
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'landlord', parseInt(id));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete landlord' });
+  }
+});
+
 // ============ LANDLORDS BDM ============
 
 app.get('/api/landlords-bdm', authMiddleware, async (req: AuthRequest, res) => {
