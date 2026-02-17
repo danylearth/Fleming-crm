@@ -5,11 +5,30 @@ import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, Emp
 import DocumentUpload from '../components/v3/DocumentUpload';
 import RentPayments from '../components/v3/RentPayments';
 import { useApi } from '../hooks/useApi';
-import { Pencil, Save, X, Mail, Phone, Building2, Calendar, FileText, MessageSquare, Clock, Wrench, AlertTriangle, ChevronRight, Plus, User, Shield } from 'lucide-react';
+import {
+  Pencil, Save, X, Mail, Phone, Building2, Calendar, MessageSquare, Clock,
+  Wrench, AlertTriangle, ChevronRight, Plus, User, Shield, Heart, CheckCircle,
+  XCircle, ChevronDown, Users
+} from 'lucide-react';
 
+// ==================== TYPES ====================
 interface Tenant {
-  id: number; name: string; email: string; phone: string; property_id: number;
-  property_address: string; move_in_date: string; status: string; notes: string;
+  id: number; name: string; email: string; phone: string;
+  title_1?: string; first_name_1?: string; last_name_1?: string; date_of_birth_1?: string;
+  is_joint_tenancy?: number;
+  title_2?: string; first_name_2?: string; last_name_2?: string;
+  email_2?: string; phone_2?: string; date_of_birth_2?: string;
+  nok_name?: string; nok_relationship?: string; nok_phone?: string; nok_email?: string;
+  kyc_completed_1?: number; kyc_completed_2?: number;
+  guarantor_required?: number; guarantor_name?: string; guarantor_address?: string;
+  guarantor_phone?: string; guarantor_email?: string;
+  guarantor_kyc_completed?: number; guarantor_deed_received?: number;
+  holding_deposit_received?: number; holding_deposit_amount?: number; holding_deposit_date?: string;
+  application_forms_completed?: number;
+  property_id: number; property_address: string;
+  tenancy_start_date?: string; tenancy_type?: string;
+  has_end_date?: number; tenancy_end_date?: string; monthly_rent?: number;
+  move_in_date: string; status: string; notes: string;
 }
 
 interface AuditEntry {
@@ -18,20 +37,21 @@ interface AuditEntry {
 }
 
 interface MaintenanceRequest {
-  id: number; property_id: number; tenant_id: number; title: string;
-  description: string; status: string; priority: string; address: string;
-  created_at: string; resolution_notes: string; contractor: string; cost: number;
+  id: number; tenant_id: number; title: string; description: string;
+  status: string; priority: string; address: string; created_at: string;
+  resolution_notes: string;
 }
 
 interface TenantNote {
   id: string; text: string; author: string; created_at: string;
 }
 
+// ==================== HELPERS ====================
 function TimeAgo({ date }: { date: string }) {
   const now = new Date();
   const then = new Date(date);
-  const diffMs = now.getTime() - then.getTime();
-  const mins = Math.floor(diffMs / 60000);
+  const diff = now.getTime() - then.getTime();
+  const mins = Math.floor(diff / 60000);
   const hrs = Math.floor(mins / 60);
   const days = Math.floor(hrs / 24);
   let label = '';
@@ -43,15 +63,6 @@ function TimeAgo({ date }: { date: string }) {
   return <span className="text-[10px] text-[var(--text-muted)]">{label}</span>;
 }
 
-function actionIcon(action: string) {
-  switch (action) {
-    case 'create': return <Plus size={12} />;
-    case 'update': return <Pencil size={12} />;
-    case 'delete': return <X size={12} />;
-    default: return <Clock size={12} />;
-  }
-}
-
 function actionColor(action: string) {
   switch (action) {
     case 'create': return 'bg-green-500/20 text-green-400';
@@ -61,19 +72,63 @@ function actionColor(action: string) {
   }
 }
 
-function priorityColor(priority: string) {
-  switch (priority) {
-    case 'urgent': return 'text-red-400';
-    case 'high': return 'text-orange-400';
-    case 'medium': return 'text-yellow-400';
-    default: return 'text-[var(--text-muted)]';
+function actionIcon(action: string) {
+  switch (action) {
+    case 'create': return <Plus size={12} />;
+    case 'update': return <Pencil size={12} />;
+    case 'delete': return <X size={12} />;
+    default: return <Clock size={12} />;
   }
 }
 
 function statusLabel(s: string) {
-  return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return s?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '';
 }
 
+function YesNo({ value, onChange, disabled }: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <div className="flex gap-1">
+      <button disabled={disabled} onClick={() => onChange(true)}
+        className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${value ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-[var(--bg-hover)] text-[var(--text-muted)] border border-transparent'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+        Yes
+      </button>
+      <button disabled={disabled} onClick={() => onChange(false)}
+        className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${!value ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-[var(--bg-hover)] text-[var(--text-muted)] border border-transparent'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+        No
+      </button>
+    </div>
+  );
+}
+
+function ReadField({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div>
+      <p className="text-xs text-[var(--text-muted)]">{label}</p>
+      <p className="text-sm mt-0.5">{value || '—'}</p>
+    </div>
+  );
+}
+
+function CompletionRing({ percent, size = 48 }: { percent: number; size?: number }) {
+  const r = (size - 6) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c - (percent / 100) * c;
+  const color = percent === 100 ? '#22c55e' : percent >= 60 ? '#f59e0b' : '#ef4444';
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--bg-hover)" strokeWidth={4} />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={4}
+          strokeLinecap="round" strokeDasharray={c} strokeDashoffset={offset} className="transition-all duration-500" />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-xs font-bold" style={{ color }}>
+        {percent}%
+      </span>
+    </div>
+  );
+}
+
+// ==================== COMPONENT ====================
 export default function TenantDetailV3() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -81,10 +136,10 @@ export default function TenantDetailV3() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', move_in_date: '', status: 'active', notes: '' });
   const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<Record<string, any>>({});
 
-  // Timeline (audit log)
+  // Timeline
   const [timeline, setTimeline] = useState<AuditEntry[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(true);
 
@@ -97,12 +152,16 @@ export default function TenantDetailV3() {
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
 
+  // Guarantor expand
+  const [guarantorExpanded, setGuarantorExpanded] = useState(false);
+
+  // Load tenant
   useEffect(() => {
     (async () => {
       try {
         const t = await api.get(`/api/tenants/${id}`);
         setTenant(t);
-        setForm({ name: t.name, email: t.email || '', phone: t.phone || '', move_in_date: t.move_in_date || '', status: t.status || 'active', notes: t.notes || '' });
+        setForm(tenantToForm(t));
       } catch (e) { console.error(e); }
       setLoading(false);
     })();
@@ -115,9 +174,7 @@ export default function TenantDetailV3() {
       try {
         const logs = await api.get(`/api/audit-log?entity_type=tenant&entity_id=${id}&limit=50`);
         setTimeline(Array.isArray(logs) ? logs : []);
-      } catch {
-        setTimeline([]);
-      }
+      } catch { setTimeline([]); }
       setTimelineLoading(false);
     })();
   }, [id]);
@@ -129,31 +186,102 @@ export default function TenantDetailV3() {
       try {
         const all = await api.get('/api/maintenance');
         setMaintenance(Array.isArray(all) ? all.filter((m: MaintenanceRequest) => m.tenant_id === Number(id)) : []);
-      } catch {
-        setMaintenance([]);
-      }
+      } catch { setMaintenance([]); }
       setMaintenanceLoading(false);
     })();
   }, [id]);
 
-  // Load notes from tenant.notes field (stored as JSON array)
+  // Load notes
   useEffect(() => {
     if (tenant?.notes) {
       try {
         const parsed = JSON.parse(tenant.notes);
         if (Array.isArray(parsed)) { setNotes(parsed); return; }
-      } catch { /* not JSON, treat as single note */ }
-      if (tenant.notes.trim()) {
-        setNotes([{ id: '1', text: tenant.notes, author: 'System', created_at: new Date().toISOString() }]);
-      }
+      } catch {}
+      if (tenant.notes.trim()) setNotes([{ id: '1', text: tenant.notes, author: 'System', created_at: new Date().toISOString() }]);
     }
   }, [tenant?.notes]);
+
+  function tenantToForm(t: Tenant) {
+    return {
+      name: t.name || '', email: t.email || '', phone: t.phone || '',
+      title_1: t.title_1 || '', first_name_1: t.first_name_1 || '', last_name_1: t.last_name_1 || '',
+      date_of_birth_1: t.date_of_birth_1 || '',
+      is_joint_tenancy: !!t.is_joint_tenancy,
+      title_2: t.title_2 || '', first_name_2: t.first_name_2 || '', last_name_2: t.last_name_2 || '',
+      email_2: t.email_2 || '', phone_2: t.phone_2 || '', date_of_birth_2: t.date_of_birth_2 || '',
+      nok_name: t.nok_name || '', nok_relationship: t.nok_relationship || '',
+      nok_phone: t.nok_phone || '', nok_email: t.nok_email || '',
+      kyc_completed_1: !!t.kyc_completed_1, kyc_completed_2: !!t.kyc_completed_2,
+      guarantor_required: !!t.guarantor_required,
+      guarantor_name: t.guarantor_name || '', guarantor_address: t.guarantor_address || '',
+      guarantor_phone: t.guarantor_phone || '', guarantor_email: t.guarantor_email || '',
+      guarantor_kyc_completed: !!t.guarantor_kyc_completed, guarantor_deed_received: !!t.guarantor_deed_received,
+      holding_deposit_received: !!t.holding_deposit_received,
+      holding_deposit_amount: t.holding_deposit_amount || '', holding_deposit_date: t.holding_deposit_date || '',
+      application_forms_completed: !!t.application_forms_completed,
+      property_id: t.property_id, tenancy_start_date: t.tenancy_start_date || t.move_in_date || '',
+      tenancy_type: t.tenancy_type || '', has_end_date: !!t.has_end_date, tenancy_end_date: t.tenancy_end_date || '',
+      monthly_rent: t.monthly_rent || '', status: t.status || 'active',
+    };
+  }
+
+  // Onboarding checklist items
+  function getChecklistItems() {
+    const items: { label: string; done: boolean }[] = [
+      { label: 'Holding Deposit Received', done: !!form.holding_deposit_received },
+      { label: 'Application Forms Completed', done: !!form.application_forms_completed },
+      { label: 'KYC Completed (Applicant 1)', done: !!form.kyc_completed_1 },
+    ];
+    if (form.is_joint_tenancy) {
+      items.push({ label: 'KYC Completed (Applicant 2)', done: !!form.kyc_completed_2 });
+    }
+    if (form.guarantor_required) {
+      items.push({ label: 'Guarantor KYC Completed', done: !!form.guarantor_kyc_completed });
+      items.push({ label: 'Deed of Guarantee Received', done: !!form.guarantor_deed_received });
+    }
+    items.push({ label: 'Tenancy Start Date Set', done: !!form.tenancy_start_date });
+    items.push({ label: 'Tenancy Type Selected', done: !!form.tenancy_type });
+    items.push({ label: 'Monthly Rent Set', done: !!form.monthly_rent });
+    items.push({ label: 'Next of Kin Provided', done: !!(form.nok_name && form.nok_phone) });
+    return items;
+  }
+
+  const checklistItems = getChecklistItems();
+  const completedCount = checklistItems.filter(i => i.done).length;
+  const completionPercent = Math.round((completedCount / checklistItems.length) * 100);
+
+  // Tenancy end date warning
+  const endDateWarning = form.has_end_date && form.tenancy_end_date
+    ? (() => {
+        const end = new Date(form.tenancy_end_date);
+        const now = new Date();
+        const daysLeft = Math.ceil((end.getTime() - now.getTime()) / 86400000);
+        return daysLeft <= 30 && daysLeft > 0 ? daysLeft : daysLeft <= 0 ? 0 : null;
+      })()
+    : null;
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updated = await api.put(`/api/tenants/${id}`, { ...form, notes: JSON.stringify(notes) });
-      setTenant({ ...tenant!, ...updated });
+      const payload = {
+        ...form,
+        name: form.first_name_1 && form.last_name_1 ? `${form.first_name_1} ${form.last_name_1}` : form.name,
+        is_joint_tenancy: form.is_joint_tenancy ? 1 : 0,
+        kyc_completed_1: form.kyc_completed_1 ? 1 : 0,
+        kyc_completed_2: form.kyc_completed_2 ? 1 : 0,
+        guarantor_required: form.guarantor_required ? 1 : 0,
+        guarantor_kyc_completed: form.guarantor_kyc_completed ? 1 : 0,
+        guarantor_deed_received: form.guarantor_deed_received ? 1 : 0,
+        holding_deposit_received: form.holding_deposit_received ? 1 : 0,
+        application_forms_completed: form.application_forms_completed ? 1 : 0,
+        has_end_date: form.has_end_date ? 1 : 0,
+        notes: JSON.stringify(notes),
+      };
+      await api.put(`/api/tenants/${id}`, payload);
+      const t = await api.get(`/api/tenants/${id}`);
+      setTenant(t);
+      setForm(tenantToForm(t));
       setEditing(false);
     } catch (e) { console.error(e); }
     setSaving(false);
@@ -162,15 +290,10 @@ export default function TenantDetailV3() {
   const addNote = async () => {
     if (!newNote.trim()) return;
     setAddingNote(true);
-    const note: TenantNote = {
-      id: Date.now().toString(),
-      text: newNote.trim(),
-      author: 'You',
-      created_at: new Date().toISOString()
-    };
+    const note: TenantNote = { id: Date.now().toString(), text: newNote.trim(), author: 'You', created_at: new Date().toISOString() };
     const updated = [...notes, note];
     try {
-      await api.put(`/api/tenants/${id}`, { notes: JSON.stringify(updated) });
+      await api.put(`/api/tenants/${id}`, { ...form, notes: JSON.stringify(updated) });
       setNotes(updated);
       setNewNote('');
     } catch (e) { console.error(e); }
@@ -179,26 +302,28 @@ export default function TenantDetailV3() {
 
   const cancelEdit = () => {
     setEditing(false);
-    if (tenant) setForm({ name: tenant.name, email: tenant.email || '', phone: tenant.phone || '', move_in_date: tenant.move_in_date || '', status: tenant.status || 'active', notes: tenant.notes || '' });
+    if (tenant) setForm(tenantToForm(tenant));
+    setGuarantorExpanded(false);
   };
 
   if (loading) return <V3Layout title="Loading..."><div className="p-8 text-[var(--text-muted)] text-sm">Loading...</div></V3Layout>;
   if (!tenant) return <V3Layout title="Not Found"><div className="p-8 text-[var(--text-muted)]">Tenant not found</div></V3Layout>;
 
+  const displayName = form.first_name_1 && form.last_name_1 ? `${form.first_name_1} ${form.last_name_1}` : tenant.name;
+
   return (
-    <V3Layout breadcrumb={[{ label: 'Tenants', to: '/v3/tenants' }, { label: tenant.name }]}>
+    <V3Layout breadcrumb={[{ label: 'Tenants', to: '/v3/tenants' }, { label: displayName }]}>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
-        {/* Header with property E-panel */}
+        {/* ==================== HEADER ==================== */}
         <GlassCard className="p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-            <Avatar name={tenant.name} size="xl" />
+            <Avatar name={displayName} size="xl" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold">{tenant.name}</h1>
-                <StatusDot status={tenant.status === 'active' ? 'active' : 'inactive'} size="md" />
-                <span className="text-xs text-[var(--text-muted)] capitalize">{tenant.status}</span>
+                <h1 className="text-2xl font-bold">{displayName}</h1>
+                <StatusDot status={(form.status || 'active') === 'active' ? 'active' : 'inactive'} size="md" />
+                <span className="text-xs text-[var(--text-muted)] capitalize">{form.status || 'active'}</span>
               </div>
-              {/* Property E-Panel inline */}
               {tenant.property_id ? (
                 <button onClick={() => navigate(`/v3/properties/${tenant.property_id}`)}
                   className="flex items-center gap-2 mt-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group">
@@ -211,71 +336,273 @@ export default function TenantDetailV3() {
               ) : (
                 <p className="text-xs text-[var(--text-muted)] mt-2">No property linked</p>
               )}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Button variant={editing ? 'ghost' : 'outline'} onClick={() => editing ? cancelEdit() : setEditing(true)}>
-                {editing ? <><X size={14} className="mr-2" />Cancel</> : <><Pencil size={14} className="mr-2" />Edit</>}
-              </Button>
-              {editing && (
-                <Button variant="gradient" onClick={handleSave} disabled={saving}>
-                  <Save size={14} className="mr-2" />{saving ? 'Saving...' : 'Save'}
-                </Button>
+              {/* Tenancy end date warning */}
+              {endDateWarning !== null && (
+                <div className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 w-fit">
+                  <AlertTriangle size={14} className="text-red-400" />
+                  <span className="text-xs text-red-400 font-medium">
+                    {endDateWarning === 0 ? 'Tenancy has expired!' : `Tenancy ends in ${endDateWarning} days`}
+                  </span>
+                </div>
               )}
+            </div>
+            {/* Completion ring + actions */}
+            <div className="flex items-center gap-4 shrink-0">
+              <CompletionRing percent={completionPercent} />
+              <div className="flex gap-2">
+                <Button variant={editing ? 'ghost' : 'outline'} onClick={() => editing ? cancelEdit() : setEditing(true)}>
+                  {editing ? <><X size={14} className="mr-2" />Cancel</> : <><Pencil size={14} className="mr-2" />Edit</>}
+                </Button>
+                {editing && (
+                  <Button variant="gradient" onClick={handleSave} disabled={saving}>
+                    <Save size={14} className="mr-2" />{saving ? 'Saving...' : 'Save'}
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </GlassCard>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* ========== LEFT COLUMN — Static info ========== */}
+          {/* ==================== LEFT COLUMN ==================== */}
           <div className="lg:col-span-3 space-y-6">
             {/* Personal Information */}
             <GlassCard className="p-6">
               <SectionHeader title="Personal Information" icon={<User size={16} />} />
               {editing ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input label="Name" value={form.name} onChange={v => setForm({ ...form, name: v })} />
-                  <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" />
-                  <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
-                  <Input label="Move-in Date" value={form.move_in_date} onChange={v => setForm({ ...form, move_in_date: v })} placeholder="YYYY-MM-DD" />
-                  <Select label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+                <div className="space-y-4">
+                  <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Applicant 1</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Select label="Title" value={form.title_1} onChange={v => setForm({ ...form, title_1: v })}
+                      options={[{ value: '', label: 'Select' }, { value: 'Mr', label: 'Mr' }, { value: 'Mrs', label: 'Mrs' }, { value: 'Ms', label: 'Ms' }, { value: 'Miss', label: 'Miss' }, { value: 'Dr', label: 'Dr' }]} />
+                    <Input label="First Name" value={form.first_name_1} onChange={v => setForm({ ...form, first_name_1: v })} />
+                    <Input label="Last Name" value={form.last_name_1} onChange={v => setForm({ ...form, last_name_1: v })} />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" />
+                    <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
+                    <Input label="Date of Birth" value={form.date_of_birth_1} onChange={v => setForm({ ...form, date_of_birth_1: v })} placeholder="YYYY-MM-DD" />
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <label className="text-xs text-[var(--text-muted)]">Joint Tenancy?</label>
+                    <YesNo value={form.is_joint_tenancy} onChange={v => setForm({ ...form, is_joint_tenancy: v })} />
+                  </div>
+                  {form.is_joint_tenancy && (
+                    <>
+                      <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4">Applicant 2</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <Select label="Title" value={form.title_2} onChange={v => setForm({ ...form, title_2: v })}
+                          options={[{ value: '', label: 'Select' }, { value: 'Mr', label: 'Mr' }, { value: 'Mrs', label: 'Mrs' }, { value: 'Ms', label: 'Ms' }, { value: 'Miss', label: 'Miss' }, { value: 'Dr', label: 'Dr' }]} />
+                        <Input label="First Name" value={form.first_name_2} onChange={v => setForm({ ...form, first_name_2: v })} />
+                        <Input label="Last Name" value={form.last_name_2} onChange={v => setForm({ ...form, last_name_2: v })} />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <Input label="Email" value={form.email_2} onChange={v => setForm({ ...form, email_2: v })} type="email" />
+                        <Input label="Phone" value={form.phone_2} onChange={v => setForm({ ...form, phone_2: v })} />
+                        <Input label="Date of Birth" value={form.date_of_birth_2} onChange={v => setForm({ ...form, date_of_birth_2: v })} placeholder="YYYY-MM-DD" />
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[
-                    { icon: Mail, label: 'Email', value: tenant.email },
-                    { icon: Phone, label: 'Phone', value: tenant.phone },
-                    { icon: Calendar, label: 'Move-in Date', value: tenant.move_in_date ? new Date(tenant.move_in_date).toLocaleDateString() : null },
-                  ].map(({ icon: Icon, label, value }) => (
-                    <div key={label} className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
-                        <Icon size={16} className="text-[var(--text-muted)]" />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                      { icon: Mail, label: 'Email', value: tenant.email },
+                      { icon: Phone, label: 'Phone', value: tenant.phone },
+                      { icon: Calendar, label: 'Date of Birth', value: tenant.date_of_birth_1 ? new Date(tenant.date_of_birth_1).toLocaleDateString() : null },
+                    ].map(({ icon: Icon, label, value }) => (
+                      <div key={label} className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
+                          <Icon size={16} className="text-[var(--text-muted)]" />
+                        </div>
+                        <div><p className="text-xs text-[var(--text-muted)]">{label}</p><p className="text-sm">{value || '—'}</p></div>
                       </div>
-                      <div>
-                        <p className="text-xs text-[var(--text-muted)]">{label}</p>
-                        <p className="text-sm">{value || '—'}</p>
+                    ))}
+                  </div>
+                  {!!tenant.is_joint_tenancy && (
+                    <>
+                      <div className="h-px bg-[var(--border-subtle)] my-2" />
+                      <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Applicant 2</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <ReadField label="Name" value={[tenant.title_2, tenant.first_name_2, tenant.last_name_2].filter(Boolean).join(' ') || null} />
+                        <ReadField label="Email" value={tenant.email_2} />
+                        <ReadField label="Phone" value={tenant.phone_2} />
+                        <ReadField label="Date of Birth" value={tenant.date_of_birth_2 ? new Date(tenant.date_of_birth_2).toLocaleDateString() : null} />
                       </div>
-                    </div>
-                  ))}
+                    </>
+                  )}
                 </div>
               )}
             </GlassCard>
 
-            {/* KYC / Compliance placeholder */}
+            {/* Next of Kin */}
             <GlassCard className="p-6">
-              <SectionHeader title="KYC & Compliance" icon={<Shield size={16} />} />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[
-                  { label: 'ID Verified', value: 'Pending' },
-                  { label: 'Right to Rent', value: 'Pending' },
-                  { label: 'Credit Check', value: 'Not started' },
-                  { label: 'References', value: 'Not started' },
-                ].map(item => (
-                  <div key={item.label} className="flex items-center justify-between py-2 px-3 rounded-xl bg-[var(--bg-hover)]/50">
-                    <span className="text-xs text-[var(--text-secondary)]">{item.label}</span>
-                    <span className="text-xs text-[var(--text-muted)]">{item.value}</span>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader title="Next of Kin" icon={<Heart size={16} />} />
+                {!form.nok_name && !editing && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-medium">Missing</span>
+                )}
               </div>
+              {editing ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <Input label="Full Name" value={form.nok_name} onChange={v => setForm({ ...form, nok_name: v })} placeholder="Next of kin name" />
+                  <Select label="Relationship" value={form.nok_relationship} onChange={v => setForm({ ...form, nok_relationship: v })}
+                    options={[{ value: '', label: 'Select' }, { value: 'Parent', label: 'Parent' }, { value: 'Spouse', label: 'Spouse' }, { value: 'Sibling', label: 'Sibling' }, { value: 'Child', label: 'Child' }, { value: 'Friend', label: 'Friend' }, { value: 'Other', label: 'Other' }]} />
+                  <Input label="Phone" value={form.nok_phone} onChange={v => setForm({ ...form, nok_phone: v })} placeholder="+44..." />
+                  <Input label="Email" value={form.nok_email} onChange={v => setForm({ ...form, nok_email: v })} type="email" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <ReadField label="Name" value={tenant.nok_name} />
+                  <ReadField label="Relationship" value={tenant.nok_relationship} />
+                  <ReadField label="Phone" value={tenant.nok_phone} />
+                  <ReadField label="Email" value={tenant.nok_email} />
+                </div>
+              )}
+            </GlassCard>
+
+            {/* Onboarding Checklist */}
+            <GlassCard className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader title="Onboarding Checklist" icon={<CheckCircle size={16} />} />
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[var(--text-muted)]">{completedCount}/{checklistItems.length}</span>
+                  <CompletionRing percent={completionPercent} size={36} />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {/* Holding Deposit */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Holding Deposit Received</span>
+                    <YesNo value={!!form.holding_deposit_received} onChange={v => setForm({ ...form, holding_deposit_received: v })} disabled={!editing} />
+                  </div>
+                  {form.holding_deposit_received && (
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      {editing ? (
+                        <>
+                          <Input label="Amount (£)" value={form.holding_deposit_amount} onChange={v => setForm({ ...form, holding_deposit_amount: v })} placeholder="0.00" />
+                          <Input label="Date Received" value={form.holding_deposit_date} onChange={v => setForm({ ...form, holding_deposit_date: v })} placeholder="YYYY-MM-DD" />
+                        </>
+                      ) : (
+                        <>
+                          <ReadField label="Amount" value={form.holding_deposit_amount ? `£${form.holding_deposit_amount}` : null} />
+                          <ReadField label="Date Received" value={form.holding_deposit_date ? new Date(form.holding_deposit_date).toLocaleDateString() : null} />
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Application Forms */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-4 py-3 flex items-center justify-between">
+                  <span className="text-sm">Application Forms Completed</span>
+                  <YesNo value={!!form.application_forms_completed} onChange={v => setForm({ ...form, application_forms_completed: v })} disabled={!editing} />
+                </div>
+
+                {/* KYC Applicant 1 */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-4 py-3 flex items-center justify-between">
+                  <span className="text-sm">KYC Completed — {form.first_name_1 || 'Applicant 1'}</span>
+                  <YesNo value={!!form.kyc_completed_1} onChange={v => setForm({ ...form, kyc_completed_1: v })} disabled={!editing} />
+                </div>
+
+                {/* KYC Applicant 2 */}
+                {form.is_joint_tenancy && (
+                  <div className="bg-[var(--bg-hover)]/50 rounded-xl px-4 py-3 flex items-center justify-between">
+                    <span className="text-sm">KYC Completed — {form.first_name_2 || 'Applicant 2'}</span>
+                    <YesNo value={!!form.kyc_completed_2} onChange={v => setForm({ ...form, kyc_completed_2: v })} disabled={!editing} />
+                  </div>
+                )}
+
+                {/* Guarantor */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Guarantor Required</span>
+                    <YesNo value={!!form.guarantor_required} onChange={v => {
+                      setForm({ ...form, guarantor_required: v });
+                      if (v) setGuarantorExpanded(true);
+                    }} disabled={!editing} />
+                  </div>
+                  {form.guarantor_required && (
+                    <div className="mt-3 space-y-3">
+                      <button onClick={() => setGuarantorExpanded(!guarantorExpanded)}
+                        className="flex items-center gap-2 text-xs text-[var(--accent-orange)] hover:underline">
+                        <ChevronDown size={12} className={`transition-transform ${guarantorExpanded ? 'rotate-180' : ''}`} />
+                        {guarantorExpanded ? 'Hide' : 'Show'} guarantor details
+                      </button>
+                      {guarantorExpanded && (
+                        <div className="space-y-3 pl-2 border-l-2 border-[var(--accent-orange)]/30">
+                          {editing ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <Input label="Guarantor Name" value={form.guarantor_name} onChange={v => setForm({ ...form, guarantor_name: v })} />
+                              <Input label="Address" value={form.guarantor_address} onChange={v => setForm({ ...form, guarantor_address: v })} />
+                              <Input label="Phone" value={form.guarantor_phone} onChange={v => setForm({ ...form, guarantor_phone: v })} />
+                              <Input label="Email" value={form.guarantor_email} onChange={v => setForm({ ...form, guarantor_email: v })} type="email" />
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <ReadField label="Name" value={form.guarantor_name} />
+                              <ReadField label="Address" value={form.guarantor_address} />
+                              <ReadField label="Phone" value={form.guarantor_phone} />
+                              <ReadField label="Email" value={form.guarantor_email} />
+                            </div>
+                          )}
+                          <div className="flex flex-col sm:flex-row gap-4">
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-[var(--text-muted)]">KYC Completed?</span>
+                              <YesNo value={!!form.guarantor_kyc_completed} onChange={v => setForm({ ...form, guarantor_kyc_completed: v })} disabled={!editing} />
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-[var(--text-muted)]">Deed of Guarantee?</span>
+                              <YesNo value={!!form.guarantor_deed_received} onChange={v => setForm({ ...form, guarantor_deed_received: v })} disabled={!editing} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </GlassCard>
+
+            {/* Tenancy Details */}
+            <GlassCard className="p-6">
+              <SectionHeader title="Tenancy Details" icon={<Building2 size={16} />} />
+              {editing ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Input label="Tenancy Start Date" value={form.tenancy_start_date} onChange={v => setForm({ ...form, tenancy_start_date: v })} placeholder="YYYY-MM-DD" />
+                    <Select label="Tenancy Type" value={form.tenancy_type} onChange={v => setForm({ ...form, tenancy_type: v })}
+                      options={[{ value: '', label: 'Select' }, { value: 'AST', label: 'AST' }, { value: 'HMO', label: 'HMO' }, { value: 'Rolling', label: 'Rolling' }, { value: 'Other', label: 'Other' }]} />
+                    <Input label="Monthly Rent (£)" value={form.monthly_rent} onChange={v => setForm({ ...form, monthly_rent: v })} placeholder="0.00" />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-[var(--text-muted)]">Has End Date?</span>
+                    <YesNo value={!!form.has_end_date} onChange={v => setForm({ ...form, has_end_date: v })} />
+                  </div>
+                  {form.has_end_date && (
+                    <Input label="Tenancy End Date" value={form.tenancy_end_date} onChange={v => setForm({ ...form, tenancy_end_date: v })} placeholder="YYYY-MM-DD" />
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <ReadField label="Start Date" value={form.tenancy_start_date ? new Date(form.tenancy_start_date).toLocaleDateString() : null} />
+                  <ReadField label="Tenancy Type" value={form.tenancy_type} />
+                  <ReadField label="Monthly Rent" value={form.monthly_rent ? `£${Number(form.monthly_rent).toLocaleString()}` : null} />
+                  {form.has_end_date && (
+                    <div>
+                      <p className="text-xs text-[var(--text-muted)]">End Date</p>
+                      <p className={`text-sm mt-0.5 ${endDateWarning !== null ? 'text-red-400 font-medium' : ''}`}>
+                        {form.tenancy_end_date ? new Date(form.tenancy_end_date).toLocaleDateString() : '—'}
+                        {endDateWarning !== null && endDateWarning > 0 && ` (${endDateWarning} days left)`}
+                        {endDateWarning === 0 && ' (Expired)'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </GlassCard>
 
             {/* Rent Payments */}
@@ -285,15 +612,13 @@ export default function TenantDetailV3() {
             <DocumentUpload entityType="tenant" entityId={tenant.id} />
           </div>
 
-          {/* ========== RIGHT COLUMN — Notes, Timeline, Maintenance ========== */}
+          {/* ==================== RIGHT COLUMN ==================== */}
           <div className="lg:col-span-2 space-y-6">
             {/* Notes */}
             <GlassCard className="p-6">
               <SectionHeader title="Notes" icon={<MessageSquare size={16} />} />
               <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                {notes.length === 0 && (
-                  <p className="text-xs text-[var(--text-muted)]">No notes yet</p>
-                )}
+                {notes.length === 0 && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
                 {notes.map(note => (
                   <div key={note.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
                     <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p>
@@ -305,13 +630,10 @@ export default function TenantDetailV3() {
                 ))}
               </div>
               <div className="flex gap-2 mt-3">
-                <input
-                  value={newNote}
-                  onChange={e => setNewNote(e.target.value)}
+                <input value={newNote} onChange={e => setNewNote(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addNote()}
                   placeholder="Add a note..."
-                  className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors"
-                />
+                  className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
                 <Button variant="gradient" onClick={addNote} disabled={addingNote || !newNote.trim()}>
                   <Plus size={14} />
                 </Button>
@@ -327,13 +649,11 @@ export default function TenantDetailV3() {
                 <p className="text-xs text-[var(--text-muted)]">No activity recorded yet</p>
               ) : (
                 <div className="relative space-y-0">
-                  {/* Timeline line */}
                   <div className="absolute left-[13px] top-2 bottom-2 w-px bg-[var(--border-input)]" />
-                  {timeline.slice(0, 20).map((entry, i) => {
+                  {timeline.slice(0, 20).map(entry => {
                     let changes: Record<string, unknown> = {};
-                    try { changes = JSON.parse(entry.changes || '{}'); } catch { /* noop */ }
+                    try { changes = JSON.parse(entry.changes || '{}'); } catch {}
                     const changedKeys = Object.keys(changes).filter(k => k !== 'id');
-
                     return (
                       <div key={entry.id} className="relative flex items-start gap-3 py-2">
                         <div className={`w-[26px] h-[26px] rounded-full flex items-center justify-center shrink-0 z-10 ${actionColor(entry.action)}`}>
@@ -341,13 +661,11 @@ export default function TenantDetailV3() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-[var(--text-primary)] capitalize">{entry.action}</span>
+                            <span className="text-xs font-medium capitalize">{entry.action}</span>
                             <span className="text-[10px] text-[var(--text-muted)]">{entry.entity_type}</span>
                           </div>
                           {changedKeys.length > 0 && (
-                            <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">
-                              Changed: {changedKeys.join(', ')}
-                            </p>
+                            <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">Changed: {changedKeys.join(', ')}</p>
                           )}
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[10px] text-[var(--text-muted)]">{entry.user_email || 'System'}</span>
@@ -376,30 +694,23 @@ export default function TenantDetailV3() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             {m.priority && ['urgent', 'high'].includes(m.priority) && (
-                              <AlertTriangle size={12} className={priorityColor(m.priority)} />
+                              <AlertTriangle size={12} className={m.priority === 'urgent' ? 'text-red-400' : 'text-orange-400'} />
                             )}
-                            <span className="text-sm font-medium text-[var(--text-primary)] truncate">{m.title || 'Untitled'}</span>
+                            <span className="text-sm font-medium truncate">{m.title || 'Untitled'}</span>
                           </div>
-                          {m.description && (
-                            <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">{m.description}</p>
-                          )}
+                          {m.description && <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">{m.description}</p>}
                         </div>
                         <span className={`text-[10px] px-2 py-0.5 rounded-full shrink-0 ${
                           m.status === 'open' ? 'bg-orange-500/20 text-orange-400' :
                           m.status === 'in_progress' ? 'bg-blue-500/20 text-blue-400' :
                           m.status === 'completed' ? 'bg-green-500/20 text-green-400' :
                           'bg-[var(--bg-hover)] text-[var(--text-muted)]'
-                        }`}>
-                          {statusLabel(m.status)}
-                        </span>
+                        }`}>{statusLabel(m.status)}</span>
                       </div>
                       <div className="flex items-center gap-3 mt-2">
                         {m.address && <span className="text-[10px] text-[var(--text-muted)] truncate">{m.address}</span>}
                         <TimeAgo date={m.created_at} />
                       </div>
-                      {m.resolution_notes && (
-                        <p className="text-[10px] text-[var(--text-secondary)] mt-1 italic">Resolution: {m.resolution_notes}</p>
-                      )}
                     </div>
                   ))}
                 </div>
