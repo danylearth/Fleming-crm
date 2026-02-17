@@ -56,6 +56,7 @@ export default function BDMV3() {
   const [workflowReason, setWorkflowReason] = useState('');
   const [workflowLoading, setWorkflowLoading] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [dragTargetStatus, setDragTargetStatus] = useState('');
 
   const load = async () => {
     try {
@@ -104,6 +105,7 @@ export default function BDMV3() {
     setWorkflowMode('choose');
     setWorkflowDate('');
     setWorkflowReason('');
+    setDragTargetStatus('');
   };
 
   const doWorkflowAction = async (status: string, extra?: Record<string, any>) => {
@@ -133,24 +135,24 @@ export default function BDMV3() {
     setConverting(false);
   };
 
-  const onDragEnd = async (result: DropResult) => {
+  const onDragEnd = (result: DropResult) => {
     const { draggableId, destination, source } = result;
     if (!destination || destination.droppableId === source.droppableId) return;
     const prospectId = parseInt(draggableId);
     const newStatus = destination.droppableId;
     const p = prospects.find(pr => pr.id === prospectId);
     if (!p) return;
-    // Optimistic update
-    setProspects(prev => prev.map(pr => pr.id === prospectId ? { ...pr, status: newStatus } : pr));
-    try {
-      await api.put(`/api/landlords-bdm/${prospectId}`, {
-        name: p.name, email: p.email, phone: p.phone, address: p.address,
-        source: p.source, notes: p.notes, follow_up_date: p.follow_up_date, status: newStatus,
-      });
-    } catch {
-      // Revert on failure
-      setProspects(prev => prev.map(pr => pr.id === prospectId ? { ...pr, status: p.status } : pr));
+    // Open workflow modal with the target status pre-selected
+    setWorkflowProspect(p);
+    setDragTargetStatus(newStatus);
+    if (newStatus === 'follow_up') {
+      setWorkflowMode('follow_up');
+    } else if (newStatus === 'not_interested') {
+      setWorkflowMode('reject');
+    } else {
+      setWorkflowMode('confirm_drag');
     }
+    setWorkflowDate('');
   };
 
   // Follow-up due count
@@ -476,12 +478,27 @@ export default function BDMV3() {
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
               </>
+            ) : workflowMode === 'confirm_drag' ? (
+              <div className="space-y-4">
+                <p className="text-sm font-medium">
+                  Move to <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ml-1 ${statusStyle(dragTargetStatus)}`}>{statusLabel(dragTargetStatus)}</span>
+                </p>
+                <p className="text-xs text-[var(--text-muted)]">Confirm moving {workflowProspect?.name} to {statusLabel(dragTargetStatus)}?</p>
+                <div className="flex gap-3">
+                  <Button variant="ghost" onClick={() => setWorkflowProspect(null)}>Cancel</Button>
+                  <Button variant="gradient" onClick={() => doWorkflowAction(dragTargetStatus)} disabled={workflowLoading}>
+                    {workflowLoading ? 'Moving...' : 'Confirm'}
+                  </Button>
+                </div>
+              </div>
             ) : workflowMode === 'follow_up' ? (
               <div className="space-y-4">
                 <p className="text-sm font-medium">Set Follow-up Date</p>
                 <Input label="Follow-up Date" value={workflowDate} onChange={setWorkflowDate} placeholder="YYYY-MM-DD" />
                 <div className="flex gap-3">
-                  <Button variant="ghost" onClick={() => setWorkflowMode('choose')}>Back</Button>
+                  <Button variant="ghost" onClick={() => dragTargetStatus ? setWorkflowProspect(null) : setWorkflowMode('choose')}>
+                    {dragTargetStatus ? 'Cancel' : 'Back'}
+                  </Button>
                   <Button variant="gradient" onClick={() => doWorkflowAction('follow_up', { follow_up_date: workflowDate })}
                     disabled={workflowLoading || !workflowDate}>
                     {workflowLoading ? 'Saving...' : 'Set Follow Up'}
@@ -493,7 +510,9 @@ export default function BDMV3() {
                 <p className="text-sm font-medium text-red-400">Mark as Not Interested</p>
                 <p className="text-xs text-[var(--text-muted)]">This will archive the prospect. Are you sure?</p>
                 <div className="flex gap-3">
-                  <Button variant="ghost" onClick={() => setWorkflowMode('choose')}>Back</Button>
+                  <Button variant="ghost" onClick={() => dragTargetStatus ? setWorkflowProspect(null) : setWorkflowMode('choose')}>
+                    {dragTargetStatus ? 'Cancel' : 'Back'}
+                  </Button>
                   <Button variant="gradient" onClick={() => doWorkflowAction('not_interested')} disabled={workflowLoading}>
                     {workflowLoading ? 'Archiving...' : 'Archive'}
                   </Button>
