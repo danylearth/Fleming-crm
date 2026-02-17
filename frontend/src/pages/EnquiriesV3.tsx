@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Avatar, SearchBar, Input, Select, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Clock, ArrowLeft, Calendar, CheckCircle, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List } from 'lucide-react';
+import { Plus, X, Clock, ArrowLeft, Calendar, CheckCircle, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List, Building2, ChevronDown, Archive } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface EnquiryRaw {
@@ -543,29 +543,73 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
 export default function EnquiriesV3() {
   const api = useApi();
   const nav = useNavigate();
+  const [rawEnquiries, setRawEnquiries] = useState<EnquiryRaw[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
+  const [properties, setProperties] = useState<{ id: number; address: string; postcode?: string; rent_amount?: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
+  const [filterPropId, setFilterPropId] = useState('');
+  const [showArchive, setShowArchive] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', status: 'new', notes: '' });
+  const [propDropOpen, setPropDropOpen] = useState(false);
+  const [propSearch, setPropSearch] = useState('');
+  const propDropRef = React.useRef<HTMLDivElement>(null);
+
+  // Close property dropdown on outside click
+  React.useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (propDropRef.current && !propDropRef.current.contains(e.target as Node)) setPropDropOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const load = async () => {
     try {
-      const data = await api.get('/api/tenant-enquiries');
+      const [data, props] = await Promise.all([
+        api.get('/api/tenant-enquiries'),
+        api.get('/api/properties').catch(() => []),
+      ]);
       const raw = Array.isArray(data) ? data : data.enquiries || [];
+      setRawEnquiries(raw);
       setEnquiries(raw.map(mapEnquiry));
-    } catch { setEnquiries([]); }
+      setProperties(Array.isArray(props) ? props : []);
+    } catch { setEnquiries([]); setRawEnquiries([]); }
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
 
-  const newEnquiries = enquiries.filter(e => e.status === 'new');
-  const filtered = enquiries.filter(e =>
-    e.name.toLowerCase().includes(search.toLowerCase()) ||
-    e.email.toLowerCase().includes(search.toLowerCase())
+  // Same visibility logic as kanban
+  const isFuture = (d?: string | null) => {
+    if (!d) return false;
+    const date = new Date(d);
+    const today = new Date(); today.setHours(0,0,0,0);
+    return date > today;
+  };
+
+  const visibleRawIds = new Set(
+    rawEnquiries.filter(e => {
+      if (filterPropId && e.linked_property_id !== Number(filterPropId)) return false;
+      if (e.status === 'rejected') return showArchive;
+      if (showArchive) return e.status === 'rejected';
+      if (e.status === 'awaiting_response' && isFuture(e.follow_up_date)) return false;
+      if (e.status === 'viewing_booked' && isFuture(e.viewing_date)) return false;
+      if (e.status === 'onboarding' && e.follow_up_date && isFuture(e.follow_up_date)) return false;
+      return true;
+    }).map(e => e.id)
   );
+
+  const filtered = enquiries.filter(e => {
+    if (!visibleRawIds.has(e.id)) return false;
+    if (!search) return true;
+    return e.name.toLowerCase().includes(search.toLowerCase()) ||
+      e.email.toLowerCase().includes(search.toLowerCase());
+  });
+
+  const archivedCount = rawEnquiries.filter(e => e.status === 'rejected').length;
 
   const addEnquiry = async () => {
     try {
@@ -586,52 +630,111 @@ export default function EnquiriesV3() {
 
   const STATUS_OPTIONS = Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }));
 
+  const selectedPropObj = filterPropId ? properties.find(p => p.id === Number(filterPropId)) : null;
+  const filteredProps = properties.filter(p =>
+    !propSearch || p.address.toLowerCase().includes(propSearch.toLowerCase()) || (p.postcode || '').toLowerCase().includes(propSearch.toLowerCase())
+  );
+
   return (
     <V3Layout hideTopBar>
       <div className="flex h-full">
         {/* Left Panel */}
         <div className={`w-full md:w-[350px] shrink-0 border-r border-[var(--border-subtle)] flex flex-col ${selectedId != null ? 'hidden md:flex' : 'flex'}`}>
-          <div className="flex items-center justify-between px-5 h-16 border-b border-[var(--border-subtle)]">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-bold">Enquiries</h2>
-              {newEnquiries.length > 0 && (
-                <span className="bg-blue-500 text-[var(--text-primary)] text-[11px] font-bold px-2 py-0.5 rounded-full">
-                  {newEnquiries.length} new
-                </span>
-              )}
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 h-14 border-b border-[var(--border-subtle)]">
+            <h2 className="text-lg font-bold">Enquiries</h2>
+            <div className="flex items-center gap-1">
+              <button onClick={() => nav('/v3/enquiries/kanban')} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors" title="Kanban view">
+                <LayoutGrid size={16} />
+              </button>
+              <Button variant="ghost" size="sm" onClick={() => setShowAdd(true)}>
+                <Plus size={16} />
+              </Button>
             </div>
-            <button onClick={() => nav('/v3/enquiries/kanban')} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors" title="Kanban view">
-              <LayoutGrid size={16} />
-            </button>
-            <Button variant="ghost" size="sm" onClick={() => setShowAdd(true)}>
-              <Plus size={16} />
-            </Button>
           </div>
 
-          {newEnquiries.length > 0 && (
-            <div className="px-5 py-3 border-b border-[var(--border-subtle)]">
-              <p className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">New Enquiries</p>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {newEnquiries.map(e => (
-                  <div key={e.id} onClick={() => setSelectedId(e.id)}
-                    className="shrink-0 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2 cursor-pointer hover:bg-blue-500/20 transition-colors min-w-[120px]">
-                    <p className="text-xs font-medium truncate">{e.name}</p>
-                    <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{formatTime(e.created_at)}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Property Selector */}
+          <div className="px-4 py-2.5 border-b border-[var(--border-subtle)]" ref={propDropRef}>
+            <div className="relative">
+              <button onClick={() => setPropDropOpen(!propDropOpen)}
+                className="w-full flex items-center gap-2.5 pl-3 pr-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl text-sm text-[var(--text-primary)] hover:border-[var(--border-input)] transition-colors">
+                <Building2 size={14} className="text-[var(--text-muted)] shrink-0" />
+                <span className="flex-1 text-left truncate text-sm">
+                  {selectedPropObj ? selectedPropObj.address : 'All Properties'}
+                </span>
+                {filterPropId && (
+                  <span className="text-[10px] bg-gradient-to-r from-orange-500 to-pink-500 text-white px-1.5 py-0.5 rounded-full font-medium shrink-0">
+                    {rawEnquiries.filter(e => e.linked_property_id === Number(filterPropId) && e.status !== 'rejected').length}
+                  </span>
+                )}
+                <ChevronDown size={14} className={`text-[var(--text-muted)] shrink-0 transition-transform ${propDropOpen ? 'rotate-180' : ''}`} />
+              </button>
 
-          <div className="px-4 py-3">
+              {propDropOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
+                  <div className="p-2.5 border-b border-[var(--border-subtle)]">
+                    <input value={propSearch} onChange={e => setPropSearch(e.target.value)} placeholder="Search properties..."
+                      autoFocus
+                      className="w-full pl-3 pr-3 py-2 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors" />
+                  </div>
+                  <div className="max-h-[240px] overflow-y-auto py-1">
+                    <button onClick={() => { setFilterPropId(''); setPropDropOpen(false); setPropSearch(''); }}
+                      className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-[var(--bg-hover)] transition-colors ${!filterPropId ? 'bg-[var(--bg-subtle)]' : ''}`}>
+                      <div className="w-7 h-7 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center shrink-0">
+                        <Building2 size={13} className="text-[var(--text-muted)]" />
+                      </div>
+                      <span className="text-sm font-medium flex-1">All Properties</span>
+                      {!filterPropId && <div className="w-2 h-2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 shrink-0" />}
+                    </button>
+                    {filteredProps.map(p => {
+                      const count = rawEnquiries.filter(e => e.linked_property_id === p.id && e.status !== 'rejected').length;
+                      const isSelected = filterPropId === String(p.id);
+                      return (
+                        <button key={p.id} onClick={() => { setFilterPropId(String(p.id)); setPropDropOpen(false); setPropSearch(''); }}
+                          className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-[var(--bg-hover)] transition-colors ${isSelected ? 'bg-[var(--bg-subtle)]' : ''}`}>
+                          <div className="w-7 h-7 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center shrink-0 text-[10px] font-bold text-[var(--text-muted)]">
+                            {p.address[0]}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{p.address}</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">{p.postcode || ''}{p.rent_amount ? ` · £${p.rent_amount}/mo` : ''}</p>
+                          </div>
+                          {count > 0 && <span className="text-[10px] bg-[var(--bg-hover)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded-full">{count}</span>}
+                          {isSelected && <div className="w-2 h-2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Archive toggle */}
+            <div className="flex items-center gap-2 mt-2">
+              <button onClick={() => setShowArchive(!showArchive)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium border transition-colors ${
+                  showArchive ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-transparent border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                }`}>
+                <Archive size={11} />
+                {showArchive ? 'Showing Archived' : 'Archive'}
+                {!showArchive && archivedCount > 0 && (
+                  <span className="bg-[var(--bg-hover)] px-1 py-0.5 rounded-full">{archivedCount}</span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="px-4 py-2.5">
             <SearchBar value={search} onChange={setSearch} placeholder="Search enquiries..." />
           </div>
 
+          {/* List */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
             ) : filtered.length === 0 ? (
-              <EmptyState message="No enquiries found" />
+              <EmptyState message={showArchive ? 'No archived enquiries' : 'No enquiries found'} />
             ) : (
               filtered.map(e => (
                 <div key={e.id} onClick={() => setSelectedId(e.id)}
