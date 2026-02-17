@@ -1,162 +1,243 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Select, EmptyState, Tag } from '../components/v3';
+import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Mail, Phone, Building2, User } from 'lucide-react';
+import { Plus, X, Mail, Phone, MapPin, Calendar, ChevronDown, Search, ArrowRight, UserPlus, XCircle } from 'lucide-react';
 
 interface Prospect {
-  id: number;
-  company_name: string;
-  contact_name: string;
-  email: string;
-  phone: string;
-  status: string;
-  source: string;
-  notes: string;
-  created_at: string;
+  id: number; name: string; email: string; phone: string; address: string;
+  status: string; follow_up_date: string; source: string; notes: string;
+  created_at: string; updated_at: string;
 }
 
-const PIPELINE: { key: string; label: string; color: string }[] = [
-  { key: 'new_lead', label: 'New Lead', color: 'from-blue-500/20 to-blue-600/10 border-blue-500/20' },
-  { key: 'contacted', label: 'Contacted', color: 'from-purple-500/20 to-purple-600/10 border-purple-500/20' },
-  { key: 'meeting_scheduled', label: 'Meeting', color: 'from-amber-500/20 to-amber-600/10 border-amber-500/20' },
-  { key: 'proposal_sent', label: 'Proposal', color: 'from-orange-500/20 to-orange-600/10 border-orange-500/20' },
-  { key: 'negotiating', label: 'Negotiating', color: 'from-pink-500/20 to-pink-600/10 border-pink-500/20' },
-  { key: 'onboarded', label: 'Onboarded', color: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/20' },
+const STATUSES = [
+  { key: 'new', label: 'New', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  { key: 'contacted', label: 'Contacted', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  { key: 'follow_up', label: 'Follow Up', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  { key: 'interested', label: 'Interested', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
+  { key: 'onboarded', label: 'Onboarded', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  { key: 'not_interested', label: 'Not Interested', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
 ];
 
-const STATUS_LABELS: Record<string, string> = {
-  new_lead: 'New Lead', contacted: 'Contacted', meeting_scheduled: 'Meeting Scheduled',
-  proposal_sent: 'Proposal Sent', negotiating: 'Negotiating', onboarded: 'Onboarded', not_interested: 'Not Interested',
-};
+function statusStyle(s: string) {
+  return STATUSES.find(st => st.key === s)?.color || 'bg-[var(--bg-hover)] text-[var(--text-muted)]';
+}
+function statusLabel(s: string) {
+  return STATUSES.find(st => st.key === s)?.label || s;
+}
 
-const STATUS_OPTIONS = Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }));
+function formatDate(d: string) {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function isOverdue(d: string) {
+  if (!d) return false;
+  return new Date(d) < new Date(new Date().toDateString());
+}
 
 export default function BDMV3() {
+  const navigate = useNavigate();
   const api = useApi();
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<number | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ company_name: '', contact_name: '', email: '', phone: '', status: 'new_lead', source: '', notes: '' });
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('active'); // active = not onboarded/not_interested
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', source: '', follow_up_date: '', notes: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const load = async () => {
     try {
       const data = await api.get('/api/landlords-bdm');
-      setProspects(Array.isArray(data) ? data : data.prospects || []);
+      setProspects(Array.isArray(data) ? data : []);
     } catch { setProspects([]); }
     setLoading(false);
   };
-
   useEffect(() => { load(); }, []);
 
-  const updateStatus = async (id: number, status: string) => {
+  const filtered = prospects.filter(p => {
+    const matchSearch = !search || [p.name, p.email, p.phone, p.address, p.source]
+      .some(v => v?.toLowerCase().includes(search.toLowerCase()));
+    let matchStatus = true;
+    if (statusFilter === 'active') matchStatus = !['onboarded', 'not_interested'].includes(p.status);
+    else if (statusFilter !== 'all') matchStatus = p.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const statusCounts = prospects.reduce((acc, p) => {
+    acc[p.status] = (acc[p.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const activeCount = prospects.filter(p => !['onboarded', 'not_interested'].includes(p.status)).length;
+
+  const handleAdd = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    setError('');
     try {
-      await api.put(`/api/landlords-bdm/${id}`, { status });
+      await api.post('/api/landlords-bdm', { ...form, status: 'new' });
+      setShowModal(false);
+      setForm({ name: '', email: '', phone: '', address: '', source: '', follow_up_date: '', notes: '' });
       await load();
-    } catch {}
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || e?.message || 'Failed to add';
+      if (msg.includes('Duplicate')) setError('A prospect with this email or phone already exists');
+      else setError(msg);
+    }
+    setSaving(false);
   };
 
-  const addProspect = async () => {
-    try {
-      await api.post('/api/landlords-bdm', form);
-      setShowAdd(false);
-      setForm({ company_name: '', contact_name: '', email: '', phone: '', status: 'new_lead', source: '', notes: '' });
-      await load();
-    } catch {}
-  };
-
-  const grouped = PIPELINE.map(col => ({
-    ...col,
-    items: prospects.filter(p => p.status === col.key),
-  }));
+  // Follow-up due count
+  const followUpDue = prospects.filter(p => p.follow_up_date && isOverdue(p.follow_up_date) && !['onboarded', 'not_interested'].includes(p.status)).length;
 
   return (
-    <V3Layout title="BDM Pipeline" breadcrumb={[{ label: 'BDM' }]}>
-      <div className="p-4 md:p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-[var(--text-secondary)] text-sm">{prospects.length} prospect{prospects.length !== 1 ? 's' : ''} in pipeline</p>
-          <Button variant="gradient" size="sm" onClick={() => setShowAdd(true)}>
-            <Plus size={14} className="mr-1.5" /> Add Prospect
+    <V3Layout title="Landlords BDM" breadcrumb={[{ label: 'BDM' }]}>
+      <div className="p-4 md:p-8 space-y-6">
+        {/* Stats row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: 'Active Prospects', value: activeCount, accent: true },
+            { label: 'Follow-ups Due', value: followUpDue, warn: followUpDue > 0 },
+            { label: 'Interested', value: statusCounts['interested'] || 0 },
+            { label: 'Onboarded', value: statusCounts['onboarded'] || 0 },
+          ].map(s => (
+            <GlassCard key={s.label} className="p-4">
+              <p className="text-xs text-[var(--text-muted)]">{s.label}</p>
+              <p className={`text-2xl font-bold mt-1 ${s.warn ? 'text-orange-400' : s.accent ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                {s.value}
+              </p>
+            </GlassCard>
+          ))}
+        </div>
+
+        {/* Search + Add */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex-1"><SearchBar value={search} onChange={setSearch} placeholder="Search prospects..." /></div>
+          <Button variant="gradient" onClick={() => setShowModal(true)}>
+            <Plus size={16} className="mr-2" /> Add Prospect
           </Button>
         </div>
 
+        {/* Status filter */}
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: 'active', label: `Active (${activeCount})` },
+            { key: 'all', label: `All (${prospects.length})` },
+            ...STATUSES.map(s => ({ key: s.key, label: `${s.label} (${statusCounts[s.key] || 0})` })),
+          ].map(f => (
+            <Tag key={f.key} active={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>
+              {f.label}
+            </Tag>
+          ))}
+        </div>
+
+        {/* Table */}
         {loading ? (
-          <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
+          <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
+        ) : filtered.length === 0 ? (
+          <EmptyState message={search || statusFilter !== 'active' ? 'No prospects match your filters' : 'No prospects yet — add your first one'} />
         ) : (
-          <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 overflow-x-auto pb-4 md:pb-0 md:overflow-visible">
-            {grouped.map(col => (
-              <div key={col.key} className="min-w-[250px] md:min-w-0">
-                <div className={`bg-gradient-to-b ${col.color} rounded-xl border p-3 mb-3`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">{col.label}</span>
-                    <span className="text-xs bg-[var(--bg-input)] px-2 py-0.5 rounded-full">{col.items.length}</span>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {col.items.length === 0 ? (
-                    <p className="text-xs text-[var(--text-faint)] text-center py-4">No prospects</p>
-                  ) : (
-                    col.items.map(p => (
-                      <GlassCard key={p.id} className="p-4" onClick={() => setExpanded(expanded === p.id ? null : p.id)}>
-                        <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
-                            {p.company_name?.[0]?.toUpperCase() || '?'}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate">{p.company_name}</p>
-                            <p className="text-xs text-[var(--text-secondary)] truncate">{p.contact_name}</p>
-                          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
+                  <th className="text-left py-3 px-4 font-medium">Name</th>
+                  <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Contact</th>
+                  <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Address</th>
+                  <th className="text-left py-3 px-4 font-medium">Status</th>
+                  <th className="text-left py-3 px-4 font-medium hidden sm:table-cell">Follow Up</th>
+                  <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(p => (
+                  <tr key={p.id}
+                    onClick={() => navigate(`/v3/bdm/${p.id}`)}
+                    className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={p.name} size="sm" />
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{p.name}</p>
+                          <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{p.email || p.phone}</p>
                         </div>
-                        {p.source && <Tag>{p.source}</Tag>}
-
-                        {expanded === p.id && (
-                          <div className="mt-3 pt-3 border-t border-[var(--border-color)] space-y-2">
-                            <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                              <Mail size={12} /> {p.email}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                              <Phone size={12} /> {p.phone}
-                            </div>
-                            {p.notes && <p className="text-xs text-[var(--text-muted)] mt-2">{p.notes}</p>}
-                            <Select label="Change Status" value={p.status} onChange={v => updateStatus(p.id, v)} options={STATUS_OPTIONS} className="mt-2" />
-                          </div>
-                        )}
-                      </GlassCard>
-                    ))
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Add Modal */}
-        {showAdd && (
-          <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-end md:items-center justify-center z-50 p-0 md:p-4" onClick={() => setShowAdd(false)}>
-            <div className="bg-[var(--bg-card)] rounded-t-2xl md:rounded-2xl border border-[var(--border-input)] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold">Add Prospect</h3>
-                <button onClick={() => setShowAdd(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-              </div>
-              <div className="space-y-4">
-                <Input label="Company Name" value={form.company_name} onChange={v => setForm(p => ({ ...p, company_name: v }))} placeholder="Company" />
-                <Input label="Contact Name" value={form.contact_name} onChange={v => setForm(p => ({ ...p, contact_name: v }))} placeholder="Contact person" />
-                <Input label="Email" value={form.email} onChange={v => setForm(p => ({ ...p, email: v }))} placeholder="email@example.com" type="email" />
-                <Input label="Phone" value={form.phone} onChange={v => setForm(p => ({ ...p, phone: v }))} placeholder="Phone number" />
-                <Select label="Status" value={form.status} onChange={v => setForm(p => ({ ...p, status: v }))} options={STATUS_OPTIONS} />
-                <Input label="Source" value={form.source} onChange={v => setForm(p => ({ ...p, source: v }))} placeholder="e.g. Referral, Cold call" />
-                <Input label="Notes" value={form.notes} onChange={v => setForm(p => ({ ...p, notes: v }))} placeholder="Notes..." />
-                <div className="flex gap-3 pt-2">
-                  <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
-                  <Button variant="gradient" onClick={addProspect} disabled={!form.company_name}>Add Prospect</Button>
-                </div>
-              </div>
-            </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 hidden md:table-cell">
+                      <div className="space-y-0.5">
+                        {p.email && <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1"><Mail size={10} />{p.email}</p>}
+                        {p.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} />{p.phone}</p>}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 hidden lg:table-cell">
+                      <p className="text-xs text-[var(--text-muted)] truncate max-w-[200px]">{p.address || '—'}</p>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusStyle(p.status)}`}>
+                        {statusLabel(p.status)}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 hidden sm:table-cell">
+                      {p.follow_up_date ? (
+                        <span className={`text-xs flex items-center gap-1 ${isOverdue(p.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-muted)]'}`}>
+                          <Calendar size={10} />
+                          {formatDate(p.follow_up_date)}
+                          {isOverdue(p.follow_up_date) && ' ⚠'}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 hidden lg:table-cell">
+                      <span className="text-xs text-[var(--text-muted)]">{p.source || '—'}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
+
+      {/* Add Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm" onClick={() => setShowModal(false)}>
+          <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Add Prospect</h2>
+              <button onClick={() => { setShowModal(false); setError(''); }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+            </div>
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-xs text-red-400">{error}</div>
+            )}
+            <Input label="Full Name *" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="Landlord name" />
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} placeholder="email@example.com" type="email" />
+              <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} placeholder="+44..." />
+            </div>
+            <Input label="Address" value={form.address} onChange={v => setForm({ ...form, address: v })} placeholder="Property or contact address" />
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Source" value={form.source} onChange={v => setForm({ ...form, source: v })} placeholder="e.g. Referral, Rightmove" />
+              <Input label="Follow-up Date" value={form.follow_up_date} onChange={v => setForm({ ...form, follow_up_date: v })} placeholder="YYYY-MM-DD" />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1.5">Notes</label>
+              <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={3}
+                className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none"
+                placeholder="Initial notes..." />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="ghost" onClick={() => { setShowModal(false); setError(''); }}>Cancel</Button>
+              <Button variant="gradient" onClick={handleAdd} disabled={saving || !form.name.trim()}>
+                {saving ? 'Adding...' : 'Add Prospect'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </V3Layout>
   );
 }

@@ -42,6 +42,7 @@ import TenantDetailV3 from './pages/TenantDetailV3';
 import EnquiriesV3 from './pages/EnquiriesV3';
 import EnquiriesKanbanV3 from './pages/EnquiriesKanbanV3';
 import BDMV3 from './pages/BDMV3';
+import BDMDetailV3 from './pages/BDMDetailV3';
 import MaintenanceV3 from './pages/MaintenanceV3';
 import TasksV3 from './pages/TasksV3';
 import TransactionsV3 from './pages/TransactionsV3';
@@ -144,6 +145,7 @@ function AppRoutes() {
       <Route path="/v3/enquiries" element={<ProtectedRoute bare><EnquiriesV3 /></ProtectedRoute>} />
       <Route path="/v3/enquiries/kanban" element={<ProtectedRoute bare><EnquiriesKanbanV3 /></ProtectedRoute>} />
       <Route path="/v3/bdm" element={<ProtectedRoute bare><BDMV3 /></ProtectedRoute>} />
+      <Route path="/v3/bdm/:id" element={<ProtectedRoute bare><BDMDetailV3 /></ProtectedRoute>} />
       <Route path="/v3/maintenance" element={<ProtectedRoute bare><MaintenanceV3 /></ProtectedRoute>} />
       <Route path="/v3/tasks" element={<ProtectedRoute bare><TasksV3 /></ProtectedRoute>} />
       <Route path="/v3/financials" element={<ProtectedRoute bare><TransactionsV3 /></ProtectedRoute>} />
