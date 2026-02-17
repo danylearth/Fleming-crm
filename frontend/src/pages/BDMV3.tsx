@@ -180,7 +180,7 @@ export default function BDMV3() {
             { key: 'all', label: `All (${prospects.length})` },
             ...STATUSES.map(s => ({ key: s.key, label: `${s.label} (${statusCounts[s.key] || 0})` })),
           ].map(f => (
-            <Tag key={f.key} active={statusFilter === f.key} onClick={() => { setStatusFilter(f.key); if (viewMode === 'kanban') setViewMode('list'); }}>
+            <Tag key={f.key} active={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>
               {f.label}
             </Tag>
           ))}
@@ -192,7 +192,11 @@ export default function BDMV3() {
         ) : viewMode === 'kanban' ? (
           /* ==================== KANBAN VIEW ==================== */
           <div className="flex gap-4 overflow-x-auto pb-4">
-            {STATUSES.filter(s => s.key !== 'onboarded' && s.key !== 'not_interested').map(col => {
+            {STATUSES.filter(s => {
+              if (statusFilter === 'active') return s.key !== 'onboarded' && s.key !== 'not_interested';
+              if (statusFilter === 'all') return true;
+              return s.key === statusFilter;
+            }).map(col => {
               const colProspects = prospects.filter(p => {
                 const matchSearch = !search || [p.name, p.email, p.phone, p.address, p.source]
                   .some(v => v?.toLowerCase().includes(search.toLowerCase()));
