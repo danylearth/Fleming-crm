@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Select, Avatar, Tag, StatusDot, SearchBar, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Mail, Building2, Calendar, Search, ChevronDown } from 'lucide-react';
+import { Plus, X, Mail, Building2, Calendar, Search, ChevronDown, Users } from 'lucide-react';
 
 interface Tenant {
   id: number; name: string; email: string; phone: string; property_id: number;
@@ -11,7 +11,45 @@ interface Tenant {
 }
 
 interface Property {
-  id: number; address: string; postcode?: string; property_type?: string;
+  id: number; address: string; postcode?: string; property_type?: string; landlord_id?: number;
+}
+
+interface Landlord {
+  id: number; name: string; email?: string;
+}
+
+function FilterDropdown({ label, icon, value, displayValue, onClear, children }: {
+  label: string; icon: React.ReactNode; value: string | number | null;
+  displayValue: string; onClear: () => void; children: (close: () => void) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+  return (
+    <div ref={ref} className="relative">
+      <button onClick={() => setOpen(!open)}
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-colors border ${
+          value ? 'bg-[var(--accent-orange)]/10 border-[var(--accent-orange)]/30 text-[var(--text-primary)]' : 'bg-[var(--bg-input)] border-[var(--border-input)] text-[var(--text-muted)]'
+        }`}>
+        {icon}
+        <span className="truncate max-w-[140px]">{value ? displayValue : label}</span>
+        {value ? (
+          <button onClick={e => { e.stopPropagation(); onClear(); }} className="hover:text-[var(--text-primary)]"><X size={12} /></button>
+        ) : (
+          <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        )}
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full left-0 mt-1 w-64 bg-[var(--bg-card)] border border-[var(--border-input)] rounded-xl shadow-xl overflow-hidden">
+          {children(() => setOpen(false))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function TenantsV3() {
@@ -25,9 +63,15 @@ export default function TenantsV3() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', property_id: '', move_in_date: '', status: 'active', notes: '' });
   const [saving, setSaving] = useState(false);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [landlords, setLandlords] = useState<Landlord[]>([]);
   const [propertySearch, setPropertySearch] = useState('');
   const [propertyDropdownOpen, setPropertyDropdownOpen] = useState(false);
   const propertyDropdownRef = useRef<HTMLDivElement>(null);
+  // List filters
+  const [filterPropertyId, setFilterPropertyId] = useState<number | null>(null);
+  const [filterLandlordId, setFilterLandlordId] = useState<number | null>(null);
+  const [filterPropertySearch, setFilterPropertySearch] = useState('');
+  const [filterLandlordSearch, setFilterLandlordSearch] = useState('');
 
   const load = async () => {
     try { setTenants(await api.get('/api/tenants')); } catch (e) { console.error(e); }
@@ -35,7 +79,10 @@ export default function TenantsV3() {
   };
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    (async () => { try { setProperties(await api.get('/api/properties')); } catch {} })();
+    (async () => {
+      try { setProperties(await api.get('/api/properties')); } catch {}
+      try { setLandlords(await api.get('/api/landlords')); } catch {}
+    })();
   }, []);
 
   // Close property dropdown on outside click
@@ -53,11 +100,24 @@ export default function TenantsV3() {
     (p.postcode || '').toLowerCase().includes(propertySearch.toLowerCase())
   );
 
+  // Build a map of property_id → landlord_id
+  const propertyLandlordMap = properties.reduce((acc, p) => {
+    if (p.landlord_id) acc[p.id] = p.landlord_id;
+    return acc;
+  }, {} as Record<number, number>);
+
+  // Properties belonging to selected landlord
+  const landlordPropertyIds = filterLandlordId
+    ? properties.filter(p => p.landlord_id === filterLandlordId).map(p => p.id)
+    : null;
+
   const filtered = tenants.filter(t => {
     const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.email?.toLowerCase().includes(search.toLowerCase());
-    const tStatus = t.status || 'active'; // default null/empty to active
+    const tStatus = t.status || 'active';
     const matchStatus = statusFilter === 'all' || tStatus === statusFilter;
-    return matchSearch && matchStatus;
+    const matchProperty = !filterPropertyId || t.property_id === filterPropertyId;
+    const matchLandlord = !landlordPropertyIds || landlordPropertyIds.includes(t.property_id);
+    return matchSearch && matchStatus && matchProperty && matchLandlord;
   });
 
   const statusCounts = tenants.reduce((acc, t) => {
@@ -90,8 +150,77 @@ export default function TenantsV3() {
           </Button>
         </div>
 
-        {/* Status filter pills */}
-        <div className="flex gap-2">
+        {/* Filters row */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Property filter */}
+          <FilterDropdown
+            label="Property"
+            icon={<Building2 size={14} />}
+            value={filterPropertyId}
+            displayValue={properties.find(p => p.id === filterPropertyId)?.address || ''}
+            onClear={() => setFilterPropertyId(null)}
+          >
+            {(close) => (
+              <>
+                <div className="p-2 border-b border-[var(--border-subtle)]">
+                  <div className="flex items-center gap-2 bg-[var(--bg-input)] rounded-lg px-2.5 py-1.5">
+                    <Search size={13} className="text-[var(--text-muted)]" />
+                    <input value={filterPropertySearch} onChange={e => setFilterPropertySearch(e.target.value)} placeholder="Search properties..."
+                      className="bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none flex-1" autoFocus />
+                  </div>
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {properties.filter(p => p.address.toLowerCase().includes(filterPropertySearch.toLowerCase())).map(p => (
+                    <button key={p.id} onClick={() => { setFilterPropertyId(p.id); setFilterPropertySearch(''); close(); }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-hover)] transition-colors ${filterPropertyId === p.id ? 'bg-[var(--bg-hover)]' : ''}`}>
+                      <Building2 size={14} className="text-[var(--text-muted)] shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm truncate">{p.address}</p>
+                        {p.postcode && <p className="text-[10px] text-[var(--text-muted)]">{p.postcode}</p>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </FilterDropdown>
+
+          {/* Landlord filter */}
+          <FilterDropdown
+            label="Landlord"
+            icon={<Users size={14} />}
+            value={filterLandlordId}
+            displayValue={landlords.find(l => l.id === filterLandlordId)?.name || ''}
+            onClear={() => setFilterLandlordId(null)}
+          >
+            {(close) => (
+              <>
+                <div className="p-2 border-b border-[var(--border-subtle)]">
+                  <div className="flex items-center gap-2 bg-[var(--bg-input)] rounded-lg px-2.5 py-1.5">
+                    <Search size={13} className="text-[var(--text-muted)]" />
+                    <input value={filterLandlordSearch} onChange={e => setFilterLandlordSearch(e.target.value)} placeholder="Search landlords..."
+                      className="bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none flex-1" autoFocus />
+                  </div>
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {landlords.filter(l => l.name.toLowerCase().includes(filterLandlordSearch.toLowerCase())).map(l => (
+                    <button key={l.id} onClick={() => { setFilterLandlordId(l.id); setFilterLandlordSearch(''); close(); }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-hover)] transition-colors ${filterLandlordId === l.id ? 'bg-[var(--bg-hover)]' : ''}`}>
+                      <Users size={14} className="text-[var(--text-muted)] shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm truncate">{l.name}</p>
+                        {l.email && <p className="text-[10px] text-[var(--text-muted)]">{l.email}</p>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </FilterDropdown>
+
+          <div className="w-px h-6 bg-[var(--border-subtle)] mx-1 hidden sm:block" />
+
+          {/* Status filter pills */}
           {statusFilters.map(s => {
             const count = s === 'all' ? tenants.length : (statusCounts[s] || 0);
             return (
