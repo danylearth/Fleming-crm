@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Avatar, SearchBar, Input, Select, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Clock, ArrowLeft, Calendar, CheckCircle, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List, Building2, ChevronDown, Archive, Pencil, ArrowRight, Eye, UserPlus, XCircle } from 'lucide-react';
+import { Plus, X, ArrowLeft, Calendar, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List, Building2, ChevronDown, Archive, Pencil, ArrowRight, XCircle, CheckCircle } from 'lucide-react';
+import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
 import { useNavigate } from 'react-router-dom';
 
 interface EnquiryRaw {
@@ -716,19 +717,19 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
                 <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Progress</p>
                 <button onClick={() => setWorkflowMode('viewing')}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><Eye size={14} className="text-white" /></div>
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><BookingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p><p className="text-xs text-[var(--text-muted)]">Select date, time & property</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
                 <button onClick={() => setWorkflowMode('awaiting')}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><Clock size={14} className="text-white" /></div>
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><AwaitingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Awaiting Client Response</p><p className="text-xs text-[var(--text-muted)]">Set follow-up date</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
                 <button onClick={() => setWorkflowMode('onboarding')}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center"><UserPlus size={14} className="text-white" /></div>
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center"><OnboardingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Start Onboarding</p><p className="text-xs text-[var(--text-muted)]">Optional follow-up date</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
@@ -739,7 +740,7 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
                     <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Convert</p>
                     <button onClick={checkDuplicatesAndConvert}
                       className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors text-left border border-emerald-500/20">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center"><CheckCircle size={14} className="text-white" /></div>
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center"><ConvertedIcon size={14} className="text-white" /></div>
                       <div className="flex-1"><p className="text-sm font-medium text-emerald-400">Convert to Tenant</p><p className="text-xs text-[var(--text-muted)]">Move to Tenants module</p></div>
                       <ArrowRight size={14} className="text-[var(--text-muted)]" />
                     </button>

@@ -5,9 +5,12 @@ import { Button, Avatar, SearchBar, EmptyState, Input, Select } from '../compone
 import { useApi } from '../hooks/useApi';
 import { getPropertyImage } from '../utils/propertyImages';
 import {
-  Plus, X, Clock, Eye, CheckCircle, XCircle, UserPlus, LayoutGrid, List,
+  Plus, X, XCircle, LayoutGrid, List,
   ChevronDown, ArrowRight, Archive, CalendarDays, Building2, Search
 } from 'lucide-react';
+import {
+  NewIcon, ViewedIcon, BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon
+} from '../components/v3/icons/FlemingIcons';
 
 interface EnquiryRaw {
   id: number;
@@ -27,11 +30,11 @@ interface Property {
 }
 
 const COLUMNS = [
-  { key: 'new', label: 'New', icon: Plus, color: 'from-blue-500 to-cyan-500' },
-  { key: 'viewing_booked', label: 'Viewing Booked', icon: Eye, color: 'from-purple-500 to-violet-500' },
-  { key: 'awaiting_response', label: 'Awaiting Response', icon: Clock, color: 'from-amber-500 to-orange-500' },
-  { key: 'onboarding', label: 'Onboarding', icon: UserPlus, color: 'from-green-500 to-emerald-500' },
-  { key: 'converted', label: 'Converted', icon: CheckCircle, color: 'from-emerald-500 to-teal-500' },
+  { key: 'new', label: 'New', icon: NewIcon, color: 'from-blue-500 to-cyan-500' },
+  { key: 'viewing_booked', label: 'Viewing Booked', icon: BookingIcon, color: 'from-purple-500 to-violet-500' },
+  { key: 'awaiting_response', label: 'Awaiting Response', icon: AwaitingIcon, color: 'from-amber-500 to-orange-500' },
+  { key: 'onboarding', label: 'Onboarding', icon: OnboardingIcon, color: 'from-green-500 to-emerald-500' },
+  { key: 'converted', label: 'Converted', icon: ConvertedIcon, color: 'from-emerald-500 to-teal-500' },
 ];
 
 function formatTime(d: string) {
@@ -127,7 +130,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
             <button onClick={() => setMode('viewing')}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center">
-                <Eye size={14} className="text-white" />
+                <BookingIcon size={14} className="text-white" />
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium">Book Viewing</p>
@@ -138,7 +141,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
             <button onClick={() => setMode('awaiting')}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
-                <Clock size={14} className="text-white" />
+                <AwaitingIcon size={14} className="text-white" />
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium">Awaiting Client Response</p>
@@ -149,7 +152,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
             <button onClick={() => setMode('onboarding')}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
-                <UserPlus size={14} className="text-white" />
+                <OnboardingIcon size={14} className="text-white" />
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium">Start Onboarding</p>

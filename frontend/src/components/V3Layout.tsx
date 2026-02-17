@@ -1,25 +1,25 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { Menu, LogOut, ChevronRight, X, Sun, Moon } from 'lucide-react';
 import {
-  LayoutDashboard, MessageSquare, Building2, Users, UserCheck,
-  Briefcase, Wrench, CheckSquare, PoundSterling, Settings,
-  Menu, LogOut, ChevronRight, X, Sun, Moon
-} from 'lucide-react';
+  DashboardIcon, EnquiriesIcon, PropertiesIcon, LandlordsIcon, TenantsIcon,
+  BdmIcon, MaintenanceIcon, TasksIcon, FinancialsIcon, SettingsIcon
+} from './v3/icons/FlemingIcons';
 import FloatingAI from './v3/FloatingAI';
 import { useTheme } from '../context/ThemeContext';
 
 const navItems = [
-  { to: '/v3', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/v3/enquiries', icon: MessageSquare, label: 'Enquiries' },
-  { to: '/v3/properties', icon: Building2, label: 'Properties' },
-  { to: '/v3/landlords', icon: Users, label: 'Landlords' },
-  { to: '/v3/tenants', icon: UserCheck, label: 'Tenants' },
-  { to: '/v3/bdm', icon: Briefcase, label: 'BDM' },
-  { to: '/v3/maintenance', icon: Wrench, label: 'Maintenance' },
-  { to: '/v3/tasks', icon: CheckSquare, label: 'Tasks' },
-  { to: '/v3/financials', icon: PoundSterling, label: 'Financials' },
-  { to: '/v3/settings', icon: Settings, label: 'Settings' },
+  { to: '/v3', icon: DashboardIcon, label: 'Dashboard' },
+  { to: '/v3/enquiries', icon: EnquiriesIcon, label: 'Enquiries' },
+  { to: '/v3/properties', icon: PropertiesIcon, label: 'Properties' },
+  { to: '/v3/landlords', icon: LandlordsIcon, label: 'Landlords' },
+  { to: '/v3/tenants', icon: TenantsIcon, label: 'Tenants' },
+  { to: '/v3/bdm', icon: BdmIcon, label: 'BDM' },
+  { to: '/v3/maintenance', icon: MaintenanceIcon, label: 'Maintenance' },
+  { to: '/v3/tasks', icon: TasksIcon, label: 'Tasks' },
+  { to: '/v3/financials', icon: FinancialsIcon, label: 'Financials' },
+  { to: '/v3/settings', icon: SettingsIcon, label: 'Settings' },
 ];
 
 interface V3LayoutProps {
