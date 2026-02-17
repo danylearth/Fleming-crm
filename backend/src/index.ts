@@ -492,6 +492,56 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
 });
 
 // Convert enquiry to tenant
+// ── Duplicate check ──
+app.get('/api/tenant-enquiries/check-duplicates', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { email, phone, exclude_id } = req.query;
+    const results: any[] = [];
+
+    if (email) {
+      // Check tenants
+      const tenantByEmail = db.prepare('SELECT id, name, email, phone, property_id FROM tenants WHERE email = ? OR email_2 = ?').all(email, email) as any[];
+      tenantByEmail.forEach(t => results.push({ ...t, source: 'tenant', match: 'email' }));
+
+      // Check landlords
+      const landlordByEmail = db.prepare('SELECT id, name, email, phone FROM landlords WHERE email = ?').all(email) as any[];
+      landlordByEmail.forEach(l => results.push({ ...l, source: 'landlord', match: 'email' }));
+
+      // Check other enquiries
+      const enqByEmail = db.prepare(
+        'SELECT id, first_name_1, last_name_1, email_1, phone_1, status FROM tenant_enquiries WHERE (email_1 = ? OR email_2 = ?) AND id != ?'
+      ).all(email, email, exclude_id || 0) as any[];
+      enqByEmail.forEach(e => results.push({ ...e, name: `${e.first_name_1} ${e.last_name_1}`, source: 'enquiry', match: 'email' }));
+    }
+
+    if (phone) {
+      const tenantByPhone = db.prepare('SELECT id, name, email, phone, property_id FROM tenants WHERE phone = ? OR phone_2 = ?').all(phone, phone) as any[];
+      tenantByPhone.forEach(t => {
+        if (!results.find(r => r.source === 'tenant' && r.id === t.id)) results.push({ ...t, source: 'tenant', match: 'phone' });
+      });
+
+      const landlordByPhone = db.prepare('SELECT id, name, email, phone FROM landlords WHERE phone = ?').all(phone) as any[];
+      landlordByPhone.forEach(l => {
+        if (!results.find(r => r.source === 'landlord' && r.id === l.id)) results.push({ ...l, source: 'landlord', match: 'phone' });
+      });
+
+      const enqByPhone = db.prepare(
+        'SELECT id, first_name_1, last_name_1, email_1, phone_1, status FROM tenant_enquiries WHERE (phone_1 = ? OR phone_2 = ?) AND id != ?'
+      ).all(phone, phone, exclude_id || 0) as any[];
+      enqByPhone.forEach(e => {
+        if (!results.find(r => r.source === 'enquiry' && r.id === e.id)) {
+          results.push({ ...e, name: `${e.first_name_1} ${e.last_name_1}`, source: 'enquiry', match: 'phone' });
+        }
+      });
+    }
+
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Duplicate check failed' });
+  }
+});
+
 app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest, res) => {
   try {
     const enquiry = db.prepare('SELECT * FROM tenant_enquiries WHERE id = ?').get(req.params.id) as any;

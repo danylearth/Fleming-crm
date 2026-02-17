@@ -264,7 +264,8 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
   const [noteDraft, setNoteDraft] = useState('');
   const [docs] = useState<string[]>([]);
   const [showWorkflow, setShowWorkflow] = useState(false);
-  const [workflowMode, setWorkflowMode] = useState<'choose'|'viewing'|'awaiting'|'onboarding'|'reject'>('choose');
+  const [workflowMode, setWorkflowMode] = useState<'choose'|'viewing'|'awaiting'|'onboarding'|'reject'|'convert'>('choose');
+  const [duplicates, setDuplicates] = useState<any[]>([]);
   const [wfDate, setWfDate] = useState('');
   const [wfTime, setWfTime] = useState('10:00');
   const [wfPropId, setWfPropId] = useState('');
@@ -332,6 +333,14 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
         case 'reject':
           await save({ status: 'rejected', rejection_reason: wfReason });
           break;
+        case 'convert':
+          await api.post(`/api/tenant-enquiries/${enquiryId}/convert`, {
+            property_id: form.linked_property_id,
+            tenancy_start_date: wfDate || new Date().toISOString().split('T')[0],
+          });
+          await loadDetail();
+          onUpdated();
+          break;
       }
       setShowWorkflow(false);
       setWorkflowMode('choose');
@@ -344,8 +353,31 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
     setWorkflowMode('choose');
     setWfDate(''); setWfTime('10:00'); setWfReason('');
     setWfPropId(form.linked_property_id?.toString() || '');
+    setDuplicates([]);
     setShowWorkflow(true);
   };
+
+  const checkDuplicatesAndConvert = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (form.email_1) params.set('email', form.email_1);
+      if (form.phone_1) params.set('phone', form.phone_1);
+      params.set('exclude_id', String(enquiryId));
+      const dupes = await api.get(`/api/tenant-enquiries/check-duplicates?${params}`);
+      if (Array.isArray(dupes) && dupes.length > 0) {
+        setDuplicates(dupes);
+        setWorkflowMode('convert');
+      } else {
+        setDuplicates([]);
+        setWorkflowMode('convert');
+      }
+    } catch {
+      setWorkflowMode('convert');
+    }
+  };
+
+  // Conversion readiness check
+  const canConvert = form.status === 'onboarding' && form.linked_property_id && form.first_name_1 && form.last_name_1 && form.email_1 && form.kyc_completed_1;
 
   const saveNote = async () => {
     if (!noteDraft.trim()) return;
@@ -700,7 +732,22 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
                   <div className="flex-1"><p className="text-sm font-medium">Start Onboarding</p><p className="text-xs text-[var(--text-muted)]">Optional follow-up date</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
+                {/* Convert to Tenant — only when ready */}
+                {canConvert && (
+                  <>
+                    <div className="h-px bg-[var(--border-subtle)] my-3" />
+                    <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Convert</p>
+                    <button onClick={checkDuplicatesAndConvert}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors text-left border border-emerald-500/20">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center"><CheckCircle size={14} className="text-white" /></div>
+                      <div className="flex-1"><p className="text-sm font-medium text-emerald-400">Convert to Tenant</p><p className="text-xs text-[var(--text-muted)]">Move to Tenants module</p></div>
+                      <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                    </button>
+                  </>
+                )}
+
                 <div className="h-px bg-[var(--border-subtle)] my-3" />
+                <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Archive</p>
                 <button onClick={() => setWorkflowMode('reject')}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center"><XCircle size={14} className="text-white" /></div>
@@ -743,15 +790,39 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
                     <p className="text-xs text-[var(--text-muted)]">Record will be archived but kept on file for future reference.</p>
                   </>
                 )}
+                {workflowMode === 'convert' && (
+                  <>
+                    {duplicates.length > 0 && (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                        <p className="text-xs font-medium text-amber-400 mb-2">⚠ Duplicate records found</p>
+                        <div className="space-y-2">
+                          {duplicates.map((d, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                              <span className="px-1.5 py-0.5 rounded bg-[var(--bg-hover)] text-[10px] font-medium uppercase">{d.source}</span>
+                              <span className="font-medium">{d.name}</span>
+                              <span className="text-[var(--text-muted)]">({d.match}: {d.match === 'email' ? d.email || d.email_1 : d.phone || d.phone_1})</span>
+                              {d.status && <span className="text-[var(--text-muted)]">— {d.status}</span>}
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-amber-400/70 mt-2">Review above before converting. Existing records will be retriggered for review.</p>
+                      </div>
+                    )}
+                    <Input label="Tenancy Start Date" value={wfDate} onChange={setWfDate} type="date" />
+                    <p className="text-xs text-[var(--text-muted)]">
+                      This will create a Tenant record linked to <strong>{properties.find(p => p.id === Number(form.linked_property_id))?.address || 'the property'}</strong> and mark this enquiry as converted.
+                    </p>
+                  </>
+                )}
                 <div className="flex gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setShowWorkflow(false)}>Cancel</Button>
                   <Button
                     variant={workflowMode === 'reject' ? 'outline' : 'gradient'}
                     onClick={handleWorkflow}
-                    disabled={wfLoading || (workflowMode === 'viewing' && (!wfDate || !wfPropId)) || (workflowMode === 'awaiting' && !wfDate)}
+                    disabled={wfLoading || (workflowMode === 'viewing' && (!wfDate || !wfPropId)) || (workflowMode === 'awaiting' && !wfDate) || (workflowMode === 'convert' && !wfDate)}
                     className={workflowMode === 'reject' ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : ''}
                   >
-                    {wfLoading ? 'Saving...' : workflowMode === 'reject' ? 'Reject & Archive' : 'Confirm'}
+                    {wfLoading ? 'Saving...' : workflowMode === 'reject' ? 'Reject & Archive' : workflowMode === 'convert' ? 'Convert to Tenant' : 'Confirm'}
                   </Button>
                 </div>
               </div>
