@@ -279,7 +279,7 @@ export default function TasksV3() {
                 const overdue = isOverdue(task);
                 const taskPct = task.status === 'completed' ? 100 : task.status === 'in_progress' ? 50 : 0;
                 return (
-                  <Card key={task.id} className={`p-4 md:p-5 ${overdue ? 'border-red-500/40' : ''}`} hover>
+                  <Card key={task.id} className={`p-4 md:p-5 ${overdue ? 'border-red-500/40' : ''}`} hover onClick={() => navigate(`/v3/tasks/${task.id}`)}>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <ProgressRing value={taskPct} size={40} strokeWidth={3} />
@@ -302,7 +302,7 @@ export default function TasksV3() {
                             <Calendar size={12} />{new Date(task.due_date).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
                           </div>
                         )}
-                        <div className="flex gap-1">
+                        <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                           {task.status !== 'in_progress' && task.status !== 'completed' && (
                             <Button variant="ghost" size="sm" onClick={() => updateStatus(task.id, 'in_progress')}>Start</Button>
                           )}
@@ -358,7 +358,7 @@ export default function TasksV3() {
             };
             const c = colorMap[task.priority] || colorMap.low;
             return (
-              <div className={`${c.bg} border-l-[3px] ${c.border} rounded-xl p-2.5 cursor-pointer hover:brightness-110 transition-all`}>
+              <div onClick={() => navigate(`/v3/tasks/${task.id}`)} className={`${c.bg} border-l-[3px] ${c.border} rounded-xl p-2.5 cursor-pointer hover:brightness-110 transition-all`}>
                 <p className={`text-xs font-medium truncate ${task.status === 'completed' ? 'line-through text-[var(--text-muted)]' : ''}`}>{task.title}</p>
                 <div className="flex items-center gap-1.5 mt-1.5">
                   {task.assigned_to && (
@@ -539,14 +539,14 @@ export default function TasksV3() {
                                 };
                                 const c = colorMap[task.priority] || colorMap.low;
                                 return (
-                                  <div key={task.id} className={`${c.bg} border-l-[3px] ${c.border} rounded-xl p-3 cursor-pointer hover:brightness-110 transition-all`}>
+                                  <div key={task.id} onClick={() => navigate(`/v3/tasks/${task.id}`)} className={`${c.bg} border-l-[3px] ${c.border} rounded-xl p-3 cursor-pointer hover:brightness-110 transition-all`}>
                                     <div className="flex items-start justify-between">
                                       <div>
                                         <p className="text-[10px] text-[var(--text-muted)] mb-1">{timeLabel} - {endHourLabel(hour+1)}</p>
                                         <p className="text-sm font-medium">{task.title}</p>
                                         {task.description && <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-2">{task.description}</p>}
                                       </div>
-                                      <button className="w-6 h-6 rounded-full hover:bg-white/10 flex items-center justify-center shrink-0">
+                                      <button onClick={e => e.stopPropagation()} className="w-6 h-6 rounded-full hover:bg-white/10 flex items-center justify-center shrink-0">
                                         <MoreVertical size={14} className="text-[var(--text-muted)]" />
                                       </button>
                                     </div>
@@ -558,7 +558,7 @@ export default function TasksV3() {
                                       )}
                                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${PRIORITY_COLORS[task.priority]}`}>{PRIORITY_LABELS[task.priority]}</span>
                                       {task.status !== 'completed' && (
-                                        <button onClick={() => updateStatus(task.id, 'completed')}
+                                        <button onClick={e => { e.stopPropagation(); updateStatus(task.id, 'completed'); }}
                                           className="text-[10px] text-emerald-400 hover:text-emerald-300 ml-auto">✓ Done</button>
                                       )}
                                     </div>

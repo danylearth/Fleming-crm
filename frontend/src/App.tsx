@@ -45,6 +45,7 @@ import BDMV3 from './pages/BDMV3';
 import BDMDetailV3 from './pages/BDMDetailV3';
 import MaintenanceV3 from './pages/MaintenanceV3';
 import TasksV3 from './pages/TasksV3';
+import TaskDetailV3 from './pages/TaskDetailV3';
 import TransactionsV3 from './pages/TransactionsV3';
 import SettingsV3 from './pages/SettingsV3';
 
@@ -148,6 +149,7 @@ function AppRoutes() {
       <Route path="/v3/bdm/:id" element={<ProtectedRoute bare><BDMDetailV3 /></ProtectedRoute>} />
       <Route path="/v3/maintenance" element={<ProtectedRoute bare><MaintenanceV3 /></ProtectedRoute>} />
       <Route path="/v3/tasks" element={<ProtectedRoute bare><TasksV3 /></ProtectedRoute>} />
+      <Route path="/v3/tasks/:id" element={<ProtectedRoute bare><TaskDetailV3 /></ProtectedRoute>} />
       <Route path="/v3/financials" element={<ProtectedRoute bare><TransactionsV3 /></ProtectedRoute>} />
       <Route path="/v3/settings" element={<ProtectedRoute bare><SettingsV3 /></ProtectedRoute>} />
     </Routes>
