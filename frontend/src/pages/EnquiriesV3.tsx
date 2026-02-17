@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Avatar, SearchBar, Input, Select, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Clock, ArrowLeft, Calendar, CheckCircle, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List, Building2, ChevronDown, Archive } from 'lucide-react';
+import { Plus, X, Clock, ArrowLeft, Calendar, CheckCircle, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List, Building2, ChevronDown, Archive, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface EnquiryRaw {
@@ -137,11 +137,42 @@ function SectionDivider({ icon, title, color = 'text-orange-400', children }: {
   );
 }
 
+// ─── Read-only Field ───
+function ReadField({ label, value }: { label: string; value?: string | number | null }) {
+  return (
+    <div>
+      <p className="text-[11px] text-[var(--text-muted)] font-medium mb-1">{label}</p>
+      <p className="text-sm text-[var(--text-primary)]">{value || '—'}</p>
+    </div>
+  );
+}
+
 // ─── Applicant Fields Block ───
-function ApplicantFields({ form, setField, suffix }: {
-  form: Record<string, any>; setField: (k: string, v: any) => void; suffix: string;
+function ApplicantFields({ form, setField, suffix, editing }: {
+  form: Record<string, any>; setField: (k: string, v: any) => void; suffix: string; editing?: boolean;
 }) {
   const f = (name: string) => `${name}${suffix}`;
+  if (!editing) {
+    return (
+      <>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+          <ReadField label="First Name" value={form[f('first_name_')]} />
+          <ReadField label="Surname" value={form[f('last_name_')]} />
+          <ReadField label="Date of Birth" value={form[f('date_of_birth_')] ? new Date(form[f('date_of_birth_')]).toLocaleDateString('en-GB') : null} />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+          <ReadField label="Email" value={form[f('email_')]} />
+          <ReadField label="Contact Number" value={form[f('phone_')]} />
+          <ReadField label="Nationality" value={form[f('nationality_')]} />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <ReadField label="Home Address" value={form[f('current_address_')]} />
+          <ReadField label="Postcode" value={form[f('postcode_')]} />
+          <ReadField label="Years at Address" value={form[f('years_at_address_')]} />
+        </div>
+      </>
+    );
+  }
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
@@ -168,10 +199,30 @@ function ApplicantFields({ form, setField, suffix }: {
 }
 
 // ─── Employment Fields Block ───
-function EmploymentFields({ form, setField, suffix }: {
-  form: Record<string, any>; setField: (k: string, v: any) => void; suffix: string;
+function EmploymentFields({ form, setField, suffix, editing }: {
+  form: Record<string, any>; setField: (k: string, v: any) => void; suffix: string; editing?: boolean;
 }) {
   const f = (name: string) => `${name}${suffix}`;
+  if (!editing) {
+    return (
+      <>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+          <ReadField label="Employment Status" value={form[f('employment_status_')]} />
+          <ReadField label="Industry" value={form[f('industry_')]} />
+          <ReadField label="Job Title" value={form[f('job_title_')]} />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+          <ReadField label="Years in Employment" value={form[f('years_employed_')]} />
+          <ReadField label="Annual Salary" value={form[f('income_')] ? `£${Number(form[f('income_')]).toLocaleString()}` : null} />
+          <ReadField label="Employer" value={form[f('employer_')]} />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <ReadField label="Contract Type" value={form[f('contract_type_')]} />
+          <ReadField label="Happy to provide further info?" value={form[f('provide_further_info_')]} />
+        </div>
+      </>
+    );
+  }
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
@@ -209,6 +260,7 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
   const [jointApp, setJointApp] = useState(false);
   const [properties, setProperties] = useState<Property[]>([]);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [docs] = useState<string[]>([]);
 
@@ -284,9 +336,20 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
             {STATUS_LABELS[form.status] || form.status}
           </span>
         </div>
-        <Button variant="gradient" size="sm" onClick={() => save()} disabled={saving}>
-          <Save size={14} className="mr-1.5" />{saving ? 'Saving...' : 'Save'}
-        </Button>
+        {editing ? (
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+              <X size={14} className="mr-1" />Cancel
+            </Button>
+            <Button variant="gradient" size="sm" onClick={() => { save(); setEditing(false); }} disabled={saving}>
+              <Save size={14} className="mr-1.5" />{saving ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        ) : (
+          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+            <Pencil size={14} className="mr-1.5" />Edit
+          </Button>
+        )}
       </div>
 
       {/* Body */}
@@ -312,87 +375,120 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
                 {/* ── Applicant 1 ── */}
                 <div>
                   <SectionDivider icon={<User size={16} />} title="Applicant 1">
-                    <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
-                      <input type="checkbox" checked={!!form.kyc_completed_1}
-                        onChange={e => setField('kyc_completed_1', e.target.checked)}
-                        className="w-4 h-4 rounded accent-orange-500" />
-                      KYC Complete
-                    </label>
+                    {editing ? (
+                      <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
+                        <input type="checkbox" checked={!!form.kyc_completed_1}
+                          onChange={e => setField('kyc_completed_1', e.target.checked)}
+                          className="w-4 h-4 rounded accent-orange-500" />
+                        KYC Complete
+                      </label>
+                    ) : form.kyc_completed_1 ? (
+                      <span className="text-xs text-emerald-400 font-medium">KYC ✓</span>
+                    ) : (
+                      <span className="text-xs text-[var(--text-muted)]">KYC Pending</span>
+                    )}
                   </SectionDivider>
-                  <ApplicantFields form={form} setField={setField} suffix="1" />
+                  <ApplicantFields form={form} setField={setField} suffix="1" editing={editing} />
                 </div>
 
                 {/* ── Employment History 1 ── */}
                 <div>
                   <SectionDivider icon={<Briefcase size={16} />} title="Employment History" />
-                  <EmploymentFields form={form} setField={setField} suffix="1" />
+                  <EmploymentFields form={form} setField={setField} suffix="1" editing={editing} />
                 </div>
 
                 {/* ── Renting Requirements ── */}
                 <div>
                   <SectionDivider icon={<Home size={16} />} title="Renting Requirements" color="text-pink-400" />
-                  <div className="space-y-4">
-                    <RadioGroup label="Tenancy Type Wanted" value={form.tenancy_type_wanted || ''} onChange={v => setField('tenancy_type_wanted', v)}
-                      options={[
-                        { value: 'Long-term', label: 'Long-term' },
-                        { value: 'Short-term', label: 'Short-term' },
-                        { value: 'Interim', label: 'Interim' },
-                      ]} />
-                    <RadioGroup label="Reason for Renting" value={form.renting_reason || ''} onChange={v => setField('renting_reason', v)}
-                      options={[
-                        { value: 'First time tenant', label: 'First time tenant' },
-                        { value: 'Family move', label: 'Family move' },
-                        { value: 'Workplace relocation', label: 'Workplace relocation' },
-                        { value: 'Studying', label: 'Studying' },
-                        { value: 'Other', label: 'Other' },
-                      ]} />
-                    <RadioGroup label="Property Type Wanted" value={form.property_type_wanted || ''} onChange={v => setField('property_type_wanted', v)}
-                      options={[
-                        { value: 'House', label: 'House' },
-                        { value: 'Bungalow', label: 'Bungalow' },
-                        { value: 'Flat', label: 'Flat' },
-                        { value: 'Studio apartment', label: 'Studio apartment' },
-                        { value: 'Shared', label: 'Shared' },
-                        { value: 'Sheltered', label: 'Sheltered' },
-                        { value: 'Other', label: 'Other' },
-                      ]} />
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <Select label="Bedrooms Required" value={form.bedrooms_required?.toString() || ''} onChange={v => setField('bedrooms_required', v ? Number(v) : null)} options={BEDROOMS_OPTIONS} />
-                      <RadioGroup label="Off Road Parking" value={form.parking_required || ''} onChange={v => setField('parking_required', v)}
-                        options={[{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }, { value: 'Preferred', label: 'Preferred' }]} />
-                      <Input label="Rent Min £" value={form.rent_min?.toString() || ''} onChange={v => setField('rent_min', v ? Number(v) : null)} placeholder="250" type="number" />
-                      <Input label="Rent Max £" value={form.rent_max?.toString() || ''} onChange={v => setField('rent_max', v ? Number(v) : null)} placeholder="2500" type="number" />
+                  {editing ? (
+                    <div className="space-y-4">
+                      <RadioGroup label="Tenancy Type Wanted" value={form.tenancy_type_wanted || ''} onChange={v => setField('tenancy_type_wanted', v)}
+                        options={[
+                          { value: 'Long-term', label: 'Long-term' },
+                          { value: 'Short-term', label: 'Short-term' },
+                          { value: 'Interim', label: 'Interim' },
+                        ]} />
+                      <RadioGroup label="Reason for Renting" value={form.renting_reason || ''} onChange={v => setField('renting_reason', v)}
+                        options={[
+                          { value: 'First time tenant', label: 'First time tenant' },
+                          { value: 'Family move', label: 'Family move' },
+                          { value: 'Workplace relocation', label: 'Workplace relocation' },
+                          { value: 'Studying', label: 'Studying' },
+                          { value: 'Other', label: 'Other' },
+                        ]} />
+                      <RadioGroup label="Property Type Wanted" value={form.property_type_wanted || ''} onChange={v => setField('property_type_wanted', v)}
+                        options={[
+                          { value: 'House', label: 'House' },
+                          { value: 'Bungalow', label: 'Bungalow' },
+                          { value: 'Flat', label: 'Flat' },
+                          { value: 'Studio apartment', label: 'Studio apartment' },
+                          { value: 'Shared', label: 'Shared' },
+                          { value: 'Sheltered', label: 'Sheltered' },
+                          { value: 'Other', label: 'Other' },
+                        ]} />
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <Select label="Bedrooms Required" value={form.bedrooms_required?.toString() || ''} onChange={v => setField('bedrooms_required', v ? Number(v) : null)} options={BEDROOMS_OPTIONS} />
+                        <RadioGroup label="Off Road Parking" value={form.parking_required || ''} onChange={v => setField('parking_required', v)}
+                          options={[{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }, { value: 'Preferred', label: 'Preferred' }]} />
+                        <Input label="Rent Min £" value={form.rent_min?.toString() || ''} onChange={v => setField('rent_min', v ? Number(v) : null)} placeholder="250" type="number" />
+                        <Input label="Rent Max £" value={form.rent_max?.toString() || ''} onChange={v => setField('rent_max', v ? Number(v) : null)} placeholder="2500" type="number" />
+                      </div>
+                      <Input label="Desired Locations (up to 5)" value={form.desired_locations || ''} onChange={v => setField('desired_locations', v)} placeholder="e.g. Manchester, Salford, Didsbury" />
                     </div>
-                    <Input label="Desired Locations (up to 5)" value={form.desired_locations || ''} onChange={v => setField('desired_locations', v)} placeholder="e.g. Manchester, Salford, Didsbury" />
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <ReadField label="Tenancy Type" value={form.tenancy_type_wanted} />
+                      <ReadField label="Reason for Renting" value={form.renting_reason} />
+                      <ReadField label="Property Type" value={form.property_type_wanted} />
+                      <ReadField label="Bedrooms Required" value={form.bedrooms_required} />
+                      <ReadField label="Off Road Parking" value={form.parking_required} />
+                      <ReadField label="Rent Range" value={form.rent_min || form.rent_max ? `£${form.rent_min || 0} — £${form.rent_max || '∞'}` : null} />
+                      <div className="md:col-span-3">
+                        <ReadField label="Desired Locations" value={form.desired_locations} />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* ── Joint Application Toggle ── */}
-                <label className="flex items-center gap-3 cursor-pointer py-3 px-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] w-fit">
-                  <input type="checkbox" checked={jointApp} onChange={e => { setJointApp(e.target.checked); setField('is_joint_application', e.target.checked); }}
-                    className="w-4 h-4 rounded accent-orange-500" />
-                  <Users size={16} className="text-pink-400" />
-                  <span className="text-sm text-[var(--text-primary)] font-medium">Joint Application</span>
-                </label>
+                {editing ? (
+                  <label className="flex items-center gap-3 cursor-pointer py-3 px-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] w-fit">
+                    <input type="checkbox" checked={jointApp} onChange={e => { setJointApp(e.target.checked); setField('is_joint_application', e.target.checked); }}
+                      className="w-4 h-4 rounded accent-orange-500" />
+                    <Users size={16} className="text-pink-400" />
+                    <span className="text-sm text-[var(--text-primary)] font-medium">Joint Application</span>
+                  </label>
+                ) : jointApp ? (
+                  <div className="flex items-center gap-2 py-2">
+                    <Users size={16} className="text-pink-400" />
+                    <span className="text-sm font-medium">Joint Application</span>
+                  </div>
+                ) : null}
 
                 {/* ── Applicant 2 ── */}
                 {jointApp && (
                   <>
                     <div>
                       <SectionDivider icon={<User size={16} />} title="Applicant 2" color="text-pink-400">
-                        <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
-                          <input type="checkbox" checked={!!form.kyc_completed_2}
-                            onChange={e => setField('kyc_completed_2', e.target.checked)}
-                            className="w-4 h-4 rounded accent-orange-500" />
-                          KYC Complete
-                        </label>
+                        {editing ? (
+                          <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
+                            <input type="checkbox" checked={!!form.kyc_completed_2}
+                              onChange={e => setField('kyc_completed_2', e.target.checked)}
+                              className="w-4 h-4 rounded accent-orange-500" />
+                            KYC Complete
+                          </label>
+                        ) : form.kyc_completed_2 ? (
+                          <span className="text-xs text-emerald-400 font-medium">KYC ✓</span>
+                        ) : (
+                          <span className="text-xs text-[var(--text-muted)]">KYC Pending</span>
+                        )}
                       </SectionDivider>
-                      <ApplicantFields form={form} setField={setField} suffix="2" />
+                      <ApplicantFields form={form} setField={setField} suffix="2" editing={editing} />
                     </div>
 
                     <div>
                       <SectionDivider icon={<Briefcase size={16} />} title="Employment History 2" color="text-pink-400" />
-                      <EmploymentFields form={form} setField={setField} suffix="2" />
+                      <EmploymentFields form={form} setField={setField} suffix="2" editing={editing} />
                     </div>
                   </>
                 )}
