@@ -132,22 +132,24 @@ export function ProgressRing({ value, size = 64, strokeWidth = 5, gradient = tru
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="var(--border-subtle)" strokeWidth={strokeWidth} />
-        {gradient && (
-          <defs>
-            <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#f97316" />
-              <stop offset="100%" stopColor="#ec4899" />
-            </linearGradient>
-          </defs>
-        )}
-        <circle cx={size/2} cy={size/2} r={radius} fill="none"
-          stroke={gradient ? `url(#${gradientId})` : '#ec4899'}
-          strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset}
-          strokeLinecap="round" className="transition-all duration-500" />
-      </svg>
-      <span className="text-lg font-bold -mt-[calc(50%+8px)] absolute">{value}%</span>
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="var(--border-subtle)" strokeWidth={strokeWidth} />
+          {gradient && (
+            <defs>
+              <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#f97316" />
+                <stop offset="100%" stopColor="#ec4899" />
+              </linearGradient>
+            </defs>
+          )}
+          <circle cx={size/2} cy={size/2} r={radius} fill="none"
+            stroke={gradient ? `url(#${gradientId})` : '#ec4899'}
+            strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset}
+            strokeLinecap="round" className="transition-all duration-500" />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{value}%</span>
+      </div>
       {label && <span className="text-[11px] text-[var(--text-secondary)] font-medium uppercase tracking-wide">{label}</span>}
     </div>
   );
