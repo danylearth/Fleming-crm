@@ -49,6 +49,12 @@ export default function BDMV3() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [workflowProspect, setWorkflowProspect] = useState<Prospect | null>(null);
+  const [workflowMode, setWorkflowMode] = useState<'choose' | 'follow_up' | 'reject'>('choose');
+  const [workflowDate, setWorkflowDate] = useState('');
+  const [workflowReason, setWorkflowReason] = useState('');
+  const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [converting, setConverting] = useState(false);
 
   const load = async () => {
     try {
@@ -89,6 +95,41 @@ export default function BDMV3() {
       else setError(msg);
     }
     setSaving(false);
+  };
+
+  const openWorkflow = (p: Prospect, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setWorkflowProspect(p);
+    setWorkflowMode('choose');
+    setWorkflowDate('');
+    setWorkflowReason('');
+  };
+
+  const doWorkflowAction = async (status: string, extra?: Record<string, any>) => {
+    if (!workflowProspect) return;
+    setWorkflowLoading(true);
+    try {
+      await api.put(`/api/landlords-bdm/${workflowProspect.id}`, {
+        name: workflowProspect.name, email: workflowProspect.email, phone: workflowProspect.phone,
+        address: workflowProspect.address, source: workflowProspect.source,
+        notes: workflowProspect.notes, status,
+        follow_up_date: extra?.follow_up_date || workflowProspect.follow_up_date,
+      });
+      setWorkflowProspect(null);
+      await load();
+    } catch (e) { console.error(e); }
+    setWorkflowLoading(false);
+  };
+
+  const doConvert = async () => {
+    if (!workflowProspect) return;
+    setConverting(true);
+    try {
+      await api.post(`/api/landlords-bdm/${workflowProspect.id}/convert`, {});
+      setWorkflowProspect(null);
+      await load();
+    } catch (e) { console.error(e); }
+    setConverting(false);
   };
 
   // Follow-up due count
@@ -189,20 +230,19 @@ export default function BDMV3() {
                             )}
                           </div>
                         </div>
-                        {(p.follow_up_date || p.source) && (
-                          <div className="flex items-center gap-3 mt-3 pt-2 border-t border-[var(--border-subtle)]">
-                            {p.follow_up_date && (
-                              <span className={`text-[10px] flex items-center gap-1 ${isOverdue(p.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-muted)]'}`}>
-                                <Calendar size={10} />
-                                {formatDate(p.follow_up_date)}
-                                {isOverdue(p.follow_up_date) && ' ⚠'}
-                              </span>
-                            )}
-                            {p.source && (
-                              <span className="text-[10px] text-[var(--text-muted)] ml-auto">{p.source}</span>
-                            )}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 mt-3 pt-2 border-t border-[var(--border-subtle)]">
+                          {p.follow_up_date && (
+                            <span className={`text-[10px] flex items-center gap-1 ${isOverdue(p.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-muted)]'}`}>
+                              <Calendar size={10} />
+                              {formatDate(p.follow_up_date)}
+                              {isOverdue(p.follow_up_date) && ' ⚠'}
+                            </span>
+                          )}
+                          <button onClick={(e) => openWorkflow(p, e)}
+                            className="ml-auto text-[10px] px-2.5 py-1 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-medium">
+                            Progress / Reject
+                          </button>
+                        </div>
                       </GlassCard>
                     ))}
                   </div>
@@ -224,6 +264,7 @@ export default function BDMV3() {
                   <th className="text-left py-3 px-4 font-medium">Status</th>
                   <th className="text-left py-3 px-4 font-medium hidden sm:table-cell">Follow Up</th>
                   <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Source</th>
+                  <th className="text-right py-3 px-4 font-medium w-20"></th>
                 </tr>
               </thead>
               <tbody>
@@ -268,6 +309,14 @@ export default function BDMV3() {
                     <td className="py-3 px-4 hidden lg:table-cell">
                       <span className="text-xs text-[var(--text-muted)]">{p.source || '—'}</span>
                     </td>
+                    <td className="py-3 px-4 text-right">
+                      {!['onboarded', 'not_interested'].includes(p.status) && (
+                        <button onClick={(e) => openWorkflow(p, e)}
+                          className="text-[10px] px-2.5 py-1 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-medium whitespace-nowrap">
+                          Progress / Reject
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -309,6 +358,108 @@ export default function BDMV3() {
                 {saving ? 'Adding...' : 'Add Prospect'}
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Workflow Modal */}
+      {workflowProspect && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm"
+          onClick={() => setWorkflowProspect(null)}>
+          <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-2"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Avatar name={workflowProspect.name} size="md" />
+                <div>
+                  <h3 className="text-lg font-bold">{workflowProspect.name}</h3>
+                  <p className="text-xs text-[var(--text-muted)]">Update workflow</p>
+                </div>
+              </div>
+              <button onClick={() => setWorkflowProspect(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+            </div>
+
+            {workflowMode === 'choose' ? (
+              <>
+                <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Progress</p>
+                <button onClick={() => doWorkflowAction('contacted')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center">
+                    <Phone size={14} className="text-white" />
+                  </div>
+                  <div className="flex-1"><p className="text-sm font-medium">Mark as Contacted</p><p className="text-xs text-[var(--text-muted)]">Initial outreach made</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
+                <button onClick={() => setWorkflowMode('follow_up')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
+                    <Calendar size={14} className="text-white" />
+                  </div>
+                  <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p><p className="text-xs text-[var(--text-muted)]">Schedule a follow-up date</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
+                <button onClick={() => doWorkflowAction('interested')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+                    <UserPlus size={14} className="text-white" />
+                  </div>
+                  <div className="flex-1"><p className="text-sm font-medium">Mark as Interested</p><p className="text-xs text-[var(--text-muted)]">Prospect wants to proceed</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
+
+                {/* Convert — only when interested */}
+                {workflowProspect.status === 'interested' && (
+                  <>
+                    <div className="h-px bg-[var(--border-subtle)] my-3" />
+                    <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Convert</p>
+                    <button onClick={doConvert} disabled={converting}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors text-left border border-emerald-500/20">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+                        <UserPlus size={14} className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-emerald-400">{converting ? 'Converting...' : 'Convert to Landlord'}</p>
+                        <p className="text-xs text-[var(--text-muted)]">Move to Landlords module</p>
+                      </div>
+                      <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                    </button>
+                  </>
+                )}
+
+                <div className="h-px bg-[var(--border-subtle)] my-3" />
+                <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Archive</p>
+                <button onClick={() => setWorkflowMode('reject')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center">
+                    <XCircle size={14} className="text-white" />
+                  </div>
+                  <div className="flex-1"><p className="text-sm font-medium text-red-400">Not Interested</p><p className="text-xs text-[var(--text-muted)]">Archive this prospect</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
+              </>
+            ) : workflowMode === 'follow_up' ? (
+              <div className="space-y-4">
+                <p className="text-sm font-medium">Set Follow-up Date</p>
+                <Input label="Follow-up Date" value={workflowDate} onChange={setWorkflowDate} placeholder="YYYY-MM-DD" />
+                <div className="flex gap-3">
+                  <Button variant="ghost" onClick={() => setWorkflowMode('choose')}>Back</Button>
+                  <Button variant="gradient" onClick={() => doWorkflowAction('follow_up', { follow_up_date: workflowDate })}
+                    disabled={workflowLoading || !workflowDate}>
+                    {workflowLoading ? 'Saving...' : 'Set Follow Up'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm font-medium text-red-400">Mark as Not Interested</p>
+                <p className="text-xs text-[var(--text-muted)]">This will archive the prospect. Are you sure?</p>
+                <div className="flex gap-3">
+                  <Button variant="ghost" onClick={() => setWorkflowMode('choose')}>Back</Button>
+                  <Button variant="gradient" onClick={() => doWorkflowAction('not_interested')} disabled={workflowLoading}>
+                    {workflowLoading ? 'Archiving...' : 'Archive'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
