@@ -218,34 +218,6 @@ export default function LandlordDetailV3() {
               </div>
             </GlassCard>
 
-            {/* Notes */}
-            <GlassCard className="p-6">
-              <SectionHeader title="Notes" />
-              <div className="space-y-3">
-                {notes.length === 0 && <p className="text-sm text-[var(--text-muted)]">No notes yet</p>}
-                {notes.map(n => (
-                  <div key={n.id} className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[var(--bg-hover)] flex items-center justify-center shrink-0 mt-0.5">
-                      <StickyNote size={14} className="text-[var(--text-muted)]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm">{n.text}</p>
-                      <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
-                        {n.author}{n.created_at ? ` · ${new Date(n.created_at).toLocaleDateString()}` : ''}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                <div className="flex gap-2 mt-2">
-                  <input value={notesInput} onChange={e => setNotesInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addNote()}
-                    placeholder="Add a note..."
-                    className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/40 transition-colors" />
-                  <Button variant="gradient" onClick={addNote} disabled={!notesInput.trim()}>Add</Button>
-                </div>
-              </div>
-            </GlassCard>
-
             {/* Documents */}
             <DocumentUpload entityType="landlord" entityId={landlord.id} />
           </div>
@@ -282,6 +254,40 @@ export default function LandlordDetailV3() {
                   ))}
                 </div>
               )}
+            </GlassCard>
+
+            {/* Notes */}
+            <GlassCard className="p-6">
+              <SectionHeader title="Notes" />
+              <div className="space-y-3">
+                {notes.length === 0 && <p className="text-sm text-[var(--text-muted)]">No notes yet</p>}
+                {notes.map(n => (
+                  <div key={n.id} className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-[var(--bg-hover)] flex items-center justify-center shrink-0 mt-0.5">
+                      <StickyNote size={14} className="text-[var(--text-muted)]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm">{n.text}</p>
+                      <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                        {n.author}{n.created_at ? ` · ${new Date(n.created_at).toLocaleDateString()}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex gap-2 mt-2">
+                  <input value={notesInput} onChange={e => setNotesInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addNote()}
+                    placeholder="Add a note..."
+                    className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/40 transition-colors" />
+                  <Button variant="gradient" onClick={addNote} disabled={!notesInput.trim()}>Add</Button>
+                </div>
+              </div>
+            </GlassCard>
+
+            {/* Activity Timeline */}
+            <GlassCard className="p-6">
+              <SectionHeader title="Activity Timeline" />
+              <p className="text-xs text-[var(--text-muted)]">Coming soon</p>
             </GlassCard>
           </div>
         </div>
