@@ -462,111 +462,6 @@ export default function TenantDetailV3() {
               )}
             </GlassCard>
 
-            {/* Onboarding Checklist */}
-            <GlassCard className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <SectionHeader title="Onboarding Checklist" icon={<CheckCircle size={16} />} />
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-[var(--text-muted)]">{completedCount}/{checklistItems.length}</span>
-                  <CompletionRing percent={completionPercent} size={36} />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {/* Holding Deposit */}
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-4 py-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Holding Deposit Received</span>
-                    <YesNo value={!!form.holding_deposit_received} onChange={v => setForm({ ...form, holding_deposit_received: v })} disabled={!editing} />
-                  </div>
-                  {form.holding_deposit_received && (
-                    <div className="grid grid-cols-2 gap-3 mt-3">
-                      {editing ? (
-                        <>
-                          <Input label="Amount (£)" value={form.holding_deposit_amount} onChange={v => setForm({ ...form, holding_deposit_amount: v })} placeholder="0.00" />
-                          <Input label="Date Received" value={form.holding_deposit_date} onChange={v => setForm({ ...form, holding_deposit_date: v })} placeholder="YYYY-MM-DD" />
-                        </>
-                      ) : (
-                        <>
-                          <ReadField label="Amount" value={form.holding_deposit_amount ? `£${form.holding_deposit_amount}` : null} />
-                          <ReadField label="Date Received" value={form.holding_deposit_date ? new Date(form.holding_deposit_date).toLocaleDateString() : null} />
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Application Forms */}
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm">Application Forms Completed</span>
-                  <YesNo value={!!form.application_forms_completed} onChange={v => setForm({ ...form, application_forms_completed: v })} disabled={!editing} />
-                </div>
-
-                {/* KYC Applicant 1 */}
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm">KYC Completed — {form.first_name_1 || 'Applicant 1'}</span>
-                  <YesNo value={!!form.kyc_completed_1} onChange={v => setForm({ ...form, kyc_completed_1: v })} disabled={!editing} />
-                </div>
-
-                {/* KYC Applicant 2 */}
-                {form.is_joint_tenancy && (
-                  <div className="bg-[var(--bg-hover)]/50 rounded-xl px-4 py-3 flex items-center justify-between">
-                    <span className="text-sm">KYC Completed — {form.first_name_2 || 'Applicant 2'}</span>
-                    <YesNo value={!!form.kyc_completed_2} onChange={v => setForm({ ...form, kyc_completed_2: v })} disabled={!editing} />
-                  </div>
-                )}
-
-                {/* Guarantor */}
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-4 py-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Guarantor Required</span>
-                    <YesNo value={!!form.guarantor_required} onChange={v => {
-                      setForm({ ...form, guarantor_required: v });
-                      if (v) setGuarantorExpanded(true);
-                    }} disabled={!editing} />
-                  </div>
-                  {form.guarantor_required && (
-                    <div className="mt-3 space-y-3">
-                      <button onClick={() => setGuarantorExpanded(!guarantorExpanded)}
-                        className="flex items-center gap-2 text-xs text-[var(--accent-orange)] hover:underline">
-                        <ChevronDown size={12} className={`transition-transform ${guarantorExpanded ? 'rotate-180' : ''}`} />
-                        {guarantorExpanded ? 'Hide' : 'Show'} guarantor details
-                      </button>
-                      {guarantorExpanded && (
-                        <div className="space-y-3 pl-2 border-l-2 border-[var(--accent-orange)]/30">
-                          {editing ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <Input label="Guarantor Name" value={form.guarantor_name} onChange={v => setForm({ ...form, guarantor_name: v })} />
-                              <Input label="Address" value={form.guarantor_address} onChange={v => setForm({ ...form, guarantor_address: v })} />
-                              <Input label="Phone" value={form.guarantor_phone} onChange={v => setForm({ ...form, guarantor_phone: v })} />
-                              <Input label="Email" value={form.guarantor_email} onChange={v => setForm({ ...form, guarantor_email: v })} type="email" />
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <ReadField label="Name" value={form.guarantor_name} />
-                              <ReadField label="Address" value={form.guarantor_address} />
-                              <ReadField label="Phone" value={form.guarantor_phone} />
-                              <ReadField label="Email" value={form.guarantor_email} />
-                            </div>
-                          )}
-                          <div className="flex flex-col sm:flex-row gap-4">
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs text-[var(--text-muted)]">KYC Completed?</span>
-                              <YesNo value={!!form.guarantor_kyc_completed} onChange={v => setForm({ ...form, guarantor_kyc_completed: v })} disabled={!editing} />
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs text-[var(--text-muted)]">Deed of Guarantee?</span>
-                              <YesNo value={!!form.guarantor_deed_received} onChange={v => setForm({ ...form, guarantor_deed_received: v })} disabled={!editing} />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </GlassCard>
-
             {/* Tenancy Details */}
             <GlassCard className="p-6">
               <SectionHeader title="Tenancy Details" icon={<Building2 size={16} />} />
@@ -614,6 +509,137 @@ export default function TenantDetailV3() {
 
           {/* ==================== RIGHT COLUMN ==================== */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Tenant Checklist */}
+            <GlassCard className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader title="Tenant Checklist" icon={<CheckCircle size={16} />} />
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[var(--text-muted)]">{completedCount}/{checklistItems.length}</span>
+                  <CompletionRing percent={completionPercent} size={36} />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {/* Holding Deposit */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs">Holding Deposit Received</span>
+                    <YesNo value={!!form.holding_deposit_received} onChange={v => setForm({ ...form, holding_deposit_received: v })} disabled={!editing} />
+                  </div>
+                  {form.holding_deposit_received && (
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      {editing ? (
+                        <>
+                          <Input label="Amount (£)" value={form.holding_deposit_amount} onChange={v => setForm({ ...form, holding_deposit_amount: v })} placeholder="0.00" />
+                          <Input label="Date Received" value={form.holding_deposit_date} onChange={v => setForm({ ...form, holding_deposit_date: v })} placeholder="YYYY-MM-DD" />
+                        </>
+                      ) : (
+                        <>
+                          <ReadField label="Amount" value={form.holding_deposit_amount ? `£${form.holding_deposit_amount}` : null} />
+                          <ReadField label="Date" value={form.holding_deposit_date ? new Date(form.holding_deposit_date).toLocaleDateString() : null} />
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Application Forms */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Application Forms Completed</span>
+                  <YesNo value={!!form.application_forms_completed} onChange={v => setForm({ ...form, application_forms_completed: v })} disabled={!editing} />
+                </div>
+
+                {/* KYC Applicant 1 */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">KYC — {form.first_name_1 || 'Applicant 1'}</span>
+                  <YesNo value={!!form.kyc_completed_1} onChange={v => setForm({ ...form, kyc_completed_1: v })} disabled={!editing} />
+                </div>
+
+                {/* KYC Applicant 2 */}
+                {form.is_joint_tenancy && (
+                  <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                    <span className="text-xs">KYC — {form.first_name_2 || 'Applicant 2'}</span>
+                    <YesNo value={!!form.kyc_completed_2} onChange={v => setForm({ ...form, kyc_completed_2: v })} disabled={!editing} />
+                  </div>
+                )}
+
+                {/* Guarantor */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs">Guarantor Required</span>
+                    <YesNo value={!!form.guarantor_required} onChange={v => {
+                      setForm({ ...form, guarantor_required: v });
+                      if (v) setGuarantorExpanded(true);
+                    }} disabled={!editing} />
+                  </div>
+                  {form.guarantor_required && (
+                    <div className="mt-2 space-y-2">
+                      <button onClick={() => setGuarantorExpanded(!guarantorExpanded)}
+                        className="flex items-center gap-1.5 text-[10px] text-[var(--accent-orange)] hover:underline">
+                        <ChevronDown size={10} className={`transition-transform ${guarantorExpanded ? 'rotate-180' : ''}`} />
+                        {guarantorExpanded ? 'Hide' : 'Show'} details
+                      </button>
+                      {guarantorExpanded && (
+                        <div className="space-y-2 pl-2 border-l-2 border-[var(--accent-orange)]/30">
+                          {editing ? (
+                            <div className="grid grid-cols-1 gap-2">
+                              <Input label="Name" value={form.guarantor_name} onChange={v => setForm({ ...form, guarantor_name: v })} />
+                              <Input label="Address" value={form.guarantor_address} onChange={v => setForm({ ...form, guarantor_address: v })} />
+                              <Input label="Phone" value={form.guarantor_phone} onChange={v => setForm({ ...form, guarantor_phone: v })} />
+                              <Input label="Email" value={form.guarantor_email} onChange={v => setForm({ ...form, guarantor_email: v })} type="email" />
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 gap-1.5">
+                              <ReadField label="Name" value={form.guarantor_name} />
+                              <ReadField label="Address" value={form.guarantor_address} />
+                              <ReadField label="Phone" value={form.guarantor_phone} />
+                              <ReadField label="Email" value={form.guarantor_email} />
+                            </div>
+                          )}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-[var(--text-muted)]">KYC Completed?</span>
+                              <YesNo value={!!form.guarantor_kyc_completed} onChange={v => setForm({ ...form, guarantor_kyc_completed: v })} disabled={!editing} />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-[var(--text-muted)]">Deed of Guarantee?</span>
+                              <YesNo value={!!form.guarantor_deed_received} onChange={v => setForm({ ...form, guarantor_deed_received: v })} disabled={!editing} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Remaining simple checks */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Tenancy Start Date Set</span>
+                  <span className={`text-[10px] font-medium ${form.tenancy_start_date ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {form.tenancy_start_date ? '✓' : '—'}
+                  </span>
+                </div>
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Tenancy Type Selected</span>
+                  <span className={`text-[10px] font-medium ${form.tenancy_type ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {form.tenancy_type || '—'}
+                  </span>
+                </div>
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Monthly Rent Set</span>
+                  <span className={`text-[10px] font-medium ${form.monthly_rent ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {form.monthly_rent ? `£${Number(form.monthly_rent).toLocaleString()}` : '—'}
+                  </span>
+                </div>
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Next of Kin Provided</span>
+                  <span className={`text-[10px] font-medium ${form.nok_name && form.nok_phone ? 'text-green-400' : 'text-orange-400'}`}>
+                    {form.nok_name && form.nok_phone ? '✓' : 'Missing'}
+                  </span>
+                </div>
+              </div>
+            </GlassCard>
+
             {/* Notes */}
             <GlassCard className="p-6">
               <SectionHeader title="Notes" icon={<MessageSquare size={16} />} />
