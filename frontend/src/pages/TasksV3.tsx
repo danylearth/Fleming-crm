@@ -307,202 +307,320 @@ export default function TasksV3() {
         )}
 
         {/* ═══ CALENDAR VIEW ═══ */}
-        {viewMode === 'calendar' && !loading && (
-          <div className="space-y-4">
-            {/* Top bar: Today + nav + Day/Week/Month */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button onClick={() => { setSelectedDate(todayStr); setCalYear(now.getFullYear()); setCalMonth(now.getMonth()); }}
-                  className="px-4 py-2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-medium hover:opacity-90 transition-opacity">Today</button>
-                <div className="flex items-center gap-1">
-                  <button onClick={prevDay} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={16} /></button>
-                  <button onClick={nextDay} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={16} /></button>
-                </div>
-                <span className="text-lg font-semibold">{new Date(selectedDate+'T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</span>
-              </div>
-              <div className="hidden md:flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-1">
-                {(['month','week','day'] as const).map(m => (
-                  <button key={m} onClick={() => setCalViewMode(m)}
-                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all capitalize ${
-                      calViewMode === m ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                    }`}>{m}</button>
-                ))}
-              </div>
-            </div>
+        {viewMode === 'calendar' && !loading && (() => {
+          // Week helpers
+          const getWeekDates = (dateStr: string) => {
+            const d = new Date(dateStr + 'T00:00:00');
+            const dow = d.getDay(); const mondayOff = dow === 0 ? -6 : 1 - dow;
+            const mon = new Date(d); mon.setDate(d.getDate() + mondayOff);
+            return Array.from({ length: 7 }, (_, i) => { const dd = new Date(mon); dd.setDate(mon.getDate() + i); return fmtDate(dd.getFullYear(), dd.getMonth(), dd.getDate()); });
+          };
+          const weekDates = getWeekDates(selectedDate);
 
-            {/* Team selector */}
-            <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
-              {TEAM.map(member => {
-                const active = selectedMember === member.id;
-                return (
-                  <button key={member.id} onClick={() => setSelectedMember(member.id)}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl border transition-all shrink-0 ${
-                      active ? 'border-orange-500/50 bg-orange-500/10' : 'border-[var(--border-color)] bg-[var(--bg-card)] hover:border-[var(--border-input)]'
-                    }`}>
-                    <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${member.color} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{member.initials}</div>
-                    <div className="text-left hidden sm:block">
-                      <p className={`text-sm font-medium ${active ? 'text-orange-400' : ''}`}>{member.name}</p>
-                      <p className="text-xs text-[var(--text-muted)]">{member.role}</p>
+          // Navigation
+          const navPrev = () => {
+            if (calViewMode === 'day') prevDay();
+            else if (calViewMode === 'week') { const d = new Date(selectedDate+'T00:00:00'); d.setDate(d.getDate()-7); setSelectedDate(fmtDate(d.getFullYear(),d.getMonth(),d.getDate())); setCalYear(d.getFullYear()); setCalMonth(d.getMonth()); }
+            else prevMonth();
+          };
+          const navNext = () => {
+            if (calViewMode === 'day') nextDay();
+            else if (calViewMode === 'week') { const d = new Date(selectedDate+'T00:00:00'); d.setDate(d.getDate()+7); setSelectedDate(fmtDate(d.getFullYear(),d.getMonth(),d.getDate())); setCalYear(d.getFullYear()); setCalMonth(d.getMonth()); }
+            else nextMonth();
+          };
+
+          // Title text
+          const navTitle = calViewMode === 'month'
+            ? `${MONTHS[calMonth]} ${calYear}`
+            : calViewMode === 'week'
+            ? (() => { const s = new Date(weekDates[0]+'T00:00:00'); const e = new Date(weekDates[6]+'T00:00:00'); return `${s.toLocaleDateString('en-GB',{day:'numeric',month:'short'})} – ${e.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}`; })()
+            : new Date(selectedDate+'T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+
+          // Task card renderer
+          const TaskCard = ({ task }: { task: Task }) => {
+            const colorMap: Record<string, { border: string; bg: string }> = {
+              high: { border: 'border-red-500/60', bg: 'bg-red-500/10' },
+              medium: { border: 'border-amber-500/60', bg: 'bg-amber-500/10' },
+              low: { border: 'border-blue-500/60', bg: 'bg-blue-500/10' },
+            };
+            const c = colorMap[task.priority] || colorMap.low;
+            return (
+              <div className={`${c.bg} border-l-[3px] ${c.border} rounded-xl p-2.5 cursor-pointer hover:brightness-110 transition-all`}>
+                <p className={`text-xs font-medium truncate ${task.status === 'completed' ? 'line-through text-[var(--text-muted)]' : ''}`}>{task.title}</p>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  {task.assigned_to && (
+                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white text-[8px] font-bold border border-[var(--bg-card)]">
+                      {task.assigned_to.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Day view + sidebar */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
-              {/* Day schedule */}
-              <Card className="p-0 overflow-hidden">
-                <div className="flex items-center justify-center gap-3 py-4 border-b border-[var(--border-subtle)]">
-                  <button onClick={prevDay} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={16} /></button>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[var(--text-secondary)] text-sm">{dayInfo.weekday}</span>
-                    <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
-                      isSelectedToday ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white' : 'bg-[var(--bg-subtle)]'
-                    }`}>{dayInfo.day}</span>
-                  </div>
-                  <button onClick={nextDay} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={16} /></button>
+                  )}
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</span>
+                  {task.status !== 'completed' && (
+                    <button onClick={(e) => { e.stopPropagation(); updateStatus(task.id, 'completed'); }}
+                      className="text-[9px] text-emerald-400 hover:text-emerald-300 ml-auto">✓</button>
+                  )}
                 </div>
+              </div>
+            );
+          };
 
-                <div className="relative overflow-y-auto max-h-[600px]">
-                  <div className="sticky top-0 z-10 bg-[var(--bg-card)] border-b border-[var(--border-subtle)] px-4 py-2 text-xs text-[var(--text-muted)]">GMT +00:00</div>
-                  {HOURS.map(hour => {
-                    const hourTasks = dayTasks.filter(t => {
-                      // Distribute tasks across hours based on ID
-                      const assignedHour = 9 + (t.id % 8);
-                      return assignedHour === hour;
-                    });
-                    const timeLabel = `${hour > 12 ? hour-12 : hour === 0 ? 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`;
-                    const endHourLabel = (h: number) => `${h > 12 ? h-12 : h === 0 ? 12 : h}:00 ${h >= 12 ? 'PM' : 'AM'}`;
+          return (
+            <div className="space-y-4">
+              {/* Top bar */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => { setSelectedDate(todayStr); setCalYear(now.getFullYear()); setCalMonth(now.getMonth()); }}
+                    className="px-4 py-2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-medium hover:opacity-90 transition-opacity">Today</button>
+                  <div className="flex items-center gap-1">
+                    <button onClick={navPrev} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={16} /></button>
+                    <button onClick={navNext} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={16} /></button>
+                  </div>
+                  <span className="text-lg font-semibold">{navTitle}</span>
+                </div>
+                <div className="hidden md:flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-1">
+                  {(['month','week','day'] as const).map(m => (
+                    <button key={m} onClick={() => setCalViewMode(m)}
+                      className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all capitalize ${
+                        calViewMode === m ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                      }`}>{m}</button>
+                  ))}
+                </div>
+              </div>
 
-                    return (
-                      <div key={hour} className="flex border-b border-[var(--border-subtle)] border-dashed min-h-[80px]">
-                        <div className="w-20 shrink-0 px-4 py-3 text-xs text-[var(--text-muted)] text-right border-r border-[var(--border-subtle)]">{timeLabel}</div>
-                        <div className="flex-1 p-2 flex flex-col gap-2">
-                          {hourTasks.map(task => {
-                            const colorMap: Record<string, { border: string; bg: string }> = {
-                              high: { border: 'border-red-500/60', bg: 'bg-red-500/10' },
-                              medium: { border: 'border-amber-500/60', bg: 'bg-amber-500/10' },
-                              low: { border: 'border-blue-500/60', bg: 'bg-blue-500/10' },
-                            };
-                            const c = colorMap[task.priority] || colorMap.low;
-                            return (
-                              <div key={task.id} className={`${c.bg} border-l-[3px] ${c.border} rounded-xl p-3 cursor-pointer hover:brightness-110 transition-all`}>
-                                <div className="flex items-start justify-between">
-                                  <div>
-                                    <p className="text-[10px] text-[var(--text-muted)] mb-1">{timeLabel} - {endHourLabel(hour+1)}</p>
-                                    <p className="text-sm font-medium">{task.title}</p>
-                                    {task.description && <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-2">{task.description}</p>}
-                                  </div>
-                                  <button className="w-6 h-6 rounded-full hover:bg-white/10 flex items-center justify-center shrink-0">
-                                    <MoreVertical size={14} className="text-[var(--text-muted)]" />
-                                  </button>
-                                </div>
-                                <div className="flex items-center gap-2 mt-2">
-                                  {task.assigned_to && (
-                                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold border-2 border-[var(--bg-card)]">
-                                      {task.assigned_to.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
-                                    </div>
-                                  )}
-                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${PRIORITY_COLORS[task.priority]}`}>
-                                    {PRIORITY_LABELS[task.priority]}
-                                  </span>
-                                  {task.status !== 'completed' && (
-                                    <button onClick={() => updateStatus(task.id, 'completed')}
-                                      className="text-[10px] text-emerald-400 hover:text-emerald-300 ml-auto">✓ Done</button>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+              {/* Team selector */}
+              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
+                {TEAM.map(member => {
+                  const active = selectedMember === member.id;
+                  return (
+                    <button key={member.id} onClick={() => setSelectedMember(member.id)}
+                      className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl border transition-all shrink-0 ${
+                        active ? 'border-orange-500/50 bg-orange-500/10' : 'border-[var(--border-color)] bg-[var(--bg-card)] hover:border-[var(--border-input)]'
+                      }`}>
+                      <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${member.color} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{member.initials}</div>
+                      <div className="text-left hidden sm:block">
+                        <p className={`text-sm font-medium ${active ? 'text-orange-400' : ''}`}>{member.name}</p>
+                        <p className="text-xs text-[var(--text-muted)]">{member.role}</p>
                       </div>
-                    );
-                  })}
-                </div>
-              </Card>
+                    </button>
+                  );
+                })}
+              </div>
 
-              {/* Right sidebar */}
-              <div className="space-y-5">
-                {/* Mini calendar */}
+              {/* ── MONTH VIEW ── */}
+              {calViewMode === 'month' && (
                 <Card className="p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <button onClick={prevMonth} className="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={14} /></button>
-                    <span className="text-sm font-semibold">{MONTHS[calMonth]} {calYear}</span>
-                    <button onClick={nextMonth} className="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={14} /></button>
+                  <div className="grid grid-cols-7 mb-2">
+                    {DAYS_SHORT.map(d => <div key={d} className="text-center text-xs text-[var(--text-muted)] font-medium py-2">{d}</div>)}
                   </div>
-                  <div className="grid grid-cols-7 mb-1">
-                    {DAYS_SHORT.map(d => <div key={d} className="text-center text-[10px] text-[var(--text-muted)] font-medium py-1">{d}</div>)}
-                  </div>
-                  <div className="grid grid-cols-7 gap-y-1">
-                    {miniGrid.map((day, i) => {
-                      if (day === null) return <div key={i} />;
-                      const dateStr = fmtDate(calYear, calMonth, day);
-                      const isSel = dateStr === selectedDate;
-                      const isTod = dateStr === todayStr;
-                      const dayEvts = tasksByDate[dateStr] || [];
-                      return (
-                        <button key={i} onClick={() => setSelectedDate(dateStr)} className="flex flex-col items-center py-1">
-                          <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
-                            isSel ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white'
-                            : isTod ? 'ring-1 ring-orange-500/50 text-orange-400'
-                            : 'hover:bg-[var(--bg-hover)]'
-                          }`}>{day}</span>
-                          {dayEvts.length > 0 && (
-                            <div className="flex gap-0.5 mt-0.5">
-                              {dayEvts.slice(0,3).map((t,j) => (
-                                <div key={j} className={`w-1 h-1 rounded-full ${
-                                  t.priority === 'high' ? 'bg-red-500' : t.priority === 'medium' ? 'bg-amber-500' : 'bg-blue-500'
-                                }`} />
+                  <div className="grid grid-cols-7 gap-px">
+                    {(() => {
+                      const first = new Date(calYear, calMonth, 1);
+                      const last = new Date(calYear, calMonth + 1, 0);
+                      const startPad = (first.getDay() + 6) % 7;
+                      const cells = [];
+                      for (let i = 0; i < startPad; i++) cells.push(<div key={`pad-${i}`} className="min-h-[100px] bg-[var(--bg-subtle)]/30 rounded-lg" />);
+                      for (let day = 1; day <= last.getDate(); day++) {
+                        const dateStr = fmtDate(calYear, calMonth, day);
+                        const isToday = dateStr === todayStr;
+                        const isSel = dateStr === selectedDate;
+                        const dTasks = filtered.filter(t => t.due_date?.startsWith(dateStr));
+                        cells.push(
+                          <div key={day} onClick={() => { setSelectedDate(dateStr); setCalViewMode('day'); }}
+                            className={`min-h-[100px] rounded-lg p-1.5 border transition-colors cursor-pointer ${
+                              isSel ? 'border-orange-500/50 bg-orange-500/5' : isToday ? 'border-[var(--accent-orange)]/40 bg-[var(--accent-orange)]/5' : 'border-[var(--border-subtle)] bg-[var(--bg-subtle)]/20 hover:bg-[var(--bg-hover)]'
+                            }`}>
+                            <p className={`text-xs font-medium mb-1 ${isToday ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}>{day}</p>
+                            <div className="space-y-1">
+                              {dTasks.slice(0, 3).map(t => (
+                                <div key={t.id} className={`text-[10px] px-1.5 py-0.5 rounded truncate ${
+                                  t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 line-through' :
+                                  t.priority === 'high' ? 'bg-red-500/10 text-red-400' : 'bg-[var(--bg-hover)] text-[var(--text-secondary)]'
+                                }`}>{t.title}</div>
                               ))}
+                              {dTasks.length > 3 && <p className="text-[9px] text-[var(--text-muted)] px-1">+{dTasks.length - 3} more</p>}
                             </div>
-                          )}
+                          </div>
+                        );
+                      }
+                      return cells;
+                    })()}
+                  </div>
+                </Card>
+              )}
+
+              {/* ── WEEK VIEW ── */}
+              {calViewMode === 'week' && (
+                <Card className="p-0 overflow-hidden">
+                  {/* Week day headers */}
+                  <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-[var(--border-subtle)]">
+                    <div className="py-3 px-2 text-[10px] text-[var(--text-muted)] text-center">GMT</div>
+                    {weekDates.map((dateStr, i) => {
+                      const d = new Date(dateStr + 'T00:00:00');
+                      const isTod = dateStr === todayStr;
+                      const isSel = dateStr === selectedDate;
+                      return (
+                        <button key={dateStr} onClick={() => { setSelectedDate(dateStr); setCalViewMode('day'); }}
+                          className={`py-3 text-center border-l border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] transition-colors ${isSel ? 'bg-orange-500/5' : ''}`}>
+                          <p className="text-[10px] text-[var(--text-muted)]">{DAYS_SHORT[i]}</p>
+                          <p className={`text-sm font-bold mt-0.5 ${isTod ? 'w-7 h-7 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 text-white flex items-center justify-center mx-auto' : ''}`}>
+                            {d.getDate()}
+                          </p>
                         </button>
                       );
                     })}
                   </div>
-                </Card>
-
-                {/* Day summary */}
-                <Card className="p-5">
-                  <h3 className="text-sm font-semibold mb-3">
-                    {isSelectedToday ? "Today's Tasks" : new Date(selectedDate+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}
-                  </h3>
-                  {dayTasks.length > 0 ? (
-                    <div className="space-y-2">
-                      {dayTasks.map(t => (
-                        <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg bg-[var(--bg-subtle)]">
-                          <div className={`w-2 h-2 rounded-full shrink-0 ${
-                            t.priority === 'high' ? 'bg-red-500' : t.priority === 'medium' ? 'bg-amber-500' : 'bg-blue-500'
-                          }`} />
-                          <p className={`text-xs truncate flex-1 ${t.status === 'completed' ? 'line-through text-[var(--text-muted)]' : ''}`}>{t.title}</p>
-                          <span className={`text-[10px] ${PRIORITY_COLORS[t.priority]} px-1.5 py-0.5 rounded-full`}>{t.priority}</span>
+                  {/* Time grid */}
+                  <div className="overflow-y-auto max-h-[600px]">
+                    {HOURS.map(hour => {
+                      const timeLabel = `${hour > 12 ? hour-12 : hour === 0 ? 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`;
+                      return (
+                        <div key={hour} className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-[var(--border-subtle)] border-dashed min-h-[72px]">
+                          <div className="px-2 py-2 text-[10px] text-[var(--text-muted)] text-right border-r border-[var(--border-subtle)]">{timeLabel}</div>
+                          {weekDates.map(dateStr => {
+                            const dTasks = filtered.filter(t => t.due_date?.startsWith(dateStr) && (9 + (t.id % 8)) === hour);
+                            return (
+                              <div key={dateStr} className="border-l border-[var(--border-subtle)] p-1 space-y-1">
+                                {dTasks.map(t => <TaskCard key={t.id} task={t} />)}
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-[var(--text-muted)]">No tasks on this day</p>
-                  )}
-                </Card>
-
-                {/* Status filter */}
-                <Card className="p-5">
-                  <h3 className="text-sm font-semibold mb-3">Status</h3>
-                  <div className="space-y-2.5">
-                    {[{ key: 'all', label: 'All Tasks' }, { key: 'pending', label: 'Pending' }, { key: 'in_progress', label: 'In Progress' }, { key: 'completed', label: 'Completed' }].map(opt => (
-                      <label key={opt.key} className="flex items-center gap-3 cursor-pointer group" onClick={() => setFilterStatus(opt.key)}>
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                          filterStatus === opt.key ? 'border-orange-500' : 'border-[var(--border-input)]'
-                        }`}>{filterStatus === opt.key && <div className="w-2 h-2 rounded-full bg-orange-500" />}</div>
-                        <span className="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]">{opt.label}</span>
-                      </label>
-                    ))}
+                      );
+                    })}
                   </div>
                 </Card>
-              </div>
+              )}
+
+              {/* ── DAY VIEW ── */}
+              {calViewMode === 'day' && (
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
+                  <Card className="p-0 overflow-hidden">
+                    <div className="flex items-center justify-center gap-3 py-4 border-b border-[var(--border-subtle)]">
+                      <button onClick={prevDay} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={16} /></button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[var(--text-secondary)] text-sm">{dayInfo.weekday}</span>
+                        <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
+                          isSelectedToday ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white' : 'bg-[var(--bg-subtle)]'
+                        }`}>{dayInfo.day}</span>
+                      </div>
+                      <button onClick={nextDay} className="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={16} /></button>
+                    </div>
+                    <div className="relative overflow-y-auto max-h-[600px]">
+                      <div className="sticky top-0 z-10 bg-[var(--bg-card)] border-b border-[var(--border-subtle)] px-4 py-2 text-xs text-[var(--text-muted)]">GMT +00:00</div>
+                      {HOURS.map(hour => {
+                        const hourTasks = dayTasks.filter(t => (9 + (t.id % 8)) === hour);
+                        const timeLabel = `${hour > 12 ? hour-12 : hour === 0 ? 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`;
+                        const endHourLabel = (h: number) => `${h > 12 ? h-12 : h === 0 ? 12 : h}:00 ${h >= 12 ? 'PM' : 'AM'}`;
+                        return (
+                          <div key={hour} className="flex border-b border-[var(--border-subtle)] border-dashed min-h-[80px]">
+                            <div className="w-20 shrink-0 px-4 py-3 text-xs text-[var(--text-muted)] text-right border-r border-[var(--border-subtle)]">{timeLabel}</div>
+                            <div className="flex-1 p-2 flex flex-col gap-2">
+                              {hourTasks.map(task => {
+                                const colorMap: Record<string, { border: string; bg: string }> = {
+                                  high: { border: 'border-red-500/60', bg: 'bg-red-500/10' },
+                                  medium: { border: 'border-amber-500/60', bg: 'bg-amber-500/10' },
+                                  low: { border: 'border-blue-500/60', bg: 'bg-blue-500/10' },
+                                };
+                                const c = colorMap[task.priority] || colorMap.low;
+                                return (
+                                  <div key={task.id} className={`${c.bg} border-l-[3px] ${c.border} rounded-xl p-3 cursor-pointer hover:brightness-110 transition-all`}>
+                                    <div className="flex items-start justify-between">
+                                      <div>
+                                        <p className="text-[10px] text-[var(--text-muted)] mb-1">{timeLabel} - {endHourLabel(hour+1)}</p>
+                                        <p className="text-sm font-medium">{task.title}</p>
+                                        {task.description && <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-2">{task.description}</p>}
+                                      </div>
+                                      <button className="w-6 h-6 rounded-full hover:bg-white/10 flex items-center justify-center shrink-0">
+                                        <MoreVertical size={14} className="text-[var(--text-muted)]" />
+                                      </button>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-2">
+                                      {task.assigned_to && (
+                                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold border-2 border-[var(--bg-card)]">
+                                          {task.assigned_to.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+                                        </div>
+                                      )}
+                                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${PRIORITY_COLORS[task.priority]}`}>{PRIORITY_LABELS[task.priority]}</span>
+                                      {task.status !== 'completed' && (
+                                        <button onClick={() => updateStatus(task.id, 'completed')}
+                                          className="text-[10px] text-emerald-400 hover:text-emerald-300 ml-auto">✓ Done</button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Card>
+
+                  {/* Right sidebar */}
+                  <div className="space-y-5">
+                    <Card className="p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <button onClick={prevMonth} className="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={14} /></button>
+                        <span className="text-sm font-semibold">{MONTHS[calMonth]} {calYear}</span>
+                        <button onClick={nextMonth} className="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronRight size={14} /></button>
+                      </div>
+                      <div className="grid grid-cols-7 mb-1">
+                        {DAYS_SHORT.map(d => <div key={d} className="text-center text-[10px] text-[var(--text-muted)] font-medium py-1">{d}</div>)}
+                      </div>
+                      <div className="grid grid-cols-7 gap-y-1">
+                        {miniGrid.map((day, i) => {
+                          if (day === null) return <div key={i} />;
+                          const dateStr = fmtDate(calYear, calMonth, day);
+                          const isSel = dateStr === selectedDate;
+                          const isTod = dateStr === todayStr;
+                          const dayEvts = tasksByDate[dateStr] || [];
+                          return (
+                            <button key={i} onClick={() => setSelectedDate(dateStr)} className="flex flex-col items-center py-1">
+                              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
+                                isSel ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white' : isTod ? 'ring-1 ring-orange-500/50 text-orange-400' : 'hover:bg-[var(--bg-hover)]'
+                              }`}>{day}</span>
+                              {dayEvts.length > 0 && (
+                                <div className="flex gap-0.5 mt-0.5">
+                                  {dayEvts.slice(0,3).map((t,j) => (
+                                    <div key={j} className={`w-1 h-1 rounded-full ${t.priority === 'high' ? 'bg-red-500' : t.priority === 'medium' ? 'bg-amber-500' : 'bg-blue-500'}`} />
+                                  ))}
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </Card>
+                    <Card className="p-5">
+                      <h3 className="text-sm font-semibold mb-3">{isSelectedToday ? "Today's Tasks" : new Date(selectedDate+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</h3>
+                      {dayTasks.length > 0 ? (
+                        <div className="space-y-2">{dayTasks.map(t => (
+                          <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg bg-[var(--bg-subtle)]">
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${t.priority === 'high' ? 'bg-red-500' : t.priority === 'medium' ? 'bg-amber-500' : 'bg-blue-500'}`} />
+                            <p className={`text-xs truncate flex-1 ${t.status === 'completed' ? 'line-through text-[var(--text-muted)]' : ''}`}>{t.title}</p>
+                            <span className={`text-[10px] ${PRIORITY_COLORS[t.priority]} px-1.5 py-0.5 rounded-full`}>{t.priority}</span>
+                          </div>
+                        ))}</div>
+                      ) : <p className="text-xs text-[var(--text-muted)]">No tasks on this day</p>}
+                    </Card>
+                    <Card className="p-5">
+                      <h3 className="text-sm font-semibold mb-3">Status</h3>
+                      <div className="space-y-2.5">
+                        {[{ key: 'all', label: 'All Tasks' }, { key: 'pending', label: 'Pending' }, { key: 'in_progress', label: 'In Progress' }, { key: 'completed', label: 'Completed' }].map(opt => (
+                          <label key={opt.key} className="flex items-center gap-3 cursor-pointer group" onClick={() => setFilterStatus(opt.key)}>
+                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                              filterStatus === opt.key ? 'border-orange-500' : 'border-[var(--border-input)]'
+                            }`}>{filterStatus === opt.key && <div className="w-2 h-2 rounded-full bg-orange-500" />}</div>
+                            <span className="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]">{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </Card>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Add Modal */}
         {showAdd && (
