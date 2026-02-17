@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Avatar, SearchBar, Input, Select, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Clock, ArrowLeft, Calendar, CheckCircle, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home } from 'lucide-react';
+import { Plus, X, Clock, ArrowLeft, Calendar, CheckCircle, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface EnquiryRaw {
   id: number;
@@ -541,6 +542,7 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
 // ─── Main Page ───
 export default function EnquiriesV3() {
   const api = useApi();
+  const nav = useNavigate();
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -598,6 +600,9 @@ export default function EnquiriesV3() {
                 </span>
               )}
             </div>
+            <button onClick={() => nav('/v3/enquiries/kanban')} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors" title="Kanban view">
+              <LayoutGrid size={16} />
+            </button>
             <Button variant="ghost" size="sm" onClick={() => setShowAdd(true)}>
               <Plus size={16} />
             </Button>
