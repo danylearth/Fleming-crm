@@ -227,15 +227,15 @@ export default function TasksV3() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-0.5 mr-1">
-                <button onClick={() => setViewMode('list')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                    viewMode === 'list' ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}><List size={13} /> List</button>
-                <button onClick={() => setViewMode('calendar')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                    viewMode === 'calendar' ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}><CalendarDays size={13} /> Calendar</button>
+              <div className="flex items-center bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-0.5 mr-1">
+                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[var(--bg-hover)] text-[var(--text-primary)]">
+                  <List size={13} /> List
+                </button>
+                <div className="w-px h-4 bg-[var(--border-color)]" />
+                {(['month','week','day'] as const).map(m => (
+                  <button key={m} onClick={() => { setViewMode('calendar'); setCalViewMode(m); }}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-all capitalize">{m}</button>
+                ))}
               </div>
               <FilterDropdown icon={Building2} label="Property" value={filterProperty}
                 displayValue={properties.find(p => p.id === filterProperty)?.address} onClear={() => setFilterProperty(null)}
@@ -365,22 +365,8 @@ export default function TasksV3() {
 
           return (
             <div className="space-y-4">
-              {/* Single toolbar: Back to List | Today | < > Title | Month Week Day | + Add Task */}
+              {/* Single toolbar: Today | < > Title | ── | List Month Week Day | + Add Task */}
               <div className="flex items-center gap-3 flex-wrap">
-                {/* Back to list */}
-                <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-0.5">
-                  <button onClick={() => setViewMode('list')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
-                    <List size={13} /> List
-                  </button>
-                  <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gradient-to-r from-orange-500 to-pink-500 text-white">
-                    <CalendarDays size={13} /> Calendar
-                  </button>
-                </div>
-
-                <div className="h-5 w-px bg-[var(--border-color)]" />
-
-                {/* Today + nav */}
                 <button onClick={() => { setSelectedDate(todayStr); setCalYear(now.getFullYear()); setCalMonth(now.getMonth()); }}
                   className="px-3 py-1.5 rounded-full bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] text-xs font-medium transition-colors">Today</button>
                 <button onClick={navPrev} className="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center"><ChevronLeft size={15} /></button>
@@ -389,8 +375,13 @@ export default function TasksV3() {
 
                 <div className="flex-1" />
 
-                {/* Month / Week / Day */}
-                <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-0.5">
+                {/* Combined: List | Month | Week | Day */}
+                <div className="flex items-center bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full p-0.5">
+                  <button onClick={() => setViewMode('list')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
+                    <List size={13} /> List
+                  </button>
+                  <div className="w-px h-4 bg-[var(--border-color)]" />
                   {(['month','week','day'] as const).map(m => (
                     <button key={m} onClick={() => setCalViewMode(m)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all capitalize ${
