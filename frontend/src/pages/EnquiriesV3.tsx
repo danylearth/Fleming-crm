@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Avatar, SearchBar, Input, Select, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Clock, ArrowLeft, Calendar, CheckCircle, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List, Building2, ChevronDown, Archive, Pencil } from 'lucide-react';
+import { Plus, X, Clock, ArrowLeft, Calendar, CheckCircle, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List, Building2, ChevronDown, Archive, Pencil, ArrowRight, Eye, UserPlus, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface EnquiryRaw {
@@ -263,6 +263,13 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
   const [editing, setEditing] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [docs] = useState<string[]>([]);
+  const [showWorkflow, setShowWorkflow] = useState(false);
+  const [workflowMode, setWorkflowMode] = useState<'choose'|'viewing'|'awaiting'|'onboarding'|'reject'>('choose');
+  const [wfDate, setWfDate] = useState('');
+  const [wfTime, setWfTime] = useState('10:00');
+  const [wfPropId, setWfPropId] = useState('');
+  const [wfReason, setWfReason] = useState('');
+  const [wfLoading, setWfLoading] = useState(false);
 
   const loadDetail = useCallback(async () => {
     try {
@@ -299,6 +306,45 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
   const updateStatus = async (status: string) => {
     setField('status', status);
     await save({ status });
+  };
+
+  const handleWorkflow = async () => {
+    setWfLoading(true);
+    try {
+      const name = [form.first_name_1, form.last_name_1].filter(Boolean).join(' ');
+      switch (workflowMode) {
+        case 'viewing':
+          if (wfPropId && wfDate) {
+            await api.post('/api/property-viewings', {
+              property_id: Number(wfPropId), enquiry_id: enquiryId,
+              viewer_name: name, viewer_email: form.email_1 || '',
+              viewer_phone: form.phone_1 || '', viewing_date: wfDate, viewing_time: wfTime,
+            });
+            await save({ status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate });
+          }
+          break;
+        case 'awaiting':
+          if (wfDate) await save({ status: 'awaiting_response', follow_up_date: wfDate });
+          break;
+        case 'onboarding':
+          await save({ status: 'onboarding', follow_up_date: wfDate || null });
+          break;
+        case 'reject':
+          await save({ status: 'rejected', rejection_reason: wfReason });
+          break;
+      }
+      setShowWorkflow(false);
+      setWorkflowMode('choose');
+      setWfDate(''); setWfTime('10:00'); setWfPropId(''); setWfReason('');
+    } catch {}
+    setWfLoading(false);
+  };
+
+  const openWorkflow = () => {
+    setWorkflowMode('choose');
+    setWfDate(''); setWfTime('10:00'); setWfReason('');
+    setWfPropId(form.linked_property_id?.toString() || '');
+    setShowWorkflow(true);
   };
 
   const saveNote = async () => {
@@ -550,24 +596,10 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
           {/* ACTIONS */}
           <div>
             <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Actions</h4>
-            <div className="space-y-2">
-              <button onClick={() => updateStatus('viewing_booked')}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-primary)]">
-                <Calendar size={16} className="text-purple-400" /> Book Viewing
-              </button>
-              <button onClick={() => updateStatus('awaiting_response')}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-primary)]">
-                <Clock size={16} className="text-amber-400" /> Awaiting Response
-              </button>
-              <button onClick={() => updateStatus('onboarding')}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-primary)]">
-                <CheckCircle size={16} className="text-green-400" /> Start Onboarding
-              </button>
-              <button onClick={() => updateStatus('rejected')}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium bg-red-500/10 hover:bg-red-500/20 transition-colors text-red-400">
-                <X size={16} /> Reject
-              </button>
-            </div>
+            <button onClick={openWorkflow}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium bg-gradient-to-r from-orange-500 to-pink-500 text-white hover:opacity-90 transition-opacity">
+              <ArrowRight size={14} /> Progress / Reject
+            </button>
           </div>
 
           {/* PROPERTY */}
@@ -631,6 +663,102 @@ function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
           </div>
         </div>
       </div>
+
+      {/* ═══ Workflow Modal ═══ */}
+      {showWorkflow && (
+        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowWorkflow(false)}>
+          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <Avatar name={name} size="md" />
+                <div>
+                  <h3 className="text-lg font-bold">{name}</h3>
+                  <p className="text-xs text-[var(--text-muted)]">Update workflow</p>
+                </div>
+              </div>
+              <button onClick={() => setShowWorkflow(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+            </div>
+
+            {workflowMode === 'choose' ? (
+              <div className="space-y-2">
+                <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Progress</p>
+                <button onClick={() => setWorkflowMode('viewing')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><Eye size={14} className="text-white" /></div>
+                  <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p><p className="text-xs text-[var(--text-muted)]">Select date, time & property</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
+                <button onClick={() => setWorkflowMode('awaiting')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><Clock size={14} className="text-white" /></div>
+                  <div className="flex-1"><p className="text-sm font-medium">Awaiting Client Response</p><p className="text-xs text-[var(--text-muted)]">Set follow-up date</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
+                <button onClick={() => setWorkflowMode('onboarding')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center"><UserPlus size={14} className="text-white" /></div>
+                  <div className="flex-1"><p className="text-sm font-medium">Start Onboarding</p><p className="text-xs text-[var(--text-muted)]">Optional follow-up date</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
+                <div className="h-px bg-[var(--border-subtle)] my-3" />
+                <button onClick={() => setWorkflowMode('reject')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center"><XCircle size={14} className="text-white" /></div>
+                  <div className="flex-1"><p className="text-sm font-medium text-red-400">Reject & Archive</p><p className="text-xs text-[var(--text-muted)]">Removes from queue, stays searchable</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <button onClick={() => setWorkflowMode('choose')} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">← Back</button>
+                {workflowMode === 'viewing' && (
+                  <>
+                    <Select label="Link to Property" value={wfPropId} onChange={setWfPropId}
+                      options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
+                    <Input label="Viewing Date" value={wfDate} onChange={setWfDate} type="date" />
+                    <Input label="Viewing Time" value={wfTime} onChange={setWfTime} type="time" />
+                    <p className="text-xs text-[var(--text-muted)]">Creates a Property Viewing. Card disappears from queue and reappears on the viewing date.</p>
+                  </>
+                )}
+                {workflowMode === 'awaiting' && (
+                  <>
+                    <Input label="Follow-up Date" value={wfDate} onChange={setWfDate} type="date" />
+                    <p className="text-xs text-[var(--text-muted)]">Card disappears from the queue and reappears on this date.</p>
+                  </>
+                )}
+                {workflowMode === 'onboarding' && (
+                  <>
+                    <Input label="Follow-up Date (optional)" value={wfDate} onChange={setWfDate} type="date" />
+                    <p className="text-xs text-[var(--text-muted)]">{wfDate ? 'Card will disappear and reappear on this date.' : 'Card stays visible in the Onboarding column.'}</p>
+                  </>
+                )}
+                {workflowMode === 'reject' && (
+                  <>
+                    <div>
+                      <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Reason (optional)</label>
+                      <textarea value={wfReason} onChange={e => setWfReason(e.target.value)} rows={3}
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none"
+                        placeholder="Reason for rejection..." />
+                    </div>
+                    <p className="text-xs text-[var(--text-muted)]">Record will be archived but kept on file for future reference.</p>
+                  </>
+                )}
+                <div className="flex gap-3 pt-2">
+                  <Button variant="ghost" onClick={() => setShowWorkflow(false)}>Cancel</Button>
+                  <Button
+                    variant={workflowMode === 'reject' ? 'outline' : 'gradient'}
+                    onClick={handleWorkflow}
+                    disabled={wfLoading || (workflowMode === 'viewing' && (!wfDate || !wfPropId)) || (workflowMode === 'awaiting' && !wfDate)}
+                    className={workflowMode === 'reject' ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : ''}
+                  >
+                    {wfLoading ? 'Saving...' : workflowMode === 'reject' ? 'Reject & Archive' : 'Confirm'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
