@@ -161,6 +161,17 @@ export default function TasksV3() {
       const match = (t.entity_type === 'tenant' && t.entity_id === filterTenant) || (t.entity_type === 'tenant_enquiry' && t.entity_id === filterTenant);
       if (!match) return false;
     }
+    // Team member filter
+    if (selectedMember !== 'all') {
+      const member = TEAM.find(m => m.id === selectedMember);
+      if (member && t.assigned_to) {
+        const assignedLower = t.assigned_to.toLowerCase();
+        const nameLower = member.name.toLowerCase();
+        if (!assignedLower.includes(nameLower) && !nameLower.includes(assignedLower)) return false;
+      } else if (member && !t.assigned_to) {
+        return false; // No assignment, filter it out when specific member selected
+      }
+    }
     return true;
   });
 
