@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import V3Layout from '../components/V3Layout';
 import { Card, GlassCard, Button, Input, Avatar, ProgressRing, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, CheckCircle2, Clock, Inbox, Calendar, Search, ChevronDown, Building2, Users, UserCircle, Tag } from 'lucide-react';
+import { Plus, X, CheckCircle2, Clock, Inbox, Calendar, Search, ChevronDown, ChevronLeft, ChevronRight, Building2, Users, UserCircle, Tag, List, CalendarDays } from 'lucide-react';
 
 interface Task {
   id: number; title: string; description: string; assigned_to: string;
@@ -109,6 +109,9 @@ export default function TasksV3() {
   const [filterLandlord, setFilterLandlord] = useState<number | null>(null);
   const [filterTenant, setFilterTenant] = useState<number | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending', due_date: '', task_type: 'manual' });
 
@@ -233,6 +236,16 @@ export default function TasksV3() {
                 onClear={() => setFilterType(null)}
                 items={TASK_TYPES.map(t => ({ id: t, label: t.replace('_', ' ').replace(/^\w/, c => c.toUpperCase()) }))}
                 onSelect={id => setFilterType(id)} />
+              <div className="flex items-center bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-1">
+                <button onClick={() => setViewMode('list')}
+                  className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+                  <List size={16} />
+                </button>
+                <button onClick={() => setViewMode('calendar')}
+                  className={`p-2 rounded-lg transition-colors ${viewMode === 'calendar' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+                  <CalendarDays size={16} />
+                </button>
+              </div>
               <Button variant="gradient" onClick={() => setShowAdd(true)}>
                 <Plus size={14} className="mr-1.5" /> Add Task
               </Button>
@@ -247,12 +260,79 @@ export default function TasksV3() {
           </div>
         </div>
 
-        {/* Task List */}
+        {/* Content */}
         {loading ? (
           <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
+        ) : viewMode === 'calendar' ? (
+          /* ==================== CALENDAR VIEW ==================== */
+          <GlassCard className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); } else setCalMonth(calMonth - 1); }}
+                className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                <ChevronLeft size={18} />
+              </button>
+              <h3 className="text-lg font-semibold">
+                {new Date(calYear, calMonth).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+              </h3>
+              <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); } else setCalMonth(calMonth + 1); }}
+                className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                <ChevronRight size={18} />
+              </button>
+            </div>
+            {/* Day headers */}
+            <div className="grid grid-cols-7 gap-px mb-1">
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                <div key={d} className="text-center text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wider py-2">{d}</div>
+              ))}
+            </div>
+            {/* Calendar grid */}
+            <div className="grid grid-cols-7 gap-px">
+              {(() => {
+                const firstDay = new Date(calYear, calMonth, 1);
+                const lastDay = new Date(calYear, calMonth + 1, 0);
+                const startPad = (firstDay.getDay() + 6) % 7; // Monday-based
+                const totalDays = lastDay.getDate();
+                const today = new Date();
+                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+                const cells = [];
+                for (let i = 0; i < startPad; i++) cells.push(<div key={`pad-${i}`} className="min-h-[90px] bg-[var(--bg-subtle)]/30 rounded-lg" />);
+
+                for (let day = 1; day <= totalDays; day++) {
+                  const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                  const isToday = dateStr === todayStr;
+                  const dayTasks = filtered.filter(t => t.due_date?.startsWith(dateStr));
+
+                  cells.push(
+                    <div key={day} className={`min-h-[90px] rounded-lg p-1.5 border transition-colors ${
+                      isToday ? 'border-[var(--accent-orange)]/40 bg-[var(--accent-orange)]/5' : 'border-[var(--border-subtle)] bg-[var(--bg-subtle)]/20 hover:bg-[var(--bg-hover)]'
+                    }`}>
+                      <p className={`text-xs font-medium mb-1 ${isToday ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}>{day}</p>
+                      <div className="space-y-1">
+                        {dayTasks.slice(0, 3).map(t => (
+                          <div key={t.id} className={`text-[10px] px-1.5 py-0.5 rounded truncate ${
+                            t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 line-through' :
+                            t.priority === 'high' || t.priority === 'urgent' ? 'bg-red-500/10 text-red-400' :
+                            'bg-[var(--bg-hover)] text-[var(--text-secondary)]'
+                          }`}>
+                            {t.title}
+                          </div>
+                        ))}
+                        {dayTasks.length > 3 && (
+                          <p className="text-[9px] text-[var(--text-muted)] px-1">+{dayTasks.length - 3} more</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+                return cells;
+              })()}
+            </div>
+          </GlassCard>
         ) : filtered.length === 0 ? (
           <EmptyState message={hasFilters || search ? 'No tasks match your filters' : 'No tasks yet'} icon={<CheckCircle2 size={32} />} />
         ) : (
+          /* ==================== LIST VIEW ==================== */
           <div className="space-y-3">
             {filtered.map(task => {
               const overdue = isOverdue(task);
