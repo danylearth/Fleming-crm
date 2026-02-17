@@ -295,6 +295,15 @@ app.put('/api/landlords/:id', authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
+app.delete('/api/landlords/:id', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    db.prepare('UPDATE properties SET landlord_id = NULL WHERE landlord_id = ?').run(req.params.id);
+    db.prepare('DELETE FROM landlords WHERE id = ?').run(req.params.id);
+    logAudit(req.user?.id, req.user?.email, 'delete', 'landlord', parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete landlord' }); }
+});
+
 // ============ LANDLORDS BDM ============
 
 app.get('/api/landlords-bdm', authMiddleware, (req: AuthRequest, res) => {
@@ -604,11 +613,11 @@ app.post('/api/tenants', authMiddleware, (req: AuthRequest, res) => {
     }
     
     const stmt = db.prepare(`
-      INSERT INTO tenants (name, first_name_1, last_name_1, email, phone, notes)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO tenants (name, first_name_1, last_name_1, email, phone, notes, property_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(name, data.first_name_1 || name, data.last_name_1 || '', 
-      data.email || null, data.phone || null, data.notes || null);
+      data.email || null, data.phone || null, data.notes || null, data.property_id || null);
     
     logAudit(req.user?.id, req.user?.email, 'create', 'tenant', result.lastInsertRowid as number);
     res.json({ id: result.lastInsertRowid });
@@ -669,6 +678,14 @@ app.put('/api/tenants/:id', authMiddleware, (req: AuthRequest, res) => {
     console.error(err);
     res.status(500).json({ error: 'Failed to update tenant' });
   }
+});
+
+app.delete('/api/tenants/:id', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    db.prepare('DELETE FROM tenants WHERE id = ?').run(req.params.id);
+    logAudit(req.user?.id, req.user?.email, 'delete', 'tenant', parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete tenant' }); }
 });
 
 // ============ PROPERTIES ============
