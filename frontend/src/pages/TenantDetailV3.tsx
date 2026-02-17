@@ -707,7 +707,7 @@ export default function TenantDetailV3() {
 
             {/* Maintenance */}
             <GlassCard className="p-6">
-              <SectionHeader title="Maintenance" icon={<Wrench size={16} />} />
+              <SectionHeader title="Maintenance Requests" icon={<Wrench size={16} />} />
               {maintenanceLoading ? (
                 <p className="text-xs text-[var(--text-muted)]">Loading...</p>
               ) : maintenance.length === 0 ? (
