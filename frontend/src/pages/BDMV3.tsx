@@ -124,8 +124,11 @@ export default function BDMV3() {
     setWorkflowLoading(false);
   };
 
+  const canConvert = (p: Prospect) => !!(p.name && p.email && p.phone && p.address);
+
   const doConvert = async () => {
     if (!workflowProspect) return;
+    if (!canConvert(workflowProspect)) return;
     setConverting(true);
     try {
       await api.post(`/api/landlords-bdm/${workflowProspect.id}/convert`, {});
@@ -217,7 +220,7 @@ export default function BDMV3() {
           <DragDropContext onDragEnd={onDragEnd}>
             <div className="flex gap-4 overflow-x-auto pb-4">
               {STATUSES.filter(s => {
-                if (statusFilter === 'active') return s.key !== 'onboarded' && s.key !== 'not_interested';
+                if (statusFilter === 'active') return s.key !== 'not_interested';
                 if (statusFilter === 'all') return true;
                 return s.key === statusFilter;
               }).map(col => {
@@ -453,17 +456,31 @@ export default function BDMV3() {
                   <>
                     <div className="h-px bg-[var(--border-subtle)] my-3" />
                     <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Convert</p>
-                    <button onClick={doConvert} disabled={converting}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors text-left border border-emerald-500/20">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
-                        <UserPlus size={14} className="text-white" />
+                    {canConvert(workflowProspect) ? (
+                      <button onClick={doConvert} disabled={converting}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors text-left border border-emerald-500/20">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+                          <UserPlus size={14} className="text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-emerald-400">{converting ? 'Converting...' : 'Convert to Landlord'}</p>
+                          <p className="text-xs text-[var(--text-muted)]">Move to Landlords module</p>
+                        </div>
+                        <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                      </button>
+                    ) : (
+                      <div className="px-4 py-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                        <p className="text-sm font-medium text-[var(--text-muted)]">Convert to Landlord</p>
+                        <p className="text-xs text-orange-400 mt-1">Missing required fields:</p>
+                        <ul className="text-xs text-[var(--text-muted)] mt-1 space-y-0.5">
+                          {!workflowProspect.name && <li>• Name</li>}
+                          {!workflowProspect.email && <li>• Email</li>}
+                          {!workflowProspect.phone && <li>• Phone</li>}
+                          {!workflowProspect.address && <li>• Address</li>}
+                        </ul>
+                        <p className="text-[10px] text-[var(--text-muted)] mt-2">Edit the prospect to add missing info first</p>
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-emerald-400">{converting ? 'Converting...' : 'Convert to Landlord'}</p>
-                        <p className="text-xs text-[var(--text-muted)]">Move to Landlords module</p>
-                      </div>
-                      <ArrowRight size={14} className="text-[var(--text-muted)]" />
-                    </button>
+                    )}
                   </>
                 )}
 

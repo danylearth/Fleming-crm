@@ -8,6 +8,7 @@ import {
   Plus, X, XCircle, LayoutGrid, List,
   ChevronDown, ArrowRight, Archive, CalendarDays, Building2, Search
 } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import {
   NewIcon, ViewedIcon, BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon
 } from '../components/v3/icons/FlemingIcons';
@@ -647,57 +648,67 @@ export default function EnquiriesKanbanV3() {
           </div>
         ) : (
           /* Kanban */
-          <div className="flex-1 overflow-x-auto overflow-y-hidden">
-            <div className="flex gap-4 p-4 md:p-6 h-full min-w-max">
-              {COLUMNS.map(col => {
-                const colEnquiries = visibleEnquiries.filter(e => e.status === col.key);
-                const Icon = col.icon;
-                return (
-                  <div key={col.key} className="w-[280px] shrink-0 flex flex-col"
-                    onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-                    onDrop={e => {
-                      e.preventDefault();
-                      const id = parseInt(e.dataTransfer.getData('text/plain'));
-                      if (id && !isNaN(id)) {
-                        const enq = enquiries.find(eq => eq.id === id);
-                        if (enq) setActionEnquiry(enq);
-                      }
-                    }}>
-                    {/* Column Header */}
-                    <div className="flex items-center gap-2.5 mb-3 px-1">
-                      <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${col.color} flex items-center justify-center`}>
-                        <Icon size={14} className="text-white" />
-                      </div>
-                      <span className="text-sm font-semibold">{col.label}</span>
-                      <span className="ml-auto text-xs text-[var(--text-muted)] bg-[var(--bg-hover)] px-2 py-0.5 rounded-full">
-                        {colEnquiries.length}
-                      </span>
-                    </div>
-
-                    {/* Cards */}
-                    <div className="flex-1 overflow-y-auto space-y-3 pr-1 pb-4">
-                      {colEnquiries.length === 0 ? (
-                        <div className="flex items-center justify-center h-24 rounded-2xl border-2 border-dashed border-[var(--border-subtle)] text-[var(--text-muted)] text-xs">
-                          {col.key === 'new' ? 'No new enquiries' : 'Drop here'}
+          <DragDropContext onDragEnd={(result: DropResult) => {
+            const { draggableId, destination, source } = result;
+            if (!destination || destination.droppableId === source.droppableId) return;
+            const id = parseInt(draggableId);
+            const enq = enquiries.find(eq => eq.id === id);
+            if (enq) setActionEnquiry(enq);
+          }}>
+            <div className="flex-1 overflow-x-auto overflow-y-hidden">
+              <div className="flex gap-4 p-4 md:p-6 h-full min-w-max">
+                {COLUMNS.map(col => {
+                  const colEnquiries = visibleEnquiries.filter(e => e.status === col.key);
+                  const Icon = col.icon;
+                  return (
+                    <div key={col.key} className="w-[280px] shrink-0 flex flex-col">
+                      {/* Column Header */}
+                      <div className="flex items-center gap-2.5 mb-3 px-1">
+                        <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${col.color} flex items-center justify-center`}>
+                          <Icon size={14} className="text-white" />
                         </div>
-                      ) : (
-                        colEnquiries.map(e => (
-                          <div key={e.id} draggable
-                            onDragStart={ev => ev.dataTransfer.setData('text/plain', String(e.id))}>
-                            <EnquiryCard
-                              enquiry={e}
-                              property={e.linked_property_id ? propMap.get(e.linked_property_id) : undefined}
-                              onAction={() => setActionEnquiry(e)}
-                            />
+                        <span className="text-sm font-semibold">{col.label}</span>
+                        <span className="ml-auto text-xs text-[var(--text-muted)] bg-[var(--bg-hover)] px-2 py-0.5 rounded-full">
+                          {colEnquiries.length}
+                        </span>
+                      </div>
+
+                      {/* Droppable area */}
+                      <Droppable droppableId={col.key}>
+                        {(provided, snapshot) => (
+                          <div ref={provided.innerRef} {...provided.droppableProps}
+                            className={`flex-1 overflow-y-auto space-y-3 pr-1 pb-4 min-h-[100px] rounded-xl transition-colors ${snapshot.isDraggingOver ? 'bg-[var(--accent-orange)]/5 ring-1 ring-[var(--accent-orange)]/20' : ''}`}>
+                            {colEnquiries.length === 0 && !snapshot.isDraggingOver ? (
+                              <div className="flex items-center justify-center h-24 rounded-2xl border-2 border-dashed border-[var(--border-subtle)] text-[var(--text-muted)] text-xs">
+                                {col.key === 'new' ? 'No new enquiries' : 'Drop here'}
+                              </div>
+                            ) : (
+                              colEnquiries.map((e, index) => (
+                                <Draggable key={e.id} draggableId={String(e.id)} index={index}>
+                                  {(provided, snapshot) => (
+                                    <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
+                                      style={provided.draggableProps.style}
+                                      className={`${snapshot.isDragging ? 'ring-2 ring-[var(--accent-orange)]/40 shadow-lg rounded-2xl' : ''}`}>
+                                      <EnquiryCard
+                                        enquiry={e}
+                                        property={e.linked_property_id ? propMap.get(e.linked_property_id) : undefined}
+                                        onAction={() => setActionEnquiry(e)}
+                                      />
+                                    </div>
+                                  )}
+                                </Draggable>
+                              ))
+                            )}
+                            {provided.placeholder}
                           </div>
-                        ))
-                      )}
+                        )}
+                      </Droppable>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </DragDropContext>
         )}
 
         {/* Action Modal */}
