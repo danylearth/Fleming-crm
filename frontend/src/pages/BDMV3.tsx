@@ -180,7 +180,7 @@ export default function BDMV3() {
             { key: 'all', label: `All (${prospects.length})` },
             ...STATUSES.map(s => ({ key: s.key, label: `${s.label} (${statusCounts[s.key] || 0})` })),
           ].map(f => (
-            <Tag key={f.key} active={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>
+            <Tag key={f.key} active={statusFilter === f.key} onClick={() => { setStatusFilter(f.key); if (viewMode === 'kanban') setViewMode('list'); }}>
               {f.label}
             </Tag>
           ))}

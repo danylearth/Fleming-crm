@@ -89,8 +89,10 @@ export function Tag({ children, active, onClick }: {
 }) {
   return (
     <span onClick={onClick}
-      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-        active ? 'bg-[var(--bg-input)] text-[var(--text-primary)]' : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+      className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+        active
+          ? 'bg-[var(--text-primary)] text-[var(--bg-page)] border-[var(--text-primary)]'
+          : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)] hover:border-[var(--text-muted)]'
       } ${onClick ? 'cursor-pointer' : ''}`}>
       {children}
     </span>
