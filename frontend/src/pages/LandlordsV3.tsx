@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Building2, Phone, Mail, ChevronDown, Search, Check, LayoutGrid, List } from 'lucide-react';
+import { Plus, X, Building2, Phone, Mail, ChevronDown, Search, Check, LayoutGrid, List, Users } from 'lucide-react';
 
 interface Landlord {
   id: number;
@@ -23,13 +23,24 @@ interface Property {
   status?: string;
 }
 
+interface Tenant {
+  id: number;
+  title_1?: string;
+  first_name_1: string;
+  last_name_1: string;
+  property_id: number | null;
+}
+
 export default function LandlordsV3() {
   const navigate = useNavigate();
   const api = useApi();
   const [landlords, setLandlords] = useState<Landlord[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
+  const [tenantFilter, setTenantFilter] = useState<number | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', notes: '' });
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<number[]>([]);
@@ -38,12 +49,14 @@ export default function LandlordsV3() {
 
   const load = async () => {
     try {
-      const [data, props] = await Promise.all([
+      const [data, props, tens] = await Promise.all([
         api.get('/api/landlords'),
         api.get('/api/properties'),
+        api.get('/api/tenant-enquiries'),
       ]);
       setLandlords(data);
       setProperties(props);
+      setTenants(tens);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -59,11 +72,35 @@ export default function LandlordsV3() {
     return acc;
   }, {} as Record<number, Property[]>);
 
-  const filtered = landlords.filter(l =>
-    l.name.toLowerCase().includes(search.toLowerCase()) ||
-    l.email?.toLowerCase().includes(search.toLowerCase()) ||
-    landlordProperties[l.id]?.some(p => p.address.toLowerCase().includes(search.toLowerCase()))
-  );
+  // Build tenant → property → landlord mapping
+  const tenantPropertyMap = tenants.reduce((acc, t) => {
+    if (t.property_id) acc[t.id] = t.property_id;
+    return acc;
+  }, {} as Record<number, number>);
+
+  // Property → landlord
+  const propertyLandlordMap = properties.reduce((acc, p) => {
+    if (p.landlord_id) acc[p.id] = p.landlord_id;
+    return acc;
+  }, {} as Record<number, number>);
+
+  const filtered = landlords.filter(l => {
+    const matchSearch = !search ||
+      l.name.toLowerCase().includes(search.toLowerCase()) ||
+      l.email?.toLowerCase().includes(search.toLowerCase()) ||
+      landlordProperties[l.id]?.some(p => p.address.toLowerCase().includes(search.toLowerCase()));
+
+    const matchProperty = !propertyFilter ||
+      landlordProperties[l.id]?.some(p => p.id === propertyFilter);
+
+    const matchTenant = !tenantFilter || (() => {
+      const tPropId = tenantPropertyMap[tenantFilter];
+      if (!tPropId) return false;
+      return propertyLandlordMap[tPropId] === l.id;
+    })();
+
+    return matchSearch && matchProperty && matchTenant;
+  });
 
   const handleSave = async () => {
     if (!form.name.trim() || selectedPropertyIds.length === 0) return;
@@ -94,6 +131,24 @@ export default function LandlordsV3() {
             <SearchBar value={search} onChange={setSearch} placeholder="Search landlords..." />
           </div>
           <div className="flex items-center gap-2">
+            <FilterDropdown
+              icon={Building2}
+              label="Property"
+              value={propertyFilter}
+              displayValue={properties.find(p => p.id === propertyFilter)?.address}
+              onClear={() => setPropertyFilter(null)}
+              items={properties.map(p => ({ id: p.id, label: p.address }))}
+              onSelect={id => setPropertyFilter(id)}
+            />
+            <FilterDropdown
+              icon={Users}
+              label="Tenant"
+              value={tenantFilter}
+              displayValue={tenants.find(t => t.id === tenantFilter) ? `${tenants.find(t => t.id === tenantFilter)?.first_name_1} ${tenants.find(t => t.id === tenantFilter)?.last_name_1}` : undefined}
+              onClear={() => setTenantFilter(null)}
+              items={tenants.map(t => ({ id: t.id, label: `${t.title_1 ? t.title_1 + ' ' : ''}${t.first_name_1} ${t.last_name_1}` }))}
+              onSelect={id => setTenantFilter(id)}
+            />
             <div className="flex items-center bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-1">
               <button onClick={() => setViewMode('list')}
                 className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
@@ -255,6 +310,70 @@ export default function LandlordsV3() {
         </div>
       )}
     </V3Layout>
+  );
+}
+
+/* ========== Property Multi-Select Component ========== */
+/* ========== Filter Dropdown Component ========== */
+function FilterDropdown({ icon: Icon, label, value, displayValue, onClear, items, onSelect }: {
+  icon: any; label: string; value: number | null; displayValue?: string;
+  onClear: () => void; items: { id: number; label: string }[]; onSelect: (id: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = items.filter(i => i.label.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-colors ${
+          value
+            ? 'bg-[var(--accent-orange)]/10 border-[var(--accent-orange)]/30 text-[var(--accent-orange)]'
+            : 'bg-[var(--bg-card)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+        }`}
+      >
+        <Icon size={14} />
+        <span className="max-w-[120px] truncate">{value ? displayValue : label}</span>
+        {value ? (
+          <X size={12} className="hover:text-white" onClick={e => { e.stopPropagation(); onClear(); }} />
+        ) : (
+          <ChevronDown size={12} className={open ? 'rotate-180' : ''} />
+        )}
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-64 bg-[var(--bg-card)] border border-[var(--border-input)] rounded-xl shadow-2xl overflow-hidden right-0">
+          <div className="p-2 border-b border-[var(--border-subtle)]">
+            <div className="flex items-center gap-2 bg-[var(--bg-input)] rounded-lg px-3 py-2">
+              <Search size={14} className="text-[var(--text-muted)]" />
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder={`Search ${label.toLowerCase()}...`}
+                className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none" autoFocus />
+            </div>
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-[var(--text-muted)] text-center py-4">No results</p>
+            ) : filtered.map(i => (
+              <button key={i.id} onClick={() => { onSelect(i.id); setOpen(false); setSearch(''); }}
+                className={`w-full text-left px-3 py-2.5 text-sm hover:bg-[var(--bg-hover)] transition-colors truncate ${value === i.id ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}>
+                {i.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
