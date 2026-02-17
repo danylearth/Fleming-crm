@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Mail, Phone, MapPin, Calendar, ChevronDown, Search, ArrowRight, UserPlus, XCircle } from 'lucide-react';
+import { Plus, X, Mail, Phone, MapPin, Calendar, ChevronDown, Search, ArrowRight, UserPlus, XCircle, LayoutGrid, List } from 'lucide-react';
 
 interface Prospect {
   id: number; name: string; email: string; phone: string; address: string;
@@ -48,6 +48,7 @@ export default function BDMV3() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', source: '', follow_up_date: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
 
   const load = async () => {
     try {
@@ -113,9 +114,19 @@ export default function BDMV3() {
           ))}
         </div>
 
-        {/* Search + Add */}
+        {/* Search + View Toggle + Add */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="flex-1"><SearchBar value={search} onChange={setSearch} placeholder="Search prospects..." /></div>
+          <div className="flex items-center gap-1 bg-[var(--bg-input)] rounded-xl p-1 border border-[var(--border-input)]">
+            <button onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+              <List size={16} />
+            </button>
+            <button onClick={() => setViewMode('kanban')}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'kanban' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+              <LayoutGrid size={16} />
+            </button>
+          </div>
           <Button variant="gradient" onClick={() => setShowModal(true)}>
             <Plus size={16} className="mr-2" /> Add Prospect
           </Button>
@@ -134,12 +145,75 @@ export default function BDMV3() {
           ))}
         </div>
 
-        {/* Table */}
+        {/* Content */}
         {loading ? (
           <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
+        ) : viewMode === 'kanban' ? (
+          /* ==================== KANBAN VIEW ==================== */
+          <div className="flex gap-4 overflow-x-auto pb-4">
+            {STATUSES.filter(s => s.key !== 'onboarded' && s.key !== 'not_interested').map(col => {
+              const colProspects = prospects.filter(p => {
+                const matchSearch = !search || [p.name, p.email, p.phone, p.address, p.source]
+                  .some(v => v?.toLowerCase().includes(search.toLowerCase()));
+                return p.status === col.key && matchSearch;
+              });
+              return (
+                <div key={col.key} className="min-w-[280px] flex-1">
+                  {/* Column header */}
+                  <div className={`rounded-xl border px-4 py-3 mb-3 ${col.color}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">{col.label}</span>
+                      <span className="text-xs bg-[var(--bg-input)] px-2 py-0.5 rounded-full">{colProspects.length}</span>
+                    </div>
+                  </div>
+                  {/* Cards */}
+                  <div className="space-y-3">
+                    {colProspects.length === 0 ? (
+                      <p className="text-xs text-[var(--text-muted)] text-center py-8">No prospects</p>
+                    ) : colProspects.map(p => (
+                      <GlassCard key={p.id} className="p-4 cursor-pointer hover:border-[var(--accent-orange)]/30 transition-colors"
+                        onClick={() => navigate(`/v3/bdm/${p.id}`)}>
+                        <div className="flex items-start gap-3">
+                          <Avatar name={p.name} size="sm" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{p.name}</p>
+                            {p.email && (
+                              <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5">
+                                <Mail size={10} />{p.email}
+                              </p>
+                            )}
+                            {p.phone && (
+                              <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5">
+                                <Phone size={10} />{p.phone}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {(p.follow_up_date || p.source) && (
+                          <div className="flex items-center gap-3 mt-3 pt-2 border-t border-[var(--border-subtle)]">
+                            {p.follow_up_date && (
+                              <span className={`text-[10px] flex items-center gap-1 ${isOverdue(p.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-muted)]'}`}>
+                                <Calendar size={10} />
+                                {formatDate(p.follow_up_date)}
+                                {isOverdue(p.follow_up_date) && ' ⚠'}
+                              </span>
+                            )}
+                            {p.source && (
+                              <span className="text-[10px] text-[var(--text-muted)] ml-auto">{p.source}</span>
+                            )}
+                          </div>
+                        )}
+                      </GlassCard>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : filtered.length === 0 ? (
           <EmptyState message={search || statusFilter !== 'active' ? 'No prospects match your filters' : 'No prospects yet — add your first one'} />
         ) : (
+          /* ==================== LIST VIEW ==================== */
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
