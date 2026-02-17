@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { Card, GlassCard, Button, Input, Avatar, ProgressRing, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
@@ -101,6 +102,7 @@ function FilterDropdown({ icon: Icon, label, value, displayValue, onClear, items
 
 export default function TasksV3() {
   const api = useApi();
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [properties, setProperties] = useState<{ id: number; address: string; landlord_id: number | null }[]>([]);
   const [landlords, setLandlords] = useState<{ id: number; name: string }[]>([]);
