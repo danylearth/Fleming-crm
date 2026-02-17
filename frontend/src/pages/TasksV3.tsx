@@ -1,18 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import V3Layout from '../components/V3Layout';
-import { Card, GlassCard, Button, SearchBar, Input, Select, Avatar, ProgressRing, EmptyState } from '../components/v3';
+import { Card, GlassCard, Button, Input, Avatar, ProgressRing, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, CheckCircle2, Clock, Inbox, Calendar } from 'lucide-react';
+import { Plus, X, CheckCircle2, Clock, Inbox, Calendar, Search, ChevronDown, Building2, Users, UserCircle, Tag } from 'lucide-react';
 
 interface Task {
-  id: number;
-  title: string;
-  description: string;
-  assigned_to: string;
-  priority: string;
-  status: string;
-  due_date: string;
-  created_at: string;
+  id: number; title: string; description: string; assigned_to: string;
+  priority: string; status: string; due_date: string; created_at: string;
+  entity_type?: string; entity_id?: number; task_type?: string;
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -23,29 +18,121 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = { pending: 'Pending', in_progress: 'In Progress', completed: 'Completed' };
 const PRIORITY_LABELS: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High' };
+const TASK_TYPES = ['manual', 'viewing', 'follow_up', 'document', 'maintenance', 'onboarding', 'compliance', 'other'];
 
 function isOverdue(task: Task) {
   return task.status !== 'completed' && task.due_date && new Date(task.due_date) < new Date();
 }
 
+/* ========== Filter Dropdown ========== */
+function FilterDropdown({ icon: Icon, label, value, displayValue, onClear, items, onSelect }: {
+  icon: any; label: string; value: number | string | null; displayValue?: string;
+  onClear: () => void; items: { id: number | string; label: string }[]; onSelect: (id: any) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = items.filter(i => i.label.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div ref={ref} className="relative">
+      <button onClick={() => setOpen(!open)}
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-colors ${
+          value ? 'bg-[var(--accent-orange)]/10 border-[var(--accent-orange)]/30 text-[var(--accent-orange)]'
+            : 'bg-[var(--bg-card)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+        }`}>
+        <Icon size={14} />
+        <span className="max-w-[120px] truncate">{value ? displayValue : label}</span>
+        {value ? <X size={12} className="hover:text-white" onClick={e => { e.stopPropagation(); onClear(); }} />
+          : <ChevronDown size={12} className={open ? 'rotate-180' : ''} />}
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-64 bg-[var(--bg-card)] border border-[var(--border-input)] rounded-xl shadow-2xl overflow-hidden right-0">
+          <div className="p-2 border-b border-[var(--border-subtle)]">
+            <div className="flex items-center gap-2 bg-[var(--bg-input)] rounded-lg px-3 py-2">
+              <Search size={14} className="text-[var(--text-muted)]" />
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder={`Search ${label.toLowerCase()}...`}
+                className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none" autoFocus />
+            </div>
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.length === 0 ? <p className="text-xs text-[var(--text-muted)] text-center py-4">No results</p>
+              : filtered.map(i => (
+                <button key={i.id} onClick={() => { onSelect(i.id); setOpen(false); setSearch(''); }}
+                  className={`w-full text-left px-3 py-2.5 text-sm hover:bg-[var(--bg-hover)] transition-colors truncate ${value === i.id ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}>
+                  {i.label}
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ========== Status/Priority Filter Tags ========== */
+function FilterTags({ options, value, onChange }: { options: { key: string; label: string }[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map(o => (
+        <button key={o.key} onClick={() => onChange(o.key)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            value === o.key ? 'bg-[var(--accent-orange)]/15 text-[var(--accent-orange)] border border-[var(--accent-orange)]/30'
+              : 'bg-[var(--bg-subtle)] text-[var(--text-muted)] border border-[var(--border-subtle)] hover:text-[var(--text-secondary)]'
+          }`}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function TasksV3() {
   const api = useApi();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [properties, setProperties] = useState<{ id: number; address: string; landlord_id: number | null }[]>([]);
+  const [landlords, setLandlords] = useState<{ id: number; name: string }[]>([]);
+  const [tenants, setTenants] = useState<{ id: number; name: string; property_id: number | null }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
+  const [filterProperty, setFilterProperty] = useState<number | null>(null);
+  const [filterLandlord, setFilterLandlord] = useState<number | null>(null);
+  const [filterTenant, setFilterTenant] = useState<number | null>(null);
+  const [filterType, setFilterType] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending', due_date: '' });
+  const [form, setForm] = useState({ title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending', due_date: '', task_type: 'manual' });
 
   const load = async () => {
     try {
-      const data = await api.get('/api/tasks');
+      const [data, props, lands, tens] = await Promise.all([
+        api.get('/api/tasks'),
+        api.get('/api/properties'),
+        api.get('/api/landlords'),
+        api.get('/api/tenants'),
+      ]);
       setTasks(Array.isArray(data) ? data : data.tasks || []);
+      setProperties(props);
+      setLandlords(lands);
+      setTenants(tens);
     } catch { setTasks([]); }
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
+
+  // Build lookup maps
+  const propertyLandlordMap = properties.reduce((acc, p) => { if (p.landlord_id) acc[p.id] = p.landlord_id; return acc; }, {} as Record<number, number>);
+  const tenantPropertyMap = tenants.reduce((acc, t) => { if (t.property_id) acc[t.id] = t.property_id; return acc; }, {} as Record<number, number>);
 
   const counts = {
     completed: tasks.filter(t => t.status === 'completed').length,
@@ -56,6 +143,21 @@ export default function TasksV3() {
   const filtered = tasks.filter(t => {
     if (filterStatus !== 'all' && t.status !== filterStatus) return false;
     if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
+    if (search && !t.title.toLowerCase().includes(search.toLowerCase()) && !t.description?.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterType && t.task_type !== filterType) return false;
+    if (filterProperty && !(t.entity_type === 'property' && t.entity_id === filterProperty)) return false;
+    if (filterLandlord) {
+      // Match tasks linked to landlord directly, or to properties owned by this landlord
+      const landlordPropertyIds = properties.filter(p => p.landlord_id === filterLandlord).map(p => p.id);
+      const match = (t.entity_type === 'landlord' && t.entity_id === filterLandlord) ||
+        (t.entity_type === 'property' && landlordPropertyIds.includes(t.entity_id!));
+      if (!match) return false;
+    }
+    if (filterTenant) {
+      const match = (t.entity_type === 'tenant' && t.entity_id === filterTenant) ||
+        (t.entity_type === 'tenant_enquiry' && t.entity_id === filterTenant);
+      if (!match) return false;
+    }
     return true;
   });
 
@@ -67,50 +169,81 @@ export default function TasksV3() {
     try {
       await api.post('/api/tasks', form);
       setShowAdd(false);
-      setForm({ title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending', due_date: '' });
+      setForm({ title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending', due_date: '', task_type: 'manual' });
       await load();
     } catch {}
   };
 
   const completionPct = tasks.length > 0 ? Math.round((counts.completed / tasks.length) * 100) : 0;
+  const hasFilters = filterProperty || filterLandlord || filterTenant || filterType;
 
   return (
     <V3Layout title="Tasks" breadcrumb={[{ label: 'Tasks' }]}>
-      <div className="p-4 md:p-8">
-        {/* Stats Strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+      <div className="p-4 md:p-8 space-y-6">
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {[
             { label: 'Done', count: counts.completed, icon: <CheckCircle2 size={20} />, color: 'text-emerald-400' },
             { label: 'In Progress', count: counts.in_progress, icon: <Clock size={20} />, color: 'text-amber-400' },
             { label: 'In Queue', count: counts.pending, icon: <Inbox size={20} />, color: 'text-blue-400' },
           ].map(s => (
             <GlassCard key={s.label} className="p-5 flex items-center gap-4">
-              <div className={`${s.color}`}>{s.icon}</div>
+              <div className={s.color}>{s.icon}</div>
               <div>
                 <p className="text-2xl font-bold">{s.count}</p>
                 <p className="text-xs text-[var(--text-secondary)]">{s.label}</p>
               </div>
             </GlassCard>
           ))}
-          <GlassCard className="p-5 flex items-center justify-center">
-            <ProgressRing value={completionPct} size={56} strokeWidth={4} label="Complete" />
+          <GlassCard className="p-5 flex flex-col items-center justify-center">
+            <ProgressRing value={completionPct} size={48} strokeWidth={4} />
+            <p className="text-[10px] text-[var(--text-muted)] mt-1 uppercase tracking-wider font-medium">Complete</p>
           </GlassCard>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 mb-6">
-          <div className="flex flex-wrap gap-2 sm:gap-3">
-            <Select value={filterStatus} onChange={setFilterStatus} options={[
-              { value: 'all', label: 'All Status' }, ...Object.entries(STATUS_LABELS).map(([v, l]) => ({ value: v, label: l }))
-            ]} className="w-full sm:w-40" />
-            <Select value={filterPriority} onChange={setFilterPriority} options={[
-              { value: 'all', label: 'All Priority' }, ...Object.entries(PRIORITY_LABELS).map(([v, l]) => ({ value: v, label: l }))
-            ]} className="w-full sm:w-40" />
+        {/* Search + Filters */}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5">
+                <Search size={16} className="text-[var(--text-muted)]" />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tasks..."
+                  className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none" />
+                {search && <button onClick={() => setSearch('')}><X size={14} className="text-[var(--text-muted)]" /></button>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <FilterDropdown icon={Building2} label="Property" value={filterProperty}
+                displayValue={properties.find(p => p.id === filterProperty)?.address}
+                onClear={() => setFilterProperty(null)}
+                items={properties.map(p => ({ id: p.id, label: p.address }))}
+                onSelect={id => setFilterProperty(id)} />
+              <FilterDropdown icon={UserCircle} label="Landlord" value={filterLandlord}
+                displayValue={landlords.find(l => l.id === filterLandlord)?.name}
+                onClear={() => setFilterLandlord(null)}
+                items={landlords.map(l => ({ id: l.id, label: l.name }))}
+                onSelect={id => setFilterLandlord(id)} />
+              <FilterDropdown icon={Users} label="Tenant" value={filterTenant}
+                displayValue={tenants.find(t => t.id === filterTenant)?.name}
+                onClear={() => setFilterTenant(null)}
+                items={tenants.map(t => ({ id: t.id, label: t.name }))}
+                onSelect={id => setFilterTenant(id)} />
+              <FilterDropdown icon={Tag} label="Type" value={filterType}
+                displayValue={filterType ? filterType.replace('_', ' ') : undefined}
+                onClear={() => setFilterType(null)}
+                items={TASK_TYPES.map(t => ({ id: t, label: t.replace('_', ' ').replace(/^\w/, c => c.toUpperCase()) }))}
+                onSelect={id => setFilterType(id)} />
+              <Button variant="gradient" onClick={() => setShowAdd(true)}>
+                <Plus size={14} className="mr-1.5" /> Add Task
+              </Button>
+            </div>
           </div>
-          <div className="sm:ml-auto">
-            <Button variant="gradient" size="sm" onClick={() => setShowAdd(true)}>
-              <Plus size={14} className="mr-1.5" /> Add Task
-            </Button>
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <FilterTags options={[{ key: 'all', label: 'All Status' }, ...Object.entries(STATUS_LABELS).map(([k, v]) => ({ key: k, label: v }))]}
+              value={filterStatus} onChange={setFilterStatus} />
+            <div className="hidden sm:block w-px h-5 bg-[var(--border-subtle)]" />
+            <FilterTags options={[{ key: 'all', label: 'All Priority' }, ...Object.entries(PRIORITY_LABELS).map(([k, v]) => ({ key: k, label: v }))]}
+              value={filterPriority} onChange={setFilterPriority} />
           </div>
         </div>
 
@@ -118,7 +251,7 @@ export default function TasksV3() {
         {loading ? (
           <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
         ) : filtered.length === 0 ? (
-          <EmptyState message="No tasks found" icon={<CheckCircle2 size={32} />} />
+          <EmptyState message={hasFilters || search ? 'No tasks match your filters' : 'No tasks yet'} icon={<CheckCircle2 size={32} />} />
         ) : (
           <div className="space-y-3">
             {filtered.map(task => {
@@ -130,9 +263,14 @@ export default function TasksV3() {
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <ProgressRing value={taskPct} size={40} strokeWidth={3} />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-[var(--text-muted)]' : ''}`}>{task.title}</p>
                           {overdue && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">Overdue</span>}
+                          {task.task_type && task.task_type !== 'manual' && (
+                            <span className="text-[10px] bg-[var(--bg-hover)] text-[var(--text-muted)] px-2 py-0.5 rounded-full">
+                              {task.task_type.replace('_', ' ')}
+                            </span>
+                          )}
                         </div>
                         {task.description && <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">{task.description}</p>}
                       </div>
@@ -176,7 +314,28 @@ export default function TasksV3() {
                 <Input label="Title" value={form.title} onChange={v => setForm(p => ({ ...p, title: v }))} placeholder="Task title" />
                 <Input label="Description" value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} placeholder="Description..." />
                 <Input label="Assigned To" value={form.assigned_to} onChange={v => setForm(p => ({ ...p, assigned_to: v }))} placeholder="Person name" />
-                <Select label="Priority" value={form.priority} onChange={v => setForm(p => ({ ...p, priority: v }))} options={Object.entries(PRIORITY_LABELS).map(([v, l]) => ({ value: v, label: l }))} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Priority</label>
+                    <div className="flex gap-1.5">
+                      {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
+                        <button key={k} onClick={() => setForm(p => ({ ...p, priority: k }))}
+                          className={`flex-1 text-xs py-2 rounded-lg border font-medium transition-colors ${
+                            form.priority === k ? PRIORITY_COLORS[k] + ' border-current' : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
+                          }`}>{v}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Type</label>
+                    <div className="relative">
+                      <select value={form.task_type} onChange={e => setForm(p => ({ ...p, task_type: e.target.value }))}
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
+                        {TASK_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
                 <Input label="Due Date" value={form.due_date} onChange={v => setForm(p => ({ ...p, due_date: v }))} type="date" />
                 <div className="flex gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
