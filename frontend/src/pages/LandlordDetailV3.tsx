@@ -196,6 +196,33 @@ export default function LandlordDetailV3() {
               )}
             </GlassCard>
 
+            {/* Properties */}
+            <GlassCard className="p-6">
+              <SectionHeader title="Properties" />
+              {properties.length === 0 ? (
+                <EmptyState message="No properties linked" />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {properties.map(p => (
+                    <Card key={p.id} hover onClick={() => navigate(`/v3/properties/${p.id}`)} className="overflow-hidden">
+                      <img src={getPropertyImage(p.id, 400, 160)} alt={p.address} className="h-24 w-full object-cover" loading="lazy" />
+                      <div className="p-3">
+                        <p className="text-sm font-medium truncate">{p.address}</p>
+                        {p.type && <p className="text-xs text-[var(--text-muted)]">{p.type}</p>}
+                        {p.status && (
+                          <span className={`inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-md ${
+                            p.status === 'available' ? 'bg-emerald-500/10 text-emerald-400' :
+                            p.status === 'let' ? 'bg-blue-500/10 text-blue-400' :
+                            'bg-[var(--bg-hover)] text-[var(--text-muted)]'
+                          }`}>{p.status}</span>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </GlassCard>
+
             {/* Marketing Preferences */}
             <GlassCard className="p-6">
               <SectionHeader title="Marketing Preferences" />
@@ -224,38 +251,6 @@ export default function LandlordDetailV3() {
 
           {/* Right column — 2/5 */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Properties */}
-            <GlassCard className="p-6">
-              <SectionHeader title="Properties" />
-              {properties.length === 0 ? (
-                <EmptyState message="No properties linked" />
-              ) : (
-                <div className="space-y-3">
-                  {properties.map(p => (
-                    <Card key={p.id} hover onClick={() => navigate(`/v3/properties/${p.id}`)} className="overflow-hidden">
-                      <img
-                        src={getPropertyImage(p.id, 400, 160)}
-                        alt={p.address}
-                        className="h-24 w-full object-cover"
-                        loading="lazy"
-                      />
-                      <div className="p-3">
-                        <p className="text-sm font-medium truncate">{p.address}</p>
-                        {p.type && <p className="text-xs text-[var(--text-muted)]">{p.type}</p>}
-                        {p.status && (
-                          <span className={`inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-md ${
-                            p.status === 'available' ? 'bg-emerald-500/10 text-emerald-400' :
-                            p.status === 'let' ? 'bg-blue-500/10 text-blue-400' :
-                            'bg-[var(--bg-hover)] text-[var(--text-muted)]'
-                          }`}>{p.status}</span>
-                        )}
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </GlassCard>
-
             {/* Notes */}
             <GlassCard className="p-6">
               <SectionHeader title="Notes" />
