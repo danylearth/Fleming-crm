@@ -3,7 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Save, Pencil, X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle, Calendar, ExternalLink, Upload, FileText, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Save, Pencil, X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle, Calendar, ExternalLink, Upload, FileText, CheckCircle, Clock } from 'lucide-react';
+import ActivityTimeline from '../components/v3/ActivityTimeline';
+import AddressAutocomplete from '../components/v3/AddressAutocomplete';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -18,6 +21,12 @@ const STATUS_LABELS: Record<string, string> = {
   new: 'New', viewing_booked: 'Viewing Booked', awaiting_response: 'Follow Up',
   onboarding: 'Onboarding', converted: 'Converted', rejected: 'Rejected',
 };
+
+const RENTING_REQUIREMENT_OPTIONS = [
+  'Pet-Friendly', 'Parking', 'Garden', 'Furnished', 'Unfurnished',
+  'Close to Transport', 'Short-term Let', 'Long-term Let', 'Ground Floor',
+  'Disabled Access', 'Bills Included', 'No Stairs',
+];
 
 const NATIONALITY_OPTIONS = [
   { value: '', label: '-' }, { value: 'British', label: 'British' }, { value: 'Irish', label: 'Irish' },
@@ -82,6 +91,7 @@ export default function EnquiryDetailV3() {
   const { id } = useParams();
   const navigate = useNavigate();
   const api = useApi();
+  const { user } = useAuth();
   const [data, setData] = useState<Record<string, any> | null>(null);
   const [form, setForm] = useState<Record<string, any>>({});
   const [properties, setProperties] = useState<{ id: number; address: string; postcode?: string; rent_amount?: number }[]>([]);
@@ -99,6 +109,7 @@ export default function EnquiryDetailV3() {
   const [wfTime, setWfTime] = useState('10:00');
   const [wfPropId, setWfPropId] = useState('');
   const [wfReason, setWfReason] = useState('');
+  const [wfViewingWith, setWfViewingWith] = useState('');
   const [wfLoading, setWfLoading] = useState(false);
 
   const loadDetail = useCallback(async () => {
@@ -140,7 +151,7 @@ export default function EnquiryDetailV3() {
               viewer_name: name, viewer_email: form.email_1 || '',
               viewer_phone: form.phone_1 || '', viewing_date: wfDate, viewing_time: wfTime,
             });
-            await save({ status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate });
+            await save({ status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate, viewing_with: wfViewingWith || null });
           }
           break;
         case 'follow_up':
@@ -165,13 +176,21 @@ export default function EnquiryDetailV3() {
     setWfLoading(false);
   };
 
+  const parseNotes = (raw: string): { id: string; text: string; author: string; created_at: string }[] => {
+    if (!raw) return [];
+    try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; } catch { return []; }
+  };
+
   const saveNote = async () => {
     if (!noteDraft.trim()) return;
-    const existing = form.notes || '';
-    const timestamp = new Date().toLocaleString('en-GB');
-    const newNotes = existing ? `${existing}\n\n[${timestamp}]\n${noteDraft.trim()}` : `[${timestamp}]\n${noteDraft.trim()}`;
+    const existing = parseNotes(form.notes);
+    const noteText = noteDraft.trim();
+    const newNote = { id: Date.now().toString(), text: noteText, author: user?.email || 'Unknown', created_at: new Date().toISOString() };
+    const updated = [...existing, newNote];
+    const newNotes = JSON.stringify(updated);
     setField('notes', newNotes);
     await save({ notes: newNotes });
+    api.post('/api/activity', { action: 'note_added', entity_type: 'tenant_enquiry', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
     setNoteDraft('');
   };
 
@@ -194,9 +213,8 @@ export default function EnquiryDetailV3() {
   }
 
   const name = [data.first_name_1, data.last_name_1].filter(Boolean).join(' ') || 'Unknown';
-  const kycDone = !!form.kyc_completed_1;
   const propertyLinked = !!form.linked_property_id;
-  const canConvert = form.status === 'onboarding' && form.linked_property_id && form.first_name_1 && form.last_name_1 && form.email_1 && form.kyc_completed_1;
+  const canConvert = form.status === 'onboarding' && form.linked_property_id && form.first_name_1 && form.last_name_1 && form.email_1;
   const selectedProp = properties.find(p => p.id === Number(form.linked_property_id));
 
   return (
@@ -216,7 +234,7 @@ export default function EnquiryDetailV3() {
           </div>
           <div className="flex gap-2">
             {!['converted', 'rejected'].includes(form.status) && (
-              <Button variant="gradient" size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); }}>
+              <Button variant="gradient" size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); }}>
                 <ArrowRight size={14} className="mr-1.5" /> Progress / Reject
               </Button>
             )}
@@ -235,9 +253,34 @@ export default function EnquiryDetailV3() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column */}
-          <div className="lg:col-span-2 space-y-6">
+        {/* Linked Property */}
+        <GlassCard className="p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Linked Property</h4>
+            <div className="flex-1" />
+            {editing ? (
+              <Select
+                value={String(form.linked_property_id || '')}
+                onChange={v => setField('linked_property_id', v ? Number(v) : null)}
+                options={[
+                  { value: '', label: 'No property linked' },
+                  ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` })),
+                ]}
+              />
+            ) : selectedProp ? (
+              <div onClick={() => navigate(`/v3/properties/${selectedProp.id}`)}
+                className="flex items-center gap-3 p-2 rounded-lg bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
+                <Building2 size={14} className="text-[var(--text-muted)]" />
+                <span className="text-sm font-medium">{selectedProp.address}{selectedProp.postcode ? `, ${selectedProp.postcode}` : ''}</span>
+                <ExternalLink size={12} className="text-[var(--text-muted)]" />
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)]">No property linked</p>
+            )}
+          </div>
+        </GlassCard>
+
+        <div className="space-y-6">
             {/* Tabs */}
             <div className="flex border-b border-[var(--border-subtle)]">
               {(['applicant', 'activity', 'notes'] as const).map(t => (
@@ -254,18 +297,7 @@ export default function EnquiryDetailV3() {
               <div className="space-y-6">
                 {/* Applicant 1 */}
                 <div>
-                  <SectionDivider icon={<User size={16} />} title="Applicant 1">
-                    {editing ? (
-                      <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
-                        <input type="checkbox" checked={!!form.kyc_completed_1} onChange={e => setField('kyc_completed_1', e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
-                        KYC Complete
-                      </label>
-                    ) : form.kyc_completed_1 ? (
-                      <span className="text-xs text-emerald-400 font-medium">KYC ✓</span>
-                    ) : (
-                      <span className="text-xs text-[var(--text-muted)]">KYC Pending</span>
-                    )}
-                  </SectionDivider>
+                  <SectionDivider icon={<User size={16} />} title="Applicant 1" />
                   {editing ? (
                     <>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
@@ -276,7 +308,7 @@ export default function EnquiryDetailV3() {
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         <Input label="Email" value={form.email_1 || ''} onChange={v => setField('email_1', v)} type="email" />
                         <Input label="Phone" value={form.phone_1 || ''} onChange={v => setField('phone_1', v)} />
-                        <Input label="Address" value={form.current_address_1 || ''} onChange={v => setField('current_address_1', v)} />
+                        <AddressAutocomplete label="Address" value={form.current_address_1 || ''} onChange={v => setField('current_address_1', v)} />
                       </div>
                     </>
                   ) : (
@@ -307,6 +339,76 @@ export default function EnquiryDetailV3() {
                       <ReadField label="Annual Salary" value={form.income_1 ? `£${Number(form.income_1).toLocaleString()}` : null} />
                     </div>
                   )}
+                </div>
+
+                {/* Address & Permanent Flag */}
+                <div>
+                  <SectionDivider icon={<Home size={16} />} title="Address" />
+                  {editing ? (
+                    <div className="space-y-3">
+                      <AddressAutocomplete label="Current Address" value={form.current_address_1 || ''} onChange={v => setField('current_address_1', v)} />
+                      <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] w-fit">
+                        <input type="checkbox" checked={!!form.is_permanent_address} onChange={e => setField('is_permanent_address', e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
+                        <span className="text-sm text-[var(--text-primary)] font-medium">This is a permanent address</span>
+                      </label>
+                      {!form.is_permanent_address && (
+                        <AddressAutocomplete label="Secondary / Previous Address" value={form.current_address_2 || ''} onChange={v => setField('current_address_2', v)} placeholder="Required if not permanent" />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <ReadField label="Current Address" value={form.current_address_1} />
+                      {form.is_permanent_address ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                          <CheckCircle size={12} /> Permanent Address
+                        </span>
+                      ) : (
+                        <ReadField label="Secondary / Previous Address" value={form.current_address_2} />
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Renting Requirements */}
+                <div>
+                  <SectionDivider icon={<Home size={16} />} title="Renting Requirements" />
+                  {(() => {
+                    const selected: string[] = form.renting_requirements ? JSON.parse(form.renting_requirements) : [];
+                    if (editing) {
+                      return (
+                        <div className="flex flex-wrap gap-2">
+                          {RENTING_REQUIREMENT_OPTIONS.map(opt => {
+                            const isActive = selected.includes(opt);
+                            return (
+                              <button key={opt} type="button"
+                                onClick={() => {
+                                  const next = isActive ? selected.filter(s => s !== opt) : [...selected, opt];
+                                  setField('renting_requirements', JSON.stringify(next));
+                                }}
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                                  isActive
+                                    ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
+                                    : 'bg-[var(--bg-input)] border-[var(--border-input)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
+                                }`}>
+                                {isActive && <span className="mr-1">✓</span>}{opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    }
+                    return selected.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {selected.map(s => (
+                          <span key={s} className="px-3 py-1.5 rounded-full text-xs font-medium bg-orange-500/15 text-orange-400 border border-orange-500/30">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[var(--text-muted)]">No requirements specified</p>
+                    );
+                  })()}
                 </div>
 
                 {/* Joint toggle */}
@@ -351,35 +453,27 @@ export default function EnquiryDetailV3() {
             {tab === 'activity' && (
               <div className="space-y-4">
                 <h4 className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Timeline</h4>
-                <div className="relative pl-6 border-l-2 border-[var(--border-subtle)] space-y-6">
-                  <div className="relative">
-                    <div className="absolute -left-[25px] w-3 h-3 rounded-full bg-orange-500" />
-                    <p className="text-sm font-medium">Current Status: {STATUS_LABELS[data.status] || data.status}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{data.updated_at ? new Date(data.updated_at).toLocaleString('en-GB') : 'N/A'}</p>
-                  </div>
-                  {data.viewing_date && (
-                    <div className="relative">
-                      <div className="absolute -left-[25px] w-3 h-3 rounded-full bg-purple-500" />
-                      <p className="text-sm font-medium">Viewing Scheduled</p>
-                      <p className="text-xs text-[var(--text-muted)]">{new Date(data.viewing_date).toLocaleDateString('en-GB')}</p>
-                    </div>
-                  )}
-                  <div className="relative">
-                    <div className="absolute -left-[25px] w-3 h-3 rounded-full bg-blue-500" />
-                    <p className="text-sm font-medium">Enquiry Created</p>
-                    <p className="text-xs text-[var(--text-muted)]">{new Date(data.created_at).toLocaleString('en-GB')}</p>
-                  </div>
-                </div>
+                <ActivityTimeline entityType="tenant_enquiry" entityId={Number(id)} />
               </div>
             )}
 
             {tab === 'notes' && (
               <div className="space-y-4">
-                {form.notes ? (
-                  <div className="bg-[var(--bg-subtle)] rounded-xl p-4 whitespace-pre-wrap text-sm text-[var(--text-primary)]">{form.notes}</div>
-                ) : (
-                  <p className="text-sm text-[var(--text-muted)]">No notes yet.</p>
-                )}
+                {(() => {
+                  const notesList = parseNotes(form.notes);
+                  return notesList.length > 0 ? (
+                    <div className="space-y-3">
+                      {notesList.map(n => (
+                        <div key={n.id} className="bg-[var(--bg-subtle)] rounded-xl p-4">
+                          <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{n.text}</p>
+                          <p className="text-[10px] text-[var(--text-muted)] mt-2">{n.author} · {new Date(n.created_at).toLocaleString('en-GB')}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[var(--text-muted)]">No notes yet.</p>
+                  );
+                })()}
                 <div>
                   <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} placeholder="Add a note..." rows={3}
                     className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none" />
@@ -390,59 +484,6 @@ export default function EnquiryDetailV3() {
               </div>
             )}
           </div>
-
-          {/* Right Column */}
-          <div className="space-y-6">
-            {/* Property */}
-            <GlassCard className="p-5">
-              <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Linked Property</h4>
-              {editing ? (
-                <Select
-                  value={String(form.linked_property_id || '')}
-                  onChange={v => setField('linked_property_id', v ? Number(v) : null)}
-                  options={[
-                    { value: '', label: 'No property linked' },
-                    ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` })),
-                  ]}
-                />
-              ) : selectedProp ? (
-                <div onClick={() => navigate(`/v3/properties/${selectedProp.id}`)}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                  <Building2 size={16} className="text-[var(--text-muted)]" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{selectedProp.address}</p>
-                    {selectedProp.postcode && <p className="text-xs text-[var(--text-muted)]">{selectedProp.postcode}</p>}
-                  </div>
-                  <ExternalLink size={12} className="text-[var(--text-muted)]" />
-                </div>
-              ) : (
-                <p className="text-sm text-[var(--text-muted)]">No property linked</p>
-              )}
-            </GlassCard>
-
-            {/* Application Status */}
-            <GlassCard className="p-5">
-              <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Application Status</h4>
-              <div className="space-y-2 mb-3">
-                {[
-                  { label: 'KYC (Applicant 1)', done: kycDone },
-                  { label: 'Property Linked', done: propertyLinked },
-                ].map(item => (
-                  <div key={item.label} className="flex items-center gap-2 text-sm">
-                    <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${item.done ? 'bg-green-500' : 'bg-[var(--bg-input)] border border-[var(--border-input)]'}`}>
-                      {item.done && <CheckCircle size={12} className="text-white" />}
-                    </div>
-                    <span className={item.done ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}>{item.label}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="w-full bg-[var(--bg-input)] rounded-full h-2 overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-orange-500 to-pink-500 rounded-full transition-all duration-500"
-                  style={{ width: `${[kycDone, propertyLinked].filter(Boolean).length / 2 * 100}%` }} />
-              </div>
-            </GlassCard>
-          </div>
-        </div>
       </div>
 
       {/* Workflow Modal */}
@@ -504,10 +545,18 @@ export default function EnquiryDetailV3() {
                       options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: p.address }))]} />
                     <DatePicker label="Date" value={wfDate} onChange={setWfDate} />
                     <Input label="Time" value={wfTime} onChange={setWfTime} type="time" />
+                    <Input label="Viewing With" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Agent name" />
                   </>
                 )}
                 {workflowMode === 'follow_up' && <DatePicker label="Follow-up Date" value={wfDate} onChange={setWfDate} />}
-                {workflowMode === 'onboarding' && <DatePicker label="Follow-up Date (optional)" value={wfDate} onChange={setWfDate} />}
+                {workflowMode === 'onboarding' && (
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                      <p className="text-sm font-medium text-amber-400">Are you sure you want to begin onboarding?</p>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">This will move the enquiry to the onboarding stage.</p>
+                    </div>
+                  </div>
+                )}
                 {workflowMode === 'reject' && (
                   <div>
                     <label className="block text-xs text-[var(--text-secondary)] mb-1.5">Reason (optional)</label>

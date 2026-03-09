@@ -463,4 +463,43 @@ try {
   // Column already exists — safe to ignore
 }
 
+try {
+  db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN viewing_with TEXT`);
+} catch (e) {
+  // Column already exists
+}
+
+// Sprint 2: Structured proof of income
+for (const col of ['income_amount TEXT', 'income_employer TEXT', 'income_contract_type TEXT']) {
+  try { db.exec(`ALTER TABLE tenants ADD COLUMN ${col}`); } catch (e) {}
+}
+
+// Sprint 2: KYC breakdown (Primary ID, Secondary ID, Address verification, Personal verification)
+for (const col of ['kyc_primary_id INTEGER DEFAULT 0', 'kyc_secondary_id INTEGER DEFAULT 0', 'kyc_address_verification INTEGER DEFAULT 0', 'kyc_personal_verification INTEGER DEFAULT 0']) {
+  try { db.exec(`ALTER TABLE tenants ADD COLUMN ${col}`); } catch (e) {}
+}
+
+// Sprint 2: Renting requirements on enquiries
+try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN renting_requirements TEXT`); } catch (e) {}
+
+// Sprint 2: Permanent address flag on enquiries
+try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN is_permanent_address INTEGER DEFAULT 0`); } catch (e) {}
+
+// Sprint 3: Landlord referral source
+try { db.exec(`ALTER TABLE landlords ADD COLUMN referral_source TEXT`); } catch (e) {}
+
+// Sprint 3: Property expenses table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS property_expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    amount REAL NOT NULL,
+    category TEXT NOT NULL DEFAULT 'other',
+    expense_date TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (property_id) REFERENCES properties(id)
+  );
+`);
+
 export default db;

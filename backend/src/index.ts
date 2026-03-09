@@ -280,15 +280,15 @@ app.put('/api/landlords/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const { name, email, phone, alt_email, date_of_birth, home_address,
       marketing_post, marketing_email, marketing_phone, marketing_sms,
-      kyc_completed, notes, landlord_type } = req.body;
+      kyc_completed, notes, landlord_type, referral_source } = req.body;
 
     db.prepare(`
       UPDATE landlords SET name=?, email=?, phone=?, alt_email=?, date_of_birth=?, home_address=?,
         marketing_post=?, marketing_email=?, marketing_phone=?, marketing_sms=?,
-        kyc_completed=?, notes=?, landlord_type=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
+        kyc_completed=?, notes=?, landlord_type=?, referral_source=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
     `).run(name, email, phone, alt_email, date_of_birth, home_address,
       marketing_post ? 1 : 0, marketing_email ? 1 : 0, marketing_phone ? 1 : 0, marketing_sms ? 1 : 0,
-      kyc_completed ? 1 : 0, notes, landlord_type || 'external', req.params.id);
+      kyc_completed ? 1 : 0, notes, landlord_type || 'external', referral_source || null, req.params.id);
 
     logAudit(req.user?.id, req.user?.email, 'update', 'landlord', parseInt(req.params.id), req.body);
     res.json({ success: true });
@@ -481,12 +481,14 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
 
     db.prepare(`
       UPDATE tenant_enquiries SET
-        title_1=?, first_name_1=?, last_name_1=?, email_1=?, phone_1=?, date_of_birth_1=?, 
+        title_1=?, first_name_1=?, last_name_1=?, email_1=?, phone_1=?, date_of_birth_1=?,
         current_address_1=?, employment_status_1=?, employer_1=?, income_1=?,
-        is_joint_application=?, title_2=?, first_name_2=?, last_name_2=?, email_2=?, phone_2=?, 
+        is_joint_application=?, title_2=?, first_name_2=?, last_name_2=?, email_2=?, phone_2=?,
         date_of_birth_2=?, current_address_2=?, employment_status_2=?, employer_2=?, income_2=?,
-        kyc_completed_1=?, kyc_completed_2=?, status=?, follow_up_date=?, viewing_date=?, 
-        linked_property_id=?, notes=?, rejection_reason=?, updated_at=CURRENT_TIMESTAMP
+        kyc_completed_1=?, kyc_completed_2=?, status=?, follow_up_date=?, viewing_date=?,
+        linked_property_id=?, notes=?, rejection_reason=?,
+        viewing_with=?, renting_requirements=?, is_permanent_address=?,
+        updated_at=CURRENT_TIMESTAMP
       WHERE id=?
     `).run(
       data.title_1, data.first_name_1, data.last_name_1, data.email_1, data.phone_1,
@@ -495,7 +497,9 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
       data.email_2, data.phone_2, data.date_of_birth_2, data.current_address_2,
       data.employment_status_2, data.employer_2, data.income_2,
       data.kyc_completed_1 ? 1 : 0, data.kyc_completed_2 ? 1 : 0, data.status, data.follow_up_date,
-      data.viewing_date, data.linked_property_id, data.notes, data.rejection_reason, req.params.id
+      data.viewing_date, data.linked_property_id, data.notes, data.rejection_reason,
+      data.viewing_with || null, data.renting_requirements || null, data.is_permanent_address ? 1 : 0,
+      req.params.id
     );
 
     logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', parseInt(req.params.id), data);
@@ -611,6 +615,7 @@ app.get('/api/tenants', authMiddleware, (req: AuthRequest, res) => {
 app.post('/api/tenants', authMiddleware, (req: AuthRequest, res) => {
   try {
     const data = req.body;
+    if (!data.property_id) return res.status(400).json({ error: 'Property is required' });
     const name = data.name || `${data.first_name_1} ${data.last_name_1}`;
 
     // Duplicate check
@@ -624,7 +629,7 @@ app.post('/api/tenants', authMiddleware, (req: AuthRequest, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(name, data.first_name_1 || name, data.last_name_1 || '',
-      data.email || null, data.phone || null, data.notes || null, data.property_id || null);
+      data.email || null, data.phone || null, data.notes || null, data.property_id);
 
     logAudit(req.user?.id, req.user?.email, 'create', 'tenant', result.lastInsertRowid as number);
     res.json({ id: result.lastInsertRowid });
@@ -967,6 +972,38 @@ app.put('/api/maintenance/:id', authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
+// ============ PROPERTY EXPENSES ============
+
+app.get('/api/property-expenses/:propertyId', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const expenses = db.prepare('SELECT * FROM property_expenses WHERE property_id = ? ORDER BY expense_date DESC, created_at DESC').all(req.params.propertyId);
+    res.json(expenses);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch expenses' });
+  }
+});
+
+app.post('/api/property-expenses', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { property_id, description, amount, category, expense_date } = req.body;
+    const result = db.prepare(
+      'INSERT INTO property_expenses (property_id, description, amount, category, expense_date) VALUES (?, ?, ?, ?, ?)'
+    ).run(property_id, description, amount, category || 'other', expense_date || null);
+    res.json({ id: result.lastInsertRowid });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create expense' });
+  }
+});
+
+app.delete('/api/property-expenses/:id', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    db.prepare('DELETE FROM property_expenses WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete expense' });
+  }
+});
+
 // ============ PROPERTY VIEWINGS ============
 
 app.get('/api/property-viewings', authMiddleware, (req: AuthRequest, res) => {
@@ -1185,6 +1222,86 @@ app.get('/api/audit-log', authMiddleware, (req: AuthRequest, res) => {
     res.json(logs);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch audit log' });
+  }
+});
+
+// Entity activity feed (non-admin, scoped to entity)
+app.get('/api/activity/:entityType/:entityId', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { entityType, entityId } = req.params;
+    const limit = Number(req.query.limit) || 50;
+    const logs = db.prepare(
+      'SELECT * FROM audit_log WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC LIMIT ?'
+    ).all(entityType, entityId, limit);
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch activity' });
+  }
+});
+
+// Log activity (e.g. note added)
+app.post('/api/activity', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { action, entity_type, entity_id, changes } = req.body;
+    logAudit(req.user?.id, req.user?.email, action, entity_type, entity_id, changes);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to log activity' });
+  }
+});
+
+// ============ EPC LOOKUP ============
+
+app.get('/api/epc-lookup', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const postcode = (req.query.postcode as string || '').trim();
+    if (!postcode) return res.status(400).json({ error: 'Postcode required' });
+    const apiKey = process.env.EPC_API_KEY;
+    if (!apiKey) return res.status(501).json({ error: 'EPC API key not configured' });
+    const url = `https://epc.opendatacommunities.org/api/v1/domestic/search?postcode=${encodeURIComponent(postcode)}&size=10`;
+    const response = await fetch(url, {
+      headers: { Authorization: `Basic ${Buffer.from(`${apiKey}:`).toString('base64')}`, Accept: 'application/json' }
+    });
+    if (!response.ok) return res.status(response.status).json({ error: 'EPC API error' });
+    const data = await response.json();
+    const results = (data.rows || []).map((r: any) => ({
+      address: r.address,
+      postcode: r.postcode,
+      current_rating: r['current-energy-rating'],
+      potential_rating: r['potential-energy-rating'],
+      current_efficiency: r['current-energy-efficiency'],
+      property_type: r['property-type'],
+      inspection_date: r['inspection-date'],
+      certificate_number: r['lmk-key'],
+    }));
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch EPC data' });
+  }
+});
+
+// ============ COUNCIL TAX LOOKUP ============
+
+app.get('/api/council-tax-lookup', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const postcode = (req.query.postcode as string || '').trim();
+    if (!postcode) return res.status(400).json({ error: 'Postcode required' });
+    // Council tax band lookup via gov.uk VOA API
+    const apiKey = process.env.COUNCIL_TAX_API_KEY;
+    if (!apiKey) return res.status(501).json({ error: 'Council Tax API key not configured' });
+    const url = `https://api.voa.gov.uk/council-tax/properties?postcode=${encodeURIComponent(postcode)}`;
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' }
+    });
+    if (!response.ok) return res.status(response.status).json({ error: 'Council Tax API error' });
+    const data = await response.json();
+    const results = (data.properties || data.results || []).map((r: any) => ({
+      address: r.address || r.formattedAddress,
+      band: r.councilTaxBand || r.band,
+    }));
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch council tax data' });
   }
 });
 

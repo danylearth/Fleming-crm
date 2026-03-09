@@ -59,10 +59,18 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
   label?: string; value: string; onChange: (v: string) => void; placeholder?: string;
   type?: string; className?: string;
 }) {
+  const shouldCap = !['email', 'number', 'password', 'time', 'tel'].includes(type);
+  const handleChange = (raw: string) => {
+    if (shouldCap && raw.length > 0 && (value.length === 0 || raw.length === 1)) {
+      onChange(raw.charAt(0).toUpperCase() + raw.slice(1));
+    } else {
+      onChange(raw);
+    }
+  };
   return (
     <div className={className}>
       {label && <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">{label}</label>}
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+      <input type={type} value={value} onChange={e => handleChange(e.target.value)} placeholder={placeholder}
         className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors" />
     </div>
   );

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { X, Send, Sparkles, ChevronDown } from 'lucide-react';
-import { useAIChat, AIAction } from '../../hooks/useAIChat';
+import { useAIChat } from '../../hooks/useAIChat';
+import type { AIAction } from '../../hooks/useAIChat';
 
 const now = () => new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' });
 

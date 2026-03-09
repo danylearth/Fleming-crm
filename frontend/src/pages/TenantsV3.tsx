@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable, type Column } from '../components/v3';
 import { useApi } from '../hooks/useApi';
@@ -42,6 +42,7 @@ function MapAutoFit({ tenants, coords, properties }: {
 
 export default function TenantsV3() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const api = useApi();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,6 +85,16 @@ export default function TenantsV3() {
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
+
+  // Auto-open modal when navigated from property page
+  useEffect(() => {
+    const createFor = searchParams.get('createFor');
+    if (createFor && properties.length > 0) {
+      setForm(f => ({ ...f, property_id: createFor }));
+      setShowModal(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, properties]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -132,7 +143,10 @@ export default function TenantsV3() {
     const matchSearch = !search || [t.name, t.email, t.phone, t.property_address]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
     const tStatus = t.status || 'active';
-    if (statusFilter !== 'all' && tStatus !== statusFilter) return false;
+    if (statusFilter === 'new') {
+      const createdDays = (Date.now() - new Date((t as any).created_at || 0).getTime()) / 86400000;
+      if (createdDays > 30 || tStatus !== 'active') return false;
+    } else if (statusFilter !== 'all' && tStatus !== statusFilter) return false;
     if (landlordPropertyIds && !landlordPropertyIds.has(t.property_id)) return false;
     if (propertyFilter && t.property_id !== propertyFilter) return false;
     return matchSearch;
@@ -335,8 +349,10 @@ export default function TenantsV3() {
           {/* Status filter tags */}
           {[
             { key: 'all', label: `All (${tenants.length})` },
+            { key: 'new', label: `New (${tenants.filter(t => { const d = new Date(t.tenancy_end_date || ''); const days = (Date.now() - new Date((t as any).created_at || 0).getTime()) / 86400000; return days <= 30 && (t.status || 'active') === 'active'; }).length})` },
             { key: 'active', label: `Active (${statusCounts['active'] || 0})` },
-            { key: 'inactive', label: `Inactive (${statusCounts['inactive'] || 0})` },
+            { key: 'onboarding', label: `Onboarding (${statusCounts['onboarding'] || 0})` },
+            { key: 'inactive', label: `Archived (${statusCounts['inactive'] || 0})` },
           ].map(f => (
             <Tag key={f.key} active={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>
               {f.label}

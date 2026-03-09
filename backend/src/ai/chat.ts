@@ -253,6 +253,12 @@ router.post('/execute', authMiddleware, async (req: AuthRequest, res) => {
 // ── Intent Handlers ──
 
 async function handleIntent(intent: string, params: Record<string, string>, user: { id: number; email: string; role: string; name: string }, context?: ChatRequest['context']): Promise<ChatResponse> {
+  // Permission scoping: non-admin users can only query, not modify
+  const writeIntents = ['move-enquiry', 'create-task', 'email-contact', 'chase-references', 'rent-reminder'];
+  if (user.role !== 'admin' && writeIntents.includes(intent)) {
+    return { text: 'You don\'t have permission to perform this action. Please contact an admin.' };
+  }
+
   switch (intent) {
     case 'move-enquiry': {
       const statusMap: Record<string, string> = {

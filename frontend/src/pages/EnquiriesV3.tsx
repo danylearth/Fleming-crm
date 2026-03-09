@@ -250,7 +250,7 @@ export default function EnquiriesV3() {
   const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '', property_id: '' });
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const { portfolioFilter } = usePortfolio();
@@ -308,10 +308,11 @@ export default function EnquiriesV3() {
         email_1: form.email,
         phone_1: form.phone,
         notes: form.notes,
+        linked_property_id: form.property_id ? Number(form.property_id) : null,
         status: 'new',
       });
       setShowAdd(false);
-      setForm({ name: '', email: '', phone: '', notes: '' });
+      setForm({ name: '', email: '', phone: '', notes: '', property_id: '' });
       await load();
     } catch { }
     setSaving(false);
@@ -624,6 +625,8 @@ export default function EnquiriesV3() {
               <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} placeholder="email@example.com" type="email" />
               <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} placeholder="+44..." />
             </div>
+            <Select label="Property" value={form.property_id} onChange={v => setForm({ ...form, property_id: v })}
+              options={[{ value: '', label: 'Select property (optional)' }, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
             <div>
               <label className="block text-xs text-[var(--text-muted)] mb-1.5">Notes</label>
               <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={3}
@@ -702,7 +705,12 @@ export default function EnquiriesV3() {
                   <DatePicker label="Follow-up Date" value={wfDate} onChange={setWfDate} />
                 )}
                 {workflowMode === 'onboarding' && (
-                  <DatePicker label="Follow-up Date (optional)" value={wfDate} onChange={setWfDate} />
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                      <p className="text-sm font-medium text-amber-400">Are you sure you want to begin onboarding?</p>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">This will move the enquiry to the onboarding stage.</p>
+                    </div>
+                  </div>
                 )}
                 {workflowMode === 'reject' && (
                   <div>

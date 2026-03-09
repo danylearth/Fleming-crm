@@ -5,9 +5,10 @@ import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, Emp
 import DocumentUpload from '../components/v3/DocumentUpload';
 import RentPayments from '../components/v3/RentPayments';
 import { useApi } from '../hooks/useApi';
+import { useAuth } from '../context/AuthContext';
 import {
   Pencil, Save, X, Mail, Phone, Building2, Calendar, MessageSquare, Clock,
-  Wrench, AlertTriangle, ChevronRight, Plus, User, Heart, CheckCircle,
+  Wrench, AlertTriangle, ChevronRight, Plus, User, CheckCircle,
   ChevronDown, ShieldCheck
 } from 'lucide-react';
 
@@ -20,12 +21,15 @@ interface Tenant {
   email_2?: string; phone_2?: string; date_of_birth_2?: string;
   nok_name?: string; nok_relationship?: string; nok_phone?: string; nok_email?: string;
   kyc_completed_1?: number; kyc_completed_2?: number;
+  kyc_primary_id?: number; kyc_secondary_id?: number;
+  kyc_address_verification?: number; kyc_personal_verification?: number;
   guarantor_required?: number; guarantor_name?: string; guarantor_address?: string;
   guarantor_phone?: string; guarantor_email?: string;
   guarantor_kyc_completed?: number; guarantor_deed_received?: number;
   holding_deposit_received?: number; holding_deposit_amount?: number; holding_deposit_date?: string;
   application_forms_completed?: number;
   authority_to_contact?: number; proof_of_income?: string; deposit_scheme?: string;
+  income_amount?: string; income_employer?: string; income_contract_type?: string;
   property_id: number; property_address: string;
   tenancy_start_date?: string; tenancy_type?: string;
   has_end_date?: number; tenancy_end_date?: string; monthly_rent?: number;
@@ -153,6 +157,7 @@ export default function TenantDetailV3() {
   const { id } = useParams();
   const navigate = useNavigate();
   const api = useApi();
+  const { user } = useAuth();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingSection, setEditingSection] = useState<string | null>(null);
@@ -188,7 +193,7 @@ export default function TenantDetailV3() {
     if (!id) return;
     (async () => {
       try {
-        const logs = await api.get(`/api/audit-log?entity_type=tenant&entity_id=${id}&limit=50`);
+        const logs = await api.get(`/api/activity/tenant/${id}?limit=50`);
         setTimeline(Array.isArray(logs) ? logs : []);
       } catch { setTimeline([]); }
       setTimelineLoading(false);
@@ -237,13 +242,16 @@ export default function TenantDetailV3() {
   function getChecklistItems() {
     const items: { label: string; done: boolean }[] = [
       { label: 'Authority to Contact', done: !!form.authority_to_contact },
-      { label: 'KYC — Primary ID', done: !!form.kyc_completed_1 },
+      { label: 'Primary ID', done: !!form.kyc_primary_id },
+      { label: 'Secondary ID', done: !!form.kyc_secondary_id },
+      { label: 'Address Verification', done: !!form.kyc_address_verification },
+      { label: 'Personal Verification', done: !!form.kyc_personal_verification },
     ];
     if (form.is_joint_tenancy) {
       items.push({ label: 'KYC — Applicant 2', done: !!form.kyc_completed_2 });
     }
     items.push({ label: 'Application Forms', done: !!form.application_forms_completed });
-    items.push({ label: 'Proof of Income', done: !!form.proof_of_income });
+    items.push({ label: 'Proof of Income', done: !!(form.income_amount || form.proof_of_income) });
     if (form.guarantor_required) {
       items.push({ label: 'Guarantor KYC', done: !!form.guarantor_kyc_completed });
       items.push({ label: 'Deed of Guarantee', done: !!form.guarantor_deed_received });
@@ -303,12 +311,14 @@ export default function TenantDetailV3() {
   const addNote = async () => {
     if (!newNote.trim()) return;
     setAddingNote(true);
-    const note: TenantNote = { id: Date.now().toString(), text: newNote.trim(), author: 'You', created_at: new Date().toISOString() };
+    const noteText = newNote.trim();
+    const note: TenantNote = { id: Date.now().toString(), text: noteText, author: user?.email || 'Unknown', created_at: new Date().toISOString() };
     const updated = [...notes, note];
     try {
       await api.put(`/api/tenants/${id}`, { notes: JSON.stringify(updated) });
       setNotes(updated);
       setNewNote('');
+      api.post('/api/activity', { action: 'note_added', entity_type: 'tenant', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
     } catch (e) { console.error(e); }
     setAddingNote(false);
   };
@@ -355,6 +365,12 @@ export default function TenantDetailV3() {
                   <span className="text-xs text-red-400 font-medium">
                     {endDateWarning === 0 ? 'Tenancy has expired!' : `Tenancy ends in ${endDateWarning} days`}
                   </span>
+                </div>
+              )}
+              {!form.nok_name && !form.nok_phone && (
+                <div className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 w-fit">
+                  <AlertTriangle size={14} className="text-amber-400" />
+                  <span className="text-xs text-amber-400 font-medium">Next of kin details missing</span>
                 </div>
               )}
             </div>
@@ -438,34 +454,7 @@ export default function TenantDetailV3() {
               )}
             </GlassCard>
 
-            {/* Next of Kin */}
-            <GlassCard className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-semibold flex items-center gap-2"><Heart size={16} />Next of Kin</h3>
-                  {!form.nok_name && !isEditing('nok') && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-medium">Missing</span>
-                  )}
-                </div>
-                <SectionEditButton editing={isEditing('nok')} onEdit={() => setEditingSection('nok')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
-              </div>
-              {isEditing('nok') ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <Input label="Full Name" value={form.nok_name} onChange={v => setForm({ ...form, nok_name: v })} placeholder="Next of kin name" />
-                  <Select label="Relationship" value={form.nok_relationship} onChange={v => setForm({ ...form, nok_relationship: v })}
-                    options={[{ value: '', label: 'Select' }, { value: 'Parent', label: 'Parent' }, { value: 'Spouse', label: 'Spouse' }, { value: 'Sibling', label: 'Sibling' }, { value: 'Child', label: 'Child' }, { value: 'Friend', label: 'Friend' }, { value: 'Other', label: 'Other' }]} />
-                  <Input label="Phone" value={form.nok_phone} onChange={v => setForm({ ...form, nok_phone: v })} placeholder="+44..." />
-                  <Input label="Email" value={form.nok_email} onChange={v => setForm({ ...form, nok_email: v })} type="email" />
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <ReadField label="Name" value={tenant.nok_name} />
-                  <ReadField label="Relationship" value={tenant.nok_relationship} />
-                  <ReadField label="Phone" value={tenant.nok_phone} />
-                  <ReadField label="Email" value={tenant.nok_email} />
-                </div>
-              )}
-            </GlassCard>
+            {/* Next of Kin — removed per client feedback (not required during onboarding) */}
 
             {/* Rent Payments */}
             <RentPayments tenantId={tenant.id} compact />
@@ -485,11 +474,6 @@ export default function TenantDetailV3() {
               {isEditing('tenancy') ? (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <DatePicker label="Start Date" value={form.tenancy_start_date} onChange={v => setForm({ ...form, tenancy_start_date: v })} />
-                    <Select label="Tenancy Type" value={form.tenancy_type} onChange={v => setForm({ ...form, tenancy_type: v })}
-                      options={[{ value: '', label: 'Select' }, { value: 'AST', label: 'AST' }, { value: 'HMO', label: 'HMO' }, { value: 'Rolling', label: 'Rolling' }, { value: 'Other', label: 'Other' }]} />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <Input label="Monthly Rent (£)" value={form.monthly_rent} onChange={v => setForm({ ...form, monthly_rent: v })} placeholder="0.00" />
                     <Select label="Deposit Scheme" value={form.deposit_scheme} onChange={v => setForm({ ...form, deposit_scheme: v })}
                       options={[{ value: '', label: 'Select...' }, { value: 'tds', label: 'Tenancy Deposit Scheme' }, { value: 'gov_back', label: 'Gov Back Scheme' }, { value: 'paid_to_landlord', label: 'Paid to Landlord' }, { value: 'other', label: 'Other/TBF' }]} />
@@ -507,8 +491,6 @@ export default function TenantDetailV3() {
               ) : (
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <ReadField label="Start Date" value={form.tenancy_start_date ? formatDateDMY(form.tenancy_start_date) : null} />
-                    <ReadField label="Tenancy Type" value={form.tenancy_type} />
                     <ReadField label="Monthly Rent" value={form.monthly_rent ? `£${Number(form.monthly_rent).toLocaleString()}` : null} />
                     <ReadField label="Deposit Scheme" value={
                       form.deposit_scheme === 'tds' ? 'Tenancy Deposit Scheme' :
@@ -549,16 +531,28 @@ export default function TenantDetailV3() {
                   <YesNo value={!!form.authority_to_contact} onChange={v => setForm({ ...form, authority_to_contact: v })} disabled={!isEditing('checklist')} />
                 </div>
 
-                {/* KYC — Applicant 1 */}
+                {/* KYC Breakdown */}
                 <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
-                  <span className="text-xs">KYC — {form.first_name_1 || 'Applicant 1'} (Address + Personal ID)</span>
-                  <YesNo value={!!form.kyc_completed_1} onChange={v => setForm({ ...form, kyc_completed_1: v })} disabled={!isEditing('checklist')} />
+                  <span className="text-xs">Primary ID</span>
+                  <YesNo value={!!form.kyc_primary_id} onChange={v => setForm({ ...form, kyc_primary_id: v })} disabled={!isEditing('checklist')} />
+                </div>
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Secondary ID</span>
+                  <YesNo value={!!form.kyc_secondary_id} onChange={v => setForm({ ...form, kyc_secondary_id: v })} disabled={!isEditing('checklist')} />
+                </div>
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Address Verification</span>
+                  <YesNo value={!!form.kyc_address_verification} onChange={v => setForm({ ...form, kyc_address_verification: v })} disabled={!isEditing('checklist')} />
+                </div>
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Personal Verification</span>
+                  <YesNo value={!!form.kyc_personal_verification} onChange={v => setForm({ ...form, kyc_personal_verification: v })} disabled={!isEditing('checklist')} />
                 </div>
 
                 {/* KYC — Applicant 2 */}
                 {form.is_joint_tenancy && (
                   <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
-                    <span className="text-xs">KYC — {form.first_name_2 || 'Applicant 2'} (Address + Personal ID)</span>
+                    <span className="text-xs">KYC — {form.first_name_2 || 'Applicant 2'}</span>
                     <YesNo value={!!form.kyc_completed_2} onChange={v => setForm({ ...form, kyc_completed_2: v })} disabled={!isEditing('checklist')} />
                   </div>
                 )}
@@ -573,17 +567,23 @@ export default function TenantDetailV3() {
                 <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs">Proof of Income</span>
-                    <span className={`text-[10px] font-medium ${form.proof_of_income ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
-                      {form.proof_of_income ? 'Provided' : '—'}
+                    <span className={`text-[10px] font-medium ${(form.income_amount || form.proof_of_income) ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                      {(form.income_amount || form.proof_of_income) ? 'Provided' : '—'}
                     </span>
                   </div>
                   {isEditing('checklist') && (
-                    <div className="mt-2">
-                      <Input label="" value={form.proof_of_income} onChange={v => setForm({ ...form, proof_of_income: v })} placeholder="e.g. £2,500/mo, Employed at ABC Ltd, Full-time" />
+                    <div className="mt-2 grid grid-cols-1 gap-2">
+                      <Input label="Monthly Amount (£)" value={form.income_amount || ''} onChange={v => setForm({ ...form, income_amount: v })} placeholder="e.g. 2500" />
+                      <Input label="Employer" value={form.income_employer || ''} onChange={v => setForm({ ...form, income_employer: v })} placeholder="e.g. ABC Ltd" />
+                      <Select label="Contract Type" value={form.income_contract_type || ''} onChange={v => setForm({ ...form, income_contract_type: v })}
+                        options={[{ value: '', label: 'Select' }, { value: 'Full-time', label: 'Full-time' }, { value: 'Part-time', label: 'Part-time' }, { value: 'Contract', label: 'Contract' }, { value: 'Self-employed', label: 'Self-employed' }, { value: 'Other', label: 'Other' }]} />
                     </div>
                   )}
-                  {!isEditing('checklist') && form.proof_of_income && (
-                    <p className="text-xs text-[var(--text-secondary)] mt-1">{form.proof_of_income}</p>
+                  {!isEditing('checklist') && (form.income_amount || form.income_employer) && (
+                    <div className="mt-1 text-xs text-[var(--text-secondary)] space-y-0.5">
+                      {form.income_amount && <p>£{Number(form.income_amount).toLocaleString()}/mo</p>}
+                      {form.income_employer && <p>{form.income_employer}{form.income_contract_type ? ` · ${form.income_contract_type}` : ''}</p>}
+                    </div>
                   )}
                 </div>
 

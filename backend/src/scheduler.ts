@@ -27,19 +27,19 @@ function logAudit(action: string, entityType: string, entityId?: number, changes
   }
 }
 
-function taskExists(taskType: string, entityId: number): boolean {
+function taskExists(taskType: string, entityId: number, entityType = 'property'): boolean {
   const existing = db.prepare(`
     SELECT id FROM tasks
-    WHERE task_type = ? AND entity_type = 'property' AND entity_id = ? AND status IN ('pending', 'in_progress')
-  `).get(taskType, entityId) as any;
+    WHERE task_type = ? AND entity_type = ? AND entity_id = ? AND status IN ('pending', 'in_progress')
+  `).get(taskType, entityType, entityId) as any;
   return !!existing;
 }
 
-function createTask(title: string, priority: string, dueDate: string, taskType: string, entityId: number): void {
+function createTask(title: string, priority: string, dueDate: string, taskType: string, entityId: number, entityType = 'property'): void {
   db.prepare(`
     INSERT INTO tasks (title, priority, status, due_date, task_type, entity_type, entity_id)
-    VALUES (?, ?, 'pending', ?, ?, 'property', ?)
-  `).run(title, priority, dueDate, taskType, entityId);
+    VALUES (?, ?, 'pending', ?, ?, ?, ?)
+  `).run(title, priority, dueDate, taskType, entityType, entityId);
 }
 
 function runComplianceChecks(): number {
@@ -183,14 +183,56 @@ function runRentReviewChecks(): number {
   return tasksCreated;
 }
 
+function runNokChecks(): number {
+  let tasksCreated = 0;
+  const today = new Date();
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const tenants = db.prepare(`
+    SELECT id, name
+    FROM tenants
+    WHERE created_at <= ?
+    AND (nok_name IS NULL OR nok_name = '')
+    AND (nok_phone IS NULL OR nok_phone = '')
+  `).all(thirtyDaysAgo.toISOString()) as any[];
+
+  for (const t of tenants) {
+    if (taskExists('nok_missing', t.id, 'tenant')) continue;
+
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 7);
+
+    createTask(
+      `Next of kin missing — ${t.name}`,
+      'medium',
+      dueDate.toISOString().split('T')[0],
+      'nok_missing',
+      t.id,
+      'tenant'
+    );
+
+    logAudit('create', 'task', t.id, {
+      type: 'nok_missing',
+      tenant: t.name,
+      via: 'scheduler',
+    });
+
+    tasksCreated++;
+  }
+
+  return tasksCreated;
+}
+
 function runAllChecks() {
   const complianceTasks = runComplianceChecks();
   const tenancyTasks = runTenancyEndChecks();
   const rentReviewTasks = runRentReviewChecks();
-  const total = complianceTasks + tenancyTasks + rentReviewTasks;
+  const nokTasks = runNokChecks();
+  const total = complianceTasks + tenancyTasks + rentReviewTasks + nokTasks;
 
   if (total > 0) {
-    console.log(`[Scheduler] Created ${total} tasks (compliance: ${complianceTasks}, tenancy: ${tenancyTasks}, rent review: ${rentReviewTasks})`);
+    console.log(`[Scheduler] Created ${total} tasks (compliance: ${complianceTasks}, tenancy: ${tenancyTasks}, rent review: ${rentReviewTasks}, nok: ${nokTasks})`);
   }
 }
 

@@ -3,13 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { Card, GlassCard, Button, ProgressRing, SectionHeader, EmptyState, Avatar, Tag, Input, Select, DatePicker } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
+import ActivityTimeline from '../components/v3/ActivityTimeline';
+import AddressAutocomplete from '../components/v3/AddressAutocomplete';
 import RentPayments from '../components/v3/RentPayments';
 import { useApi } from '../hooks/useApi';
 import { getPropertyImage } from '../utils/propertyImages';
 import {
   Building2, Bed, PoundSterling, MapPin, User, Users,
   CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
-  AlertTriangle, ShieldCheck, FileText
+  AlertTriangle, ShieldCheck, FileText, Plus, Wrench, Trash2
 } from 'lucide-react';
 
 interface PropertyDetail {
@@ -38,6 +40,16 @@ interface PropertyDetail {
 interface Task {
   id: number; title: string; status: string; priority: string; due_date: string;
   property_id?: number;
+}
+
+interface MaintenanceRecord {
+  id: number; title: string; status: string; priority: string; description: string;
+  property_id: number; created_at: string; address?: string;
+}
+
+interface Expense {
+  id: number; property_id: number; description: string; amount: number;
+  category: string; expense_date: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -83,10 +95,14 @@ export default function PropertyDetailV3() {
   const navigate = useNavigate();
   const [property, setProperty] = useState<PropertyDetail | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Record<string, any>>({});
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [expenseForm, setExpenseForm] = useState({ description: '', amount: '', category: 'maintenance', expense_date: '' });
 
   const populateForm = (p: PropertyDetail) => setForm({
     address: p.address || '', postcode: p.postcode || '',
@@ -109,10 +125,14 @@ export default function PropertyDetailV3() {
     Promise.all([
       api.get(`/api/properties/${id}`),
       api.get('/api/tasks').catch(() => []),
-    ]).then(([prop, tks]) => {
+      api.get('/api/maintenance').catch(() => []),
+      api.get(`/api/property-expenses/${id}`).catch(() => []),
+    ]).then(([prop, tks, maint, exps]) => {
       setProperty(prop);
       populateForm(prop);
       setTasks(Array.isArray(tks) ? tks : []);
+      setMaintenance(Array.isArray(maint) ? maint.filter((m: MaintenanceRecord) => m.property_id === Number(id)) : []);
+      setExpenses(Array.isArray(exps) ? exps : []);
     }).catch(() => {})
     .finally(() => setLoading(false));
   }, [id]);
@@ -235,7 +255,8 @@ export default function PropertyDetailV3() {
               <SectionHeader title="Details" />
               {editing ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <Input label="Address" value={form.address} onChange={(v: string) => setForm({ ...form, address: v })} />
+                  <AddressAutocomplete label="Address" value={form.address} onChange={(v: string) => setForm({ ...form, address: v })}
+                    onSelect={p => { if (p.postcode) setForm(f => ({ ...f, postcode: p.postcode || f.postcode })); }} />
                   <Input label="Postcode" value={form.postcode} onChange={(v: string) => setForm({ ...form, postcode: v })} />
                   <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />
                   <Select label="Type" value={form.property_type} onChange={(v: string) => setForm({ ...form, property_type: v })}
@@ -270,6 +291,26 @@ export default function PropertyDetailV3() {
                     options={[{ value: '', label: 'Select...' }, ...['A','B','C','D','E','F','G','H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
                   <Select label="EPC Grade" value={form.epc_grade} onChange={(v: string) => setForm({ ...form, epc_grade: v })}
                     options={[{ value: '', label: 'Select...' }, ...['A','B','C','D','E','F','G'].map(g => ({ value: g, label: `Grade ${g}` }))]} />
+                  {form.postcode && (
+                    <div className="col-span-full flex gap-2">
+                      <button type="button" onClick={async () => {
+                        try {
+                          const data = await api.get(`/api/epc-lookup?postcode=${encodeURIComponent(form.postcode)}`);
+                          if (data.length > 0) setForm(f => ({ ...f, epc_grade: data[0].current_rating || f.epc_grade }));
+                        } catch {}
+                      }} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-colors">
+                        Auto-fetch EPC
+                      </button>
+                      <button type="button" onClick={async () => {
+                        try {
+                          const data = await api.get(`/api/council-tax-lookup?postcode=${encodeURIComponent(form.postcode)}`);
+                          if (data.length > 0 && data[0].band) setForm(f => ({ ...f, council_tax_band: data[0].band }));
+                        } catch {}
+                      }} className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-colors">
+                        Auto-fetch Council Tax
+                      </button>
+                    </div>
+                  )}
                   <DatePicker label="Rent Review Date" value={form.rent_review_date} onChange={(v: string) => setForm({ ...form, rent_review_date: v })} />
                   <DatePicker label="Onboarded Date" value={form.onboarded_date} onChange={(v: string) => setForm({ ...form, onboarded_date: v })} />
                   <div className="flex flex-wrap gap-2 col-span-full">
@@ -344,6 +385,17 @@ export default function PropertyDetailV3() {
                     <ReadField label="Start Date" value={formatDate(property.tenancy_start_date)} />
                     {property.has_end_date ? <ReadField label="End Date" value={formatDate(property.tenancy_end_date)} /> : null}
                     <ReadField label="Status" value={property.has_live_tenancy ? 'Active' : 'Inactive'} />
+                    {property.has_end_date && property.tenancy_end_date && (() => {
+                      const days = daysUntil(property.tenancy_end_date);
+                      if (days === null) return null;
+                      return (
+                        <ReadField label="Time Remaining" value={
+                          <span className={`text-sm font-medium ${days < 0 ? 'text-red-400' : days < 30 ? 'text-amber-400' : days < 90 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                            {days < 0 ? `Expired ${Math.abs(days)} days ago` : `${days} days`}
+                          </span>
+                        } />
+                      );
+                    })()}
                   </div>
                 )}
               </GlassCard>
@@ -372,6 +424,96 @@ export default function PropertyDetailV3() {
               ) : (
                 <EmptyState message="No tasks for this property" />
               )}
+            </Card>
+
+            {/* Maintenance */}
+            <Card className="p-6">
+              <SectionHeader title="Maintenance" action={() => navigate('/v3/maintenance')} actionLabel="View All" />
+              {maintenance.length ? (
+                <div className="space-y-2">
+                  {maintenance.slice(0, 5).map(m => (
+                    <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                        m.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
+                        m.status === 'in_progress' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-amber-500/20 text-amber-400'
+                      }`}>
+                        <Wrench size={14} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm truncate">{m.title}</p>
+                        <p className="text-[10px] text-[var(--text-muted)]">{m.status === 'completed' ? 'Completed' : m.status === 'in_progress' ? 'In Progress' : 'Open'}</p>
+                      </div>
+                      <Tag>{m.priority}</Tag>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState message="No maintenance records" />
+              )}
+            </Card>
+
+            {/* Expenses */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader title="Expenses" />
+                <Button variant="outline" size="sm" onClick={() => setShowExpenseForm(!showExpenseForm)}>
+                  <Plus size={14} className="mr-1.5" /> Add
+                </Button>
+              </div>
+              {showExpenseForm && (
+                <div className="mb-4 p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] space-y-3">
+                  <Input label="Description" value={expenseForm.description} onChange={(v: string) => setExpenseForm(f => ({ ...f, description: v }))} placeholder="e.g. Boiler repair" />
+                  <div className="grid grid-cols-3 gap-3">
+                    <Input label="Amount (£)" value={expenseForm.amount} onChange={(v: string) => setExpenseForm(f => ({ ...f, amount: v }))} type="number" />
+                    <Select label="Category" value={expenseForm.category} onChange={(v: string) => setExpenseForm(f => ({ ...f, category: v }))}
+                      options={[{ value: 'maintenance', label: 'Maintenance' }, { value: 'insurance', label: 'Insurance' }, { value: 'legal', label: 'Legal' }, { value: 'service_charge', label: 'Service Charge' }, { value: 'other', label: 'Other' }]} />
+                    <DatePicker label="Date" value={expenseForm.expense_date} onChange={(v: string) => setExpenseForm(f => ({ ...f, expense_date: v }))} />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setShowExpenseForm(false)}>Cancel</Button>
+                    <Button variant="gradient" size="sm" disabled={!expenseForm.description || !expenseForm.amount} onClick={async () => {
+                      try {
+                        await api.post('/api/property-expenses', { property_id: property.id, ...expenseForm, amount: parseFloat(expenseForm.amount) || 0 });
+                        const exps = await api.get(`/api/property-expenses/${property.id}`);
+                        setExpenses(Array.isArray(exps) ? exps : []);
+                        setExpenseForm({ description: '', amount: '', category: 'maintenance', expense_date: '' });
+                        setShowExpenseForm(false);
+                      } catch {}
+                    }}>Save</Button>
+                  </div>
+                </div>
+              )}
+              {expenses.length ? (
+                <div className="space-y-2">
+                  {expenses.map(e => (
+                    <div key={e.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)]">
+                      <div className="w-7 h-7 rounded-lg bg-red-500/20 text-red-400 flex items-center justify-center">
+                        <PoundSterling size={14} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm truncate">{e.description}</p>
+                        <p className="text-[10px] text-[var(--text-muted)]">{e.category}{e.expense_date ? ` · ${new Date(e.expense_date).toLocaleDateString('en-GB')}` : ''}</p>
+                      </div>
+                      <span className="text-sm font-medium text-red-400">-£{e.amount.toLocaleString()}</span>
+                      <button onClick={async () => {
+                        try {
+                          await api.delete(`/api/property-expenses/${e.id}`);
+                          setExpenses(prev => prev.filter(x => x.id !== e.id));
+                        } catch {}
+                      }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="pt-2 border-t border-[var(--border-subtle)] flex justify-between">
+                    <span className="text-xs text-[var(--text-muted)]">Total</span>
+                    <span className="text-sm font-semibold text-red-400">-£{expenses.reduce((a, e) => a + e.amount, 0).toLocaleString()}</span>
+                  </div>
+                </div>
+              ) : !showExpenseForm ? (
+                <EmptyState message="No expenses recorded" />
+              ) : null}
             </Card>
 
             {/* Rent Payments */}
@@ -446,13 +588,24 @@ export default function PropertyDetailV3() {
                     <ChevronRight size={16} className="text-[var(--text-muted)]" />
                   </div>
                 ) : (
-                  <p className="text-sm text-[var(--text-muted)]">No tenant assigned</p>
+                  <div className="space-y-3">
+                    <p className="text-sm text-[var(--text-muted)]">No tenant assigned</p>
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/v3/tenants?createFor=${property.id}`)}>
+                      <Plus size={14} className="mr-1.5" />Create Tenant
+                    </Button>
+                  </div>
                 )}
               </Card>
             )}
 
             {/* Documents */}
             <DocumentUpload entityType="property" entityId={property.id} />
+
+            {/* Activity */}
+            <Card className="p-6">
+              <SectionHeader title="Activity" />
+              <ActivityTimeline entityType="property" entityId={property.id} />
+            </Card>
           </div>
         </div>
       </div>

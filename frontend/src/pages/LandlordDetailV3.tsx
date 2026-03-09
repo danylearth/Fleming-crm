@@ -3,7 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Select, Avatar, SectionHeader, EmptyState, Card, DatePicker } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
+import ActivityTimeline from '../components/v3/ActivityTimeline';
+import AddressAutocomplete from '../components/v3/AddressAutocomplete';
 import { useApi } from '../hooks/useApi';
+import { useAuth } from '../context/AuthContext';
 import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Search, ChevronDown } from 'lucide-react';
 import { getPropertyImage } from '../utils/propertyImages';
 
@@ -11,7 +14,7 @@ interface Landlord {
   id: number; name: string; email: string; phone: string; address: string; notes: string;
   alt_email: string; date_of_birth: string; home_address: string;
   marketing_post: number; marketing_email: number; marketing_phone: number; marketing_sms: number;
-  kyc_completed: number; property_count: number;
+  kyc_completed: number; property_count: number; referral_source: string;
 }
 interface Property {
   id: number; address: string; landlord_id: number; type?: string; status?: string;
@@ -58,13 +61,14 @@ export default function LandlordDetailV3() {
   const { id } = useParams();
   const navigate = useNavigate();
   const api = useApi();
+  const { user } = useAuth();
   const [landlord, setLandlord] = useState<Landlord | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: '', email: '', phone: '', address: '', notes: '',
-    alt_email: '', date_of_birth: '', home_address: '',
+    alt_email: '', date_of_birth: '', home_address: '', referral_source: '',
     marketing_post: false, marketing_email: false, marketing_phone: false, marketing_sms: false,
     kyc_completed: false,
   });
@@ -81,6 +85,7 @@ export default function LandlordDetailV3() {
   const populateForm = (l: Landlord) => setForm({
     name: l.name || '', email: l.email || '', phone: l.phone || '', address: l.address || '',
     notes: '', alt_email: l.alt_email || '', date_of_birth: l.date_of_birth || '', home_address: l.home_address || '',
+    referral_source: l.referral_source || '',
     marketing_post: !!l.marketing_post, marketing_email: !!l.marketing_email,
     marketing_phone: !!l.marketing_phone, marketing_sms: !!l.marketing_sms,
     kyc_completed: !!l.kyc_completed,
@@ -125,12 +130,14 @@ export default function LandlordDetailV3() {
 
   const addNote = async () => {
     if (!notesInput.trim()) return;
-    const newNote = { id: Date.now().toString(), text: notesInput.trim(), author: 'You', created_at: new Date().toISOString() };
+    const noteText = notesInput.trim();
+    const newNote = { id: Date.now().toString(), text: noteText, author: user?.email || 'Unknown', created_at: new Date().toISOString() };
     const updated = [...notes, newNote];
     setNotes(updated);
     setNotesInput('');
     try {
       await api.put(`/api/landlords/${id}`, { ...form, notes: JSON.stringify(updated) });
+      api.post('/api/activity', { action: 'note_added', entity_type: 'landlord', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
     } catch (e) { console.error(e); }
   };
 
@@ -157,7 +164,7 @@ export default function LandlordDetailV3() {
                   </span>
                 )}
               </div>
-              <p className="text-[var(--text-secondary)] text-sm mt-1">{properties.length} {properties.length === 1 ? 'property' : 'properties'} managed</p>
+              {/* Subtitle removed per client feedback */}
             </div>
             <div className="flex gap-2">
               <Button variant={editing ? 'ghost' : 'outline'} onClick={() => {
@@ -188,7 +195,9 @@ export default function LandlordDetailV3() {
                   <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" />
                   <Input label="Alternative Email" value={form.alt_email} onChange={v => setForm({ ...form, alt_email: v })} type="email" />
                   <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
-                  <Input label="Home Address" value={form.home_address} onChange={v => setForm({ ...form, home_address: v })} />
+                  <AddressAutocomplete label="Home Address" value={form.home_address} onChange={v => setForm({ ...form, home_address: v })} />
+                  <Select label="Referral Source" value={form.referral_source} onChange={v => setForm({ ...form, referral_source: v })}
+                    options={[{ value: '', label: 'Select...' }, { value: 'Website', label: 'Website' }, { value: 'Word of Mouth', label: 'Word of Mouth' }, { value: 'Social Media', label: 'Social Media' }, { value: 'Rightmove', label: 'Rightmove' }, { value: 'Zoopla', label: 'Zoopla' }, { value: 'Referral', label: 'Referral' }, { value: 'Walk-in', label: 'Walk-in' }, { value: 'Other', label: 'Other' }]} />
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -198,6 +207,7 @@ export default function LandlordDetailV3() {
                   <ReadField icon={Mail} label="Alternative Email" value={landlord.alt_email} />
                   <ReadField icon={Phone} label="Phone" value={landlord.phone} />
                   <ReadField icon={MapPin} label="Home Address" value={landlord.home_address} />
+                  <ReadField icon={Megaphone} label="Referral Source" value={landlord.referral_source} />
                 </div>
               )}
             </GlassCard>
@@ -295,7 +305,7 @@ export default function LandlordDetailV3() {
             {/* Activity Timeline */}
             <GlassCard className="p-6">
               <SectionHeader title="Activity Timeline" />
-              <p className="text-xs text-[var(--text-muted)]">Coming soon</p>
+              <ActivityTimeline entityType="landlord" entityId={landlord.id} />
             </GlassCard>
           </div>
         </div>
@@ -316,7 +326,9 @@ export default function LandlordDetailV3() {
                 </div>
               </div>
 
-              <Input label="Address *" value={propForm.address} onChange={(v: string) => setPropForm(f => ({ ...f, address: v }))} placeholder="Property address" />
+              <AddressAutocomplete label="Address *" value={propForm.address} onChange={(v: string) => setPropForm(f => ({ ...f, address: v }))}
+                onSelect={p => { if (p.postcode) setPropForm(f => ({ ...f, postcode: p.postcode || f.postcode })); }}
+                placeholder="Property address" />
               <div className="grid grid-cols-2 gap-3">
                 <Input label="Postcode" value={propForm.postcode} onChange={(v: string) => setPropForm(f => ({ ...f, postcode: v }))} placeholder="e.g. SW1A 1AA" />
                 <Input label="Rent (£/month)" value={propForm.rent_amount} onChange={(v: string) => setPropForm(f => ({ ...f, rent_amount: v }))} placeholder="0" />
