@@ -161,7 +161,7 @@ export default function BDMV3() {
   const followUpDue = prospects.filter(p => p.follow_up_date && isOverdue(p.follow_up_date) && !['onboarded', 'not_interested'].includes(p.status)).length;
 
   return (
-    <V3Layout title="Landlords BDM" breadcrumb={[{ label: 'BDM' }]}>
+    <V3Layout title="Landlord Enquiries" breadcrumb={[{ label: 'Landlord Enquiries' }]}>
       <div className="p-4 md:p-8 space-y-6">
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

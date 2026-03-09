@@ -192,7 +192,7 @@ export default function BDMDetailV3() {
   const isOnboarded = prospect.status === 'onboarded';
 
   return (
-    <V3Layout breadcrumb={[{ label: 'BDM', to: '/v3/bdm' }, { label: prospect.name }]}>
+    <V3Layout breadcrumb={[{ label: 'Landlord Enquiries', to: '/v3/bdm' }, { label: prospect.name }]}>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Header */}
         <GlassCard className="p-6">

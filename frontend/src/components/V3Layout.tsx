@@ -11,11 +11,11 @@ import { useTheme } from '../context/ThemeContext';
 
 const navItems = [
   { to: '/v3', icon: DashboardIcon, label: 'Dashboard' },
-  { to: '/v3/enquiries', icon: EnquiriesIcon, label: 'Enquiries' },
+  { to: '/v3/enquiries', icon: EnquiriesIcon, label: 'Tenant Enquiries' },
   { to: '/v3/properties', icon: PropertiesIcon, label: 'Properties' },
   { to: '/v3/landlords', icon: LandlordsIcon, label: 'Landlords' },
   { to: '/v3/tenants', icon: TenantsIcon, label: 'Tenants' },
-  { to: '/v3/bdm', icon: BdmIcon, label: 'BDM' },
+  { to: '/v3/bdm', icon: BdmIcon, label: 'Landlord Enquiries' },
   { to: '/v3/maintenance', icon: MaintenanceIcon, label: 'Maintenance' },
   { to: '/v3/tasks', icon: TasksIcon, label: 'Tasks' },
   { to: '/v3/financials', icon: FinancialsIcon, label: 'Financials' },

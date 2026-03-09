@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Avatar, SearchBar, Input, Select, EmptyState } from '../components/v3';
+import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, ArrowLeft, Calendar, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List, Building2, ChevronDown, Archive, Pencil, ArrowRight, XCircle, CheckCircle } from 'lucide-react';
+import { Plus, X, ArrowLeft, Calendar, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List, Building2, ChevronDown, Pencil, ArrowRight, XCircle, CheckCircle, Mail, Phone } from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
 import { useNavigate } from 'react-router-dom';
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 
 interface EnquiryRaw {
   id: number;
@@ -25,6 +26,8 @@ interface Enquiry {
   email: string;
   phone: string;
   status: string;
+  follow_up_date: string;
+  linked_property_id: number | null;
   created_at: string;
 }
 
@@ -35,69 +38,36 @@ function mapEnquiry(raw: EnquiryRaw): Enquiry {
     email: raw.email_1 || '',
     phone: raw.phone_1 || '',
     status: raw.status || 'new',
+    follow_up_date: raw.follow_up_date || '',
+    linked_property_id: raw.linked_property_id || null,
     created_at: raw.created_at,
   };
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  new: 'bg-blue-500/20 text-blue-400',
-  viewing_booked: 'bg-purple-500/20 text-purple-400',
-  awaiting_response: 'bg-amber-500/20 text-amber-400',
-  onboarding: 'bg-green-500/20 text-green-400',
-  converted: 'bg-emerald-500/20 text-emerald-400',
-  rejected: 'bg-red-500/20 text-red-400',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  new: 'New',
-  viewing_booked: 'Viewing Booked',
-  awaiting_response: 'Awaiting Response',
-  onboarding: 'Onboarding',
-  converted: 'Converted',
-  rejected: 'Rejected',
-};
-
-const TITLE_OPTIONS = [
-  { value: '', label: '-' }, { value: 'Mr', label: 'Mr' }, { value: 'Mrs', label: 'Mrs' },
-  { value: 'Ms', label: 'Ms' }, { value: 'Miss', label: 'Miss' }, { value: 'Dr', label: 'Dr' },
+const STATUSES = [
+  { key: 'new', label: 'New', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  { key: 'viewing_booked', label: 'Viewing Booked', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  { key: 'awaiting_response', label: 'Follow Up', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  { key: 'onboarding', label: 'Onboarding', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
+  { key: 'converted', label: 'Converted', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  { key: 'rejected', label: 'Rejected', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
 ];
 
-const EMPLOYMENT_OPTIONS = [
-  { value: '', label: '-' }, { value: 'Employed', label: 'Employed' }, { value: 'Self-Employed', label: 'Self-Employed' },
-  { value: 'Unemployed', label: 'Unemployed' }, { value: 'Student', label: 'Student' }, { value: 'Retired', label: 'Retired' },
-];
+function statusStyle(s: string) {
+  return STATUSES.find(st => st.key === s)?.color || 'bg-[var(--bg-hover)] text-[var(--text-muted)]';
+}
+function statusLabel(s: string) {
+  return STATUSES.find(st => st.key === s)?.label || s;
+}
 
-const NATIONALITY_OPTIONS = [
-  { value: '', label: '-' }, { value: 'British', label: 'British' }, { value: 'Irish', label: 'Irish' },
-  { value: 'Polish', label: 'Polish' }, { value: 'Romanian', label: 'Romanian' }, { value: 'Indian', label: 'Indian' },
-  { value: 'Pakistani', label: 'Pakistani' }, { value: 'Bangladeshi', label: 'Bangladeshi' }, { value: 'Nigerian', label: 'Nigerian' },
-  { value: 'Chinese', label: 'Chinese' }, { value: 'Italian', label: 'Italian' }, { value: 'Portuguese', label: 'Portuguese' },
-  { value: 'Spanish', label: 'Spanish' }, { value: 'French', label: 'French' }, { value: 'German', label: 'German' },
-  { value: 'American', label: 'American' }, { value: 'Other', label: 'Other' },
-];
+function formatDate(d: string) {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
-const INDUSTRY_OPTIONS = [
-  { value: '', label: '-' }, { value: 'Accounting & Finance', label: 'Accounting & Finance' },
-  { value: 'Construction', label: 'Construction' }, { value: 'Education', label: 'Education' },
-  { value: 'Engineering', label: 'Engineering' }, { value: 'Healthcare', label: 'Healthcare' },
-  { value: 'Hospitality', label: 'Hospitality' }, { value: 'IT & Technology', label: 'IT & Technology' },
-  { value: 'Legal', label: 'Legal' }, { value: 'Manufacturing', label: 'Manufacturing' },
-  { value: 'Marketing & Media', label: 'Marketing & Media' }, { value: 'Public Sector', label: 'Public Sector' },
-  { value: 'Retail', label: 'Retail' }, { value: 'Transport & Logistics', label: 'Transport & Logistics' },
-  { value: 'Other', label: 'Other' },
-];
-
-const BEDROOMS_OPTIONS = [
-  { value: '', label: '-' }, ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
-];
-
-function formatTime(d: string) {
-  const date = new Date(d);
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+function isOverdue(d: string) {
+  if (!d) return false;
+  return new Date(d) < new Date(new Date().toDateString());
 }
 
 // ─── Radio Group Component ───
@@ -147,6 +117,28 @@ function ReadField({ label, value }: { label: string; value?: string | number | 
     </div>
   );
 }
+
+const NATIONALITY_OPTIONS = [
+  { value: '', label: '-' }, { value: 'British', label: 'British' }, { value: 'Irish', label: 'Irish' },
+  { value: 'Polish', label: 'Polish' }, { value: 'Romanian', label: 'Romanian' }, { value: 'Indian', label: 'Indian' },
+  { value: 'Pakistani', label: 'Pakistani' }, { value: 'Other', label: 'Other' },
+];
+
+const EMPLOYMENT_OPTIONS = [
+  { value: '', label: '-' }, { value: 'Employed', label: 'Employed' }, { value: 'Self-Employed', label: 'Self-Employed' },
+  { value: 'Unemployed', label: 'Unemployed' }, { value: 'Student', label: 'Student' }, { value: 'Retired', label: 'Retired' },
+];
+
+const INDUSTRY_OPTIONS = [
+  { value: '', label: '-' }, { value: 'Accounting & Finance', label: 'Accounting & Finance' },
+  { value: 'Construction', label: 'Construction' }, { value: 'Education', label: 'Education' },
+  { value: 'Healthcare', label: 'Healthcare' }, { value: 'IT & Technology', label: 'IT & Technology' },
+  { value: 'Retail', label: 'Retail' }, { value: 'Other', label: 'Other' },
+];
+
+const BEDROOMS_OPTIONS = [
+  { value: '', label: '-' }, ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+];
 
 // ─── Applicant Fields Block ───
 function ApplicantFields({ form, setField, suffix, editing }: {
@@ -212,14 +204,10 @@ function EmploymentFields({ form, setField, suffix, editing }: {
           <ReadField label="Industry" value={form[f('industry_')]} />
           <ReadField label="Job Title" value={form[f('job_title_')]} />
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-          <ReadField label="Years in Employment" value={form[f('years_employed_')]} />
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <ReadField label="Annual Salary" value={form[f('income_')] ? `£${Number(form[f('income_')]).toLocaleString()}` : null} />
           <ReadField label="Employer" value={form[f('employer_')]} />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
           <ReadField label="Contract Type" value={form[f('contract_type_')]} />
-          <ReadField label="Happy to provide further info?" value={form[f('provide_further_info_')]} />
         </div>
       </>
     );
@@ -232,635 +220,44 @@ function EmploymentFields({ form, setField, suffix, editing }: {
         <Input label="Job Title" value={form[f('job_title_')] || ''} onChange={v => setField(f('job_title_'), v)} placeholder="Job title" />
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
-        <Input label="Years in Employment" value={form[f('years_employed_')]?.toString() || ''} onChange={v => setField(f('years_employed_'), v ? Number(v) : null)} placeholder="0" type="number" />
         <Input label="Annual Salary £" value={form[f('income_')]?.toString() || ''} onChange={v => setField(f('income_'), v ? Number(v) : null)} placeholder="0" type="number" />
         <Input label="Employer" value={form[f('employer_')] || ''} onChange={v => setField(f('employer_'), v)} placeholder="Employer name" />
       </div>
-      <div className="space-y-3">
-        <RadioGroup label="Contract Type" value={form[f('contract_type_')] || ''} onChange={v => setField(f('contract_type_'), v)}
-          options={[
-            { value: 'Permanent', label: 'Permanent' },
-            { value: 'Fixed position', label: 'Fixed position' },
-            { value: 'Contract role', label: 'Contract role' },
-            { value: 'Temporary or agency', label: 'Temporary or agency' },
-          ]} />
-        <RadioGroup label="Happy to provide further info?" value={form[f('provide_further_info_')] || ''} onChange={v => setField(f('provide_further_info_'), v)}
-          options={[{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }]} />
-      </div>
+      <RadioGroup label="Contract Type" value={form[f('contract_type_')] || ''} onChange={v => setField(f('contract_type_'), v)}
+        options={[
+          { value: 'Permanent', label: 'Permanent' },
+          { value: 'Fixed position', label: 'Fixed position' },
+          { value: 'Contract role', label: 'Contract role' },
+          { value: 'Temporary or agency', label: 'Temporary or agency' },
+        ]} />
     </>
-  );
-}
-
-// ─── Detail Panel ───
-function EnquiryDetail({ enquiryId, api, onBack, onUpdated }: {
-  enquiryId: number; api: any; onBack: () => void; onUpdated: () => void;
-}) {
-  const [data, setData] = useState<EnquiryRaw | null>(null);
-  const [form, setForm] = useState<Record<string, any>>({});
-  const [tab, setTab] = useState<'applicant' | 'activity' | 'notes'>('applicant');
-  const [jointApp, setJointApp] = useState(false);
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [noteDraft, setNoteDraft] = useState('');
-  const [docs] = useState<string[]>([]);
-  const [showWorkflow, setShowWorkflow] = useState(false);
-  const [workflowMode, setWorkflowMode] = useState<'choose'|'viewing'|'awaiting'|'onboarding'|'reject'|'convert'>('choose');
-  const [duplicates, setDuplicates] = useState<any[]>([]);
-  const [wfDate, setWfDate] = useState('');
-  const [wfTime, setWfTime] = useState('10:00');
-  const [wfPropId, setWfPropId] = useState('');
-  const [wfReason, setWfReason] = useState('');
-  const [wfLoading, setWfLoading] = useState(false);
-
-  const loadDetail = useCallback(async () => {
-    try {
-      const d = await api.get(`/api/tenant-enquiries/${enquiryId}`);
-      setData(d);
-      setForm({ ...d });
-      if (d.is_joint_application || d.first_name_2 || d.last_name_2 || d.email_2) setJointApp(true);
-    } catch {}
-  }, [enquiryId, api]);
-
-  useEffect(() => { loadDetail(); }, [loadDetail]);
-  useEffect(() => {
-    (async () => {
-      try {
-        const p = await api.get('/api/properties');
-        setProperties(Array.isArray(p) ? p : p.properties || []);
-      } catch {}
-    })();
-  }, [api]);
-
-  const setField = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
-
-  const save = async (extra?: Record<string, any>) => {
-    setSaving(true);
-    try {
-      const payload = { ...form, is_joint_application: jointApp, ...extra };
-      await api.put(`/api/tenant-enquiries/${enquiryId}`, payload);
-      await loadDetail();
-      onUpdated();
-    } catch {}
-    setSaving(false);
-  };
-
-  const updateStatus = async (status: string) => {
-    setField('status', status);
-    await save({ status });
-  };
-
-  const handleWorkflow = async () => {
-    setWfLoading(true);
-    try {
-      const name = [form.first_name_1, form.last_name_1].filter(Boolean).join(' ');
-      switch (workflowMode) {
-        case 'viewing':
-          if (wfPropId && wfDate) {
-            await api.post('/api/property-viewings', {
-              property_id: Number(wfPropId), enquiry_id: enquiryId,
-              viewer_name: name, viewer_email: form.email_1 || '',
-              viewer_phone: form.phone_1 || '', viewing_date: wfDate, viewing_time: wfTime,
-            });
-            await save({ status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate });
-          }
-          break;
-        case 'awaiting':
-          if (wfDate) await save({ status: 'awaiting_response', follow_up_date: wfDate });
-          break;
-        case 'onboarding':
-          await save({ status: 'onboarding', follow_up_date: wfDate || null });
-          break;
-        case 'reject':
-          await save({ status: 'rejected', rejection_reason: wfReason });
-          break;
-        case 'convert':
-          await api.post(`/api/tenant-enquiries/${enquiryId}/convert`, {
-            property_id: form.linked_property_id,
-            tenancy_start_date: wfDate || new Date().toISOString().split('T')[0],
-          });
-          await loadDetail();
-          onUpdated();
-          break;
-      }
-      setShowWorkflow(false);
-      setWorkflowMode('choose');
-      setWfDate(''); setWfTime('10:00'); setWfPropId(''); setWfReason('');
-    } catch {}
-    setWfLoading(false);
-  };
-
-  const openWorkflow = () => {
-    setWorkflowMode('choose');
-    setWfDate(''); setWfTime('10:00'); setWfReason('');
-    setWfPropId(form.linked_property_id?.toString() || '');
-    setDuplicates([]);
-    setShowWorkflow(true);
-  };
-
-  const checkDuplicatesAndConvert = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (form.email_1) params.set('email', form.email_1);
-      if (form.phone_1) params.set('phone', form.phone_1);
-      params.set('exclude_id', String(enquiryId));
-      const dupes = await api.get(`/api/tenant-enquiries/check-duplicates?${params}`);
-      if (Array.isArray(dupes) && dupes.length > 0) {
-        setDuplicates(dupes);
-        setWorkflowMode('convert');
-      } else {
-        setDuplicates([]);
-        setWorkflowMode('convert');
-      }
-    } catch {
-      setWorkflowMode('convert');
-    }
-  };
-
-  // Conversion readiness check
-  const canConvert = form.status === 'onboarding' && form.linked_property_id && form.first_name_1 && form.last_name_1 && form.email_1 && form.kyc_completed_1;
-
-  const saveNote = async () => {
-    if (!noteDraft.trim()) return;
-    const existing = form.notes || '';
-    const timestamp = new Date().toLocaleString('en-GB');
-    const newNotes = existing ? `${existing}\n\n[${timestamp}]\n${noteDraft.trim()}` : `[${timestamp}]\n${noteDraft.trim()}`;
-    setField('notes', newNotes);
-    await save({ notes: newNotes });
-    setNoteDraft('');
-  };
-
-  if (!data) return <div className="flex-1 flex items-center justify-center text-[var(--text-muted)] text-sm">Loading...</div>;
-
-  const name = [data.first_name_1, data.last_name_1].filter(Boolean).join(' ') || 'Unknown';
-  const kycDone = !!form.kyc_completed_1;
-  const propertyLinked = !!form.linked_property_id;
-  const hasDocs = docs.length > 0;
-  const completionItems = [kycDone, propertyLinked, hasDocs];
-  const completionPct = Math.round((completionItems.filter(Boolean).length / completionItems.length) * 100);
-
-  const selectedProp = properties.find(p => p.id === Number(form.linked_property_id));
-
-  return (
-    <div className="flex-1 flex flex-col min-w-0">
-      {/* Header */}
-      <div className="flex items-center gap-4 px-4 md:px-6 h-16 border-b border-[var(--border-subtle)] shrink-0">
-        <button onClick={onBack} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden mr-1">
-          <ArrowLeft size={20} />
-        </button>
-        <Avatar name={name} size="md" />
-        <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold truncate">{name}</h3>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[form.status] || ''}`}>
-            {STATUS_LABELS[form.status] || form.status}
-          </span>
-        </div>
-        {editing ? (
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
-              <X size={14} className="mr-1" />Cancel
-            </Button>
-            <Button variant="gradient" size="sm" onClick={() => { save(); setEditing(false); }} disabled={saving}>
-              <Save size={14} className="mr-1.5" />{saving ? 'Saving...' : 'Save'}
-            </Button>
-          </div>
-        ) : (
-          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-            <Pencil size={14} className="mr-1.5" />Edit
-          </Button>
-        )}
-      </div>
-
-      {/* Body */}
-      <div className="flex-1 overflow-hidden flex">
-        {/* Left: tabs */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex border-b border-[var(--border-subtle)] px-4 md:px-6">
-            {(['applicant', 'activity', 'notes'] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  tab === t ? 'border-orange-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}>
-                {t === 'applicant' ? 'Applicant Info' : t === 'activity' ? 'Activity' : 'Notes'}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 md:p-6">
-            {/* ═══ APPLICANT TAB ═══ */}
-            {tab === 'applicant' && (
-              <div className="space-y-6 max-w-4xl">
-
-                {/* ── Applicant 1 ── */}
-                <div>
-                  <SectionDivider icon={<User size={16} />} title="Applicant 1">
-                    {editing ? (
-                      <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
-                        <input type="checkbox" checked={!!form.kyc_completed_1}
-                          onChange={e => setField('kyc_completed_1', e.target.checked)}
-                          className="w-4 h-4 rounded accent-orange-500" />
-                        KYC Complete
-                      </label>
-                    ) : form.kyc_completed_1 ? (
-                      <span className="text-xs text-emerald-400 font-medium">KYC ✓</span>
-                    ) : (
-                      <span className="text-xs text-[var(--text-muted)]">KYC Pending</span>
-                    )}
-                  </SectionDivider>
-                  <ApplicantFields form={form} setField={setField} suffix="1" editing={editing} />
-                </div>
-
-                {/* ── Employment History 1 ── */}
-                <div>
-                  <SectionDivider icon={<Briefcase size={16} />} title="Employment History" />
-                  <EmploymentFields form={form} setField={setField} suffix="1" editing={editing} />
-                </div>
-
-                {/* ── Renting Requirements ── */}
-                <div>
-                  <SectionDivider icon={<Home size={16} />} title="Renting Requirements" color="text-pink-400" />
-                  {editing ? (
-                    <div className="space-y-4">
-                      <RadioGroup label="Tenancy Type Wanted" value={form.tenancy_type_wanted || ''} onChange={v => setField('tenancy_type_wanted', v)}
-                        options={[
-                          { value: 'Long-term', label: 'Long-term' },
-                          { value: 'Short-term', label: 'Short-term' },
-                          { value: 'Interim', label: 'Interim' },
-                        ]} />
-                      <RadioGroup label="Reason for Renting" value={form.renting_reason || ''} onChange={v => setField('renting_reason', v)}
-                        options={[
-                          { value: 'First time tenant', label: 'First time tenant' },
-                          { value: 'Family move', label: 'Family move' },
-                          { value: 'Workplace relocation', label: 'Workplace relocation' },
-                          { value: 'Studying', label: 'Studying' },
-                          { value: 'Other', label: 'Other' },
-                        ]} />
-                      <RadioGroup label="Property Type Wanted" value={form.property_type_wanted || ''} onChange={v => setField('property_type_wanted', v)}
-                        options={[
-                          { value: 'House', label: 'House' },
-                          { value: 'Bungalow', label: 'Bungalow' },
-                          { value: 'Flat', label: 'Flat' },
-                          { value: 'Studio apartment', label: 'Studio apartment' },
-                          { value: 'Shared', label: 'Shared' },
-                          { value: 'Sheltered', label: 'Sheltered' },
-                          { value: 'Other', label: 'Other' },
-                        ]} />
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <Select label="Bedrooms Required" value={form.bedrooms_required?.toString() || ''} onChange={v => setField('bedrooms_required', v ? Number(v) : null)} options={BEDROOMS_OPTIONS} />
-                        <RadioGroup label="Off Road Parking" value={form.parking_required || ''} onChange={v => setField('parking_required', v)}
-                          options={[{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }, { value: 'Preferred', label: 'Preferred' }]} />
-                        <Input label="Rent Min £" value={form.rent_min?.toString() || ''} onChange={v => setField('rent_min', v ? Number(v) : null)} placeholder="250" type="number" />
-                        <Input label="Rent Max £" value={form.rent_max?.toString() || ''} onChange={v => setField('rent_max', v ? Number(v) : null)} placeholder="2500" type="number" />
-                      </div>
-                      <Input label="Desired Locations (up to 5)" value={form.desired_locations || ''} onChange={v => setField('desired_locations', v)} placeholder="e.g. Manchester, Salford, Didsbury" />
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <ReadField label="Tenancy Type" value={form.tenancy_type_wanted} />
-                      <ReadField label="Reason for Renting" value={form.renting_reason} />
-                      <ReadField label="Property Type" value={form.property_type_wanted} />
-                      <ReadField label="Bedrooms Required" value={form.bedrooms_required} />
-                      <ReadField label="Off Road Parking" value={form.parking_required} />
-                      <ReadField label="Rent Range" value={form.rent_min || form.rent_max ? `£${form.rent_min || 0} — £${form.rent_max || '∞'}` : null} />
-                      <div className="md:col-span-3">
-                        <ReadField label="Desired Locations" value={form.desired_locations} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* ── Joint Application Toggle ── */}
-                {editing ? (
-                  <label className="flex items-center gap-3 cursor-pointer py-3 px-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] w-fit">
-                    <input type="checkbox" checked={jointApp} onChange={e => { setJointApp(e.target.checked); setField('is_joint_application', e.target.checked); }}
-                      className="w-4 h-4 rounded accent-orange-500" />
-                    <Users size={16} className="text-pink-400" />
-                    <span className="text-sm text-[var(--text-primary)] font-medium">Joint Application</span>
-                  </label>
-                ) : jointApp ? (
-                  <div className="flex items-center gap-2 py-2">
-                    <Users size={16} className="text-pink-400" />
-                    <span className="text-sm font-medium">Joint Application</span>
-                  </div>
-                ) : null}
-
-                {/* ── Applicant 2 ── */}
-                {jointApp && (
-                  <>
-                    <div>
-                      <SectionDivider icon={<User size={16} />} title="Applicant 2" color="text-pink-400">
-                        {editing ? (
-                          <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
-                            <input type="checkbox" checked={!!form.kyc_completed_2}
-                              onChange={e => setField('kyc_completed_2', e.target.checked)}
-                              className="w-4 h-4 rounded accent-orange-500" />
-                            KYC Complete
-                          </label>
-                        ) : form.kyc_completed_2 ? (
-                          <span className="text-xs text-emerald-400 font-medium">KYC ✓</span>
-                        ) : (
-                          <span className="text-xs text-[var(--text-muted)]">KYC Pending</span>
-                        )}
-                      </SectionDivider>
-                      <ApplicantFields form={form} setField={setField} suffix="2" editing={editing} />
-                    </div>
-
-                    <div>
-                      <SectionDivider icon={<Briefcase size={16} />} title="Employment History 2" color="text-pink-400" />
-                      <EmploymentFields form={form} setField={setField} suffix="2" editing={editing} />
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* ═══ ACTIVITY TAB ═══ */}
-            {tab === 'activity' && (
-              <div className="space-y-4">
-                <h4 className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Timeline</h4>
-                <div className="relative pl-6 border-l-2 border-[var(--border-subtle)] space-y-6">
-                  <div className="relative">
-                    <div className="absolute -left-[25px] w-3 h-3 rounded-full bg-orange-500" />
-                    <p className="text-sm font-medium">Current Status: {STATUS_LABELS[data.status] || data.status}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{data.updated_at ? new Date(data.updated_at).toLocaleString('en-GB') : 'N/A'}</p>
-                  </div>
-                  {data.viewing_date && (
-                    <div className="relative">
-                      <div className="absolute -left-[25px] w-3 h-3 rounded-full bg-purple-500" />
-                      <p className="text-sm font-medium">Viewing Scheduled</p>
-                      <p className="text-xs text-[var(--text-muted)]">{new Date(data.viewing_date).toLocaleString('en-GB')}</p>
-                    </div>
-                  )}
-                  <div className="relative">
-                    <div className="absolute -left-[25px] w-3 h-3 rounded-full bg-blue-500" />
-                    <p className="text-sm font-medium">Enquiry Created</p>
-                    <p className="text-xs text-[var(--text-muted)]">{new Date(data.created_at).toLocaleString('en-GB')}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ═══ NOTES TAB ═══ */}
-            {tab === 'notes' && (
-              <div className="space-y-4">
-                <h4 className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Notes</h4>
-                {form.notes ? (
-                  <div className="bg-[var(--bg-subtle)] rounded-xl p-4 whitespace-pre-wrap text-sm text-[var(--text-primary)]">
-                    {form.notes}
-                  </div>
-                ) : (
-                  <p className="text-sm text-[var(--text-muted)]">No notes yet.</p>
-                )}
-                <div>
-                  <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} placeholder="Add a note..."
-                    rows={3}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none" />
-                  <Button variant="gradient" size="sm" onClick={saveNote} disabled={!noteDraft.trim()} className="mt-2">
-                    <Save size={14} className="mr-1.5" /> Add Note
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ═══ Right Sidebar ═══ */}
-        <div className="hidden lg:flex w-[300px] shrink-0 border-l border-[var(--border-subtle)] flex-col overflow-y-auto p-4 space-y-5">
-          {/* ACTIONS */}
-          <div>
-            <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Actions</h4>
-            <button onClick={openWorkflow}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium bg-gradient-to-r from-orange-500 to-pink-500 text-white hover:opacity-90 transition-opacity">
-              <ArrowRight size={14} /> Progress / Reject
-            </button>
-          </div>
-
-          {/* PROPERTY */}
-          <div>
-            <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Property</h4>
-            <select value={form.linked_property_id || ''} onChange={e => setField('linked_property_id', e.target.value ? Number(e.target.value) : null)}
-              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2.5 text-sm text-[var(--text-primary)] appearance-none focus:outline-none mb-2">
-              <option value="">No property linked</option>
-              {properties.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.address}{p.postcode ? `, ${p.postcode}` : ''}{p.rent ? ` - £${p.rent}/mo` : ''}
-                </option>
-              ))}
-            </select>
-            {selectedProp && (
-              <a href="/properties" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
-                View property <ExternalLink size={12} />
-              </a>
-            )}
-          </div>
-
-          {/* DOCUMENTS */}
-          <div>
-            <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Documents</h4>
-            <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-dashed border-[var(--border-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors mb-2">
-              <Upload size={14} /> Upload
-            </button>
-            {docs.length === 0 ? (
-              <p className="text-xs text-[var(--text-muted)] text-center py-2">No documents uploaded yet</p>
-            ) : (
-              docs.map((d, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm py-1">
-                  <FileText size={14} className="text-[var(--text-muted)]" /> {d}
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* APPLICATION STATUS */}
-          <div>
-            <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Application Status</h4>
-            <div className="space-y-2 mb-3">
-              {[
-                { label: 'KYC (Applicant 1)', done: kycDone },
-                { label: 'Property Linked', done: propertyLinked },
-                { label: 'Documents', done: hasDocs },
-              ].map(item => (
-                <div key={item.label} className="flex items-center gap-2 text-sm">
-                  <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${item.done ? 'bg-green-500' : 'bg-[var(--bg-input)] border border-[var(--border-input)]'}`}>
-                    {item.done && <CheckCircle size={12} className="text-white" />}
-                  </div>
-                  <span className={item.done ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}>{item.label}</span>
-                </div>
-              ))}
-            </div>
-            <div className="w-full bg-[var(--bg-input)] rounded-full h-2 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-orange-500 to-pink-500 rounded-full transition-all duration-500"
-                style={{ width: `${completionPct}%` }} />
-            </div>
-            <p className="text-xs text-[var(--text-muted)] mt-1.5 text-center">{completionPct}% complete</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ═══ Workflow Modal ═══ */}
-      {showWorkflow && (
-        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowWorkflow(false)}>
-          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <Avatar name={name} size="md" />
-                <div>
-                  <h3 className="text-lg font-bold">{name}</h3>
-                  <p className="text-xs text-[var(--text-muted)]">Update workflow</p>
-                </div>
-              </div>
-              <button onClick={() => setShowWorkflow(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-
-            {workflowMode === 'choose' ? (
-              <div className="space-y-2">
-                <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Progress</p>
-                <button onClick={() => setWorkflowMode('viewing')}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><BookingIcon size={14} className="text-white" /></div>
-                  <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p><p className="text-xs text-[var(--text-muted)]">Select date, time & property</p></div>
-                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
-                </button>
-                <button onClick={() => setWorkflowMode('awaiting')}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><AwaitingIcon size={14} className="text-white" /></div>
-                  <div className="flex-1"><p className="text-sm font-medium">Awaiting Client Response</p><p className="text-xs text-[var(--text-muted)]">Set follow-up date</p></div>
-                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
-                </button>
-                <button onClick={() => setWorkflowMode('onboarding')}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center"><OnboardingIcon size={14} className="text-white" /></div>
-                  <div className="flex-1"><p className="text-sm font-medium">Start Onboarding</p><p className="text-xs text-[var(--text-muted)]">Optional follow-up date</p></div>
-                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
-                </button>
-                {/* Convert to Tenant — only when ready */}
-                {canConvert && (
-                  <>
-                    <div className="h-px bg-[var(--border-subtle)] my-3" />
-                    <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Convert</p>
-                    <button onClick={checkDuplicatesAndConvert}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors text-left border border-emerald-500/20">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center"><ConvertedIcon size={14} className="text-white" /></div>
-                      <div className="flex-1"><p className="text-sm font-medium text-emerald-400">Convert to Tenant</p><p className="text-xs text-[var(--text-muted)]">Move to Tenants module</p></div>
-                      <ArrowRight size={14} className="text-[var(--text-muted)]" />
-                    </button>
-                  </>
-                )}
-
-                <div className="h-px bg-[var(--border-subtle)] my-3" />
-                <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Archive</p>
-                <button onClick={() => setWorkflowMode('reject')}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center"><XCircle size={14} className="text-white" /></div>
-                  <div className="flex-1"><p className="text-sm font-medium text-red-400">Reject & Archive</p><p className="text-xs text-[var(--text-muted)]">Removes from queue, stays searchable</p></div>
-                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <button onClick={() => setWorkflowMode('choose')} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">← Back</button>
-                {workflowMode === 'viewing' && (
-                  <>
-                    <Select label="Link to Property" value={wfPropId} onChange={setWfPropId}
-                      options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
-                    <Input label="Viewing Date" value={wfDate} onChange={setWfDate} type="date" />
-                    <Input label="Viewing Time" value={wfTime} onChange={setWfTime} type="time" />
-                    <p className="text-xs text-[var(--text-muted)]">Creates a Property Viewing. Card disappears from queue and reappears on the viewing date.</p>
-                  </>
-                )}
-                {workflowMode === 'awaiting' && (
-                  <>
-                    <Input label="Follow-up Date" value={wfDate} onChange={setWfDate} type="date" />
-                    <p className="text-xs text-[var(--text-muted)]">Card disappears from the queue and reappears on this date.</p>
-                  </>
-                )}
-                {workflowMode === 'onboarding' && (
-                  <>
-                    <Input label="Follow-up Date (optional)" value={wfDate} onChange={setWfDate} type="date" />
-                    <p className="text-xs text-[var(--text-muted)]">{wfDate ? 'Card will disappear and reappear on this date.' : 'Card stays visible in the Onboarding column.'}</p>
-                  </>
-                )}
-                {workflowMode === 'reject' && (
-                  <>
-                    <div>
-                      <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Reason (optional)</label>
-                      <textarea value={wfReason} onChange={e => setWfReason(e.target.value)} rows={3}
-                        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none"
-                        placeholder="Reason for rejection..." />
-                    </div>
-                    <p className="text-xs text-[var(--text-muted)]">Record will be archived but kept on file for future reference.</p>
-                  </>
-                )}
-                {workflowMode === 'convert' && (
-                  <>
-                    {duplicates.length > 0 && (
-                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                        <p className="text-xs font-medium text-amber-400 mb-2">⚠ Duplicate records found</p>
-                        <div className="space-y-2">
-                          {duplicates.map((d, i) => (
-                            <div key={i} className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                              <span className="px-1.5 py-0.5 rounded bg-[var(--bg-hover)] text-[10px] font-medium uppercase">{d.source}</span>
-                              <span className="font-medium">{d.name}</span>
-                              <span className="text-[var(--text-muted)]">({d.match}: {d.match === 'email' ? d.email || d.email_1 : d.phone || d.phone_1})</span>
-                              {d.status && <span className="text-[var(--text-muted)]">— {d.status}</span>}
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-[10px] text-amber-400/70 mt-2">Review above before converting. Existing records will be retriggered for review.</p>
-                      </div>
-                    )}
-                    <Input label="Tenancy Start Date" value={wfDate} onChange={setWfDate} type="date" />
-                    <p className="text-xs text-[var(--text-muted)]">
-                      This will create a Tenant record linked to <strong>{properties.find(p => p.id === Number(form.linked_property_id))?.address || 'the property'}</strong> and mark this enquiry as converted.
-                    </p>
-                  </>
-                )}
-                <div className="flex gap-3 pt-2">
-                  <Button variant="ghost" onClick={() => setShowWorkflow(false)}>Cancel</Button>
-                  <Button
-                    variant={workflowMode === 'reject' ? 'outline' : 'gradient'}
-                    onClick={handleWorkflow}
-                    disabled={wfLoading || (workflowMode === 'viewing' && (!wfDate || !wfPropId)) || (workflowMode === 'awaiting' && !wfDate) || (workflowMode === 'convert' && !wfDate)}
-                    className={workflowMode === 'reject' ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : ''}
-                  >
-                    {wfLoading ? 'Saving...' : workflowMode === 'reject' ? 'Reject & Archive' : workflowMode === 'convert' ? 'Convert to Tenant' : 'Confirm'}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
   );
 }
 
 // ─── Main Page ───
 export default function EnquiriesV3() {
   const api = useApi();
-  const nav = useNavigate();
+  const navigate = useNavigate();
   const [rawEnquiries, setRawEnquiries] = useState<EnquiryRaw[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
-  const [properties, setProperties] = useState<{ id: number; address: string; postcode?: string; rent_amount?: number }[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
-  const [filterPropId, setFilterPropId] = useState('');
-  const [showArchive, setShowArchive] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('active');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', status: 'new', notes: '' });
-  const [propDropOpen, setPropDropOpen] = useState(false);
-  const [propSearch, setPropSearch] = useState('');
-  const propDropRef = React.useRef<HTMLDivElement>(null);
+  const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '' });
+  const [saving, setSaving] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  // Close property dropdown on outside click
-  React.useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (propDropRef.current && !propDropRef.current.contains(e.target as Node)) setPropDropOpen(false);
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+  // Workflow state
+  const [workflowEnquiry, setWorkflowEnquiry] = useState<Enquiry | null>(null);
+  const [workflowMode, setWorkflowMode] = useState<'choose' | 'viewing' | 'follow_up' | 'onboarding' | 'reject'>('choose');
+  const [wfDate, setWfDate] = useState('');
+  const [wfTime, setWfTime] = useState('10:00');
+  const [wfPropId, setWfPropId] = useState('');
+  const [wfReason, setWfReason] = useState('');
+  const [wfLoading, setWfLoading] = useState(false);
 
   const load = async () => {
     try {
@@ -875,39 +272,27 @@ export default function EnquiriesV3() {
     } catch { setEnquiries([]); setRawEnquiries([]); }
     setLoading(false);
   };
-
   useEffect(() => { load(); }, []);
 
-  // Same visibility logic as kanban
-  const isFuture = (d?: string | null) => {
-    if (!d) return false;
-    const date = new Date(d);
-    const today = new Date(); today.setHours(0,0,0,0);
-    return date > today;
-  };
-
-  const visibleRawIds = new Set(
-    rawEnquiries.filter(e => {
-      if (filterPropId && e.linked_property_id !== Number(filterPropId)) return false;
-      if (e.status === 'rejected') return showArchive;
-      if (showArchive) return e.status === 'rejected';
-      if (e.status === 'awaiting_response' && isFuture(e.follow_up_date)) return false;
-      if (e.status === 'viewing_booked' && isFuture(e.viewing_date)) return false;
-      if (e.status === 'onboarding' && e.follow_up_date && isFuture(e.follow_up_date)) return false;
-      return true;
-    }).map(e => e.id)
-  );
-
   const filtered = enquiries.filter(e => {
-    if (!visibleRawIds.has(e.id)) return false;
-    if (!search) return true;
-    return e.name.toLowerCase().includes(search.toLowerCase()) ||
-      e.email.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || [e.name, e.email, e.phone]
+      .some(v => v?.toLowerCase().includes(search.toLowerCase()));
+    if (statusFilter === 'active') return matchSearch && !['converted', 'rejected'].includes(e.status);
+    if (statusFilter !== 'all') return matchSearch && e.status === statusFilter;
+    return matchSearch;
   });
 
-  const archivedCount = rawEnquiries.filter(e => e.status === 'rejected').length;
+  const statusCounts = enquiries.reduce((acc, e) => {
+    acc[e.status] = (acc[e.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const activeCount = enquiries.filter(e => !['converted', 'rejected'].includes(e.status)).length;
+
+  const followUpDue = enquiries.filter(e => e.follow_up_date && isOverdue(e.follow_up_date) && !['converted', 'rejected'].includes(e.status)).length;
 
   const addEnquiry = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
     try {
       const [firstName, ...lastParts] = form.name.trim().split(' ');
       await api.post('/api/tenant-enquiries', {
@@ -915,178 +300,419 @@ export default function EnquiriesV3() {
         last_name_1: lastParts.join(' ') || '',
         email_1: form.email,
         phone_1: form.phone,
-        status: form.status,
         notes: form.notes,
+        status: 'new',
       });
       setShowAdd(false);
-      setForm({ name: '', email: '', phone: '', status: 'new', notes: '' });
+      setForm({ name: '', email: '', phone: '', notes: '' });
       await load();
     } catch {}
+    setSaving(false);
   };
 
-  const STATUS_OPTIONS = Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }));
+  const openWorkflow = (e: Enquiry, ev: React.MouseEvent) => {
+    ev.stopPropagation();
+    setWorkflowEnquiry(e);
+    setWorkflowMode('choose');
+    setWfDate(''); setWfTime('10:00'); setWfPropId(''); setWfReason('');
+  };
 
-  const selectedPropObj = filterPropId ? properties.find(p => p.id === Number(filterPropId)) : null;
-  const filteredProps = properties.filter(p =>
-    !propSearch || p.address.toLowerCase().includes(propSearch.toLowerCase()) || (p.postcode || '').toLowerCase().includes(propSearch.toLowerCase())
-  );
+  const doWorkflowAction = async () => {
+    if (!workflowEnquiry) return;
+    setWfLoading(true);
+    try {
+      const raw = rawEnquiries.find(r => r.id === workflowEnquiry.id);
+      if (!raw) return;
+
+      switch (workflowMode) {
+        case 'viewing':
+          if (wfPropId && wfDate) {
+            const name = workflowEnquiry.name;
+            await api.post('/api/property-viewings', {
+              property_id: Number(wfPropId), enquiry_id: workflowEnquiry.id,
+              viewer_name: name, viewer_email: workflowEnquiry.email,
+              viewer_phone: workflowEnquiry.phone, viewing_date: wfDate, viewing_time: wfTime,
+            });
+            await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`, {
+              ...raw, status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate,
+            });
+          }
+          break;
+        case 'follow_up':
+          if (wfDate) {
+            await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`, {
+              ...raw, status: 'awaiting_response', follow_up_date: wfDate,
+            });
+          }
+          break;
+        case 'onboarding':
+          await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`, {
+            ...raw, status: 'onboarding', follow_up_date: wfDate || null,
+          });
+          break;
+        case 'reject':
+          await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`, {
+            ...raw, status: 'rejected', rejection_reason: wfReason,
+          });
+          break;
+      }
+      setWorkflowEnquiry(null);
+      await load();
+    } catch {}
+    setWfLoading(false);
+  };
+
+  const propertyMap = properties.reduce((acc, p) => { acc[p.id] = p; return acc; }, {} as Record<number, Property>);
+
+  // Kanban columns — reuse STATUSES minus converted/rejected
+  const kanbanStatuses = STATUSES.filter(s => !['converted', 'rejected'].includes(s.key));
+
+  const onDragEnd = async (result: DropResult) => {
+    const { draggableId, destination, source } = result;
+    if (!destination || destination.droppableId === source.droppableId) return;
+    const enquiryId = parseInt(draggableId);
+    const newStatus = destination.droppableId;
+    const e = enquiries.find(eq => eq.id === enquiryId);
+    if (!e) return;
+    setWorkflowEnquiry(e);
+    if (newStatus === 'awaiting_response') {
+      setWorkflowMode('follow_up');
+    } else if (newStatus === 'viewing_booked') {
+      setWorkflowMode('viewing');
+    } else if (newStatus === 'onboarding') {
+      setWorkflowMode('onboarding');
+    } else {
+      // Direct status change
+      const raw = rawEnquiries.find(r => r.id === enquiryId);
+      if (raw) {
+        try {
+          await api.put(`/api/tenant-enquiries/${enquiryId}`, { ...raw, status: newStatus });
+          await load();
+        } catch {}
+      }
+    }
+  };
 
   return (
-    <V3Layout hideTopBar>
-      <div className="flex h-full">
-        {/* Left Panel */}
-        <div className={`w-full md:w-[350px] shrink-0 border-r border-[var(--border-subtle)] flex flex-col ${selectedId != null ? 'hidden md:flex' : 'flex'}`}>
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 h-14 border-b border-[var(--border-subtle)]">
-            <h2 className="text-lg font-bold">Enquiries</h2>
-            <div className="flex items-center gap-1">
-              <button onClick={() => nav('/v3/enquiries/kanban')} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors" title="Kanban view">
-                <LayoutGrid size={16} />
-              </button>
-              <Button variant="ghost" size="sm" onClick={() => setShowAdd(true)}>
-                <Plus size={16} />
-              </Button>
-            </div>
+    <V3Layout title="Tenant Enquiries" breadcrumb={[{ label: 'Tenant Enquiries' }]}>
+      <div className="p-4 md:p-8 space-y-6">
+        {/* Stats row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: 'Active Enquiries', value: activeCount, accent: true },
+            { label: 'Follow-ups Due', value: followUpDue, warn: followUpDue > 0 },
+            { label: 'Viewing Booked', value: statusCounts['viewing_booked'] || 0 },
+            { label: 'Onboarding', value: statusCounts['onboarding'] || 0 },
+          ].map(s => (
+            <GlassCard key={s.label} className="p-4">
+              <p className="text-xs text-[var(--text-muted)]">{s.label}</p>
+              <p className={`text-2xl font-bold mt-1 ${s.warn ? 'text-orange-400' : s.accent ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                {s.value}
+              </p>
+            </GlassCard>
+          ))}
+        </div>
+
+        {/* Search + View Toggle + Add */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex-1"><SearchBar value={search} onChange={setSearch} placeholder="Search enquiries..." /></div>
+          <div className="flex items-center gap-1 bg-[var(--bg-input)] rounded-xl p-1 border border-[var(--border-input)]">
+            <button onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+              <List size={16} />
+            </button>
+            <button onClick={() => setViewMode('kanban')}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'kanban' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+              <LayoutGrid size={16} />
+            </button>
           </div>
+          <Button variant="gradient" onClick={() => setShowAdd(true)}>
+            <Plus size={16} className="mr-2" /> Add Enquiry
+          </Button>
+        </div>
 
-          {/* Property Selector */}
-          <div className="px-4 py-2.5 border-b border-[var(--border-subtle)]" ref={propDropRef}>
-            <div className="relative">
-              <button onClick={() => setPropDropOpen(!propDropOpen)}
-                className="w-full flex items-center gap-2.5 pl-3 pr-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl text-sm text-[var(--text-primary)] hover:border-[var(--border-input)] transition-colors">
-                <Building2 size={14} className="text-[var(--text-muted)] shrink-0" />
-                <span className="flex-1 text-left truncate text-sm">
-                  {selectedPropObj ? selectedPropObj.address : 'All Properties'}
-                </span>
-                {filterPropId && (
-                  <span className="text-[10px] bg-gradient-to-r from-orange-500 to-pink-500 text-white px-1.5 py-0.5 rounded-full font-medium shrink-0">
-                    {rawEnquiries.filter(e => e.linked_property_id === Number(filterPropId) && e.status !== 'rejected').length}
-                  </span>
-                )}
-                <ChevronDown size={14} className={`text-[var(--text-muted)] shrink-0 transition-transform ${propDropOpen ? 'rotate-180' : ''}`} />
-              </button>
+        {/* Status filter */}
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: 'active', label: `Active (${activeCount})` },
+            { key: 'all', label: `All (${enquiries.length})` },
+            ...STATUSES.map(s => ({ key: s.key, label: `${s.label} (${statusCounts[s.key] || 0})` })),
+          ].map(f => (
+            <Tag key={f.key} active={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>
+              {f.label}
+            </Tag>
+          ))}
+        </div>
 
-              {propDropOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
-                  <div className="p-2.5 border-b border-[var(--border-subtle)]">
-                    <input value={propSearch} onChange={e => setPropSearch(e.target.value)} placeholder="Search properties..."
-                      autoFocus
-                      className="w-full pl-3 pr-3 py-2 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors" />
-                  </div>
-                  <div className="max-h-[240px] overflow-y-auto py-1">
-                    <button onClick={() => { setFilterPropId(''); setPropDropOpen(false); setPropSearch(''); }}
-                      className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-[var(--bg-hover)] transition-colors ${!filterPropId ? 'bg-[var(--bg-subtle)]' : ''}`}>
-                      <div className="w-7 h-7 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center shrink-0">
-                        <Building2 size={13} className="text-[var(--text-muted)]" />
+        {/* Content */}
+        {loading ? (
+          <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
+        ) : viewMode === 'kanban' ? (
+          /* ==================== KANBAN VIEW ==================== */
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="flex gap-4 overflow-x-auto pb-4">
+              {kanbanStatuses.filter(s => {
+                if (statusFilter === 'active') return true;
+                if (statusFilter === 'all') return true;
+                return s.key === statusFilter;
+              }).map(col => {
+                const colEnquiries = enquiries.filter(e => {
+                  const matchSearch = !search || [e.name, e.email, e.phone]
+                    .some(v => v?.toLowerCase().includes(search.toLowerCase()));
+                  return e.status === col.key && matchSearch;
+                });
+                return (
+                  <div key={col.key} className="min-w-[280px] flex-1">
+                    <div className={`rounded-xl border px-4 py-3 mb-3 ${col.color}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold">{col.label}</span>
+                        <span className="text-xs bg-[var(--bg-input)] px-2 py-0.5 rounded-full">{colEnquiries.length}</span>
                       </div>
-                      <span className="text-sm font-medium flex-1">All Properties</span>
-                      {!filterPropId && <div className="w-2 h-2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 shrink-0" />}
-                    </button>
-                    {filteredProps.map(p => {
-                      const count = rawEnquiries.filter(e => e.linked_property_id === p.id && e.status !== 'rejected').length;
-                      const isSelected = filterPropId === String(p.id);
-                      return (
-                        <button key={p.id} onClick={() => { setFilterPropId(String(p.id)); setPropDropOpen(false); setPropSearch(''); }}
-                          className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-[var(--bg-hover)] transition-colors ${isSelected ? 'bg-[var(--bg-subtle)]' : ''}`}>
-                          <div className="w-7 h-7 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center shrink-0 text-[10px] font-bold text-[var(--text-muted)]">
-                            {p.address[0]}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{p.address}</p>
-                            <p className="text-[10px] text-[var(--text-muted)]">{p.postcode || ''}{p.rent_amount ? ` · £${p.rent_amount}/mo` : ''}</p>
-                          </div>
-                          {count > 0 && <span className="text-[10px] bg-[var(--bg-hover)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded-full">{count}</span>}
-                          {isSelected && <div className="w-2 h-2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 shrink-0" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Archive toggle */}
-            <div className="flex items-center gap-2 mt-2">
-              <button onClick={() => setShowArchive(!showArchive)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium border transition-colors ${
-                  showArchive ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-transparent border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}>
-                <Archive size={11} />
-                {showArchive ? 'Showing Archived' : 'Archive'}
-                {!showArchive && archivedCount > 0 && (
-                  <span className="bg-[var(--bg-hover)] px-1 py-0.5 rounded-full">{archivedCount}</span>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Search */}
-          <div className="px-4 py-2.5">
-            <SearchBar value={search} onChange={setSearch} placeholder="Search enquiries..." />
-          </div>
-
-          {/* List */}
-          <div className="flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="flex items-center justify-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
-            ) : filtered.length === 0 ? (
-              <EmptyState message={showArchive ? 'No archived enquiries' : 'No enquiries found'} />
-            ) : (
-              filtered.map(e => (
-                <div key={e.id} onClick={() => setSelectedId(e.id)}
-                  className={`flex items-center gap-3 px-5 py-3 cursor-pointer transition-colors border-b border-[var(--border-subtle)] ${
-                    selectedId === e.id ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-subtle)]'
-                  }`}>
-                  <Avatar name={e.name} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium truncate">{e.name}</p>
-                      <span className="text-[10px] text-[var(--text-muted)] shrink-0 ml-2">{formatTime(e.created_at)}</span>
                     </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[e.status] || 'bg-[var(--bg-input)] text-[var(--text-secondary)]'}`}>
-                      {STATUS_LABELS[e.status] || e.status}
-                    </span>
+                    <Droppable droppableId={col.key}>
+                      {(provided, snapshot) => (
+                        <div ref={provided.innerRef} {...provided.droppableProps}
+                          className={`space-y-3 min-h-[100px] rounded-xl transition-colors ${snapshot.isDraggingOver ? 'bg-[var(--accent-orange)]/5 ring-1 ring-[var(--accent-orange)]/20' : ''}`}>
+                          {colEnquiries.length === 0 && !snapshot.isDraggingOver ? (
+                            <p className="text-xs text-[var(--text-muted)] text-center py-8">No enquiries</p>
+                          ) : colEnquiries.map((e, index) => (
+                            <Draggable key={e.id} draggableId={String(e.id)} index={index}>
+                              {(provided, snapshot) => (
+                                <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
+                                  style={provided.draggableProps.style}>
+                                  <GlassCard className={`p-4 cursor-grab active:cursor-grabbing hover:border-[var(--accent-orange)]/30 transition-colors ${snapshot.isDragging ? 'ring-2 ring-[var(--accent-orange)]/40 shadow-lg' : ''}`}
+                                    onClick={() => !snapshot.isDragging && navigate(`/v3/enquiries/${e.id}`)}>
+                                    <div className="flex items-start gap-3">
+                                      <Avatar name={e.name} size="sm" />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">{e.name}</p>
+                                        {e.email && <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5"><Mail size={10} />{e.email}</p>}
+                                        {e.phone && <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5"><Phone size={10} />{e.phone}</p>}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-3 pt-2 border-t border-[var(--border-subtle)]">
+                                      {e.follow_up_date && (
+                                        <span className={`text-[10px] flex items-center gap-1 ${isOverdue(e.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-muted)]'}`}>
+                                          <Calendar size={10} />{formatDate(e.follow_up_date)}
+                                        </span>
+                                      )}
+                                      {e.linked_property_id && propertyMap[e.linked_property_id] && (
+                                        <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
+                                          <Building2 size={10} />{propertyMap[e.linked_property_id].address.substring(0, 20)}...
+                                        </span>
+                                      )}
+                                      <button onClick={(ev) => openWorkflow(e, ev)}
+                                        className="ml-auto text-[10px] px-2.5 py-1 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-medium">
+                                        Progress / Reject
+                                      </button>
+                                    </div>
+                                  </GlassCard>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
                   </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Right Panel */}
-        <div className={`flex-1 flex flex-col min-w-0 ${selectedId != null ? 'flex' : 'hidden md:flex'}`}>
-          {selectedId != null ? (
-            <EnquiryDetail key={selectedId} enquiryId={selectedId} api={api} onBack={() => setSelectedId(null)} onUpdated={load} />
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <EmptyState message="Select an enquiry to view details" />
+                );
+              })}
             </div>
-          )}
-        </div>
-
-        {/* Add Modal */}
-        {showAdd && (
-          <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowAdd(false)}>
-            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-[480px] max-h-[85vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold">Add Enquiry</h3>
-                <button onClick={() => setShowAdd(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-              </div>
-              <div className="space-y-4">
-                <Input label="Name" value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="Full name" />
-                <Input label="Email" value={form.email} onChange={v => setForm(p => ({ ...p, email: v }))} placeholder="email@example.com" type="email" />
-                <Input label="Phone" value={form.phone} onChange={v => setForm(p => ({ ...p, phone: v }))} placeholder="Phone number" />
-                <Select label="Status" value={form.status} onChange={v => setForm(p => ({ ...p, status: v }))} options={STATUS_OPTIONS} />
-                <Input label="Notes" value={form.notes} onChange={v => setForm(p => ({ ...p, notes: v }))} placeholder="Initial notes..." />
-                <div className="flex gap-3 pt-2">
-                  <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
-                  <Button variant="gradient" onClick={addEnquiry} disabled={!form.name || !form.email}>Add Enquiry</Button>
-                </div>
-              </div>
-            </div>
+          </DragDropContext>
+        ) : filtered.length === 0 ? (
+          <EmptyState message={search || statusFilter !== 'active' ? 'No enquiries match your filters' : 'No enquiries yet — add your first one'} />
+        ) : (
+          /* ==================== LIST VIEW ==================== */
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
+                  <th className="text-left py-3 px-4 font-medium">Name</th>
+                  <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Contact</th>
+                  <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Property</th>
+                  <th className="text-left py-3 px-4 font-medium">Status</th>
+                  <th className="text-left py-3 px-4 font-medium hidden sm:table-cell">Follow Up</th>
+                  <th className="text-right py-3 px-4 font-medium w-20"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(e => (
+                  <tr key={e.id}
+                    onClick={() => navigate(`/v3/enquiries/${e.id}`)}
+                    className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={e.name} size="sm" />
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{e.name}</p>
+                          <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{e.email || e.phone}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 hidden md:table-cell">
+                      <div className="space-y-0.5">
+                        {e.email && <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1"><Mail size={10} />{e.email}</p>}
+                        {e.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} />{e.phone}</p>}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 hidden lg:table-cell">
+                      {e.linked_property_id && propertyMap[e.linked_property_id] ? (
+                        <p className="text-xs text-[var(--text-secondary)] truncate max-w-[200px] flex items-center gap-1">
+                          <Building2 size={10} className="text-[var(--text-muted)] shrink-0" />
+                          {propertyMap[e.linked_property_id].address}
+                        </p>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusStyle(e.status)}`}>
+                        {statusLabel(e.status)}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 hidden sm:table-cell">
+                      {e.follow_up_date ? (
+                        <span className={`text-xs flex items-center gap-1 ${isOverdue(e.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-muted)]'}`}>
+                          <Calendar size={10} />{formatDate(e.follow_up_date)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {!['converted', 'rejected'].includes(e.status) && (
+                        <button onClick={(ev) => openWorkflow(e, ev)}
+                          className="text-[10px] px-2.5 py-1 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-medium whitespace-nowrap">
+                          Progress / Reject
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
+
+      {/* Add Enquiry Modal */}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm" onClick={() => setShowAdd(false)}>
+          <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Add Enquiry</h2>
+              <button onClick={() => setShowAdd(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+            </div>
+            <Input label="Full Name *" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="First and last name" />
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} placeholder="email@example.com" type="email" />
+              <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} placeholder="+44..." />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1.5">Notes</label>
+              <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={3}
+                className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none"
+                placeholder="Initial notes..." />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
+              <Button variant="gradient" onClick={addEnquiry} disabled={saving || !form.name.trim()}>
+                {saving ? 'Adding...' : 'Add Enquiry'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Workflow Modal */}
+      {workflowEnquiry && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm"
+          onClick={() => setWorkflowEnquiry(null)}>
+          <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-2"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Avatar name={workflowEnquiry.name} size="md" />
+                <div>
+                  <h3 className="text-lg font-bold">{workflowEnquiry.name}</h3>
+                  <p className="text-xs text-[var(--text-muted)]">Update workflow</p>
+                </div>
+              </div>
+              <button onClick={() => setWorkflowEnquiry(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+            </div>
+
+            {workflowMode === 'choose' ? (
+              <>
+                <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Progress</p>
+                <button onClick={() => setWorkflowMode('viewing')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><BookingIcon size={14} className="text-white" /></div>
+                  <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p><p className="text-xs text-[var(--text-muted)]">Select date, time & property</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
+                <button onClick={() => setWorkflowMode('follow_up')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><AwaitingIcon size={14} className="text-white" /></div>
+                  <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p><p className="text-xs text-[var(--text-muted)]">Schedule a follow-up date</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
+                <button onClick={() => setWorkflowMode('onboarding')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center"><OnboardingIcon size={14} className="text-white" /></div>
+                  <div className="flex-1"><p className="text-sm font-medium">Start Onboarding</p><p className="text-xs text-[var(--text-muted)]">Begin tenant onboarding</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
+                <div className="h-px bg-[var(--border-subtle)] my-3" />
+                <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Archive</p>
+                <button onClick={() => setWorkflowMode('reject')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center"><XCircle size={14} className="text-white" /></div>
+                  <div className="flex-1"><p className="text-sm font-medium text-red-400">Reject & Archive</p><p className="text-xs text-[var(--text-muted)]">Archive this enquiry</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <button onClick={() => setWorkflowMode('choose')} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">← Back</button>
+                {workflowMode === 'viewing' && (
+                  <>
+                    <Select label="Link to Property" value={wfPropId} onChange={setWfPropId}
+                      options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
+                    <Input label="Viewing Date" value={wfDate} onChange={setWfDate} type="date" />
+                    <Input label="Viewing Time" value={wfTime} onChange={setWfTime} type="time" />
+                  </>
+                )}
+                {workflowMode === 'follow_up' && (
+                  <Input label="Follow-up Date" value={wfDate} onChange={setWfDate} type="date" />
+                )}
+                {workflowMode === 'onboarding' && (
+                  <Input label="Follow-up Date (optional)" value={wfDate} onChange={setWfDate} type="date" />
+                )}
+                {workflowMode === 'reject' && (
+                  <div>
+                    <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Reason (optional)</label>
+                    <textarea value={wfReason} onChange={e => setWfReason(e.target.value)} rows={3}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none"
+                      placeholder="Reason for rejection..." />
+                  </div>
+                )}
+                <div className="flex gap-3 pt-2">
+                  <Button variant="ghost" onClick={() => setWorkflowEnquiry(null)}>Cancel</Button>
+                  <Button
+                    variant={workflowMode === 'reject' ? 'outline' : 'gradient'}
+                    onClick={doWorkflowAction}
+                    disabled={wfLoading || (workflowMode === 'viewing' && (!wfDate || !wfPropId)) || (workflowMode === 'follow_up' && !wfDate)}
+                    className={workflowMode === 'reject' ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : ''}
+                  >
+                    {wfLoading ? 'Saving...' : workflowMode === 'reject' ? 'Reject & Archive' : 'Confirm'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </V3Layout>
   );
 }
