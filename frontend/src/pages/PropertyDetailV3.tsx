@@ -1,28 +1,80 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { Card, GlassCard, Button, ProgressRing, SectionHeader, StatusDot, EmptyState, Avatar, Tag, Input, Select } from '../components/v3';
+import { Card, GlassCard, Button, ProgressRing, SectionHeader, EmptyState, Avatar, Tag, Input, Select } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import RentPayments from '../components/v3/RentPayments';
 import { useApi } from '../hooks/useApi';
 import { getPropertyImage } from '../utils/propertyImages';
 import {
   Building2, Bed, PoundSterling, MapPin, User, Users,
-  CheckCircle2, Clock, ChevronRight, Pencil, Save, X
+  CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
+  AlertTriangle, ShieldCheck, FileText
 } from 'lucide-react';
 
 interface PropertyDetail {
   id: number; address: string; postcode: string; rent_amount: number;
   status: string; landlord_name: string; landlord_id?: number;
-  current_tenant: string | null; tenant_id?: number;
+  landlord_phone?: string; landlord_email?: string;
+  current_tenant: string | null; current_tenant_id?: number; tenant_id?: number;
   bedrooms: number; property_type: string;
+  // Management
+  service_type: string | null; charge_percentage: number | null; total_charge: number | null;
+  council_tax_band: string | null; epc_grade: string | null;
+  rent_review_date: string | null; onboarded_date: string | null;
+  proof_of_ownership_received: number;
+  // Leasehold
+  is_leasehold: number; leasehold_start_date: string | null;
+  leasehold_end_date: string | null; leaseholder_info: string | null;
+  // Tenancy
+  has_live_tenancy: number; tenancy_start_date: string | null;
+  tenancy_type: string | null; has_end_date: number; tenancy_end_date: string | null;
+  // Compliance
   eicr_expiry_date: string | null; epc_expiry_date: string | null;
-  gas_safety_expiry_date: string | null; has_gas: boolean;
+  gas_safety_expiry_date: string | null; has_gas: number;
+  notes: string | null;
 }
 
 interface Task {
   id: number; title: string; status: string; priority: string; due_date: string;
   property_id?: number;
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  to_let: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  let_agreed: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  full_management: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  rent_collection: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+};
+const STATUS_LABELS: Record<string, string> = {
+  to_let: 'To Let', let_agreed: 'Let Agreed', full_management: 'Full Management', rent_collection: 'Rent Collection',
+};
+const EPC_COLORS: Record<string, string> = {
+  A: 'bg-emerald-500 text-white', B: 'bg-emerald-400 text-white', C: 'bg-lime-500 text-white',
+  D: 'bg-yellow-500 text-black', E: 'bg-amber-500 text-white', F: 'bg-orange-500 text-white', G: 'bg-red-500 text-white',
+};
+
+function ReadField({ label, value }: { label: string; value: string | React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs text-[var(--text-muted)]">{label}</p>
+      <p className="text-sm font-medium mt-0.5">{value || '—'}</p>
+    </div>
+  );
+}
+
+function Toggle({ label, checked, onChange, disabled }: { label: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button type="button" onClick={() => !disabled && onChange(!checked)}
+      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-colors ${
+        checked ? 'bg-[var(--accent-orange)]/10 border-[var(--accent-orange)]/30 text-[var(--accent-orange)]' : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
+      } ${disabled ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}>
+      <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${checked ? 'bg-[var(--accent-orange)] border-[var(--accent-orange)]' : 'border-[var(--border-input)]'}`}>
+        {checked && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5L4.5 7.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+      </div>
+      {label}
+    </button>
+  );
 }
 
 export default function PropertyDetailV3() {
@@ -34,9 +86,23 @@ export default function PropertyDetailV3() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    address: '', postcode: '', rent_amount: '', bedrooms: '', property_type: '', status: 'active',
-    eicr_expiry_date: '', epc_expiry_date: '', gas_safety_expiry_date: '',
+  const [form, setForm] = useState<Record<string, any>>({});
+
+  const populateForm = (p: PropertyDetail) => setForm({
+    address: p.address || '', postcode: p.postcode || '',
+    rent_amount: String(p.rent_amount || ''), bedrooms: String(p.bedrooms || ''),
+    property_type: p.property_type || 'house', status: p.status || 'to_let',
+    service_type: p.service_type || '', charge_percentage: String(p.charge_percentage ?? ''),
+    total_charge: String(p.total_charge ?? ''), council_tax_band: p.council_tax_band || '',
+    epc_grade: p.epc_grade || '', rent_review_date: p.rent_review_date || '',
+    onboarded_date: p.onboarded_date || '', proof_of_ownership_received: !!p.proof_of_ownership_received,
+    is_leasehold: !!p.is_leasehold, leasehold_start_date: p.leasehold_start_date || '',
+    leasehold_end_date: p.leasehold_end_date || '', leaseholder_info: p.leaseholder_info || '',
+    has_live_tenancy: !!p.has_live_tenancy, tenancy_start_date: p.tenancy_start_date || '',
+    tenancy_type: p.tenancy_type || '', has_end_date: !!p.has_end_date,
+    tenancy_end_date: p.tenancy_end_date || '',
+    eicr_expiry_date: p.eicr_expiry_date || '', epc_expiry_date: p.epc_expiry_date || '',
+    has_gas: !!p.has_gas, gas_safety_expiry_date: p.gas_safety_expiry_date || '',
   });
 
   useEffect(() => {
@@ -45,13 +111,7 @@ export default function PropertyDetailV3() {
       api.get('/api/tasks').catch(() => []),
     ]).then(([prop, tks]) => {
       setProperty(prop);
-      setForm({
-        address: prop.address || '', postcode: prop.postcode || '',
-        rent_amount: String(prop.rent_amount || ''), bedrooms: String(prop.bedrooms || ''),
-        property_type: prop.property_type || '', status: prop.status || 'active',
-        eicr_expiry_date: prop.eicr_expiry_date || '', epc_expiry_date: prop.epc_expiry_date || '',
-        gas_safety_expiry_date: prop.gas_safety_expiry_date || '',
-      });
+      populateForm(prop);
       setTasks(Array.isArray(tks) ? tks : []);
     }).catch(() => {})
     .finally(() => setLoading(false));
@@ -60,45 +120,46 @@ export default function PropertyDetailV3() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updated = await api.put(`/api/properties/${id}`, {
+      await api.put(`/api/properties/${id}`, {
         ...form,
         rent_amount: parseFloat(form.rent_amount) || 0,
         bedrooms: parseInt(form.bedrooms) || 0,
+        charge_percentage: form.charge_percentage ? parseFloat(form.charge_percentage) : null,
+        total_charge: form.total_charge ? parseFloat(form.total_charge) : null,
       });
-      setProperty({ ...property!, ...updated });
+      const updated = await api.get(`/api/properties/${id}`);
+      setProperty(updated);
+      populateForm(updated);
       setEditing(false);
     } catch (e) { console.error(e); }
     setSaving(false);
   };
 
-  const cancelEdit = () => {
-    setEditing(false);
-    if (property) setForm({
-      address: property.address || '', postcode: property.postcode || '',
-      rent_amount: String(property.rent_amount || ''), bedrooms: String(property.bedrooms || ''),
-      property_type: property.property_type || '', status: property.status || 'active',
-      eicr_expiry_date: property.eicr_expiry_date || '', epc_expiry_date: property.epc_expiry_date || '',
-      gas_safety_expiry_date: property.gas_safety_expiry_date || '',
-    });
+  const cancelEdit = () => { setEditing(false); if (property) populateForm(property); };
+
+  const daysUntil = (d: string | null) => {
+    if (!d) return null;
+    return Math.ceil((new Date(d).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   };
 
-  const compliancePercent = (expiryDate: string | null) => {
-    if (!expiryDate) return 0;
-    const days = Math.ceil((new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const compliancePercent = (d: string | null) => {
+    if (!d) return 0;
+    const days = daysUntil(d)!;
     if (days < 0) return 0;
     if (days > 365) return 100;
     return Math.round((days / 365) * 100);
   };
 
-  const complianceColor = (expiryDate: string | null): 'active' | 'warning' | 'error' => {
-    if (!expiryDate) return 'error';
-    const days = Math.ceil((new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    if (days < 0) return 'error';
-    if (days < 30) return 'warning';
-    return 'active';
+  const overallCompliance = () => {
+    const items = [
+      compliancePercent(property?.eicr_expiry_date ?? null),
+      compliancePercent(property?.epc_expiry_date ?? null),
+      ...(property?.has_gas ? [compliancePercent(property.gas_safety_expiry_date)] : []),
+    ];
+    return items.length ? Math.round(items.reduce((a, b) => a + b, 0) / items.length) : 0;
   };
 
-  const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString() : 'N/A';
+  const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
   if (loading) {
     return (
@@ -118,34 +179,36 @@ export default function PropertyDetailV3() {
     );
   }
 
-  const propertyTasks = tasks.filter(t => t.property_id === property.id || !t.property_id).slice(0, 5);
+  const propertyTasks = tasks.filter(t => t.property_id === property.id).slice(0, 5);
+  const isToLet = property.status === 'to_let';
+  const statusColor = STATUS_COLORS[property.status] || 'bg-[var(--bg-hover)] text-[var(--text-muted)]';
+  const statusLbl = STATUS_LABELS[property.status] || property.status;
+
+  // Compliance reminders (expiring within 30 days)
+  const reminders: { label: string; days: number }[] = [];
+  const eicrDays = daysUntil(property.eicr_expiry_date);
+  if (eicrDays !== null && eicrDays <= 30) reminders.push({ label: 'EICR', days: eicrDays });
+  const epcDays = daysUntil(property.epc_expiry_date);
+  if (epcDays !== null && epcDays <= 30) reminders.push({ label: 'EPC', days: epcDays });
+  if (property.has_gas) {
+    const gasDays = daysUntil(property.gas_safety_expiry_date);
+    if (gasDays !== null && gasDays <= 30) reminders.push({ label: 'Gas Safety', days: gasDays });
+  }
 
   return (
-    <V3Layout
-      title=""
-      breadcrumb={[
-        { label: 'Properties', to: '/v3/properties' },
-        { label: property.address },
-      ]}
-    >
-      <div className="p-4 md:p-6 space-y-6 max-w-6xl">
+    <V3Layout title="" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: property.address }]}>
+      <div className="p-4 md:p-6 space-y-6 max-w-7xl">
         {/* Hero */}
         <div className="relative h-40 md:h-56 rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
-          <img
-            src={getPropertyImage(property.id, 1200, 400)}
-            alt={property.address}
-            className="absolute inset-0 w-full h-full object-cover"
-            loading="lazy"
-          />
+          <img src={getPropertyImage(property.id, 1200, 400)} alt={property.address}
+            className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
           <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/60 to-transparent">
             <div className="flex items-center gap-2 mb-1">
-              <StatusDot status={property.status === 'active' ? 'active' : 'inactive'} size="md" />
-              <span className="text-sm text-white/70 capitalize">{property.status}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusColor}`}>{statusLbl}</span>
             </div>
             <h1 className="text-2xl font-bold text-white">{property.address}</h1>
             <p className="text-white/60 text-sm">{property.postcode}</p>
           </div>
-          {/* Edit button */}
           <div className="absolute top-4 right-4 flex gap-2">
             {editing ? (
               <>
@@ -164,70 +227,127 @@ export default function PropertyDetailV3() {
           </div>
         </div>
 
-        {/* Edit Form */}
-        {editing && (
-          <GlassCard className="p-6">
-            <SectionHeader title="Edit Property" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Input label="Address" value={form.address} onChange={v => setForm({ ...form, address: v })} />
-              <Input label="Postcode" value={form.postcode} onChange={v => setForm({ ...form, postcode: v })} />
-              <Input label="Rent (£/mo)" value={form.rent_amount} onChange={v => setForm({ ...form, rent_amount: v })} />
-              <Input label="Bedrooms" value={form.bedrooms} onChange={v => setForm({ ...form, bedrooms: v })} />
-              <Select label="Type" value={form.property_type} onChange={v => setForm({ ...form, property_type: v })}
-                options={[
-                  { value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' },
-                  { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' },
-                ]} />
-              <Select label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })}
-                options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'void', label: 'Void' }]} />
-              <Input label="EICR Expiry" value={form.eicr_expiry_date} onChange={v => setForm({ ...form, eicr_expiry_date: v })} placeholder="YYYY-MM-DD" />
-              <Input label="EPC Expiry" value={form.epc_expiry_date} onChange={v => setForm({ ...form, epc_expiry_date: v })} placeholder="YYYY-MM-DD" />
-              <Input label="Gas Safety Expiry" value={form.gas_safety_expiry_date} onChange={v => setForm({ ...form, gas_safety_expiry_date: v })} placeholder="YYYY-MM-DD" />
-            </div>
-          </GlassCard>
-        )}
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column */}
+          {/* LEFT COLUMN — 2/3 */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Compliance Rings */}
-            <Card className="p-6">
-              <SectionHeader title="Compliance Overview" />
-              <div className="grid grid-cols-2 md:flex md:items-center gap-6 md:gap-8">
-                <div className="flex flex-col items-center">
-                  <ProgressRing value={compliancePercent(property.eicr_expiry_date)} size={80} strokeWidth={6} />
-                  <span className="text-xs text-[var(--text-secondary)] mt-2">EICR</span>
-                  <span className={`text-xs mt-0.5 ${
-                    complianceColor(property.eicr_expiry_date) === 'error' ? 'text-red-400'
-                    : complianceColor(property.eicr_expiry_date) === 'warning' ? 'text-amber-400'
-                    : 'text-emerald-400'
-                  }`}>{formatDate(property.eicr_expiry_date)}</span>
+            {/* Details */}
+            <GlassCard className="p-6">
+              <SectionHeader title="Details" />
+              {editing ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <Input label="Address" value={form.address} onChange={(v: string) => setForm({ ...form, address: v })} />
+                  <Input label="Postcode" value={form.postcode} onChange={(v: string) => setForm({ ...form, postcode: v })} />
+                  <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />
+                  <Select label="Type" value={form.property_type} onChange={(v: string) => setForm({ ...form, property_type: v })}
+                    options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
+                  <Input label="Bedrooms" value={form.bedrooms} onChange={(v: string) => setForm({ ...form, bedrooms: v })} />
+                  <Select label="Status" value={form.status} onChange={(v: string) => setForm({ ...form, status: v })}
+                    options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }]} />
                 </div>
-                <div className="flex flex-col items-center">
-                  <ProgressRing value={compliancePercent(property.epc_expiry_date)} size={80} strokeWidth={6} />
-                  <span className="text-xs text-[var(--text-secondary)] mt-2">EPC</span>
-                  <span className={`text-xs mt-0.5 ${
-                    complianceColor(property.epc_expiry_date) === 'error' ? 'text-red-400'
-                    : complianceColor(property.epc_expiry_date) === 'warning' ? 'text-amber-400'
-                    : 'text-emerald-400'
-                  }`}>{formatDate(property.epc_expiry_date)}</span>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <ReadField label="Type" value={<span className="capitalize">{property.property_type}</span>} />
+                  <ReadField label="Bedrooms" value={String(property.bedrooms)} />
+                  <ReadField label="Rent" value={`£${property.rent_amount?.toLocaleString()}/mo`} />
+                  <ReadField label="Postcode" value={property.postcode} />
+                  <ReadField label="Status" value={
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusColor}`}>{statusLbl}</span>
+                  } />
                 </div>
-                {property.has_gas && (
-                  <div className="flex flex-col items-center">
-                    <ProgressRing value={compliancePercent(property.gas_safety_expiry_date)} size={80} strokeWidth={6} />
-                    <span className="text-xs text-[var(--text-secondary)] mt-2">Gas Safety</span>
-                    <span className={`text-xs mt-0.5 ${
-                      complianceColor(property.gas_safety_expiry_date) === 'error' ? 'text-red-400'
-                      : complianceColor(property.gas_safety_expiry_date) === 'warning' ? 'text-amber-400'
-                      : 'text-emerald-400'
-                    }`}>{formatDate(property.gas_safety_expiry_date)}</span>
+              )}
+            </GlassCard>
+
+            {/* Management */}
+            <GlassCard className="p-6">
+              <SectionHeader title="Management" />
+              {editing ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <Select label="Service Type" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v })}
+                    options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
+                  <Input label="Charge (%)" value={form.charge_percentage} onChange={(v: string) => setForm({ ...form, charge_percentage: v })} placeholder="e.g. 10" />
+                  <Input label="Total Charge (£)" value={form.total_charge} onChange={(v: string) => setForm({ ...form, total_charge: v })} />
+                  <Select label="Council Tax Band" value={form.council_tax_band} onChange={(v: string) => setForm({ ...form, council_tax_band: v })}
+                    options={[{ value: '', label: 'Select...' }, ...['A','B','C','D','E','F','G','H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
+                  <Select label="EPC Grade" value={form.epc_grade} onChange={(v: string) => setForm({ ...form, epc_grade: v })}
+                    options={[{ value: '', label: 'Select...' }, ...['A','B','C','D','E','F','G'].map(g => ({ value: g, label: `Grade ${g}` }))]} />
+                  <Input label="Rent Review Date" value={form.rent_review_date} onChange={(v: string) => setForm({ ...form, rent_review_date: v })} type="date" />
+                  <Input label="Onboarded Date" value={form.onboarded_date} onChange={(v: string) => setForm({ ...form, onboarded_date: v })} type="date" />
+                  <div className="flex flex-wrap gap-2 col-span-full">
+                    <Toggle label="Proof of Ownership" checked={form.proof_of_ownership_received} onChange={v => setForm({ ...form, proof_of_ownership_received: v })} />
+                    <Toggle label="Has Gas" checked={form.has_gas} onChange={v => setForm({ ...form, has_gas: v })} />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <ReadField label="Service Type" value={
+                    property.service_type === 'full_management' ? 'Full Management' :
+                    property.service_type === 'rent_collection' ? 'Rent Collection' :
+                    property.service_type === 'let_only' ? 'Let Only' : null
+                  } />
+                  <ReadField label="Charge" value={property.charge_percentage ? `${property.charge_percentage}%` : null} />
+                  <ReadField label="Total Charge" value={property.total_charge ? `£${property.total_charge}` : null} />
+                  <ReadField label="Council Tax" value={property.council_tax_band ? `Band ${property.council_tax_band}` : null} />
+                  <ReadField label="EPC Grade" value={property.epc_grade ? (
+                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-bold ${EPC_COLORS[property.epc_grade] || 'bg-[var(--bg-hover)] text-[var(--text-muted)]'}`}>
+                      {property.epc_grade}
+                    </span>
+                  ) : null} />
+                  <ReadField label="Rent Review" value={formatDate(property.rent_review_date)} />
+                  <ReadField label="Onboarded" value={formatDate(property.onboarded_date)} />
+                  <ReadField label="Proof of Ownership" value={property.proof_of_ownership_received ? 'Yes' : 'No'} />
+                  <ReadField label="Gas Supply" value={property.has_gas ? 'Yes' : 'No'} />
+                </div>
+              )}
+            </GlassCard>
+
+            {/* Leasehold (conditional) */}
+            {(editing ? form.is_leasehold : property.is_leasehold) ? (
+              <GlassCard className="p-6">
+                <SectionHeader title="Leasehold" />
+                {editing ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <Toggle label="Leasehold Property" checked={form.is_leasehold} onChange={v => setForm({ ...form, is_leasehold: v })} />
+                    <Input label="Lease Start" value={form.leasehold_start_date} onChange={(v: string) => setForm({ ...form, leasehold_start_date: v })} type="date" />
+                    <Input label="Lease End" value={form.leasehold_end_date} onChange={(v: string) => setForm({ ...form, leasehold_end_date: v })} type="date" />
+                    <Input label="Leaseholder Info" value={form.leaseholder_info} onChange={(v: string) => setForm({ ...form, leaseholder_info: v })} className="col-span-full" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <ReadField label="Lease Start" value={formatDate(property.leasehold_start_date)} />
+                    <ReadField label="Lease End" value={formatDate(property.leasehold_end_date)} />
+                    <ReadField label="Leaseholder Info" value={property.leaseholder_info} />
                   </div>
                 )}
+              </GlassCard>
+            ) : editing ? (
+              <div className="flex">
+                <Toggle label="Mark as Leasehold" checked={false} onChange={v => setForm({ ...form, is_leasehold: v })} />
               </div>
-            </Card>
+            ) : null}
 
-            {/* Rent Payments */}
-            <RentPayments propertyId={property.id} compact />
+            {/* Current Tenancy (hidden if to_let) */}
+            {!isToLet && (
+              <GlassCard className="p-6">
+                <SectionHeader title="Current Tenancy" />
+                {editing ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <Toggle label="Live Tenancy" checked={form.has_live_tenancy} onChange={v => setForm({ ...form, has_live_tenancy: v })} />
+                    <Select label="Tenancy Type" value={form.tenancy_type} onChange={(v: string) => setForm({ ...form, tenancy_type: v })}
+                      options={[{ value: '', label: 'Select...' }, { value: 'AST', label: 'AST' }, { value: 'HMO', label: 'HMO' }, { value: 'Rolling', label: 'Rolling' }, { value: 'Other', label: 'Other' }]} />
+                    <Input label="Start Date" value={form.tenancy_start_date} onChange={(v: string) => setForm({ ...form, tenancy_start_date: v })} type="date" />
+                    <Toggle label="Has End Date" checked={form.has_end_date} onChange={v => setForm({ ...form, has_end_date: v })} />
+                    {form.has_end_date && <Input label="End Date" value={form.tenancy_end_date} onChange={(v: string) => setForm({ ...form, tenancy_end_date: v })} type="date" />}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <ReadField label="Tenancy Type" value={property.tenancy_type} />
+                    <ReadField label="Start Date" value={formatDate(property.tenancy_start_date)} />
+                    {property.has_end_date ? <ReadField label="End Date" value={formatDate(property.tenancy_end_date)} /> : null}
+                    <ReadField label="Status" value={property.has_live_tenancy ? 'Active' : 'Inactive'} />
+                  </div>
+                )}
+              </GlassCard>
+            )}
 
             {/* Tasks */}
             <Card className="p-6">
@@ -235,7 +355,8 @@ export default function PropertyDetailV3() {
               {propertyTasks.length ? (
                 <div className="space-y-2">
                   {propertyTasks.map(task => (
-                    <div key={task.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)]">
+                    <div key={task.id} onClick={() => navigate(`/v3/tasks/${task.id}`)}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
                         task.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'
                       }`}>
@@ -249,47 +370,55 @@ export default function PropertyDetailV3() {
                   ))}
                 </div>
               ) : (
-                <EmptyState message="No tasks" />
+                <EmptyState message="No tasks for this property" />
               )}
             </Card>
 
-            {/* Documents */}
-            <DocumentUpload entityType="property" entityId={property.id} />
+            {/* Rent Payments */}
+            <RentPayments propertyId={property.id} compact />
           </div>
 
-          {/* Right Column */}
+          {/* RIGHT COLUMN — 1/3 */}
           <div className="space-y-6">
-            {/* Property Info */}
+            {/* Compliance Overview */}
             <Card className="p-6">
-              <SectionHeader title="Details" />
-              <div className="space-y-4">
-                {[
-                  { icon: Building2, label: 'Type', value: property.property_type },
-                  { icon: Bed, label: 'Bedrooms', value: property.bedrooms },
-                  { icon: PoundSterling, label: 'Rent', value: `£${property.rent_amount?.toLocaleString()}/mo` },
-                  { icon: MapPin, label: 'Postcode', value: property.postcode },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center">
-                      <item.icon size={15} className="text-[var(--text-muted)]" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-[var(--text-muted)]">{item.label}</p>
-                      <p className="text-sm font-medium capitalize">{item.value}</p>
-                    </div>
-                  </div>
-                ))}
+              <SectionHeader title="Compliance" />
+              <div className="flex justify-center mb-4">
+                <ProgressRing value={overallCompliance()} size={90} strokeWidth={7} />
+              </div>
+              <div className="space-y-3">
+                <ComplianceRow label="EICR" expiry={property.eicr_expiry_date} />
+                <ComplianceRow label="EPC" expiry={property.epc_expiry_date} grade={property.epc_grade} />
+                {property.has_gas ? <ComplianceRow label="Gas Safety" expiry={property.gas_safety_expiry_date} /> : null}
               </div>
             </Card>
+
+            {/* Compliance Reminders */}
+            {reminders.length > 0 && (
+              <Card className="p-6 border-amber-500/30">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle size={16} className="text-amber-400" />
+                  <span className="text-sm font-semibold text-amber-400">Expiring Soon</span>
+                </div>
+                <div className="space-y-2">
+                  {reminders.map(r => (
+                    <div key={r.label} className="flex items-center justify-between text-sm">
+                      <span className="text-[var(--text-secondary)]">{r.label}</span>
+                      <span className={`text-xs font-medium ${r.days < 0 ? 'text-red-400' : 'text-amber-400'}`}>
+                        {r.days < 0 ? `Expired ${Math.abs(r.days)}d ago` : `${r.days} days`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
 
             {/* Landlord */}
             <Card className="p-6">
               <SectionHeader title="Landlord" />
               {property.landlord_name ? (
-                <div
-                  onClick={() => property.landlord_id && navigate(`/v3/landlords/${property.landlord_id}`)}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
-                >
+                <div onClick={() => property.landlord_id && navigate(`/v3/landlords/${property.landlord_id}`)}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
                   <Avatar name={property.landlord_name} size="md" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{property.landlord_name}</p>
@@ -302,28 +431,56 @@ export default function PropertyDetailV3() {
               )}
             </Card>
 
-            {/* Tenant */}
-            <Card className="p-6">
-              <SectionHeader title="Tenant" />
-              {property.current_tenant ? (
-                <div
-                  onClick={() => property.tenant_id && navigate(`/v3/tenants/${property.tenant_id}`)}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
-                >
-                  <Avatar name={property.current_tenant} size="md" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{property.current_tenant}</p>
-                    <p className="text-xs text-[var(--text-muted)]">Current Tenant</p>
+            {/* Tenant (hidden if to_let) */}
+            {!isToLet && (
+              <Card className="p-6">
+                <SectionHeader title="Tenant" />
+                {property.current_tenant ? (
+                  <div onClick={() => (property.current_tenant_id || property.tenant_id) && navigate(`/v3/tenants/${property.current_tenant_id || property.tenant_id}`)}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
+                    <Avatar name={property.current_tenant} size="md" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{property.current_tenant}</p>
+                      <p className="text-xs text-[var(--text-muted)]">Current Tenant</p>
+                    </div>
+                    <ChevronRight size={16} className="text-[var(--text-muted)]" />
                   </div>
-                  <ChevronRight size={16} className="text-[var(--text-muted)]" />
-                </div>
-              ) : (
-                <p className="text-sm text-[var(--text-muted)]">No tenant assigned</p>
-              )}
-            </Card>
+                ) : (
+                  <p className="text-sm text-[var(--text-muted)]">No tenant assigned</p>
+                )}
+              </Card>
+            )}
+
+            {/* Documents */}
+            <DocumentUpload entityType="property" entityId={property.id} />
           </div>
         </div>
       </div>
     </V3Layout>
+  );
+}
+
+function ComplianceRow({ label, expiry, grade }: { label: string; expiry: string | null; grade?: string | null }) {
+  const days = expiry ? Math.ceil((new Date(expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+  const color = days === null ? 'text-red-400' : days < 0 ? 'text-red-400' : days < 30 ? 'text-amber-400' : 'text-emerald-400';
+  const formatD = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not set';
+
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-[var(--border-subtle)] last:border-0">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-[var(--text-secondary)]">{label}</span>
+        {grade && (
+          <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold ${EPC_COLORS[grade] || 'bg-[var(--bg-hover)]'}`}>
+            {grade}
+          </span>
+        )}
+      </div>
+      <div className="text-right">
+        <p className={`text-xs font-medium ${color}`}>
+          {days === null ? 'Not set' : days < 0 ? 'Expired' : `${days}d remaining`}
+        </p>
+        <p className="text-[10px] text-[var(--text-muted)]">{formatD(expiry)}</p>
+      </div>
+    </div>
   );
 }
