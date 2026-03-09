@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePortfolio } from '../context/PortfolioContext';
 import { Menu, LogOut, ChevronRight, X, Sun, Moon } from 'lucide-react';
 import {
   DashboardIcon, EnquiriesIcon, PropertiesIcon, LandlordsIcon, TenantsIcon,
@@ -22,6 +23,12 @@ const navItems = [
   { to: '/v3/settings', icon: SettingsIcon, label: 'Settings' },
 ];
 
+const PORTFOLIO_OPTIONS = [
+  { key: 'all' as const, label: 'All' },
+  { key: 'internal' as const, label: 'Fleming Owned' },
+  { key: 'external' as const, label: 'Lettings Clients' },
+];
+
 interface V3LayoutProps {
   children: React.ReactNode;
   title?: string;
@@ -36,6 +43,7 @@ export default function V3Layout({ children, title, breadcrumb, hideTopBar }: V3
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const { portfolioFilter, setPortfolioFilter } = usePortfolio();
 
   // Close mobile drawer on navigation
   useEffect(() => {
@@ -79,10 +87,9 @@ export default function V3Layout({ children, title, breadcrumb, hideTopBar }: V3
               to={item.to}
               end={item.to === '/v3'}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
-                  isActive
-                    ? 'bg-[var(--bg-input)] text-[var(--text-primary)]'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]'
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${isActive
+                  ? 'bg-[var(--bg-input)] text-[var(--text-primary)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]'
                 }`
               }
             >
@@ -123,10 +130,28 @@ export default function V3Layout({ children, title, breadcrumb, hideTopBar }: V3
               <button onClick={() => setMobileOpen(true)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden mr-1">
                 <Menu size={22} />
               </button>
-              {/* breadcrumb removed — title only */}
               {title && <h1 className="text-xl md:text-2xl font-bold">{title}</h1>}
             </div>
             <div className="flex items-center gap-3">
+              {/* Portfolio toggle */}
+              <div className="flex items-center gap-0.5 bg-[var(--bg-input)] rounded-xl p-0.5 border border-[var(--border-input)]">
+                {PORTFOLIO_OPTIONS.map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setPortfolioFilter(opt.key)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap ${portfolioFilter === opt.key
+                        ? opt.key === 'internal'
+                          ? 'bg-orange-500/20 text-orange-400 shadow-sm'
+                          : opt.key === 'external'
+                            ? 'bg-purple-500/20 text-purple-400 shadow-sm'
+                            : 'bg-[var(--bg-hover)] text-[var(--text-primary)] shadow-sm'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                      }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
               <button onClick={toggleTheme} className="p-2 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-elevated)] border border-[var(--border-color)] transition-colors text-[var(--text-primary)]">
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>

@@ -1,17 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState, DataTable, type Column } from '../components/v3';
+import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable, type Column, SearchDropdown } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Building2, Phone, Mail, Search, Check, LayoutGrid, List } from 'lucide-react';
+import { Plus, X, Building2, Phone, Mail, Search, Check, LayoutGrid, List, User } from 'lucide-react';
+import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 
 interface Landlord {
   id: number; name: string; email: string; phone: string;
   address: string; notes: string; property_count: number;
+  landlord_type?: string;
 }
 
 interface Property {
   id: number; address: string; landlord_id: number | null;
+}
+
+interface TenantOption {
+  id: number; name: string; property_id: number;
 }
 
 export default function LandlordsV3() {
@@ -23,19 +29,26 @@ export default function LandlordsV3() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', notes: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', notes: '', landlord_type: 'external' });
+  const { portfolioFilter } = usePortfolio();
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
+  const [tenants, setTenants] = useState<TenantOption[]>([]);
+  // Filter state
+  const [tenantFilter, setTenantFilter] = useState<number | null>(null);
+  const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
 
   const load = async () => {
     try {
-      const [data, props] = await Promise.all([
+      const [data, props, tns] = await Promise.all([
         api.get('/api/landlords'),
         api.get('/api/properties'),
+        api.get('/api/tenants'),
       ]);
       setLandlords(data);
       setProperties(props);
+      setTenants(Array.isArray(tns) ? tns.map((t: any) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -49,11 +62,23 @@ export default function LandlordsV3() {
     return acc;
   }, {} as Record<number, Property[]>);
 
-  const filtered = landlords.filter(l => {
+  const portfolioFiltered = filterByPortfolio(landlords, portfolioFilter);
+  const filtered = portfolioFiltered.filter(l => {
     const matchSearch = !search || [l.name, l.email, l.phone, l.address]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
-    if (filter === 'active') return matchSearch && (landlordProperties[l.id]?.length || 0) > 0;
-    if (filter === 'new') return matchSearch && !(landlordProperties[l.id]?.length);
+    if (filter === 'active' && !(landlordProperties[l.id]?.length)) return false;
+    if (filter === 'new' && (landlordProperties[l.id]?.length)) return false;
+    if (tenantFilter) {
+      const tn = tenants.find(t => t.id === tenantFilter);
+      if (tn) {
+        const propIds = (landlordProperties[l.id] || []).map(p => p.id);
+        if (!propIds.includes(tn.property_id)) return false;
+      }
+    }
+    if (propertyFilter) {
+      const propIds = (landlordProperties[l.id] || []).map(p => p.id);
+      if (!propIds.includes(propertyFilter)) return false;
+    }
     return matchSearch;
   });
 
@@ -70,7 +95,7 @@ export default function LandlordsV3() {
         api.put(`/api/properties/${pid}`, { landlord_id: newLandlord.id })
       ));
       setShowModal(false);
-      setForm({ name: '', email: '', phone: '', address: '', notes: '' });
+      setForm({ name: '', email: '', phone: '', address: '', notes: '', landlord_type: 'external' });
       setSelectedPropertyIds([]);
       await load();
     } catch (e) { console.error(e); }
@@ -115,8 +140,27 @@ export default function LandlordsV3() {
           </Button>
         </div>
 
-        {/* Filter tabs */}
-        <div className="flex flex-wrap gap-2">
+        {/* Dropdown filters + Filter tabs */}
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchDropdown
+            icon={<User size={14} />}
+            placeholder="Tenant"
+            searchPlaceholder="Search tenants..."
+            options={tenants.map(t => ({ id: t.id, label: t.name, subtitle: properties.find(p => p.id === t.property_id)?.address }))}
+            value={tenantFilter}
+            onChange={setTenantFilter}
+          />
+          <SearchDropdown
+            icon={<Building2 size={14} />}
+            placeholder="Property"
+            searchPlaceholder="Search properties..."
+            options={properties.map(p => ({ id: p.id, label: p.address }))}
+            value={propertyFilter}
+            onChange={setPropertyFilter}
+          />
+
+          <div className="h-5 w-px bg-[var(--border-subtle)] hidden sm:block" />
+
           {[
             { key: 'all', label: `All (${landlords.length})` },
             { key: 'active', label: `Active (${activeCount})` },
@@ -243,6 +287,7 @@ export default function LandlordsV3() {
             <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} placeholder="email@example.com" type="email" />
             <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} placeholder="+44..." />
             <Input label="Address" value={form.address} onChange={v => setForm({ ...form, address: v })} placeholder="Address" />
+            <Select label="Portfolio Type" value={form.landlord_type} onChange={v => setForm({ ...form, landlord_type: v })} options={[{ value: 'external', label: 'Lettings Client' }, { value: 'internal', label: 'Fleming Owned' }]} />
             <PropertyMultiSelect
               properties={properties}
               selected={selectedPropertyIds}

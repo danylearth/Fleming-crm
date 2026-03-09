@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState, useRef, useEffect } from 'react';
 
 // ─── Card ───
 export function Card({ children, className = '', onClick, hover }: {
@@ -16,12 +16,15 @@ export function Card({ children, className = '', onClick, hover }: {
 }
 
 // ─── Glass Card (gradient shine) ───
-export function GlassCard({ children, className = '', onClick }: {
+export function GlassCard({ children, className = '', onClick, onMouseEnter, onMouseLeave }: {
   children: ReactNode; className?: string; onClick?: () => void;
+  onMouseEnter?: () => void; onMouseLeave?: () => void;
 }) {
   return (
     <div
       onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       className={`bg-gradient-to-br from-[var(--glass-from)] to-[var(--glass-to)] rounded-2xl border border-[var(--border-color)] backdrop-blur-sm ${onClick ? 'cursor-pointer hover:border-[var(--border-input)] transition-all' : ''
         } ${className}`}
     >
@@ -74,8 +77,9 @@ export function Select({ label, value, onChange, options, className = '' }: {
     <div className={className}>
       {label && <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">{label}</label>}
       <select value={value} onChange={e => onChange(e.target.value)}
-        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] appearance-none focus:outline-none focus:border-[var(--border-input)] transition-colors">
-        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] appearance-none focus:outline-none focus:border-[var(--border-input)] transition-colors"
+        style={{ colorScheme: 'dark' }}>
+        {options.map(o => <option key={o.value} value={o.value} style={{ background: 'var(--bg-input)', color: 'var(--text-primary)' }}>{o.label}</option>)}
       </select>
     </div>
   );
@@ -194,3 +198,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search...' }: {
 // ─── DataTable (re-export) ───
 export { DataTable } from './DataTable';
 export type { Column } from './DataTable';
+
+// ─── SearchDropdown (re-export) ───
+export { SearchDropdown } from './SearchDropdown';
+export type { DropdownOption } from './SearchDropdown';

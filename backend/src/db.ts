@@ -61,6 +61,8 @@ db.exec(`
     marketing_sms INTEGER DEFAULT 0,
     -- KYC
     kyc_completed INTEGER DEFAULT 0,
+    -- Portfolio type
+    landlord_type TEXT DEFAULT 'external' CHECK(landlord_type IN ('internal', 'external')),
     -- Notes
     notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -443,5 +445,12 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_viewings_date ON property_viewings(viewing_date);
   CREATE INDEX IF NOT EXISTS idx_viewings_property ON property_viewings(property_id);
 `);
+
+// Migrations for existing databases
+try {
+  db.exec(`ALTER TABLE landlords ADD COLUMN landlord_type TEXT DEFAULT 'external' CHECK(landlord_type IN ('internal', 'external'))`);
+} catch (e) {
+  // Column already exists — safe to ignore
+}
 
 export default db;

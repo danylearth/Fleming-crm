@@ -42,6 +42,11 @@ interface TenantNote {
 }
 
 // ==================== HELPERS ====================
+function formatDateDMY(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+}
 function TimeAgo({ date }: { date: string }) {
   const now = new Date();
   const then = new Date(date);
@@ -50,7 +55,7 @@ function TimeAgo({ date }: { date: string }) {
   const hrs = Math.floor(mins / 60);
   const days = Math.floor(hrs / 24);
   let label = '';
-  if (days > 30) label = then.toLocaleDateString();
+  if (days > 30) label = formatDateDMY(date);
   else if (days > 0) label = `${days}d ago`;
   else if (hrs > 0) label = `${hrs}h ago`;
   else if (mins > 0) label = `${mins}m ago`;
@@ -112,8 +117,8 @@ function CompletionRing({ percent, size = 48 }: { percent: number; size?: number
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--bg-hover)" strokeWidth={4} />
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={4}
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--bg-hover)" strokeWidth={4} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={4}
           strokeLinecap="round" strokeDasharray={c} strokeDashoffset={offset} className="transition-all duration-500" />
       </svg>
       <span className="absolute inset-0 flex items-center justify-center text-xs font-bold" style={{ color }}>
@@ -196,7 +201,7 @@ export default function TenantDetailV3() {
       try {
         const parsed = JSON.parse(tenant.notes);
         if (Array.isArray(parsed)) { setNotes(parsed); return; }
-      } catch {}
+      } catch { }
       if (tenant.notes.trim()) setNotes([{ id: '1', text: tenant.notes, author: 'System', created_at: new Date().toISOString() }]);
     }
   }, [tenant?.notes]);
@@ -254,11 +259,11 @@ export default function TenantDetailV3() {
   // Tenancy end date warning
   const endDateWarning = form.has_end_date && form.tenancy_end_date
     ? (() => {
-        const end = new Date(form.tenancy_end_date);
-        const now = new Date();
-        const daysLeft = Math.ceil((end.getTime() - now.getTime()) / 86400000);
-        return daysLeft <= 30 && daysLeft > 0 ? daysLeft : daysLeft <= 0 ? 0 : null;
-      })()
+      const end = new Date(form.tenancy_end_date);
+      const now = new Date();
+      const daysLeft = Math.ceil((end.getTime() - now.getTime()) / 86400000);
+      return daysLeft <= 30 && daysLeft > 0 ? daysLeft : daysLeft <= 0 ? 0 : null;
+    })()
     : null;
 
   // Per-section save: sends partial update to backend
@@ -407,7 +412,7 @@ export default function TenantDetailV3() {
                     {[
                       { icon: Mail, label: 'Email', value: tenant.email },
                       { icon: Phone, label: 'Phone', value: tenant.phone },
-                      { icon: Calendar, label: 'Date of Birth', value: tenant.date_of_birth_1 ? new Date(tenant.date_of_birth_1).toLocaleDateString() : null },
+                      { icon: Calendar, label: 'Date of Birth', value: tenant.date_of_birth_1 ? formatDateDMY(tenant.date_of_birth_1) : null },
                     ].map(({ icon: Icon, label, value }) => (
                       <div key={label} className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
@@ -425,7 +430,7 @@ export default function TenantDetailV3() {
                         <ReadField label="Name" value={[tenant.title_2, tenant.first_name_2, tenant.last_name_2].filter(Boolean).join(' ') || null} />
                         <ReadField label="Email" value={tenant.email_2} />
                         <ReadField label="Phone" value={tenant.phone_2} />
-                        <ReadField label="Date of Birth" value={tenant.date_of_birth_2 ? new Date(tenant.date_of_birth_2).toLocaleDateString() : null} />
+                        <ReadField label="Date of Birth" value={tenant.date_of_birth_2 ? formatDateDMY(tenant.date_of_birth_2) : null} />
                       </div>
                     </>
                   )}
@@ -437,7 +442,7 @@ export default function TenantDetailV3() {
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <SectionHeader title="Next of Kin" icon={<Heart size={16} />} />
+                  <h3 className="text-lg font-semibold flex items-center gap-2"><Heart size={16} />Next of Kin</h3>
                   {!form.nok_name && !isEditing('nok') && (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-medium">Missing</span>
                   )}
@@ -502,21 +507,21 @@ export default function TenantDetailV3() {
               ) : (
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <ReadField label="Start Date" value={form.tenancy_start_date ? new Date(form.tenancy_start_date).toLocaleDateString() : null} />
+                    <ReadField label="Start Date" value={form.tenancy_start_date ? formatDateDMY(form.tenancy_start_date) : null} />
                     <ReadField label="Tenancy Type" value={form.tenancy_type} />
                     <ReadField label="Monthly Rent" value={form.monthly_rent ? `£${Number(form.monthly_rent).toLocaleString()}` : null} />
                     <ReadField label="Deposit Scheme" value={
                       form.deposit_scheme === 'tds' ? 'Tenancy Deposit Scheme' :
-                      form.deposit_scheme === 'gov_back' ? 'Gov Back Scheme' :
-                      form.deposit_scheme === 'paid_to_landlord' ? 'Paid to Landlord' :
-                      form.deposit_scheme === 'other' ? 'Other/TBF' : null
+                        form.deposit_scheme === 'gov_back' ? 'Gov Back Scheme' :
+                          form.deposit_scheme === 'paid_to_landlord' ? 'Paid to Landlord' :
+                            form.deposit_scheme === 'other' ? 'Other/TBF' : null
                     } />
                   </div>
                   {form.has_end_date && (
                     <div>
                       <p className="text-xs text-[var(--text-muted)]">End Date</p>
                       <p className={`text-sm mt-0.5 ${endDateWarning !== null ? 'text-red-400 font-medium' : ''}`}>
-                        {form.tenancy_end_date ? new Date(form.tenancy_end_date).toLocaleDateString() : '—'}
+                        {form.tenancy_end_date ? formatDateDMY(form.tenancy_end_date) : '—'}
                         {endDateWarning !== null && endDateWarning > 0 && ` (${endDateWarning} days left)`}
                         {endDateWarning === 0 && ' (Expired)'}
                       </p>
@@ -598,7 +603,7 @@ export default function TenantDetailV3() {
                       ) : (
                         <>
                           <ReadField label="Amount" value={form.holding_deposit_amount ? `£${form.holding_deposit_amount}` : null} />
-                          <ReadField label="Date" value={form.holding_deposit_date ? new Date(form.holding_deposit_date).toLocaleDateString() : null} />
+                          <ReadField label="Date" value={form.holding_deposit_date ? formatDateDMY(form.holding_deposit_date) : null} />
                         </>
                       )}
                     </div>
@@ -694,7 +699,7 @@ export default function TenantDetailV3() {
                   <div className="absolute left-[13px] top-2 bottom-2 w-px bg-[var(--border-input)]" />
                   {timeline.slice(0, 20).map(entry => {
                     let changes: Record<string, unknown> = {};
-                    try { changes = JSON.parse(entry.changes || '{}'); } catch {}
+                    try { changes = JSON.parse(entry.changes || '{}'); } catch { }
                     const changedKeys = Object.keys(changes).filter(k => k !== 'id');
                     return (
                       <div key={entry.id} className="relative flex items-start gap-3 py-2">

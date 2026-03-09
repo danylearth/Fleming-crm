@@ -1,19 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, Avatar } from '../components/v3';
+import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, Avatar, SearchDropdown } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Building2, Plus, List, Map, X, Search, ChevronDown } from 'lucide-react';
+import { Building2, Plus, List, Map, X, Search, ChevronDown, User } from 'lucide-react';
 import PropertyMap from '../components/v3/PropertyMap';
+import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 
 interface Property {
   id: number; address: string; postcode: string; rent_amount: number;
   status: string; landlord_name: string; current_tenant: string | null;
-  bedrooms: number; property_type: string;
+  bedrooms: number; property_type: string; landlord_type?: string;
 }
 
 interface LandlordOption {
   id: number; name: string;
+}
+
+interface TenantOption {
+  id: number; name: string; property_id: number;
 }
 
 const STATUSES = [
@@ -47,12 +52,18 @@ export default function PropertiesV3() {
   });
   const [llDropOpen, setLlDropOpen] = useState(false);
   const [llSearch, setLlSearch] = useState('');
+  const [tenants, setTenants] = useState<TenantOption[]>([]);
+  // Filter state
+  const [landlordFilter, setLandlordFilter] = useState<number | null>(null);
+  const [tenantFilter, setTenantFilter] = useState<number | null>(null);
+  const { portfolioFilter } = usePortfolio();
 
   const load = () => {
-    Promise.all([api.get('/api/properties'), api.get('/api/landlords')])
-      .then(([data, lls]) => {
+    Promise.all([api.get('/api/properties'), api.get('/api/landlords'), api.get('/api/tenants')])
+      .then(([data, lls, tns]) => {
         setProperties(Array.isArray(data) ? data : []);
         setLandlords(Array.isArray(lls) ? lls.map((l: any) => ({ id: l.id, name: l.name })) : []);
+        setTenants(Array.isArray(tns) ? tns.map((t: any) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
       })
       .catch(() => setProperties([]))
       .finally(() => setLoading(false));
@@ -60,10 +71,19 @@ export default function PropertiesV3() {
 
   useEffect(() => { load(); }, []);
 
-  const filtered = properties.filter(p => {
+  const portfolioFiltered = filterByPortfolio(properties, portfolioFilter);
+  const filtered = portfolioFiltered.filter(p => {
     const matchSearch = !search || [p.address, p.postcode, p.landlord_name, p.current_tenant]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
     if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+    if (landlordFilter) {
+      const ll = landlords.find(l => l.id === landlordFilter);
+      if (ll && p.landlord_name !== ll.name) return false;
+    }
+    if (tenantFilter) {
+      const tn = tenants.find(t => t.id === tenantFilter);
+      if (tn && tn.property_id !== p.id) return false;
+    }
     return matchSearch;
   });
 
@@ -110,8 +130,27 @@ export default function PropertiesV3() {
           </Button>
         </div>
 
-        {/* Status filter */}
-        <div className="flex flex-wrap gap-2">
+        {/* Dropdown filters + Status filter */}
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchDropdown
+            icon={<User size={14} />}
+            placeholder="Landlord"
+            searchPlaceholder="Search landlords..."
+            options={landlords.map(l => ({ id: l.id, label: l.name, subtitle: `${properties.filter(p => p.landlord_name === l.name).length} properties` }))}
+            value={landlordFilter}
+            onChange={setLandlordFilter}
+          />
+          <SearchDropdown
+            icon={<User size={14} />}
+            placeholder="Tenant"
+            searchPlaceholder="Search tenants..."
+            options={tenants.map(t => ({ id: t.id, label: t.name, subtitle: properties.find(p => p.id === t.property_id)?.address }))}
+            value={tenantFilter}
+            onChange={setTenantFilter}
+          />
+
+          <div className="h-5 w-px bg-[var(--border-subtle)] hidden sm:block" />
+
           {[
             { key: 'all', label: `All (${properties.length})` },
             ...STATUSES.map(s => ({ key: s.key, label: `${s.label} (${statusCounts[s.key] || 0})` })),
@@ -297,19 +336,17 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Select label="Council Tax Band" value={form.council_tax_band} onChange={(v: string) => setForm((f: any) => ({ ...f, council_tax_band: v }))}
-            options={[{ value: '', label: 'Select...' }, ...['A','B','C','D','E','F','G','H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
+            options={[{ value: '', label: 'Select...' }, ...['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
           <div>
             <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Gas Supply</label>
             <button type="button" onClick={() => setForm((f: any) => ({ ...f, has_gas: !f.has_gas }))}
-              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border transition-colors w-full ${
-                form.has_gas
-                  ? 'bg-[var(--accent-orange)]/10 border-[var(--accent-orange)]/30 text-[var(--accent-orange)]'
-                  : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
-              }`}>
-              <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${
-                form.has_gas ? 'bg-[var(--accent-orange)] border-[var(--accent-orange)]' : 'border-[var(--border-input)]'
-              }`}>
-                {form.has_gas && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5L4.5 7.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border transition-colors w-full ${form.has_gas
+                ? 'bg-[var(--accent-orange)]/10 border-[var(--accent-orange)]/30 text-[var(--accent-orange)]'
+                : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
+                }`}>
+              <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${form.has_gas ? 'bg-[var(--accent-orange)] border-[var(--accent-orange)]' : 'border-[var(--border-input)]'
+                }`}>
+                {form.has_gas && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5L4.5 7.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
               </div>
               <span className="text-sm">Has Gas</span>
             </button>

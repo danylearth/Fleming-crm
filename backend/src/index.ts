@@ -24,12 +24,12 @@ const storage = multer.diskStorage({
     cb(null, uniqueSuffix + '-' + file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_'));
   }
 });
-const upload = multer({ 
+const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 
-                     'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif',
+      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -64,15 +64,15 @@ app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     const stmt = db.prepare('SELECT * FROM users WHERE email = ? AND is_active = 1');
     const user = stmt.get(email) as any;
-    
+
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    
+
     // Update last login
     db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
     logAudit(user.id, user.email, 'login', 'user', user.id);
-    
+
     const token = generateToken({ id: user.id, email: user.email, role: user.role, name: user.name });
     res.json({ user: { id: user.id, email: user.email, role: user.role, name: user.name }, token });
   } catch (err) {
@@ -90,12 +90,12 @@ app.post('/api/auth/setup', async (req, res) => {
     if (existing.count > 0) {
       return res.status(400).json({ error: 'Setup already completed' });
     }
-    
+
     const { email, password, name } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
     const stmt = db.prepare('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)');
     stmt.run(email, hashedPassword, name, 'admin');
-    
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Setup failed' });
@@ -107,7 +107,7 @@ app.post('/api/auth/setup', async (req, res) => {
 app.get('/api/dashboard', authMiddleware, (req: AuthRequest, res) => {
   try {
     const stats: any = {};
-    
+
     // Basic counts
     stats.properties = (db.prepare('SELECT COUNT(*) as c FROM properties').get() as any).c;
     stats.propertiesLet = (db.prepare("SELECT COUNT(*) as c FROM properties WHERE status = 'let'").get() as any).c;
@@ -115,39 +115,39 @@ app.get('/api/dashboard', authMiddleware, (req: AuthRequest, res) => {
     stats.tenants = (db.prepare('SELECT COUNT(*) as c FROM tenants').get() as any).c;
     stats.activeTenancies = (db.prepare("SELECT COUNT(*) as c FROM tenancies WHERE status = 'active'").get() as any).c;
     stats.openMaintenance = (db.prepare("SELECT COUNT(*) as c FROM maintenance WHERE status IN ('open', 'in_progress')").get() as any).c;
-    
+
     // BDM Pipeline counts
     stats.bdmProspects = (db.prepare("SELECT COUNT(*) as c FROM landlords_bdm WHERE status NOT IN ('onboarded', 'not_interested')").get() as any).c;
     stats.bdmNew = (db.prepare("SELECT COUNT(*) as c FROM landlords_bdm WHERE status = 'new'").get() as any).c;
     stats.bdmContacted = (db.prepare("SELECT COUNT(*) as c FROM landlords_bdm WHERE status = 'contacted'").get() as any).c;
     stats.bdmInterested = (db.prepare("SELECT COUNT(*) as c FROM landlords_bdm WHERE status = 'interested'").get() as any).c;
-    
+
     // Enquiries pipeline counts
     stats.enquiries = (db.prepare("SELECT COUNT(*) as c FROM tenant_enquiries WHERE status NOT IN ('rejected', 'converted')").get() as any).c;
     stats.enquiriesNew = (db.prepare("SELECT COUNT(*) as c FROM tenant_enquiries WHERE status = 'new'").get() as any).c;
     stats.enquiriesViewing = (db.prepare("SELECT COUNT(*) as c FROM tenant_enquiries WHERE status = 'viewing_booked'").get() as any).c;
     stats.enquiriesOnboarding = (db.prepare("SELECT COUNT(*) as c FROM tenant_enquiries WHERE status = 'onboarding'").get() as any).c;
-    
+
     // Monthly income
     const incomeResult = db.prepare(`
       SELECT COALESCE(SUM(amount), 0) as total FROM transactions 
       WHERE type = 'payment' AND date >= date('now', 'start of month')
     `).get() as any;
     stats.monthlyIncome = incomeResult.total;
-    
+
     // Outstanding rent (pending rent payments)
     const outstandingResult = db.prepare(`
       SELECT COALESCE(SUM(amount_due - COALESCE(amount_paid, 0)), 0) as total 
       FROM rent_payments WHERE status IN ('pending', 'partial')
     `).get() as any;
     stats.outstandingRent = outstandingResult.total;
-    
+
     // Tasks counts
     const today = new Date().toISOString().split('T')[0];
     stats.tasksOverdue = (db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status IN ('pending', 'in_progress') AND due_date < date('now')").get() as any).c;
     stats.tasksDueToday = (db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status IN ('pending', 'in_progress') AND due_date = date('now')").get() as any).c;
     stats.tasksUpcoming = (db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status IN ('pending', 'in_progress') AND due_date > date('now') AND due_date <= date('now', '+7 days')").get() as any).c;
-    
+
     // Compliance alerts (detailed)
     stats.complianceAlerts = db.prepare(`
       SELECT id as property_id, address, 
@@ -185,7 +185,7 @@ app.get('/api/dashboard', authMiddleware, (req: AuthRequest, res) => {
         COALESCE(eicr_expiry_date, epc_expiry_date, gas_safety_expiry_date)
       LIMIT 10
     `).all();
-    
+
     // Recent maintenance
     stats.recentMaintenance = db.prepare(`
       SELECT m.*, p.address FROM maintenance m
@@ -194,7 +194,7 @@ app.get('/api/dashboard', authMiddleware, (req: AuthRequest, res) => {
       ORDER BY CASE m.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
                m.created_at DESC LIMIT 5
     `).all();
-    
+
     // Recent tasks
     stats.recentTasks = db.prepare(`
       SELECT t.id, t.title, t.priority, t.due_date, 
@@ -207,7 +207,7 @@ app.get('/api/dashboard', authMiddleware, (req: AuthRequest, res) => {
         CASE t.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END
       LIMIT 5
     `).all();
-    
+
     logAudit(req.user?.id, req.user?.email, 'view', 'dashboard');
     res.json(stats);
   } catch (err) {
@@ -233,25 +233,25 @@ app.get('/api/landlords', authMiddleware, (req: AuthRequest, res) => {
 
 app.post('/api/landlords', authMiddleware, (req: AuthRequest, res) => {
   try {
-    const { name, email, phone, alt_email, date_of_birth, home_address, 
-            marketing_post, marketing_email, marketing_phone, marketing_sms, 
-            kyc_completed, notes } = req.body;
-    
+    const { name, email, phone, alt_email, date_of_birth, home_address,
+      marketing_post, marketing_email, marketing_phone, marketing_sms,
+      kyc_completed, notes, landlord_type } = req.body;
+
     // Duplicate check
     if (email || phone) {
       const existing = db.prepare('SELECT id FROM landlords WHERE email = ? OR phone = ?').get(email, phone);
       if (existing) return res.status(400).json({ error: 'Duplicate email or phone number' });
     }
-    
+
     const stmt = db.prepare(`
       INSERT INTO landlords (name, email, phone, alt_email, date_of_birth, home_address,
-        marketing_post, marketing_email, marketing_phone, marketing_sms, kyc_completed, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        marketing_post, marketing_email, marketing_phone, marketing_sms, kyc_completed, notes, landlord_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(name, email || null, phone || null, alt_email || null, date_of_birth || null, 
-      home_address || null, marketing_post ? 1 : 0, marketing_email ? 1 : 0, marketing_phone ? 1 : 0, 
-      marketing_sms ? 1 : 0, kyc_completed ? 1 : 0, notes || null);
-    
+    const result = stmt.run(name, email || null, phone || null, alt_email || null, date_of_birth || null,
+      home_address || null, marketing_post ? 1 : 0, marketing_email ? 1 : 0, marketing_phone ? 1 : 0,
+      marketing_sms ? 1 : 0, kyc_completed ? 1 : 0, notes || null, landlord_type || 'external');
+
     logAudit(req.user?.id, req.user?.email, 'create', 'landlord', result.lastInsertRowid as number);
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
@@ -266,7 +266,7 @@ app.get('/api/landlords/:id', authMiddleware, (req: AuthRequest, res) => {
       FROM landlords l WHERE l.id = ?
     `).get(req.params.id);
     if (!landlord) return res.status(404).json({ error: 'Landlord not found' });
-    
+
     logAudit(req.user?.id, req.user?.email, 'view', 'landlord', parseInt(req.params.id));
     res.json(landlord);
   } catch (err) {
@@ -277,17 +277,17 @@ app.get('/api/landlords/:id', authMiddleware, (req: AuthRequest, res) => {
 app.put('/api/landlords/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const { name, email, phone, alt_email, date_of_birth, home_address,
-            marketing_post, marketing_email, marketing_phone, marketing_sms,
-            kyc_completed, notes } = req.body;
-    
+      marketing_post, marketing_email, marketing_phone, marketing_sms,
+      kyc_completed, notes, landlord_type } = req.body;
+
     db.prepare(`
       UPDATE landlords SET name=?, email=?, phone=?, alt_email=?, date_of_birth=?, home_address=?,
         marketing_post=?, marketing_email=?, marketing_phone=?, marketing_sms=?,
-        kyc_completed=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
+        kyc_completed=?, notes=?, landlord_type=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
     `).run(name, email, phone, alt_email, date_of_birth, home_address,
       marketing_post ? 1 : 0, marketing_email ? 1 : 0, marketing_phone ? 1 : 0, marketing_sms ? 1 : 0,
-      kyc_completed ? 1 : 0, notes, req.params.id);
-    
+      kyc_completed ? 1 : 0, notes, landlord_type || 'external', req.params.id);
+
     logAudit(req.user?.id, req.user?.email, 'update', 'landlord', parseInt(req.params.id), req.body);
     res.json({ success: true });
   } catch (err) {
@@ -322,20 +322,20 @@ app.get('/api/landlords-bdm', authMiddleware, (req: AuthRequest, res) => {
 app.post('/api/landlords-bdm', authMiddleware, (req: AuthRequest, res) => {
   try {
     const { name, email, phone, address, status, follow_up_date, source, notes } = req.body;
-    
+
     // Duplicate check
     if (email || phone) {
       const existing = db.prepare('SELECT id FROM landlords_bdm WHERE email = ? OR phone = ?').get(email, phone);
       if (existing) return res.status(400).json({ error: 'Duplicate email or phone number' });
     }
-    
+
     const stmt = db.prepare(`
       INSERT INTO landlords_bdm (name, email, phone, address, status, follow_up_date, source, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(name, email || null, phone || null, address || null, 
+    const result = stmt.run(name, email || null, phone || null, address || null,
       status || 'new', follow_up_date || null, source || null, notes || null);
-    
+
     logAudit(req.user?.id, req.user?.email, 'create', 'landlord_bdm', result.lastInsertRowid as number);
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
@@ -347,7 +347,7 @@ app.get('/api/landlords-bdm/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const prospect = db.prepare('SELECT * FROM landlords_bdm WHERE id = ?').get(req.params.id);
     if (!prospect) return res.status(404).json({ error: 'Prospect not found' });
-    
+
     logAudit(req.user?.id, req.user?.email, 'view', 'landlord_bdm', parseInt(req.params.id));
     res.json(prospect);
   } catch (err) {
@@ -358,12 +358,12 @@ app.get('/api/landlords-bdm/:id', authMiddleware, (req: AuthRequest, res) => {
 app.put('/api/landlords-bdm/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const { name, email, phone, address, status, follow_up_date, source, notes } = req.body;
-    
+
     db.prepare(`
       UPDATE landlords_bdm SET name=?, email=?, phone=?, address=?, status=?, 
         follow_up_date=?, source=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
     `).run(name, email, phone, address, status, follow_up_date, source, notes, req.params.id);
-    
+
     logAudit(req.user?.id, req.user?.email, 'update', 'landlord_bdm', parseInt(req.params.id), req.body);
     res.json({ success: true });
   } catch (err) {
@@ -376,17 +376,19 @@ app.post('/api/landlords-bdm/:id/convert', authMiddleware, (req: AuthRequest, re
   try {
     const prospect = db.prepare('SELECT * FROM landlords_bdm WHERE id = ?').get(req.params.id) as any;
     if (!prospect) return res.status(404).json({ error: 'Prospect not found' });
-    
+
+    const { landlord_type } = req.body || {};
+
     // Create landlord
     const result = db.prepare(`
-      INSERT INTO landlords (name, email, phone, home_address, notes)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(prospect.name, prospect.email, prospect.phone, prospect.address, prospect.notes);
-    
+      INSERT INTO landlords (name, email, phone, home_address, notes, landlord_type)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(prospect.name, prospect.email, prospect.phone, prospect.address, prospect.notes, landlord_type || 'external');
+
     // Update BDM status
     db.prepare("UPDATE landlords_bdm SET status = 'onboarded', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
       .run(req.params.id);
-    
+
     logAudit(req.user?.id, req.user?.email, 'update', 'landlord_bdm', parseInt(req.params.id), { converted_to: result.lastInsertRowid });
     res.json({ landlord_id: result.lastInsertRowid });
   } catch (err) {
@@ -399,8 +401,9 @@ app.post('/api/landlords-bdm/:id/convert', authMiddleware, (req: AuthRequest, re
 app.get('/api/tenant-enquiries', authMiddleware, (req: AuthRequest, res) => {
   try {
     const enquiries = db.prepare(`
-      SELECT te.*, p.address as property_address FROM tenant_enquiries te
+      SELECT te.*, p.address as property_address, l.landlord_type FROM tenant_enquiries te
       LEFT JOIN properties p ON p.id = te.linked_property_id
+      LEFT JOIN landlords l ON l.id = p.landlord_id
       ORDER BY 
         CASE te.status WHEN 'viewing_booked' THEN 1 WHEN 'onboarding' THEN 2 WHEN 'awaiting_response' THEN 3 WHEN 'new' THEN 4 ELSE 5 END,
         te.viewing_date NULLS LAST,
@@ -416,7 +419,7 @@ app.get('/api/tenant-enquiries', authMiddleware, (req: AuthRequest, res) => {
 app.post('/api/tenant-enquiries', authMiddleware, (req: AuthRequest, res) => {
   try {
     const data = req.body;
-    
+
     // Duplicate check
     if (data.email_1 || data.phone_1) {
       const existingEnquiry = db.prepare('SELECT id FROM tenant_enquiries WHERE email_1 = ? OR phone_1 = ?').get(data.email_1, data.phone_1);
@@ -425,7 +428,7 @@ app.post('/api/tenant-enquiries', authMiddleware, (req: AuthRequest, res) => {
         return res.status(400).json({ error: 'Duplicate email or phone number found', existing_type: existingTenant ? 'tenant' : 'enquiry' });
       }
     }
-    
+
     const stmt = db.prepare(`
       INSERT INTO tenant_enquiries (
         title_1, first_name_1, last_name_1, email_1, phone_1, date_of_birth_1, current_address_1,
@@ -435,16 +438,16 @@ app.post('/api/tenant-enquiries', authMiddleware, (req: AuthRequest, res) => {
         status, notes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    
+
     const result = stmt.run(
-      data.title_1, data.first_name_1, data.last_name_1, data.email_1, data.phone_1, 
+      data.title_1, data.first_name_1, data.last_name_1, data.email_1, data.phone_1,
       data.date_of_birth_1, data.current_address_1, data.employment_status_1, data.employer_1, data.income_1,
-      data.is_joint_application ? 1 : 0, data.title_2, data.first_name_2, data.last_name_2, 
-      data.email_2, data.phone_2, data.date_of_birth_2, data.current_address_2, 
+      data.is_joint_application ? 1 : 0, data.title_2, data.first_name_2, data.last_name_2,
+      data.email_2, data.phone_2, data.date_of_birth_2, data.current_address_2,
       data.employment_status_2, data.employer_2, data.income_2,
       'new', data.notes
     );
-    
+
     logAudit(req.user?.id, req.user?.email, 'create', 'tenant_enquiry', result.lastInsertRowid as number);
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
@@ -456,12 +459,13 @@ app.post('/api/tenant-enquiries', authMiddleware, (req: AuthRequest, res) => {
 app.get('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const enquiry = db.prepare(`
-      SELECT te.*, p.address as property_address FROM tenant_enquiries te
+      SELECT te.*, p.address as property_address, l.landlord_type FROM tenant_enquiries te
       LEFT JOIN properties p ON p.id = te.linked_property_id
+      LEFT JOIN landlords l ON l.id = p.landlord_id
       WHERE te.id = ?
     `).get(req.params.id);
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
-    
+
     logAudit(req.user?.id, req.user?.email, 'view', 'tenant_enquiry', parseInt(req.params.id));
     res.json(enquiry);
   } catch (err) {
@@ -472,7 +476,7 @@ app.get('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
 app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const data = req.body;
-    
+
     db.prepare(`
       UPDATE tenant_enquiries SET
         title_1=?, first_name_1=?, last_name_1=?, email_1=?, phone_1=?, date_of_birth_1=?, 
@@ -491,7 +495,7 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
       data.kyc_completed_1 ? 1 : 0, data.kyc_completed_2 ? 1 : 0, data.status, data.follow_up_date,
       data.viewing_date, data.linked_property_id, data.notes, data.rejection_reason, req.params.id
     );
-    
+
     logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', parseInt(req.params.id), data);
     res.json({ success: true });
   } catch (err) {
@@ -555,9 +559,9 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
   try {
     const enquiry = db.prepare('SELECT * FROM tenant_enquiries WHERE id = ?').get(req.params.id) as any;
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
-    
+
     const { property_id, tenancy_start_date, tenancy_type, monthly_rent } = req.body;
-    
+
     // Create tenant
     const name = `${enquiry.first_name_1} ${enquiry.last_name_1}`;
     const result = db.prepare(`
@@ -572,11 +576,11 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
       enquiry.last_name_2, enquiry.email_2, enquiry.phone_2, enquiry.date_of_birth_2,
       enquiry.kyc_completed_1, enquiry.kyc_completed_2, property_id, tenancy_start_date, tenancy_type, monthly_rent
     );
-    
+
     // Update enquiry status
     db.prepare("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
       .run(req.params.id);
-    
+
     logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', parseInt(req.params.id), { converted_to_tenant: result.lastInsertRowid });
     res.json({ tenant_id: result.lastInsertRowid });
   } catch (err) {
@@ -590,9 +594,10 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
 app.get('/api/tenants', authMiddleware, (req: AuthRequest, res) => {
   try {
     const tenants = db.prepare(`
-      SELECT t.*, p.address as property_address
+      SELECT t.*, p.address as property_address, l.landlord_type
       FROM tenants t
       LEFT JOIN properties p ON p.id = t.property_id
+      LEFT JOIN landlords l ON l.id = p.landlord_id
       ORDER BY t.name
     `).all();
     res.json(tenants);
@@ -605,20 +610,20 @@ app.post('/api/tenants', authMiddleware, (req: AuthRequest, res) => {
   try {
     const data = req.body;
     const name = data.name || `${data.first_name_1} ${data.last_name_1}`;
-    
+
     // Duplicate check
     if (data.email || data.phone) {
       const existing = db.prepare('SELECT id FROM tenants WHERE email = ? OR phone = ?').get(data.email, data.phone);
       if (existing) return res.status(400).json({ error: 'Duplicate email or phone number' });
     }
-    
+
     const stmt = db.prepare(`
       INSERT INTO tenants (name, first_name_1, last_name_1, email, phone, notes, property_id)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(name, data.first_name_1 || name, data.last_name_1 || '', 
+    const result = stmt.run(name, data.first_name_1 || name, data.last_name_1 || '',
       data.email || null, data.phone || null, data.notes || null, data.property_id || null);
-    
+
     logAudit(req.user?.id, req.user?.email, 'create', 'tenant', result.lastInsertRowid as number);
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
@@ -629,13 +634,14 @@ app.post('/api/tenants', authMiddleware, (req: AuthRequest, res) => {
 app.get('/api/tenants/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const tenant = db.prepare(`
-      SELECT t.*, p.address as property_address
+      SELECT t.*, p.address as property_address, l.landlord_type
       FROM tenants t
       LEFT JOIN properties p ON p.id = t.property_id
+      LEFT JOIN landlords l ON l.id = p.landlord_id
       WHERE t.id = ?
     `).get(req.params.id);
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
-    
+
     logAudit(req.user?.id, req.user?.email, 'view', 'tenant', parseInt(req.params.id));
     res.json(tenant);
   } catch (err) {
@@ -647,7 +653,7 @@ app.put('/api/tenants/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const data = req.body;
     const name = data.name || `${data.first_name_1} ${data.last_name_1}`;
-    
+
     db.prepare(`
       UPDATE tenants SET
         name=?, title_1=?, first_name_1=?, last_name_1=?, email=?, phone=?, date_of_birth_1=?,
@@ -671,7 +677,7 @@ app.put('/api/tenants/:id', authMiddleware, (req: AuthRequest, res) => {
       data.property_id, data.tenancy_start_date, data.tenancy_type, data.has_end_date ? 1 : 0, data.tenancy_end_date, data.monthly_rent,
       data.notes, req.params.id
     );
-    
+
     logAudit(req.user?.id, req.user?.email, 'update', 'tenant', parseInt(req.params.id), data);
     res.json({ success: true });
   } catch (err) {
@@ -693,7 +699,7 @@ app.delete('/api/tenants/:id', authMiddleware, (req: AuthRequest, res) => {
 app.get('/api/properties', authMiddleware, (req: AuthRequest, res) => {
   try {
     const properties = db.prepare(`
-      SELECT p.*, l.name as landlord_name,
+      SELECT p.*, l.name as landlord_name, l.landlord_type,
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant
       FROM properties p
       JOIN landlords l ON l.id = p.landlord_id
@@ -721,13 +727,13 @@ app.post('/api/properties', authMiddleware, (req: AuthRequest, res) => {
       data.landlord_id, data.address, data.postcode, data.property_type || 'house', data.bedrooms || 1,
       data.rent_amount, data.status || 'available',
       data.is_leasehold ? 1 : 0, data.leasehold_start_date, data.leasehold_end_date, data.leaseholder_info,
-      data.proof_of_ownership_received ? 1 : 0, data.council_tax_band, data.service_type, 
+      data.proof_of_ownership_received ? 1 : 0, data.council_tax_band, data.service_type,
       data.charge_percentage, data.total_charge,
-      data.eicr_expiry_date, data.epc_grade, data.epc_expiry_date, 
+      data.eicr_expiry_date, data.epc_grade, data.epc_expiry_date,
       data.has_gas ? 1 : 0, data.gas_safety_expiry_date,
       data.rent_review_date, data.onboarded_date, data.notes
     );
-    
+
     logAudit(req.user?.id, req.user?.email, 'create', 'property', result.lastInsertRowid as number);
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
@@ -739,7 +745,7 @@ app.post('/api/properties', authMiddleware, (req: AuthRequest, res) => {
 app.get('/api/properties/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const property = db.prepare(`
-      SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email,
+      SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email, l.landlord_type,
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant,
         (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id
       FROM properties p
@@ -747,7 +753,7 @@ app.get('/api/properties/:id', authMiddleware, (req: AuthRequest, res) => {
       WHERE p.id = ?
     `).get(req.params.id);
     if (!property) return res.status(404).json({ error: 'Property not found' });
-    
+
     logAudit(req.user?.id, req.user?.email, 'view', 'property', parseInt(req.params.id));
     res.json(property);
   } catch (err) {
@@ -775,7 +781,7 @@ app.put('/api/properties/:id', authMiddleware, (req: AuthRequest, res) => {
       data.rent_review_date, data.eicr_expiry_date, data.epc_grade, data.epc_expiry_date,
       data.has_gas ? 1 : 0, data.gas_safety_expiry_date, data.onboarded_date, data.notes, req.params.id
     );
-    
+
     logAudit(req.user?.id, req.user?.email, 'update', 'property', parseInt(req.params.id), data);
     res.json({ success: true });
   } catch (err) {
@@ -797,7 +803,7 @@ app.get('/api/tasks', authMiddleware, (req: AuthRequest, res) => {
       query += " WHERE t.status IN ('pending', 'in_progress')";
     }
     query += ` ORDER BY CASE t.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, t.due_date NULLS LAST`;
-    
+
     const tasks = db.prepare(query).all();
     res.json(tasks);
   } catch (err) {
@@ -827,7 +833,7 @@ app.post('/api/tasks', authMiddleware, (req: AuthRequest, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(title, description, priority || 'medium', assigned_to, entity_type, entity_id, due_date, task_type || 'manual');
-    
+
     logAudit(req.user?.id, req.user?.email, 'create', 'task', result.lastInsertRowid as number);
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
@@ -839,13 +845,13 @@ app.put('/api/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const { title, description, priority, status, assigned_to, due_date, follow_up_date, notes } = req.body;
     const completed_at = status === 'completed' ? new Date().toISOString() : null;
-    
+
     db.prepare(`
       UPDATE tasks SET title=?, description=?, priority=?, status=?, assigned_to=?, 
         due_date=?, follow_up_date=?, notes=?, completed_at=?, updated_at=CURRENT_TIMESTAMP
       WHERE id=?
     `).run(title, description, priority, status, assigned_to, due_date, follow_up_date, notes, completed_at, req.params.id);
-    
+
     logAudit(req.user?.id, req.user?.email, 'update', 'task', parseInt(req.params.id), req.body);
     res.json({ success: true });
   } catch (err) {
@@ -889,12 +895,12 @@ app.put('/api/rent-payments/:id/pay', authMiddleware, (req: AuthRequest, res) =>
     const { amount_paid, payment_date } = req.body;
     const payment = db.prepare('SELECT * FROM rent_payments WHERE id = ?').get(req.params.id) as any;
     if (!payment) return res.status(404).json({ error: 'Payment not found' });
-    
+
     const status = amount_paid >= payment.amount_due ? 'paid' : 'partial';
     db.prepare(`
       UPDATE rent_payments SET amount_paid=?, payment_date=?, status=? WHERE id=?
     `).run(amount_paid, payment_date, status, req.params.id);
-    
+
     logAudit(req.user?.id, req.user?.email, 'update', 'rent_payment', parseInt(req.params.id), req.body);
     res.json({ success: true });
   } catch (err) {
@@ -907,7 +913,7 @@ app.put('/api/rent-payments/:id/pay', authMiddleware, (req: AuthRequest, res) =>
 app.get('/api/maintenance', authMiddleware, (req: AuthRequest, res) => {
   try {
     const requests = db.prepare(`
-      SELECT m.*, p.address, l.name as landlord_name
+      SELECT m.*, p.address, l.name as landlord_name, l.landlord_type
       FROM maintenance m
       JOIN properties p ON p.id = m.property_id
       JOIN landlords l ON l.id = p.landlord_id
@@ -933,7 +939,7 @@ app.post('/api/maintenance', authMiddleware, (req: AuthRequest, res) => {
       data.property_id, data.tenant_id, data.landlord_id, data.reporter_name, data.reporter_email, data.reporter_phone,
       data.reporter_type, data.title, data.description, data.category, data.priority || 'medium'
     );
-    
+
     logAudit(req.user?.id, req.user?.email, 'create', 'maintenance', result.lastInsertRowid as number);
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
@@ -945,13 +951,13 @@ app.put('/api/maintenance/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const data = req.body;
     const completed_date = data.status === 'completed' ? new Date().toISOString().split('T')[0] : data.completed_date;
-    
+
     db.prepare(`
       UPDATE maintenance SET status=?, contractor=?, contractor_phone=?, cost=?, resolution_notes=?, 
         notes=?, completed_date=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
-    `).run(data.status, data.contractor, data.contractor_phone, data.cost, data.resolution_notes, 
+    `).run(data.status, data.contractor, data.contractor_phone, data.cost, data.resolution_notes,
       data.notes, completed_date, req.params.id);
-    
+
     logAudit(req.user?.id, req.user?.email, 'update', 'maintenance', parseInt(req.params.id), data);
     res.json({ success: true });
   } catch (err) {
@@ -982,13 +988,13 @@ app.post('/api/property-viewings', authMiddleware, (req: AuthRequest, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes);
-    
+
     // If linked to enquiry, update enquiry status
     if (enquiry_id) {
       db.prepare("UPDATE tenant_enquiries SET status = 'viewing_booked', viewing_date = ? WHERE id = ?")
         .run(viewing_date, enquiry_id);
     }
-    
+
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create viewing' });
@@ -1105,16 +1111,16 @@ app.post('/api/documents/:entityType/:entityId', authMiddleware, upload.single('
     const { entityType, entityId } = req.params;
     const { doc_type } = req.body;
     const file = req.file;
-    
+
     if (!file) return res.status(400).json({ error: 'No file uploaded' });
     if (!doc_type) return res.status(400).json({ error: 'Document type required' });
-    
+
     const stmt = db.prepare(`
       INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(entityType, entityId, doc_type, file.filename, file.originalname, file.mimetype, file.size, req.user?.id);
-    
+
     logAudit(req.user?.id, req.user?.email, 'create', 'document', result.lastInsertRowid as number, { entity_type: entityType, entity_id: entityId });
     res.json({ id: result.lastInsertRowid, doc_type, original_name: file.originalname, mime_type: file.mimetype, size: file.size });
   } catch (err) {
@@ -1126,10 +1132,10 @@ app.get('/api/documents/download/:id', authMiddleware, (req: AuthRequest, res) =
   try {
     const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(req.params.id) as any;
     if (!doc) return res.status(404).json({ error: 'Document not found' });
-    
+
     const filePath = path.join(uploadsDir, doc.filename);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
-    
+
     res.setHeader('Content-Disposition', `attachment; filename="${doc.original_name}"`);
     res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
     res.sendFile(filePath);
@@ -1142,11 +1148,11 @@ app.delete('/api/documents/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(req.params.id) as any;
     if (!doc) return res.status(404).json({ error: 'Document not found' });
-    
+
     const filePath = path.join(uploadsDir, doc.filename);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     db.prepare('DELETE FROM documents WHERE id = ?').run(req.params.id);
-    
+
     logAudit(req.user?.id, req.user?.email, 'delete', 'document', parseInt(req.params.id));
     res.json({ success: true });
   } catch (err) {
@@ -1161,18 +1167,18 @@ app.get('/api/audit-log', authMiddleware, (req: AuthRequest, res) => {
     if (req.user?.role !== 'admin') {
       return res.status(403).json({ error: 'Admin access required' });
     }
-    
+
     const { entity_type, entity_id, user_id, limit = 100 } = req.query;
     let query = 'SELECT * FROM audit_log WHERE 1=1';
     const params: any[] = [];
-    
+
     if (entity_type) { query += ' AND entity_type = ?'; params.push(entity_type); }
     if (entity_id) { query += ' AND entity_id = ?'; params.push(entity_id); }
     if (user_id) { query += ' AND user_id = ?'; params.push(user_id); }
-    
+
     query += ' ORDER BY created_at DESC LIMIT ?';
     params.push(limit);
-    
+
     const logs = db.prepare(query).all(...params);
     res.json(logs);
   } catch (err) {
@@ -1203,7 +1209,7 @@ app.post('/api/users', authMiddleware, async (req: AuthRequest, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const stmt = db.prepare('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)');
     const result = stmt.run(email, hashedPassword, name, role || 'staff');
-    
+
     logAudit(req.user?.id, req.user?.email, 'create', 'user', result.lastInsertRowid as number);
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
@@ -1217,7 +1223,7 @@ app.get('/api/export/:entityType', authMiddleware, (req: AuthRequest, res) => {
   try {
     const { entityType } = req.params;
     let data;
-    
+
     switch (entityType) {
       case 'landlords':
         data = db.prepare('SELECT name, email, phone, home_address FROM landlords').all();
@@ -1234,7 +1240,7 @@ app.get('/api/export/:entityType', authMiddleware, (req: AuthRequest, res) => {
       default:
         return res.status(400).json({ error: 'Invalid entity type' });
     }
-    
+
     logAudit(req.user?.id, req.user?.email, 'export', entityType);
     res.json(data);
   } catch (err) {

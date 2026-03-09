@@ -3,12 +3,41 @@ import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable, type Column } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Mail, Phone, Building2, Calendar, Search, ChevronDown, LayoutGrid, List } from 'lucide-react';
+import { Plus, X, Mail, Phone, Building2, Calendar, Search, ChevronDown, LayoutGrid, List, User, MapPin } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 
 interface Tenant {
   id: number; name: string; email: string; phone: string; property_id: number;
   property_address: string; tenancy_end_date: string; monthly_rent: number;
-  status: string; nok_name: string;
+  status: string; nok_name: string; landlord_type?: string;
+}
+
+interface Property {
+  id: number; address: string; postcode?: string; landlord_id: number; landlord_name: string;
+}
+
+interface Landlord {
+  id: number; name: string;
+}
+
+// Helper component to auto-fit map bounds to markers
+function MapAutoFit({ tenants, coords, properties }: {
+  tenants: Tenant[]; coords: Record<number, [number, number]>; properties: Property[];
+}) {
+  const map = useMap();
+  useEffect(() => {
+    const points: [number, number][] = tenants
+      .map(t => coords[t.property_id])
+      .filter((c): c is [number, number] => !!c);
+    if (points.length > 0) {
+      const bounds = L.latLngBounds(points.map(p => L.latLng(p[0], p[1])));
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+    }
+  }, [tenants, coords]);
+  return null;
 }
 
 export default function TenantsV3() {
@@ -18,23 +47,39 @@ export default function TenantsV3() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [landlordFilter, setLandlordFilter] = useState<number | null>(null);
+  const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', property_id: '', status: 'active', notes: '' });
   const [saving, setSaving] = useState(false);
-  const [properties, setProperties] = useState<{ id: number; address: string; postcode?: string }[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [landlords, setLandlords] = useState<Landlord[]>([]);
   const [propertySearch, setPropertySearch] = useState('');
   const [propertyDropdownOpen, setPropertyDropdownOpen] = useState(false);
   const propertyDropdownRef = useRef<HTMLDivElement>(null);
+  // Filter dropdown state
+  const [landlordDropdownOpen, setLandlordDropdownOpen] = useState(false);
+  const [landlordSearchFilter, setLandlordSearchFilter] = useState('');
+  const [propertyFilterDropdownOpen, setPropertyFilterDropdownOpen] = useState(false);
+  const [propertySearchFilter, setPropertySearchFilter] = useState('');
+  const landlordFilterRef = useRef<HTMLDivElement>(null);
+  const propertyFilterRef = useRef<HTMLDivElement>(null);
+  // Map state
+  const [coords, setCoords] = useState<Record<number, [number, number]>>({});
+  const [hoveredTenantId, setHoveredTenantId] = useState<number | null>(null);
+  const { portfolioFilter } = usePortfolio();
 
   const load = async () => {
     try {
-      const [data, props] = await Promise.all([
+      const [data, props, lls] = await Promise.all([
         api.get('/api/tenants'),
         api.get('/api/properties'),
+        api.get('/api/landlords'),
       ]);
       setTenants(Array.isArray(data) ? data : []);
       setProperties(Array.isArray(props) ? props : []);
+      setLandlords(Array.isArray(lls) ? lls : []);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -43,16 +88,53 @@ export default function TenantsV3() {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (propertyDropdownRef.current && !propertyDropdownRef.current.contains(e.target as Node)) setPropertyDropdownOpen(false);
+      if (landlordFilterRef.current && !landlordFilterRef.current.contains(e.target as Node)) setLandlordDropdownOpen(false);
+      if (propertyFilterRef.current && !propertyFilterRef.current.contains(e.target as Node)) setPropertyFilterDropdownOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const filtered = tenants.filter(t => {
+  // Geocode property postcodes for map markers
+  useEffect(() => {
+    if (properties.length === 0) return;
+    const postcodes = [...new Set(properties.filter(p => p.postcode).map(p => p.postcode!))];
+    const newCoords: Record<number, [number, number]> = {};
+    let cancelled = false;
+    (async () => {
+      for (const pc of postcodes) {
+        if (cancelled) break;
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${encodeURIComponent(pc)}&country=GB&format=json&limit=1`);
+          const data = await res.json();
+          if (data[0]) {
+            const lat = parseFloat(data[0].lat);
+            const lon = parseFloat(data[0].lon);
+            properties.filter(p => p.postcode === pc).forEach(p => {
+              newCoords[p.id] = [lat, lon];
+            });
+          }
+        } catch { /* skip */ }
+        await new Promise(r => setTimeout(r, 300)); // rate limit
+      }
+      if (!cancelled) setCoords(newCoords);
+    })();
+    return () => { cancelled = true; };
+  }, [properties]);
+
+  // Build a set of property IDs owned by the selected landlord
+  const landlordPropertyIds = landlordFilter
+    ? new Set(properties.filter(p => p.landlord_id === landlordFilter).map(p => p.id))
+    : null;
+
+  const portfolioFiltered = filterByPortfolio(tenants, portfolioFilter);
+  const filtered = portfolioFiltered.filter(t => {
     const matchSearch = !search || [t.name, t.email, t.phone, t.property_address]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
     const tStatus = t.status || 'active';
     if (statusFilter !== 'all' && tStatus !== statusFilter) return false;
+    if (landlordPropertyIds && !landlordPropertyIds.has(t.property_id)) return false;
+    if (propertyFilter && t.property_id !== propertyFilter) return false;
     return matchSearch;
   });
 
@@ -131,8 +213,126 @@ export default function TenantsV3() {
           </Button>
         </div>
 
-        {/* Status filter */}
-        <div className="flex flex-wrap gap-2">
+        {/* Filter dropdowns row */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Landlord filter dropdown */}
+          <div className="relative" ref={landlordFilterRef}>
+            <button
+              onClick={() => { setLandlordDropdownOpen(!landlordDropdownOpen); setPropertyFilterDropdownOpen(false); }}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition-colors ${landlordFilter
+                ? 'bg-[var(--accent)]/10 border-[var(--accent)]/30 text-[var(--text-primary)]'
+                : 'bg-[var(--bg-input)] border-[var(--border-input)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                }`}
+            >
+              <User size={14} />
+              {landlordFilter ? landlords.find(l => l.id === landlordFilter)?.name || 'Landlord' : 'Landlord'}
+              {landlordFilter ? (
+                <X size={12} className="ml-1 hover:text-red-400" onClick={(e) => { e.stopPropagation(); setLandlordFilter(null); }} />
+              ) : (
+                <ChevronDown size={12} />
+              )}
+            </button>
+            {landlordDropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 w-64 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-xl z-50 overflow-hidden">
+                <div className="p-2">
+                  <input
+                    type="text"
+                    placeholder="Search landlords..."
+                    value={landlordSearchFilter}
+                    onChange={e => setLandlordSearchFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--accent)]"
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  <button
+                    onClick={() => { setLandlordFilter(null); setLandlordDropdownOpen(false); setLandlordSearchFilter(''); }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-hover)] transition-colors ${!landlordFilter ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-secondary)]'
+                      }`}
+                  >
+                    All Landlords
+                  </button>
+                  {landlords
+                    .filter(l => l.name.toLowerCase().includes(landlordSearchFilter.toLowerCase()))
+                    .map(l => (
+                      <button
+                        key={l.id}
+                        onClick={() => { setLandlordFilter(l.id); setLandlordDropdownOpen(false); setLandlordSearchFilter(''); }}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-hover)] transition-colors ${landlordFilter === l.id ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-secondary)]'
+                          }`}
+                      >
+                        {l.name}
+                        <span className="text-xs text-[var(--text-muted)] ml-2">
+                          ({properties.filter(p => p.landlord_id === l.id).length} properties)
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Property filter dropdown */}
+          <div className="relative" ref={propertyFilterRef}>
+            <button
+              onClick={() => { setPropertyFilterDropdownOpen(!propertyFilterDropdownOpen); setLandlordDropdownOpen(false); }}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition-colors ${propertyFilter
+                ? 'bg-[var(--accent)]/10 border-[var(--accent)]/30 text-[var(--text-primary)]'
+                : 'bg-[var(--bg-input)] border-[var(--border-input)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                }`}
+            >
+              <Building2 size={14} />
+              {propertyFilter ? (properties.find(p => p.id === propertyFilter)?.address?.split(',')[0] || 'Property') : 'Property'}
+              {propertyFilter ? (
+                <X size={12} className="ml-1 hover:text-red-400" onClick={(e) => { e.stopPropagation(); setPropertyFilter(null); }} />
+              ) : (
+                <ChevronDown size={12} />
+              )}
+            </button>
+            {propertyFilterDropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 w-72 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-xl z-50 overflow-hidden">
+                <div className="p-2">
+                  <input
+                    type="text"
+                    placeholder="Search properties..."
+                    value={propertySearchFilter}
+                    onChange={e => setPropertySearchFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--accent)]"
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  <button
+                    onClick={() => { setPropertyFilter(null); setPropertyFilterDropdownOpen(false); setPropertySearchFilter(''); }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-hover)] transition-colors ${!propertyFilter ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-secondary)]'
+                      }`}
+                  >
+                    All Properties
+                  </button>
+                  {(landlordFilter ? properties.filter(p => p.landlord_id === landlordFilter) : properties)
+                    .filter(p =>
+                      p.address.toLowerCase().includes(propertySearchFilter.toLowerCase()) ||
+                      (p.postcode || '').toLowerCase().includes(propertySearchFilter.toLowerCase())
+                    )
+                    .map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => { setPropertyFilter(p.id); setPropertyFilterDropdownOpen(false); setPropertySearchFilter(''); }}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-hover)] transition-colors ${propertyFilter === p.id ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-secondary)]'
+                          }`}
+                      >
+                        <p className="truncate">{p.address}</p>
+                        <p className="text-xs text-[var(--text-muted)]">{p.landlord_name}</p>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="h-5 w-px bg-[var(--border-subtle)] hidden sm:block" />
+
+          {/* Status filter tags */}
           {[
             { key: 'all', label: `All (${tenants.length})` },
             { key: 'active', label: `Active (${statusCounts['active'] || 0})` },
@@ -219,41 +419,82 @@ export default function TenantsV3() {
             onRowClick={(t) => navigate(`/v3/tenants/${t.id}`)}
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map(t => (
-              <GlassCard key={t.id} onClick={() => navigate(`/v3/tenants/${t.id}`)} className="p-5">
-                <div className="flex items-start gap-4">
-                  <Avatar name={t.name} size="lg" />
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm truncate">{t.name}</h3>
-                    {t.email && (
-                      <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1 mt-1">
-                        <Mail size={11} /> {t.email}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-3 space-y-1.5">
-                  {t.property_address && (
-                    <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5 truncate">
-                      <Building2 size={12} /> {t.property_address}
-                    </p>
-                  )}
-                  {t.tenancy_end_date && (
-                    <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
-                      <Calendar size={12} /> Ends {formatDate(t.tenancy_end_date)}
-                    </p>
-                  )}
-                </div>
-                {t.monthly_rent && (
-                  <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
-                    <span className="text-sm font-bold bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent">
-                      £{t.monthly_rent.toLocaleString()}/mo
-                    </span>
-                  </div>
-                )}
-              </GlassCard>
-            ))}
+          /* ===== CARD + MAP SPLIT VIEW ===== */
+          <div className="flex gap-4" style={{ height: 'calc(100vh - 320px)', minHeight: '400px' }}>
+            {/* Cards (left) */}
+            <div className="w-1/2 overflow-y-auto space-y-3 pr-2 p-1">
+              {filtered.map(t => {
+                const isHov = hoveredTenantId === t.id;
+                return (
+                  <GlassCard
+                    key={t.id}
+                    onClick={() => navigate(`/v3/tenants/${t.id}`)}
+                    onMouseEnter={() => setHoveredTenantId(t.id)}
+                    onMouseLeave={() => setHoveredTenantId(null)}
+                    className={`p-4 ${isHov ? 'outline outline-1 outline-offset-1 outline-white/40' : ''}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <Avatar name={t.name} size="md" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-semibold text-sm truncate">{t.name}</h3>
+                          {t.monthly_rent && (
+                            <span className="text-xs font-bold bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent shrink-0 ml-2">
+                              £{t.monthly_rent.toLocaleString()}/mo
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 space-y-0.5">
+                          {t.email && <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1"><Mail size={10} />{t.email}</p>}
+                          {t.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} />{t.phone}</p>}
+                        </div>
+                        {t.property_address && (
+                          <p className="text-xs text-[var(--text-muted)] flex items-center gap-1 mt-1.5 truncate">
+                            <MapPin size={10} className="shrink-0" />{t.property_address}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </GlassCard>
+                );
+              })}
+            </div>
+            {/* Map (right) */}
+            <div className="w-1/2 rounded-2xl overflow-hidden border border-[var(--border-subtle)] relative z-0">
+              <MapContainer
+                center={[55.953, -3.188]}
+                zoom={12}
+                style={{ height: '100%', width: '100%' }}
+                attributionControl={false}
+              >
+                <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+                <MapAutoFit tenants={filtered} coords={coords} properties={properties} />
+                {filtered.map(t => {
+                  const c = coords[t.property_id];
+                  if (!c) return null;
+                  const isHovered = hoveredTenantId === t.id;
+                  return (
+                    <Marker
+                      key={t.id}
+                      position={c}
+                      icon={L.divIcon({
+                        className: '',
+                        html: `<div style="width:${isHovered ? 14 : 10}px;height:${isHovered ? 14 : 10}px;background:${isHovered ? '#f97316' : '#6366f1'};border-radius:50%;border:2px solid white;box-shadow:0 0 ${isHovered ? 8 : 4}px rgba(0,0,0,0.4);transition:all .2s"></div>`,
+                        iconSize: [isHovered ? 14 : 10, isHovered ? 14 : 10],
+                        iconAnchor: [isHovered ? 7 : 5, isHovered ? 7 : 5],
+                      })}
+                    >
+                      <Popup>
+                        <div style={{ color: '#1a1a2e', fontSize: 12 }}>
+                          <strong>{t.name}</strong><br />
+                          {t.property_address}
+                        </div>
+                      </Popup>
+                    </Marker>
+                  );
+                })}
+              </MapContainer>
+            </div>
           </div>
         )}
       </div>

@@ -29,3 +29,4 @@ Thumbs.db
 *.db
 *.sqlite
 .vercel
+.env*.local

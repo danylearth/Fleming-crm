@@ -107,8 +107,9 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
               value={selectedType}
               onChange={e => setSelectedType(e.target.value)}
               className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] appearance-none focus:outline-none transition-colors"
+              style={{ colorScheme: 'dark' }}
             >
-              {docTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              {docTypes.map(t => <option key={t} value={t} style={{ background: 'var(--bg-input)', color: 'var(--text-primary)' }}>{t}</option>)}
             </select>
           </div>
           <input
@@ -145,7 +146,7 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{doc.original_name}</p>
                 <p className="text-xs text-[var(--text-muted)]">
-                  {doc.doc_type} · {formatBytes(doc.size)} · {new Date(doc.uploaded_at).toLocaleDateString()}
+                  {doc.doc_type} · {formatBytes(doc.size)} · {(() => { const d = new Date(doc.uploaded_at); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })()}
                 </p>
               </div>
               <button

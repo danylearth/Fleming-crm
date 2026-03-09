@@ -1,13 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Tag, SearchBar, EmptyState, DataTable } from '../components/v3';
+import { GlassCard, Button, Input, Tag, SearchBar, EmptyState, DataTable, SearchDropdown } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, AlertCircle, Clock, CheckCircle2, Wrench, MapPin, ChevronDown, ChevronUp, Search, Building2 } from 'lucide-react';
+import { Plus, X, AlertCircle, Clock, CheckCircle2, Wrench, MapPin, ChevronDown, ChevronUp, Search, Building2, User } from 'lucide-react';
+import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 
 interface MaintenanceItem {
   id: number; property_id: number; address: string; title: string; description: string;
   priority: string; status: string; reported_date: string; resolved_date: string | null;
-  reporter_name: string;
+  reporter_name: string; landlord_type?: string;
+}
+
+interface TenantOption {
+  id: number; name: string; property_id: number;
+}
+
+interface LandlordOption {
+  id: number; name: string;
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -49,15 +58,26 @@ export default function MaintenanceV3() {
   const [form, setForm] = useState({ title: '', description: '', priority: 'medium', property_id: '' });
   const [propDropOpen, setPropDropOpen] = useState(false);
   const [propSearch, setPropSearch] = useState('');
+  const [tenants, setTenants] = useState<TenantOption[]>([]);
+  const [landlords, setLandlords] = useState<LandlordOption[]>([]);
+  // Filter state
+  const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
+  const [tenantFilter, setTenantFilter] = useState<number | null>(null);
+  const [landlordFilter, setLandlordFilter] = useState<number | null>(null);
+  const { portfolioFilter } = usePortfolio();
 
   const load = async () => {
     try {
-      const [data, props] = await Promise.all([
+      const [data, props, tns, lls] = await Promise.all([
         api.get('/api/maintenance'),
         api.get('/api/properties'),
+        api.get('/api/tenants'),
+        api.get('/api/landlords'),
       ]);
       setItems(Array.isArray(data) ? data : data.items || []);
       setProperties(props);
+      setTenants(Array.isArray(tns) ? tns.map((t: any) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
+      setLandlords(Array.isArray(lls) ? lls.map((l: any) => ({ id: l.id, name: l.name })) : []);
     } catch { setItems([]); }
     setLoading(false);
   };
@@ -68,9 +88,19 @@ export default function MaintenanceV3() {
     return acc;
   }, {} as Record<string, number>);
 
-  const filtered = items.filter(i => {
+  const portfolioFiltered = filterByPortfolio(items, portfolioFilter);
+  const filtered = portfolioFiltered.filter(i => {
     if (statusFilter !== 'all' && i.status !== statusFilter) return false;
     if (search && !i.title.toLowerCase().includes(search.toLowerCase()) && !i.address?.toLowerCase().includes(search.toLowerCase())) return false;
+    if (propertyFilter && i.property_id !== propertyFilter) return false;
+    if (tenantFilter) {
+      const tn = tenants.find(t => t.id === tenantFilter);
+      if (tn && tn.property_id !== i.property_id) return false;
+    }
+    if (landlordFilter) {
+      const prop = properties.find(p => p.id === i.property_id);
+      if (prop && (prop as any).landlord_id !== landlordFilter) return false;
+    }
     return true;
   });
 
@@ -119,8 +149,35 @@ export default function MaintenanceV3() {
           </Button>
         </div>
 
-        {/* Status filter */}
-        <div className="flex flex-wrap gap-2">
+        {/* Dropdown filters + Status filter */}
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchDropdown
+            icon={<Building2 size={14} />}
+            placeholder="Property"
+            searchPlaceholder="Search properties..."
+            options={properties.map(p => ({ id: p.id, label: p.address }))}
+            value={propertyFilter}
+            onChange={setPropertyFilter}
+          />
+          <SearchDropdown
+            icon={<User size={14} />}
+            placeholder="Tenant"
+            searchPlaceholder="Search tenants..."
+            options={tenants.map(t => ({ id: t.id, label: t.name, subtitle: properties.find(p => p.id === t.property_id)?.address }))}
+            value={tenantFilter}
+            onChange={setTenantFilter}
+          />
+          <SearchDropdown
+            icon={<User size={14} />}
+            placeholder="Landlord"
+            searchPlaceholder="Search landlords..."
+            options={landlords.map(l => ({ id: l.id, label: l.name }))}
+            value={landlordFilter}
+            onChange={setLandlordFilter}
+          />
+
+          <div className="h-5 w-px bg-[var(--border-subtle)] hidden sm:block" />
+
           {[
             { key: 'all', label: `All (${items.length})` },
             ...STATUS_MAP.map(s => ({ key: s.key, label: `${s.label} (${statusCounts[s.key] || 0})` })),

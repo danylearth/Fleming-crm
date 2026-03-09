@@ -52,7 +52,7 @@ import SettingsV3 from './pages/SettingsV3';
 
 function ProtectedRoute({ children, bare }: { children: React.ReactNode; bare?: boolean }) {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -60,18 +60,18 @@ function ProtectedRoute({ children, bare }: { children: React.ReactNode; bare?: 
       </div>
     );
   }
-  
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
+
   if (bare) return <>{children}</>;
   return <Layout>{children}</Layout>;
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-navy-900">
@@ -79,11 +79,11 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  
+
   if (user) {
     return <Navigate to="/v3" replace />;
   }
-  
+
   return <>{children}</>;
 }
 
@@ -92,36 +92,36 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<PublicRoute><LoginV3 /></PublicRoute>} />
       <Route path="/" element={<Navigate to="/v3" replace />} />
-      
+
       {/* Properties */}
       <Route path="/properties" element={<ProtectedRoute><Properties /></ProtectedRoute>} />
       <Route path="/properties/:id" element={<ProtectedRoute><PropertyDetail /></ProtectedRoute>} />
-      
+
       {/* Landlords */}
       <Route path="/landlords" element={<ProtectedRoute><Landlords /></ProtectedRoute>} />
       <Route path="/landlords/:id" element={<ProtectedRoute><LandlordDetail /></ProtectedRoute>} />
-      
+
       {/* Landlords BDM */}
       <Route path="/landlords-bdm" element={<ProtectedRoute><LandlordsBDM /></ProtectedRoute>} />
       <Route path="/landlords-bdm/:id" element={<ProtectedRoute><LandlordBDMDetail /></ProtectedRoute>} />
-      
+
       {/* Tenants */}
       <Route path="/tenants" element={<ProtectedRoute><Tenants /></ProtectedRoute>} />
       <Route path="/tenants/:id" element={<ProtectedRoute><TenantDetail /></ProtectedRoute>} />
-      
+
       {/* Tenant Enquiries */}
       <Route path="/tenant-enquiries" element={<ProtectedRoute><TenantEnquiries /></ProtectedRoute>} />
       <Route path="/tenant-enquiries/:id" element={<ProtectedRoute><TenantEnquiryDetail /></ProtectedRoute>} />
-      
+
       {/* Maintenance */}
       <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
-      
+
       {/* Transactions */}
       <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
-      
+
       {/* Tasks */}
       <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
-      
+
       {/* V2 — AI-first design */}
       <Route path="/v2" element={<ProtectedRoute bare><AILayout><DashboardV2 /></AILayout></ProtectedRoute>} />
       <Route path="/v2/enquiries" element={<ProtectedRoute bare><AILayout><EnquiriesV2 /></AILayout></ProtectedRoute>} />
@@ -133,7 +133,7 @@ function AppRoutes() {
       <Route path="/v2/transactions" element={<ProtectedRoute bare><AILayout><TransactionsV2 /></AILayout></ProtectedRoute>} />
       <Route path="/v2/properties" element={<ProtectedRoute bare><PropertiesV2 /></ProtectedRoute>} />
       <Route path="/v2/landlords" element={<ProtectedRoute bare><LandlordsV2 /></ProtectedRoute>} />
-      
+
       <Route path="/applicant-concept" element={<ProtectedRoute bare><ApplicantConcept /></ProtectedRoute>} />
 
       {/* V3 — Dark mode redesign */}
@@ -157,13 +157,16 @@ function AppRoutes() {
     </Routes>
   );
 }
+import { PortfolioProvider } from './context/PortfolioContext';
 
 export default function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <PortfolioProvider>
+            <AppRoutes />
+          </PortfolioProvider>
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>

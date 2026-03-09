@@ -38,7 +38,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
         if (tenantId) filtered = filtered.filter((p: Payment) => p.tenant_id === tenantId);
         setPayments(filtered);
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [propertyId, tenantId]);
 
@@ -99,11 +99,11 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   const paidPayments = payments.filter(p => p.status === 'paid' && p.payment_date && p.due_date);
   const avgLateDays = paidPayments.length > 0
     ? Math.round(paidPayments.reduce((sum, p) => {
-        const due = new Date(p.due_date).getTime();
-        const paid = new Date(p.payment_date!).getTime();
-        const daysLate = Math.max(0, Math.ceil((paid - due) / (1000 * 60 * 60 * 24)));
-        return sum + daysLate;
-      }, 0) / paidPayments.length)
+      const due = new Date(p.due_date).getTime();
+      const paid = new Date(p.payment_date!).getTime();
+      const daysLate = Math.max(0, Math.ceil((paid - due) / (1000 * 60 * 60 * 24)));
+      return sum + daysLate;
+    }, 0) / paidPayments.length)
     : null;
 
   return (
@@ -141,7 +141,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
       {showAdd && (
         <div className="mb-4 p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-color)] space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Due Date" value={form.due_date} onChange={v => setForm({ ...form, due_date: v })} placeholder="YYYY-MM-DD" />
+            <Input label="Due Date" value={form.due_date} onChange={v => setForm({ ...form, due_date: v })} type="date" />
             <Input label="Amount (£)" value={form.amount_due} onChange={v => setForm({ ...form, amount_due: v })} placeholder="1200" />
           </div>
           <Button variant="gradient" size="sm" onClick={handleAdd}>
@@ -165,8 +165,8 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
                   {!compact && payment.address && <span className="text-[var(--text-muted)] ml-2">· {payment.address}</span>}
                 </p>
                 <p className="text-xs text-[var(--text-muted)]">
-                  Due {new Date(payment.due_date).toLocaleDateString()}
-                  {payment.payment_date && ` · Paid ${new Date(payment.payment_date).toLocaleDateString()}`}
+                  Due {(() => { const d = new Date(payment.due_date); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })()}
+                  {payment.payment_date && ` · Paid ${(() => { const d = new Date(payment.payment_date); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })()}`}
                 </p>
               </div>
               <span className={`text-xs font-medium capitalize ${statusColor(payment.status)}`}>

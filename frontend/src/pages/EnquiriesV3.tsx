@@ -6,6 +6,7 @@ import { Plus, X, ArrowLeft, Calendar, Upload, FileText, ExternalLink, Save, Use
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
+import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 
 interface EnquiryRaw {
   id: number;
@@ -29,6 +30,7 @@ interface Enquiry {
   follow_up_date: string;
   linked_property_id: number | null;
   created_at: string;
+  landlord_type?: string;
 }
 
 function mapEnquiry(raw: EnquiryRaw): Enquiry {
@@ -41,6 +43,7 @@ function mapEnquiry(raw: EnquiryRaw): Enquiry {
     follow_up_date: raw.follow_up_date || '',
     linked_property_id: raw.linked_property_id || null,
     created_at: raw.created_at,
+    landlord_type: raw.landlord_type || undefined,
   };
 }
 
@@ -82,8 +85,8 @@ function RadioGroup({ label, value, onChange, options }: {
         {options.map(o => (
           <button key={o.value} type="button" onClick={() => onChange(o.value)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${value === o.value
-                ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
-                : 'bg-[var(--bg-input)] border-[var(--border-input)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
+              ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
+              : 'bg-[var(--bg-input)] border-[var(--border-input)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
               }`}>
             {o.label}
           </button>
@@ -248,6 +251,7 @@ export default function EnquiriesV3() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const { portfolioFilter } = usePortfolio();
 
   // Workflow state
   const [workflowEnquiry, setWorkflowEnquiry] = useState<Enquiry | null>(null);
@@ -273,7 +277,8 @@ export default function EnquiriesV3() {
   };
   useEffect(() => { load(); }, []);
 
-  const filtered = enquiries.filter(e => {
+  const portfolioFiltered = filterByPortfolio(enquiries, portfolioFilter);
+  const filtered = portfolioFiltered.filter(e => {
     const matchSearch = !search || [e.name, e.email, e.phone]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
     if (statusFilter === 'active') return matchSearch && !['converted', 'rejected'].includes(e.status);
