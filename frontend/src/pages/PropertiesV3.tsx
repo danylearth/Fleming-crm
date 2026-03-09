@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Tag, SearchBar, EmptyState, Avatar } from '../components/v3';
+import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, Avatar } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { Building2, Plus, List, Map, Mail, Phone, PoundSterling, Bed } from 'lucide-react';
+import { Building2, Plus, List, Map, X, Search, ChevronDown } from 'lucide-react';
 import PropertyMap from '../components/v3/PropertyMap';
 
 interface Property {
   id: number; address: string; postcode: string; rent_amount: number;
   status: string; landlord_name: string; current_tenant: string | null;
   bedrooms: number; property_type: string;
+}
+
+interface LandlordOption {
+  id: number; name: string;
 }
 
 const STATUSES = [
@@ -34,13 +38,27 @@ export default function PropertiesV3() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [landlords, setLandlords] = useState<LandlordOption[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
+    rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: false,
+  });
+  const [llDropOpen, setLlDropOpen] = useState(false);
+  const [llSearch, setLlSearch] = useState('');
 
-  useEffect(() => {
-    api.get('/api/properties')
-      .then(data => setProperties(Array.isArray(data) ? data : []))
+  const load = () => {
+    Promise.all([api.get('/api/properties'), api.get('/api/landlords')])
+      .then(([data, lls]) => {
+        setProperties(Array.isArray(data) ? data : []);
+        setLandlords(Array.isArray(lls) ? lls.map((l: any) => ({ id: l.id, name: l.name })) : []);
+      })
       .catch(() => setProperties([]))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { load(); }, []);
 
   const filtered = properties.filter(p => {
     const matchSearch = !search || [p.address, p.postcode, p.landlord_name, p.current_tenant]
@@ -87,7 +105,7 @@ export default function PropertiesV3() {
               <Map size={16} />
             </button>
           </div>
-          <Button variant="gradient" onClick={() => navigate('/v3/properties/new')}>
+          <Button variant="gradient" onClick={() => setShowAdd(true)}>
             <Plus size={16} className="mr-2" /> Add Property
           </Button>
         </div>
@@ -169,7 +187,142 @@ export default function PropertiesV3() {
             </table>
           </div>
         )}
+        {/* Add Property Modal */}
+        {showAdd && <PropertyAddModal
+          landlords={landlords} form={form} setForm={setForm}
+          llDropOpen={llDropOpen} setLlDropOpen={setLlDropOpen}
+          llSearch={llSearch} setLlSearch={setLlSearch}
+          saving={saving}
+          onClose={() => { setShowAdd(false); resetForm(); }}
+          onSubmit={async () => {
+            setSaving(true);
+            try {
+              const res = await api.post('/api/properties', {
+                ...form,
+                landlord_id: Number(form.landlord_id),
+                bedrooms: Number(form.bedrooms),
+                rent_amount: Number(form.rent_amount) || 0,
+                has_gas: form.has_gas,
+              });
+              setShowAdd(false);
+              resetForm();
+              navigate(`/v3/properties/${res.id}`);
+            } catch (e) { console.error(e); }
+            setSaving(false);
+          }}
+        />}
       </div>
     </V3Layout>
+  );
+
+  function resetForm() {
+    setForm({ landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1', rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: false });
+    setLlSearch('');
+    setLlDropOpen(false);
+  }
+}
+
+function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen, llSearch, setLlSearch, saving, onClose, onSubmit, lockedLandlord }: {
+  landlords: LandlordOption[];
+  form: any; setForm: (fn: any) => void;
+  llDropOpen: boolean; setLlDropOpen: (v: boolean) => void;
+  llSearch: string; setLlSearch: (v: string) => void;
+  saving: boolean; onClose: () => void; onSubmit: () => void;
+  lockedLandlord?: { id: number; name: string };
+}) {
+  const selectedLl = lockedLandlord || landlords.find(l => l.id === Number(form.landlord_id));
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-lg space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Add Property</h2>
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+        </div>
+
+        {/* Landlord selector */}
+        {lockedLandlord ? (
+          <div>
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Landlord</label>
+            <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] opacity-70">
+              {lockedLandlord.name}
+            </div>
+          </div>
+        ) : (
+          <div className="relative">
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Landlord *</label>
+            <button type="button" onClick={() => setLlDropOpen(!llDropOpen)}
+              className="w-full flex items-center justify-between bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-left hover:border-[var(--accent-orange)]/40 transition-colors">
+              <span className={selectedLl ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}>
+                {selectedLl ? selectedLl.name : 'Select landlord...'}
+              </span>
+              <ChevronDown size={14} className="text-[var(--text-muted)]" />
+            </button>
+            {llDropOpen && (
+              <div className="absolute z-50 mt-1 w-full bg-[var(--bg-card)] border border-[var(--border-input)] rounded-xl shadow-2xl overflow-hidden">
+                <div className="p-2 border-b border-[var(--border-subtle)]">
+                  <div className="flex items-center gap-2 bg-[var(--bg-input)] rounded-lg px-3 py-2">
+                    <Search size={14} className="text-[var(--text-muted)]" />
+                    <input value={llSearch} onChange={e => setLlSearch(e.target.value)} placeholder="Search landlords..."
+                      className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none" autoFocus />
+                  </div>
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {landlords.filter(l => l.name.toLowerCase().includes(llSearch.toLowerCase())).map(l => (
+                    <button key={l.id} onClick={() => { setForm((f: any) => ({ ...f, landlord_id: String(l.id) })); setLlDropOpen(false); setLlSearch(''); }}
+                      className="w-full text-left px-3 py-2.5 text-sm hover:bg-[var(--bg-hover)] transition-colors truncate text-[var(--text-secondary)]">
+                      {l.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <Input label="Address *" value={form.address} onChange={(v: string) => setForm((f: any) => ({ ...f, address: v }))} placeholder="Property address" />
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Postcode" value={form.postcode} onChange={(v: string) => setForm((f: any) => ({ ...f, postcode: v }))} placeholder="e.g. SW1A 1AA" />
+          <Input label="Rent (£/month)" value={form.rent_amount} onChange={(v: string) => setForm((f: any) => ({ ...f, rent_amount: v }))} placeholder="0" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Select label="Type" value={form.property_type} onChange={(v: string) => setForm((f: any) => ({ ...f, property_type: v }))}
+            options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
+          <Input label="Bedrooms" value={form.bedrooms} onChange={(v: string) => setForm((f: any) => ({ ...f, bedrooms: v }))} placeholder="1" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Select label="Status" value={form.status} onChange={(v: string) => setForm((f: any) => ({ ...f, status: v }))}
+            options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }]} />
+          <Select label="Service Type" value={form.service_type} onChange={(v: string) => setForm((f: any) => ({ ...f, service_type: v }))}
+            options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Select label="Council Tax Band" value={form.council_tax_band} onChange={(v: string) => setForm((f: any) => ({ ...f, council_tax_band: v }))}
+            options={[{ value: '', label: 'Select...' }, ...['A','B','C','D','E','F','G','H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
+          <div>
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Gas Supply</label>
+            <button type="button" onClick={() => setForm((f: any) => ({ ...f, has_gas: !f.has_gas }))}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border transition-colors w-full ${
+                form.has_gas
+                  ? 'bg-[var(--accent-orange)]/10 border-[var(--accent-orange)]/30 text-[var(--accent-orange)]'
+                  : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
+              }`}>
+              <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${
+                form.has_gas ? 'bg-[var(--accent-orange)] border-[var(--accent-orange)]' : 'border-[var(--border-input)]'
+              }`}>
+                {form.has_gas && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5L4.5 7.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+              </div>
+              <span className="text-sm">Has Gas</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.address || !form.landlord_id}>
+            {saving ? 'Creating...' : 'Create Property'}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

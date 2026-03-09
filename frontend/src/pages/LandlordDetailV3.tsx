@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Avatar, SectionHeader, EmptyState, Card } from '../components/v3';
+import { GlassCard, Button, Input, Select, Avatar, SectionHeader, EmptyState, Card } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import { useApi } from '../hooks/useApi';
-import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle } from 'lucide-react';
+import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Search, ChevronDown } from 'lucide-react';
 import { getPropertyImage } from '../utils/propertyImages';
 
 interface Landlord {
@@ -71,6 +71,12 @@ export default function LandlordDetailV3() {
   const [saving, setSaving] = useState(false);
   const [notesInput, setNotesInput] = useState('');
   const [notes, setNotes] = useState<{ id: string; text: string; author: string; created_at: string }[]>([]);
+  const [showAddProp, setShowAddProp] = useState(false);
+  const [propSaving, setPropSaving] = useState(false);
+  const [propForm, setPropForm] = useState({
+    landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
+    rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: false,
+  });
 
   const populateForm = (l: Landlord) => setForm({
     name: l.name || '', email: l.email || '', phone: l.phone || '', address: l.address || '',
@@ -198,7 +204,12 @@ export default function LandlordDetailV3() {
 
             {/* Properties */}
             <GlassCard className="p-6">
-              <SectionHeader title="Properties" />
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader title="Properties" />
+                <Button variant="outline" size="sm" onClick={() => { setPropForm(f => ({ ...f, landlord_id: String(id) })); setShowAddProp(true); }}>
+                  <Plus size={14} className="mr-1.5" /> Add Property
+                </Button>
+              </div>
               {properties.length === 0 ? (
                 <EmptyState message="No properties linked" />
               ) : (
@@ -211,10 +222,12 @@ export default function LandlordDetailV3() {
                         {p.type && <p className="text-xs text-[var(--text-muted)]">{p.type}</p>}
                         {p.status && (
                           <span className={`inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-md ${
-                            p.status === 'available' ? 'bg-emerald-500/10 text-emerald-400' :
-                            p.status === 'let' ? 'bg-blue-500/10 text-blue-400' :
+                            p.status === 'to_let' ? 'bg-emerald-500/10 text-emerald-400' :
+                            p.status === 'let_agreed' ? 'bg-blue-500/10 text-blue-400' :
+                            p.status === 'full_management' ? 'bg-purple-500/10 text-purple-400' :
+                            p.status === 'rent_collection' ? 'bg-amber-500/10 text-amber-400' :
                             'bg-[var(--bg-hover)] text-[var(--text-muted)]'
-                          }`}>{p.status}</span>
+                          }`}>{p.status === 'to_let' ? 'To Let' : p.status === 'let_agreed' ? 'Let Agreed' : p.status === 'full_management' ? 'Full Mgmt' : p.status === 'rent_collection' ? 'Rent Collection' : p.status}</span>
                         )}
                       </div>
                     </Card>
@@ -286,6 +299,83 @@ export default function LandlordDetailV3() {
             </GlassCard>
           </div>
         </div>
+        {/* Add Property Modal */}
+        {showAddProp && (
+          <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm" onClick={() => setShowAddProp(false)}>
+            <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-lg space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Add Property</h2>
+                <button onClick={() => setShowAddProp(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+              </div>
+
+              {/* Landlord locked */}
+              <div>
+                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Landlord</label>
+                <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] opacity-70">
+                  {landlord?.name}
+                </div>
+              </div>
+
+              <Input label="Address *" value={propForm.address} onChange={(v: string) => setPropForm(f => ({ ...f, address: v }))} placeholder="Property address" />
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="Postcode" value={propForm.postcode} onChange={(v: string) => setPropForm(f => ({ ...f, postcode: v }))} placeholder="e.g. SW1A 1AA" />
+                <Input label="Rent (£/month)" value={propForm.rent_amount} onChange={(v: string) => setPropForm(f => ({ ...f, rent_amount: v }))} placeholder="0" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Select label="Type" value={propForm.property_type} onChange={(v: string) => setPropForm(f => ({ ...f, property_type: v }))}
+                  options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
+                <Input label="Bedrooms" value={propForm.bedrooms} onChange={(v: string) => setPropForm(f => ({ ...f, bedrooms: v }))} placeholder="1" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Select label="Status" value={propForm.status} onChange={(v: string) => setPropForm(f => ({ ...f, status: v }))}
+                  options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }]} />
+                <Select label="Service Type" value={propForm.service_type} onChange={(v: string) => setPropForm(f => ({ ...f, service_type: v }))}
+                  options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Select label="Council Tax Band" value={propForm.council_tax_band} onChange={(v: string) => setPropForm(f => ({ ...f, council_tax_band: v }))}
+                  options={[{ value: '', label: 'Select...' }, ...['A','B','C','D','E','F','G','H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
+                <div>
+                  <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Gas Supply</label>
+                  <button type="button" onClick={() => setPropForm(f => ({ ...f, has_gas: !f.has_gas }))}
+                    className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border transition-colors w-full ${
+                      propForm.has_gas
+                        ? 'bg-[var(--accent-orange)]/10 border-[var(--accent-orange)]/30 text-[var(--accent-orange)]'
+                        : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
+                    }`}>
+                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${
+                      propForm.has_gas ? 'bg-[var(--accent-orange)] border-[var(--accent-orange)]' : 'border-[var(--border-input)]'
+                    }`}>
+                      {propForm.has_gas && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5L4.5 7.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                    </div>
+                    <span className="text-sm">Has Gas</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button variant="ghost" onClick={() => setShowAddProp(false)}>Cancel</Button>
+                <Button variant="gradient" disabled={propSaving || !propForm.address} onClick={async () => {
+                  setPropSaving(true);
+                  try {
+                    const res = await api.post('/api/properties', {
+                      ...propForm,
+                      landlord_id: Number(id),
+                      bedrooms: Number(propForm.bedrooms),
+                      rent_amount: Number(propForm.rent_amount) || 0,
+                      has_gas: propForm.has_gas,
+                    });
+                    setShowAddProp(false);
+                    navigate(`/v3/properties/${res.id}`);
+                  } catch (e) { console.error(e); }
+                  setPropSaving(false);
+                }}>
+                  {propSaving ? 'Creating...' : 'Create Property'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </V3Layout>
   );
