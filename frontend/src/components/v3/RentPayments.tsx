@@ -95,6 +95,17 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   const totalPaid = payments.reduce((sum, p) => sum + (p.amount_paid || 0), 0);
   const pendingCount = payments.filter(p => p.status !== 'paid').length;
 
+  // Average late payment (days between due_date and payment_date for paid payments)
+  const paidPayments = payments.filter(p => p.status === 'paid' && p.payment_date && p.due_date);
+  const avgLateDays = paidPayments.length > 0
+    ? Math.round(paidPayments.reduce((sum, p) => {
+        const due = new Date(p.due_date).getTime();
+        const paid = new Date(p.payment_date!).getTime();
+        const daysLate = Math.max(0, Math.ceil((paid - due) / (1000 * 60 * 60 * 24)));
+        return sum + daysLate;
+      }, 0) / paidPayments.length)
+    : null;
+
   return (
     <Card className="p-6">
       <SectionHeader
@@ -105,7 +116,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
 
       {/* Summary */}
       {!loading && payments.length > 0 && (
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           <div className="p-3 rounded-xl bg-[var(--bg-subtle)]">
             <p className="text-xs text-[var(--text-muted)]">Total Due</p>
             <p className="text-lg font-bold">£{totalDue.toLocaleString()}</p>
@@ -117,6 +128,12 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
           <div className="p-3 rounded-xl bg-[var(--bg-subtle)]">
             <p className="text-xs text-[var(--text-muted)]">Pending</p>
             <p className="text-lg font-bold text-amber-400">{pendingCount}</p>
+          </div>
+          <div className="p-3 rounded-xl bg-[var(--bg-subtle)]">
+            <p className="text-xs text-[var(--text-muted)]">Avg Late</p>
+            <p className={`text-lg font-bold ${avgLateDays === null ? 'text-[var(--text-muted)]' : avgLateDays === 0 ? 'text-emerald-400' : avgLateDays <= 5 ? 'text-amber-400' : 'text-red-400'}`}>
+              {avgLateDays === null ? '—' : avgLateDays === 0 ? 'On time' : `${avgLateDays}d`}
+            </p>
           </div>
         </div>
       )}
