@@ -50,7 +50,7 @@ export default function BDMV3() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [workflowProspect, setWorkflowProspect] = useState<Prospect | null>(null);
-  const [workflowMode, setWorkflowMode] = useState<'choose' | 'follow_up' | 'reject'>('choose');
+  const [workflowMode, setWorkflowMode] = useState<'choose' | 'follow_up' | 'reject' | 'confirm_drag'>('choose');
   const [workflowDate, setWorkflowDate] = useState('');
   const [workflowReason, setWorkflowReason] = useState('');
   const [workflowLoading, setWorkflowLoading] = useState(false);

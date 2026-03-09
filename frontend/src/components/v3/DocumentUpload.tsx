@@ -35,7 +35,7 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
   const [selectedType, setSelectedType] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
   useEffect(() => {
     Promise.all([
@@ -45,7 +45,7 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
       setDocs(Array.isArray(d) ? d : []);
       setDocTypes(Array.isArray(t) ? t : []);
       if (Array.isArray(t) && t.length) setSelectedType(t[0]);
-    }).catch(() => {})
+    }).catch(() => { })
       .finally(() => setLoading(false));
   }, [entityType, entityId]);
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState } from '../components/v3';
+import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState, DataTable, type Column } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Building2, Phone, Mail, Search, Check, LayoutGrid, List } from 'lucide-react';
 
@@ -134,65 +134,57 @@ export default function LandlordsV3() {
         ) : filtered.length === 0 ? (
           <EmptyState message={search || filter !== 'all' ? 'No landlords match your filters' : 'No landlords yet — add your first one'} />
         ) : viewMode === 'list' ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
-                  <th className="text-left py-3 px-4 font-medium">Name</th>
-                  <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Contact</th>
-                  <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Address</th>
-                  <th className="text-left py-3 px-4 font-medium">Properties</th>
-                  <th className="text-right py-3 px-4 font-medium w-20"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(l => {
-                  const lProps = landlordProperties[l.id] || [];
-                  return (
-                    <tr key={l.id}
-                      onClick={() => navigate(`/v3/landlords/${l.id}`)}
-                      className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar name={l.name} size="sm" />
-                          <div className="min-w-0">
-                            <p className="font-medium truncate">{l.name}</p>
-                            <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{l.email || l.phone}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 hidden md:table-cell">
-                        <div className="space-y-0.5">
-                          {l.email && <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1"><Mail size={10} />{l.email}</p>}
-                          {l.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} />{l.phone}</p>}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 hidden lg:table-cell">
-                        <p className="text-xs text-[var(--text-muted)] truncate max-w-[200px]">{l.address || '—'}</p>
-                      </td>
-                      <td className="py-3 px-4">
-                        {lProps.length > 0 ? (
-                          <div className="space-y-0.5">
-                            {lProps.slice(0, 2).map(p => (
-                              <p key={p.id} className="text-xs text-[var(--text-secondary)] flex items-center gap-1 truncate max-w-[200px]">
-                                <Building2 size={10} className="text-[var(--text-muted)] shrink-0" /> {p.address}
-                              </p>
-                            ))}
-                            {lProps.length > 2 && <p className="text-[10px] text-[var(--text-muted)]">+{lProps.length - 2} more</p>}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-amber-400">No property linked</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <Tag>{lProps.length} {lProps.length === 1 ? 'property' : 'properties'}</Tag>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<Landlord & { _props: Property[] }>
+            columns={[
+              {
+                key: 'name', header: 'Name',
+                render: (l) => (
+                  <div className="flex items-center gap-3">
+                    <Avatar name={l.name} size="sm" />
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{l.name}</p>
+                      <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{l.email || l.phone}</p>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'contact', header: 'Contact', hideClass: 'hidden md:table-cell',
+                render: (l) => (
+                  <div className="space-y-0.5">
+                    {l.email && <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1"><Mail size={10} />{l.email}</p>}
+                    {l.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} />{l.phone}</p>}
+                  </div>
+                ),
+              },
+              {
+                key: 'address', header: 'Address', hideClass: 'hidden lg:table-cell',
+                render: (l) => <p className="text-xs text-[var(--text-muted)] truncate max-w-[200px]">{l.address || '—'}</p>,
+              },
+              {
+                key: 'properties', header: 'Properties',
+                render: (l) => l._props.length > 0 ? (
+                  <div className="space-y-0.5">
+                    {l._props.slice(0, 2).map(p => (
+                      <p key={p.id} className="text-xs text-[var(--text-secondary)] flex items-center gap-1 truncate max-w-[200px]">
+                        <Building2 size={10} className="text-[var(--text-muted)] shrink-0" /> {p.address}
+                      </p>
+                    ))}
+                    {l._props.length > 2 && <p className="text-[10px] text-[var(--text-muted)]">+{l._props.length - 2} more</p>}
+                  </div>
+                ) : (
+                  <span className="text-xs text-amber-400">No property linked</span>
+                ),
+              },
+              {
+                key: 'count', header: '', align: 'right', width: 'w-20',
+                render: (l) => <Tag>{l._props.length} {l._props.length === 1 ? 'property' : 'properties'}</Tag>,
+              },
+            ]}
+            data={filtered.map(l => ({ ...l, _props: landlordProperties[l.id] || [] }))}
+            rowKey={(l) => l.id}
+            onRowClick={(l) => navigate(`/v3/landlords/${l.id}`)}
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filtered.map(l => {
@@ -307,8 +299,8 @@ function PropertyMultiSelect({ properties, selected, onChange }: {
         className="w-full flex items-center justify-between bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-left hover:border-[var(--accent-orange)]/40 transition-colors">
         <span className={selected.length > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}>
           {selected.length === 0 ? 'Select properties...' :
-           selected.length === 1 ? selectedProps[0]?.address :
-           `${selected.length} properties selected`}
+            selected.length === 1 ? selectedProps[0]?.address :
+              `${selected.length} properties selected`}
         </span>
         <Search size={14} className="text-[var(--text-muted)]" />
       </button>

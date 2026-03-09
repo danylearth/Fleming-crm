@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 // ─── Card ───
 export function Card({ children, className = '', onClick, hover }: {
@@ -7,9 +7,8 @@ export function Card({ children, className = '', onClick, hover }: {
   return (
     <div
       onClick={onClick}
-      className={`bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] ${
-        hover ? 'hover:border-[var(--border-input)] hover:brightness-110 cursor-pointer transition-all' : ''
-      } ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      className={`bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] ${hover ? 'hover:border-[var(--border-input)] hover:brightness-110 cursor-pointer transition-all' : ''
+        } ${onClick ? 'cursor-pointer' : ''} ${className}`}
     >
       {children}
     </div>
@@ -23,9 +22,8 @@ export function GlassCard({ children, className = '', onClick }: {
   return (
     <div
       onClick={onClick}
-      className={`bg-gradient-to-br from-[var(--glass-from)] to-[var(--glass-to)] rounded-2xl border border-[var(--border-color)] backdrop-blur-sm ${
-        onClick ? 'cursor-pointer hover:border-[var(--border-input)] transition-all' : ''
-      } ${className}`}
+      className={`bg-gradient-to-br from-[var(--glass-from)] to-[var(--glass-to)] rounded-2xl border border-[var(--border-color)] backdrop-blur-sm ${onClick ? 'cursor-pointer hover:border-[var(--border-input)] transition-all' : ''
+        } ${className}`}
     >
       {children}
     </div>
@@ -34,7 +32,7 @@ export function GlassCard({ children, className = '', onClick }: {
 
 // ─── Button ───
 export function Button({ children, onClick, variant = 'primary', size = 'md', className = '', disabled, type = 'button' }: {
-  children: ReactNode; onClick?: () => void; variant?: 'primary' | 'ghost' | 'gradient' | 'outline';
+  children: ReactNode; onClick?: (e?: any) => void; variant?: 'primary' | 'ghost' | 'gradient' | 'outline';
   size?: 'sm' | 'md' | 'lg'; className?: string; disabled?: boolean; type?: 'button' | 'submit';
 }) {
   const base = 'inline-flex items-center justify-center font-medium transition-all rounded-full';
@@ -89,11 +87,10 @@ export function Tag({ children, active, onClick }: {
 }) {
   return (
     <span onClick={onClick}
-      className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
-        active
-          ? 'bg-[var(--text-primary)] text-[var(--bg-page)] border-[var(--text-primary)]'
-          : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)] hover:border-[var(--text-muted)]'
-      } ${onClick ? 'cursor-pointer' : ''}`}>
+      className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${active
+        ? 'bg-[var(--text-primary)] text-[var(--bg-page)] border-[var(--text-primary)]'
+        : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)] hover:border-[var(--text-muted)]'
+        } ${onClick ? 'cursor-pointer' : ''}`}>
       {children}
     </span>
   );
@@ -134,7 +131,7 @@ export function ProgressRing({ value, size = 64, strokeWidth = 5, gradient = tru
     <div className="flex flex-col items-center gap-1">
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
-          <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="var(--border-subtle)" strokeWidth={strokeWidth} />
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--border-subtle)" strokeWidth={strokeWidth} />
           {gradient && (
             <defs>
               <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
@@ -143,7 +140,7 @@ export function ProgressRing({ value, size = 64, strokeWidth = 5, gradient = tru
               </linearGradient>
             </defs>
           )}
-          <circle cx={size/2} cy={size/2} r={radius} fill="none"
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none"
             stroke={gradient ? `url(#${gradientId})` : '#ec4899'}
             strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset}
             strokeLinecap="round" className="transition-all duration-500" />
@@ -156,12 +153,12 @@ export function ProgressRing({ value, size = 64, strokeWidth = 5, gradient = tru
 }
 
 // ─── Section Header ───
-export function SectionHeader({ title, action, actionLabel }: {
-  title: string; action?: () => void; actionLabel?: string;
+export function SectionHeader({ title, icon, action, actionLabel }: {
+  title: string; icon?: ReactNode; action?: () => void; actionLabel?: string;
 }) {
   return (
     <div className="flex items-center justify-between mb-4">
-      <h3 className="text-lg font-semibold">{title}</h3>
+      <h3 className="text-lg font-semibold flex items-center gap-2">{icon}{title}</h3>
       {action && actionLabel && (
         <Button variant="outline" size="sm" onClick={action}>{actionLabel}</Button>
       )}
@@ -193,3 +190,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search...' }: {
     </div>
   );
 }
+
+// ─── DataTable (re-export) ───
+export { DataTable } from './DataTable';
+export type { Column } from './DataTable';

@@ -63,7 +63,7 @@ const AI_MESSAGES = [
 
 const TABS = ['Overview', 'Documents', 'Activity', 'Notes', 'Compliance'];
 
-const NAV_SECTIONS = [
+const NAV_SECTIONS: { label: string | null; items: { icon: any; label: string; href: string; active: boolean; badge?: number }[] }[] = [
   {
     label: null,
     items: [
@@ -186,20 +186,18 @@ export default function ApplicantConcept() {
               )}
               {section.items.map((item, ii) => (
                 <a key={ii} href={item.href}
-                  className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 transition-all ${
-                    item.active
+                  className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 transition-all ${item.active
                       ? 'bg-gray-900 text-white'
                       : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                  } ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+                    } ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
                   title={sidebarCollapsed ? item.label : undefined}>
                   <item.icon className={`w-4 h-4 flex-shrink-0 ${item.active ? 'text-white' : 'text-gray-400'}`} />
                   {!sidebarCollapsed && (
                     <>
                       <span className="text-xs font-medium flex-1">{item.label}</span>
                       {item.badge && (
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                          item.active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
-                        }`}>{item.badge}</span>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${item.active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+                          }`}>{item.badge}</span>
                       )}
                     </>
                   )}
@@ -263,9 +261,8 @@ export default function ApplicantConcept() {
                 { icon: Edit3, tip: 'Edit' },
                 { icon: Share2, tip: 'Share' },
               ].map(({ icon: Icon, tip }, i) => (
-                <button key={i} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                  i === 0 ? 'bg-gray-100 text-gray-700' : 'hover:bg-gray-50 text-gray-400 hover:text-gray-600'
-                }`} title={tip}>
+                <button key={i} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${i === 0 ? 'bg-gray-100 text-gray-700' : 'hover:bg-gray-50 text-gray-400 hover:text-gray-600'
+                  }`} title={tip}>
                   <Icon className="w-4 h-4" />
                 </button>
               ))}
@@ -290,17 +287,14 @@ export default function ApplicantConcept() {
             ].map((s, i) => (
               <div key={i} className="flex items-center">
                 {i > 0 && <div className="w-8 flex items-center justify-center"><ChevronRight className="w-3.5 h-3.5 text-gray-300" /></div>}
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  s.active ? 'bg-emerald-50 border border-emerald-200' : s.past ? 'bg-gray-50 border border-gray-100' : 'hover:bg-gray-50'
-                }`}>
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold ${
-                    s.active ? 'bg-emerald-500 text-white' : s.past ? 'bg-gray-300 text-white' : 'bg-gray-200 text-gray-500'
-                  }`}>{s.stage}</span>
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${s.active ? 'bg-emerald-50 border border-emerald-200' : s.past ? 'bg-gray-50 border border-gray-100' : 'hover:bg-gray-50'
+                  }`}>
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold ${s.active ? 'bg-emerald-500 text-white' : s.past ? 'bg-gray-300 text-white' : 'bg-gray-200 text-gray-500'
+                    }`}>{s.stage}</span>
                   <div className="flex -space-x-1.5">
                     {s.people.map((p, j) => (
-                      <div key={j} className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-semibold border-2 border-white ${
-                        s.active && j === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
-                      }`}>{p}</div>
+                      <div key={j} className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-semibold border-2 border-white ${s.active && j === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+                        }`}>{p}</div>
                     ))}
                     {s.people.length === 0 && <div className="w-6 h-6 rounded-full border-2 border-dashed border-gray-200 flex items-center justify-center">
                       <Plus className="w-3 h-3 text-gray-300" />
@@ -322,11 +316,10 @@ export default function ApplicantConcept() {
               <div className="flex items-center gap-6">
                 {TABS.map(tab => (
                   <button key={tab} onClick={() => setActiveTab(tab)}
-                    className={`py-3 text-xs font-medium border-b-2 transition-all ${
-                      activeTab === tab
+                    className={`py-3 text-xs font-medium border-b-2 transition-all ${activeTab === tab
                         ? 'border-gray-900 text-gray-900'
                         : 'border-transparent text-gray-400 hover:text-gray-600'
-                    }`}>{tab}</button>
+                      }`}>{tab}</button>
                 ))}
               </div>
             </div>
@@ -412,9 +405,8 @@ export default function ApplicantConcept() {
                       { name: 'Landlord Ref', status: 'pending', icon: Home },
                     ].map((doc, i) => (
                       <div key={i} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors cursor-pointer">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                          doc.status === 'verified' ? 'bg-emerald-50' : 'bg-amber-50'
-                        }`}>
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${doc.status === 'verified' ? 'bg-emerald-50' : 'bg-amber-50'
+                          }`}>
                           <doc.icon className={`w-4 h-4 ${doc.status === 'verified' ? 'text-emerald-500' : 'text-amber-500'}`} />
                         </div>
                         <div className="min-w-0">
@@ -523,16 +515,15 @@ export default function ApplicantConcept() {
                         {i < TIMELINE.length - 1 && (
                           <div className="absolute left-[11px] top-6 w-px h-full bg-gray-100" />
                         )}
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                          item.type === 'viewing' ? 'bg-emerald-50' :
-                          item.type === 'call' ? 'bg-blue-50' :
-                          item.type === 'document' ? 'bg-amber-50' :
-                          'bg-gray-50'
-                        }`}>
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${item.type === 'viewing' ? 'bg-emerald-50' :
+                            item.type === 'call' ? 'bg-blue-50' :
+                              item.type === 'document' ? 'bg-amber-50' :
+                                'bg-gray-50'
+                          }`}>
                           {item.type === 'viewing' ? <Eye className="w-3 h-3 text-emerald-600" /> :
-                           item.type === 'call' ? <Phone className="w-3 h-3 text-blue-600" /> :
-                           item.type === 'document' ? <FileText className="w-3 h-3 text-amber-600" /> :
-                           <Plus className="w-3 h-3 text-gray-500" />}
+                            item.type === 'call' ? <Phone className="w-3 h-3 text-blue-600" /> :
+                              item.type === 'document' ? <FileText className="w-3 h-3 text-amber-600" /> :
+                                <Plus className="w-3 h-3 text-gray-500" />}
                         </div>
                         <div className="flex-1 pb-4">
                           <p className="text-sm text-gray-900">{item.event}</p>
@@ -581,11 +572,10 @@ export default function ApplicantConcept() {
                   {msg.role === 'user' && (
                     <span className="text-[10px] text-gray-400 mb-1">{msg.time}</span>
                   )}
-                  <div className={`max-w-[92%] px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-line ${
-                    msg.role === 'user'
+                  <div className={`max-w-[92%] px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-line ${msg.role === 'user'
                       ? 'bg-gray-900 text-white rounded-2xl rounded-br-md'
                       : 'bg-gray-50 text-gray-700 border border-gray-100 rounded-2xl rounded-bl-md'
-                  }`}>
+                    }`}>
                     {msg.text}
                   </div>
                 </div>
@@ -628,9 +618,8 @@ export default function ApplicantConcept() {
                 <button className="text-gray-300 hover:text-gray-500 transition-colors"><Paperclip className="w-4 h-4" /></button>
                 <button className="text-gray-300 hover:text-gray-500 transition-colors"><Mic className="w-4 h-4" /></button>
                 <button onClick={handleAiSend}
-                  className={`p-1.5 rounded-lg transition-all ${
-                    aiInput.trim() ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-400'
-                  }`}>
+                  className={`p-1.5 rounded-lg transition-all ${aiInput.trim() ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-400'
+                    }`}>
                   <Send className="w-3.5 h-3.5" />
                 </button>
               </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Tag, SearchBar, EmptyState } from '../components/v3';
+import { GlassCard, Button, Input, Tag, SearchBar, EmptyState, DataTable } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, AlertCircle, Clock, CheckCircle2, Wrench, MapPin, ChevronDown, ChevronUp, Search, Building2 } from 'lucide-react';
 
@@ -75,7 +75,7 @@ export default function MaintenanceV3() {
   });
 
   const updateStatus = async (id: number, status: string) => {
-    try { await api.put(`/api/maintenance/${id}`, { status }); await load(); } catch {}
+    try { await api.put(`/api/maintenance/${id}`, { status }); await load(); } catch { }
   };
 
   const addItem = async () => {
@@ -85,7 +85,7 @@ export default function MaintenanceV3() {
       setShowAdd(false);
       setForm({ title: '', description: '', priority: 'medium', property_id: '' });
       await load();
-    } catch {}
+    } catch { }
   };
 
   const selectedProp = properties.find(p => p.id === Number(form.property_id));
@@ -137,85 +137,79 @@ export default function MaintenanceV3() {
         ) : filtered.length === 0 ? (
           <EmptyState message={search || statusFilter !== 'all' ? 'No maintenance items match your filters' : 'No maintenance items yet'} />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
-                  <th className="text-left py-3 px-4 font-medium">Title</th>
-                  <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Property</th>
-                  <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Reported By</th>
-                  <th className="text-left py-3 px-4 font-medium">Priority</th>
-                  <th className="text-left py-3 px-4 font-medium">Status</th>
-                  <th className="text-left py-3 px-4 font-medium hidden sm:table-cell">Date</th>
-                  <th className="text-right py-3 px-4 font-medium w-20"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(item => (
-                  <tr key={item.id}
-                    onClick={() => setExpanded(expanded === item.id ? null : item.id)}
-                    className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                          item.priority === 'urgent' ? 'bg-red-500/20' : item.priority === 'high' ? 'bg-orange-500/20' : 'bg-[var(--bg-hover)]'
-                        }`}>
-                          <Wrench size={14} className={item.priority === 'urgent' ? 'text-red-400' : 'text-[var(--text-muted)]'} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">{item.title}</p>
-                          <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{item.address}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 hidden md:table-cell">
-                      <p className="text-xs text-[var(--text-secondary)] truncate max-w-[200px] flex items-center gap-1">
-                        <MapPin size={10} className="text-[var(--text-muted)] shrink-0" />{item.address}
-                      </p>
-                    </td>
-                    <td className="py-3 px-4 hidden lg:table-cell">
-                      <span className="text-xs text-[var(--text-muted)]">{item.reporter_name || '—'}</span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${PRIORITY_COLORS[item.priority]}`}>
-                        {PRIORITY_LABELS[item.priority] || item.priority}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusStyle(item.status)}`}>
-                        {statusLabel(item.status)}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 hidden sm:table-cell">
-                      <span className="text-xs text-[var(--text-muted)]">{formatDate(item.reported_date)}</span>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      {expanded === item.id ? <ChevronUp size={14} className="text-[var(--text-muted)]" /> : <ChevronDown size={14} className="text-[var(--text-muted)]" />}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {/* Expanded detail */}
-            {expanded && (() => {
-              const item = items.find(i => i.id === expanded);
-              if (!item) return null;
-              return (
-                <div className="px-4 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)] space-y-3">
-                  {item.description && <p className="text-sm text-[var(--text-secondary)]">{item.description}</p>}
-                  {item.resolved_date && <p className="text-xs text-emerald-400">Resolved: {formatDate(item.resolved_date)}</p>}
-                  <div className="flex gap-2">
-                    {item.status !== 'in_progress' && item.status !== 'completed' && item.status !== 'closed' && (
-                      <Button variant="outline" size="sm" onClick={(e: any) => { e.stopPropagation(); updateStatus(item.id, 'in_progress'); }}>Mark In Progress</Button>
-                    )}
-                    {item.status !== 'completed' && item.status !== 'closed' && (
-                      <Button variant="outline" size="sm" onClick={(e: any) => { e.stopPropagation(); updateStatus(item.id, 'completed'); }}>Mark Completed</Button>
-                    )}
+          <DataTable<MaintenanceItem>
+            columns={[
+              {
+                key: 'title', header: 'Title',
+                render: (item) => (
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${item.priority === 'urgent' ? 'bg-red-500/20' : item.priority === 'high' ? 'bg-orange-500/20' : 'bg-[var(--bg-hover)]'
+                      }`}>
+                      <Wrench size={14} className={item.priority === 'urgent' ? 'text-red-400' : 'text-[var(--text-muted)]'} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{item.title}</p>
+                      <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{item.address}</p>
+                    </div>
                   </div>
+                ),
+              },
+              {
+                key: 'property', header: 'Property', hideClass: 'hidden md:table-cell',
+                render: (item) => (
+                  <p className="text-xs text-[var(--text-secondary)] truncate max-w-[200px] flex items-center gap-1">
+                    <MapPin size={10} className="text-[var(--text-muted)] shrink-0" />{item.address}
+                  </p>
+                ),
+              },
+              {
+                key: 'reporter', header: 'Reported By', hideClass: 'hidden lg:table-cell',
+                render: (item) => <span className="text-xs text-[var(--text-muted)]">{item.reporter_name || '—'}</span>,
+              },
+              {
+                key: 'priority', header: 'Priority',
+                render: (item) => (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${PRIORITY_COLORS[item.priority]}`}>
+                    {PRIORITY_LABELS[item.priority] || item.priority}
+                  </span>
+                ),
+              },
+              {
+                key: 'status', header: 'Status',
+                render: (item) => (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusStyle(item.status)}`}>
+                    {statusLabel(item.status)}
+                  </span>
+                ),
+              },
+              {
+                key: 'date', header: 'Date', hideClass: 'hidden sm:table-cell',
+                render: (item) => <span className="text-xs text-[var(--text-muted)]">{formatDate(item.reported_date)}</span>,
+              },
+              {
+                key: 'expand', header: '', align: 'right', width: 'w-20',
+                render: (item) => expanded === item.id ? <ChevronUp size={14} className="text-[var(--text-muted)]" /> : <ChevronDown size={14} className="text-[var(--text-muted)]" />,
+              },
+            ]}
+            data={filtered}
+            rowKey={(item) => item.id}
+            onRowClick={(item) => setExpanded(expanded === item.id ? null : item.id)}
+            expandedId={expanded}
+            expandedRow={(item) => (
+              <div className="px-4 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)] space-y-3">
+                {item.description && <p className="text-sm text-[var(--text-secondary)]">{item.description}</p>}
+                {item.resolved_date && <p className="text-xs text-emerald-400">Resolved: {formatDate(item.resolved_date)}</p>}
+                <div className="flex gap-2">
+                  {item.status !== 'in_progress' && item.status !== 'completed' && item.status !== 'closed' && (
+                    <Button variant="outline" size="sm" onClick={(e: any) => { e.stopPropagation(); updateStatus(item.id, 'in_progress'); }}>Mark In Progress</Button>
+                  )}
+                  {item.status !== 'completed' && item.status !== 'closed' && (
+                    <Button variant="outline" size="sm" onClick={(e: any) => { e.stopPropagation(); updateStatus(item.id, 'completed'); }}>Mark Completed</Button>
+                  )}
                 </div>
-              );
-            })()}
-          </div>
+              </div>
+            )}
+          />
         )}
 
         {/* Add Modal */}
@@ -264,9 +258,8 @@ export default function MaintenanceV3() {
                   <div className="flex gap-1.5">
                     {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
                       <button key={k} onClick={() => setForm(p => ({ ...p, priority: k }))}
-                        className={`flex-1 text-xs py-2 rounded-lg border font-medium transition-colors ${
-                          form.priority === k ? PRIORITY_COLORS[k] + ' border-current' : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
-                        }`}>{v}</button>
+                        className={`flex-1 text-xs py-2 rounded-lg border font-medium transition-colors ${form.priority === k ? PRIORITY_COLORS[k] + ' border-current' : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
+                          }`}>{v}</button>
                     ))}
                   </div>
                 </div>

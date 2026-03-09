@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState } from '../components/v3';
+import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState, DataTable } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, ArrowLeft, Calendar, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List, Building2, ChevronDown, Pencil, ArrowRight, XCircle, CheckCircle, Mail, Phone } from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
@@ -81,11 +81,10 @@ function RadioGroup({ label, value, onChange, options }: {
       <div className="flex flex-wrap gap-2">
         {options.map(o => (
           <button key={o.value} type="button" onClick={() => onChange(o.value)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-              value === o.value
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${value === o.value
                 ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
                 : 'bg-[var(--bg-input)] border-[var(--border-input)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
-            }`}>
+              }`}>
             {o.label}
           </button>
         ))}
@@ -306,7 +305,7 @@ export default function EnquiriesV3() {
       setShowAdd(false);
       setForm({ name: '', email: '', phone: '', notes: '' });
       await load();
-    } catch {}
+    } catch { }
     setSaving(false);
   };
 
@@ -358,7 +357,7 @@ export default function EnquiriesV3() {
       }
       setWorkflowEnquiry(null);
       await load();
-    } catch {}
+    } catch { }
     setWfLoading(false);
   };
 
@@ -388,7 +387,7 @@ export default function EnquiriesV3() {
         try {
           await api.put(`/api/tenant-enquiries/${enquiryId}`, { ...raw, status: newStatus });
           await load();
-        } catch {}
+        } catch { }
       }
     }
   };
@@ -524,75 +523,72 @@ export default function EnquiriesV3() {
           <EmptyState message={search || statusFilter !== 'active' ? 'No enquiries match your filters' : 'No enquiries yet — add your first one'} />
         ) : (
           /* ==================== LIST VIEW ==================== */
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
-                  <th className="text-left py-3 px-4 font-medium">Name</th>
-                  <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Contact</th>
-                  <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Property</th>
-                  <th className="text-left py-3 px-4 font-medium">Status</th>
-                  <th className="text-left py-3 px-4 font-medium hidden sm:table-cell">Follow Up</th>
-                  <th className="text-right py-3 px-4 font-medium w-20"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(e => (
-                  <tr key={e.id}
-                    onClick={() => navigate(`/v3/enquiries/${e.id}`)}
-                    className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={e.name} size="sm" />
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">{e.name}</p>
-                          <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{e.email || e.phone}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 hidden md:table-cell">
-                      <div className="space-y-0.5">
-                        {e.email && <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1"><Mail size={10} />{e.email}</p>}
-                        {e.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} />{e.phone}</p>}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 hidden lg:table-cell">
-                      {e.linked_property_id && propertyMap[e.linked_property_id] ? (
-                        <p className="text-xs text-[var(--text-secondary)] truncate max-w-[200px] flex items-center gap-1">
-                          <Building2 size={10} className="text-[var(--text-muted)] shrink-0" />
-                          {propertyMap[e.linked_property_id].address}
-                        </p>
-                      ) : (
-                        <span className="text-xs text-[var(--text-muted)]">—</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusStyle(e.status)}`}>
-                        {statusLabel(e.status)}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 hidden sm:table-cell">
-                      {e.follow_up_date ? (
-                        <span className={`text-xs flex items-center gap-1 ${isOverdue(e.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-muted)]'}`}>
-                          <Calendar size={10} />{formatDate(e.follow_up_date)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-[var(--text-muted)]">—</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      {!['converted', 'rejected'].includes(e.status) && (
-                        <button onClick={(ev) => openWorkflow(e, ev)}
-                          className="text-[10px] px-2.5 py-1 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-medium whitespace-nowrap">
-                          Progress / Reject
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<Enquiry>
+            columns={[
+              {
+                key: 'name', header: 'Name',
+                render: (e) => (
+                  <div className="flex items-center gap-3">
+                    <Avatar name={e.name} size="sm" />
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{e.name}</p>
+                      <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{e.email || e.phone}</p>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'contact', header: 'Contact', hideClass: 'hidden md:table-cell',
+                render: (e) => (
+                  <div className="space-y-0.5">
+                    {e.email && <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1"><Mail size={10} />{e.email}</p>}
+                    {e.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} />{e.phone}</p>}
+                  </div>
+                ),
+              },
+              {
+                key: 'property', header: 'Property', hideClass: 'hidden lg:table-cell',
+                render: (e) => e.linked_property_id && propertyMap[e.linked_property_id] ? (
+                  <p className="text-xs text-[var(--text-secondary)] truncate max-w-[200px] flex items-center gap-1">
+                    <Building2 size={10} className="text-[var(--text-muted)] shrink-0" />
+                    {propertyMap[e.linked_property_id].address}
+                  </p>
+                ) : (
+                  <span className="text-xs text-[var(--text-muted)]">—</span>
+                ),
+              },
+              {
+                key: 'status', header: 'Status',
+                render: (e) => (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusStyle(e.status)}`}>
+                    {statusLabel(e.status)}
+                  </span>
+                ),
+              },
+              {
+                key: 'follow_up', header: 'Follow Up', hideClass: 'hidden sm:table-cell',
+                render: (e) => e.follow_up_date ? (
+                  <span className={`text-xs flex items-center gap-1 ${isOverdue(e.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-muted)]'}`}>
+                    <Calendar size={10} />{formatDate(e.follow_up_date)}
+                  </span>
+                ) : (
+                  <span className="text-xs text-[var(--text-muted)]">—</span>
+                ),
+              },
+              {
+                key: 'action', header: '', align: 'right', width: 'w-20',
+                render: (e) => !['converted', 'rejected'].includes(e.status) ? (
+                  <button onClick={(ev) => openWorkflow(e, ev)}
+                    className="text-[10px] px-2.5 py-1 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-medium whitespace-nowrap">
+                    Progress / Reject
+                  </button>
+                ) : null,
+              },
+            ]}
+            data={filtered}
+            rowKey={(e) => e.id}
+            onRowClick={(e) => navigate(`/v3/enquiries/${e.id}`)}
+          />
         )}
       </div>
 

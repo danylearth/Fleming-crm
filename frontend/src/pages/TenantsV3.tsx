@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState } from '../components/v3';
+import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable, type Column } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Mail, Phone, Building2, Calendar, Search, ChevronDown, LayoutGrid, List } from 'lucide-react';
 
@@ -150,65 +150,74 @@ export default function TenantsV3() {
         ) : filtered.length === 0 ? (
           <EmptyState message={search || statusFilter !== 'all' ? 'No tenants match your filters' : 'No tenants yet — add your first one'} />
         ) : viewMode === 'list' ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
-                  <th className="text-left py-3 px-4 font-medium">Name</th>
-                  <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Contact</th>
-                  <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Property</th>
-                  <th className="text-left py-3 px-4 font-medium hidden sm:table-cell">Tenancy End</th>
-                  <th className="text-right py-3 px-4 font-medium hidden sm:table-cell">Rent</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(t => (
-                  <tr key={t.id}
-                    onClick={() => navigate(`/v3/tenants/${t.id}`)}
-                    className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={t.name} size="sm" />
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">{t.name}</p>
-                          <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{t.email || t.phone}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 hidden md:table-cell">
-                      <div className="space-y-0.5">
-                        {t.email && <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1"><Mail size={10} />{t.email}</p>}
-                        {t.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} />{t.phone}</p>}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 hidden lg:table-cell">
-                      {t.property_address ? (
-                        <p className="text-xs text-[var(--text-secondary)] truncate max-w-[200px] flex items-center gap-1">
-                          <Building2 size={10} className="text-[var(--text-muted)] shrink-0" />{t.property_address}
-                        </p>
-                      ) : (
-                        <span className="text-xs text-[var(--text-muted)]">—</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 hidden sm:table-cell">
-                      {t.tenancy_end_date ? (
-                        <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">
-                          <Calendar size={10} />{formatDate(t.tenancy_end_date)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-[var(--text-muted)]">—</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-right hidden sm:table-cell">
-                      <span className="text-sm font-semibold">
-                        {t.monthly_rent ? `£${t.monthly_rent.toLocaleString()}` : '—'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<Tenant>
+            columns={[
+              {
+                key: 'name', header: 'Name',
+                render: (t) => (
+                  <div className="flex items-center gap-3">
+                    <Avatar name={t.name} size="sm" />
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{t.name}</p>
+                      <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{t.email || t.phone}</p>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'contact', header: 'Contact', hideClass: 'hidden md:table-cell',
+                render: (t) => (
+                  <div className="space-y-0.5">
+                    {t.email && <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1"><Mail size={10} />{t.email}</p>}
+                    {t.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} />{t.phone}</p>}
+                  </div>
+                ),
+              },
+              {
+                key: 'property', header: 'Property', hideClass: 'hidden lg:table-cell',
+                render: (t) => t.property_address ? (
+                  <p className="text-xs text-[var(--text-secondary)] truncate max-w-[200px] flex items-center gap-1">
+                    <Building2 size={10} className="text-[var(--text-muted)] shrink-0" />{t.property_address}
+                  </p>
+                ) : (
+                  <span className="text-xs text-[var(--text-muted)]">—</span>
+                ),
+              },
+              {
+                key: 'status', header: 'Status',
+                render: (t) => {
+                  const s = t.status || 'active';
+                  return (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${s === 'active' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-[var(--bg-hover)] text-[var(--text-muted)] border-[var(--border-subtle)]'
+                      }`}>
+                      {s === 'active' ? 'Active' : 'Inactive'}
+                    </span>
+                  );
+                },
+              },
+              {
+                key: 'tenancy_end', header: 'Tenancy End', hideClass: 'hidden sm:table-cell',
+                render: (t) => t.tenancy_end_date ? (
+                  <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">
+                    <Calendar size={10} />{formatDate(t.tenancy_end_date)}
+                  </span>
+                ) : (
+                  <span className="text-xs text-[var(--text-muted)]">—</span>
+                ),
+              },
+              {
+                key: 'rent', header: 'Rent', align: 'right', hideClass: 'hidden sm:table-cell',
+                render: (t) => (
+                  <span className="text-sm font-semibold">
+                    {t.monthly_rent ? `£${t.monthly_rent.toLocaleString()}` : '—'}
+                  </span>
+                ),
+              },
+            ]}
+            data={filtered}
+            rowKey={(t) => t.id}
+            onRowClick={(t) => navigate(`/v3/tenants/${t.id}`)}
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filtered.map(t => (
@@ -261,9 +270,8 @@ export default function TenantsV3() {
             <div ref={propertyDropdownRef} className="relative">
               <label className="block text-xs text-[var(--text-muted)] mb-1.5">Property <span className="text-red-400">*</span></label>
               <button type="button" onClick={() => setPropertyDropdownOpen(!propertyDropdownOpen)}
-                className={`w-full flex items-center justify-between gap-2 bg-[var(--bg-input)] border rounded-xl px-3 py-2.5 text-sm text-left transition-colors ${
-                  !form.property_id ? 'border-[var(--border-input)]' : 'border-[var(--accent-orange)]/30'
-                }`}>
+                className={`w-full flex items-center justify-between gap-2 bg-[var(--bg-input)] border rounded-xl px-3 py-2.5 text-sm text-left transition-colors ${!form.property_id ? 'border-[var(--border-input)]' : 'border-[var(--accent-orange)]/30'
+                  }`}>
                 {selectedProperty ? (
                   <span className="flex items-center gap-2 truncate">
                     <Building2 size={14} className="text-[var(--text-muted)] shrink-0" />
@@ -288,9 +296,8 @@ export default function TenantsV3() {
                       <p className="text-xs text-[var(--text-muted)] px-3 py-4 text-center">No properties found</p>
                     ) : filteredProperties.map(p => (
                       <button key={p.id} onClick={() => { setForm({ ...form, property_id: String(p.id) }); setPropertyDropdownOpen(false); setPropertySearch(''); }}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-hover)] transition-colors ${
-                          Number(form.property_id) === p.id ? 'bg-[var(--bg-hover)]' : ''
-                        }`}>
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-hover)] transition-colors ${Number(form.property_id) === p.id ? 'bg-[var(--bg-hover)]' : ''
+                          }`}>
                         <Building2 size={14} className="text-[var(--text-muted)] shrink-0" />
                         <div className="min-w-0">
                           <p className="text-sm truncate">{p.address}</p>

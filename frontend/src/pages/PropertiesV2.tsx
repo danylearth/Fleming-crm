@@ -63,10 +63,10 @@ interface Property {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
-  available:   { label: 'Available',   bg: 'bg-emerald-50',  text: 'text-emerald-600' },
-  occupied:    { label: 'Occupied',    bg: 'bg-sky-50',      text: 'text-sky-600' },
-  maintenance: { label: 'Maintenance', bg: 'bg-amber-50',    text: 'text-amber-600' },
-  void:        { label: 'Void',        bg: 'bg-red-50',      text: 'text-red-600' },
+  available: { label: 'Available', bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  occupied: { label: 'Occupied', bg: 'bg-sky-50', text: 'text-sky-600' },
+  maintenance: { label: 'Maintenance', bg: 'bg-amber-50', text: 'text-amber-600' },
+  void: { label: 'Void', bg: 'bg-red-50', text: 'text-red-600' },
 };
 
 function complianceDot(expiry: string | null) {
@@ -109,7 +109,7 @@ export default function PropertiesV2() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Property | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<string>('grid');
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([]);
   const [aiInput, setAiInput] = useState('');
   const [aiTyping, setAiTyping] = useState(false);
@@ -200,9 +200,8 @@ export default function PropertiesV2() {
             const isActive = location.pathname === item.href || (item.href !== '/v2' && location.pathname.startsWith(item.href));
             return (
               <Link key={item.href} to={item.href}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all group relative ${
-                  isActive ? 'bg-white/15 text-white' : 'text-white/40 hover:text-white/70 hover:bg-white/5'
-                }`} title={item.label}>
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all group relative ${isActive ? 'bg-white/15 text-white' : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+                  }`} title={item.label}>
                 <item.icon className="w-[18px] h-[18px]" />
                 <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">{item.label}</div>
               </Link>
@@ -226,11 +225,11 @@ export default function PropertiesV2() {
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => setViewMode('grid')}
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${viewMode === 'grid' ? 'bg-[#2a2a2a] text-white' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
+                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-100">
                   <LayoutGrid className="w-3.5 h-3.5" />
                 </button>
                 <button onClick={() => setViewMode('list')}
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-[#2a2a2a] text-white' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
+                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-[#2a2a2a] text-white">
                   <List className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -247,12 +246,10 @@ export default function PropertiesV2() {
               const pSt = STATUS_CONFIG[p.status?.toLowerCase()] || STATUS_CONFIG.available;
               return (
                 <button key={p.id} onClick={() => selectProperty(p)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all ${
-                    isSelected ? 'bg-[#f6f7f3]' : 'hover:bg-gray-50'
-                  }`}>
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    isSelected ? 'bg-[#2a2a2a] text-white' : 'bg-gray-100 text-gray-600'
-                  }`}>
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all ${isSelected ? 'bg-[#f6f7f3]' : 'hover:bg-gray-50'
+                    }`}>
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-[#2a2a2a] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
                     <Home className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -298,11 +295,11 @@ export default function PropertiesV2() {
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1 mr-2">
                   <button onClick={() => setViewMode('grid')}
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${viewMode === 'grid' ? 'bg-[#2a2a2a] text-white' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-200'}`}>
+                    className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-[#2a2a2a] text-white">
                     <LayoutGrid className="w-4 h-4" />
                   </button>
                   <button onClick={() => setViewMode('list')}
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-[#2a2a2a] text-white' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-200'}`}>
+                    className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-200">
                     <List className="w-4 h-4" />
                   </button>
                 </div>
@@ -629,11 +626,10 @@ export default function PropertiesV2() {
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
           {aiMessages.map((msg, i) => (
             <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-              <div className={`max-w-[92%] px-3 py-2 text-xs leading-relaxed whitespace-pre-line ${
-                msg.role === 'user'
-                  ? 'bg-[#2a2a2a] text-white rounded-2xl rounded-br-sm'
-                  : 'bg-[#f6f7f3] text-gray-700 rounded-2xl rounded-bl-sm'
-              }`}>
+              <div className={`max-w-[92%] px-3 py-2 text-xs leading-relaxed whitespace-pre-line ${msg.role === 'user'
+                ? 'bg-[#2a2a2a] text-white rounded-2xl rounded-br-sm'
+                : 'bg-[#f6f7f3] text-gray-700 rounded-2xl rounded-bl-sm'
+                }`}>
                 {msg.text}
               </div>
               <p className="text-[9px] text-gray-300 mt-0.5 px-1">{msg.time}</p>
@@ -672,9 +668,8 @@ function MiniStat({ label, value, ok }: { label: string; value: string; ok?: boo
   return (
     <div className="bg-white rounded-xl border border-gray-200/60 p-3.5">
       <p className="text-[10px] text-gray-400 mb-1">{label}</p>
-      <p className={`text-sm font-semibold ${
-        ok === true ? 'text-emerald-600' : ok === false ? 'text-amber-600' : 'text-gray-900'
-      }`}>{value}</p>
+      <p className={`text-sm font-semibold ${ok === true ? 'text-emerald-600' : ok === false ? 'text-amber-600' : 'text-gray-900'
+        }`}>{value}</p>
     </div>
   );
 }
