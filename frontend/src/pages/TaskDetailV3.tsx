@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { Card, GlassCard, Button, Input, Avatar, EmptyState } from '../components/v3';
+import { Card, GlassCard, Button, Input, Select, Avatar, EmptyState, DatePicker } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import {
   ArrowLeft, Pencil, Save, X, Calendar, Clock, User, Building2,
@@ -270,11 +270,9 @@ export default function TaskDetailV3() {
                 <div className="flex-1">
                   <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Due Date</p>
                   {editing ? (
-                    <input
-                      type="date"
+                    <DatePicker
                       value={form.due_date?.slice(0, 10) || ''}
-                      onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))}
-                      className="w-full bg-transparent border-b border-[var(--border-input)] text-sm outline-none"
+                      onChange={v => setForm(f => ({ ...f, due_date: v }))}
                     />
                   ) : (
                     <p className={`text-sm font-medium ${isOverdue ? 'text-red-400' : ''}`}>
@@ -347,15 +345,11 @@ export default function TaskDetailV3() {
               {editing && (
                 <div>
                   <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-2">Type</p>
-                  <select
+                  <Select
                     value={form.task_type || 'manual'}
-                    onChange={e => setForm(f => ({ ...f, task_type: e.target.value }))}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm"
-                  >
-                    {TASK_TYPES.map(t => (
-                      <option key={t} value={t}>{t.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())}</option>
-                    ))}
-                  </select>
+                    onChange={v => setForm(f => ({ ...f, task_type: v }))}
+                    options={TASK_TYPES.map(t => ({ value: t, label: t.replace('_', ' ').replace(/^\w/, c => c.toUpperCase()) }))}
+                  />
                 </div>
               )}
             </Card>

@@ -6,6 +6,8 @@ import fs from 'fs';
 import multer from 'multer';
 import db from './db';
 import { generateToken, authMiddleware, AuthRequest } from './auth';
+import aiRouter from './ai/chat';
+import { startScheduler } from './scheduler';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -1248,6 +1250,10 @@ app.get('/api/export/:entityType', authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
+// ============ AI ASSISTANT ============
+
+app.use('/api/ai', aiRouter);
+
 // SPA fallback
 app.get(/^(?!\/api).*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
@@ -1255,4 +1261,5 @@ app.get(/^(?!\/api).*/, (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Fleming CRM running on http://localhost:${PORT}`);
+  startScheduler();
 });

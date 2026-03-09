@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState, DataTable } from '../components/v3';
+import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState, DataTable, DatePicker } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, ArrowLeft, Calendar, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List, Building2, ChevronDown, Pencil, ArrowRight, XCircle, CheckCircle, Mail, Phone } from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
+import { SearchDropdown } from '../components/v3/SearchDropdown';
 
 interface EnquiryRaw {
   id: number;
@@ -173,7 +174,7 @@ function ApplicantFields({ form, setField, suffix, editing }: {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
         <Input label="First Name" value={form[f('first_name_')] || ''} onChange={v => setField(f('first_name_'), v)} placeholder="First name" />
         <Input label="Surname" value={form[f('last_name_')] || ''} onChange={v => setField(f('last_name_'), v)} placeholder="Surname" />
-        <Input label="Date of Birth" value={form[f('date_of_birth_')] || ''} onChange={v => setField(f('date_of_birth_'), v)} type="date" />
+        <DatePicker label="Date of Birth" value={form[f('date_of_birth_')] || ''} onChange={v => setField(f('date_of_birth_'), v)} />
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
         <Input label="Email" value={form[f('email_')] || ''} onChange={v => setField(f('email_'), v)} placeholder="Email" type="email" />
@@ -246,6 +247,7 @@ export default function EnquiriesV3() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('active');
+  const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '' });
@@ -281,6 +283,7 @@ export default function EnquiriesV3() {
   const filtered = portfolioFiltered.filter(e => {
     const matchSearch = !search || [e.name, e.email, e.phone]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
+    if (propertyFilter && e.linked_property_id !== propertyFilter) return false;
     if (statusFilter === 'active') return matchSearch && !['converted', 'rejected'].includes(e.status);
     if (statusFilter !== 'all') return matchSearch && e.status === statusFilter;
     return matchSearch;
@@ -435,8 +438,18 @@ export default function EnquiriesV3() {
           </Button>
         </div>
 
-        {/* Status filter */}
-        <div className="flex flex-wrap gap-2">
+        {/* Property filter */}
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchDropdown
+            icon={<Building2 size={14} />}
+            placeholder="Property"
+            searchPlaceholder="Search properties..."
+            options={properties.map(p => ({ id: p.id, label: p.address, subtitle: p.postcode }))}
+            value={propertyFilter}
+            onChange={setPropertyFilter}
+          />
+
+          {/* Status filter */}
           {[
             { key: 'active', label: `Active (${activeCount})` },
             { key: 'all', label: `All (${enquiries.length})` },
@@ -463,6 +476,7 @@ export default function EnquiriesV3() {
                 const colEnquiries = enquiries.filter(e => {
                   const matchSearch = !search || [e.name, e.email, e.phone]
                     .some(v => v?.toLowerCase().includes(search.toLowerCase()));
+                  if (propertyFilter && e.linked_property_id !== propertyFilter) return false;
                   return e.status === col.key && matchSearch;
                 });
                 return (
@@ -680,15 +694,15 @@ export default function EnquiriesV3() {
                   <>
                     <Select label="Link to Property" value={wfPropId} onChange={setWfPropId}
                       options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
-                    <Input label="Viewing Date" value={wfDate} onChange={setWfDate} type="date" />
+                    <DatePicker label="Viewing Date" value={wfDate} onChange={setWfDate} />
                     <Input label="Viewing Time" value={wfTime} onChange={setWfTime} type="time" />
                   </>
                 )}
                 {workflowMode === 'follow_up' && (
-                  <Input label="Follow-up Date" value={wfDate} onChange={setWfDate} type="date" />
+                  <DatePicker label="Follow-up Date" value={wfDate} onChange={setWfDate} />
                 )}
                 {workflowMode === 'onboarding' && (
-                  <Input label="Follow-up Date (optional)" value={wfDate} onChange={setWfDate} type="date" />
+                  <DatePicker label="Follow-up Date (optional)" value={wfDate} onChange={setWfDate} />
                 )}
                 {workflowMode === 'reject' && (
                   <div>

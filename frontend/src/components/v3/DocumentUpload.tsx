@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Card, Button, SectionHeader, EmptyState } from './index';
+import { Card, Button, SectionHeader, EmptyState, Select } from './index';
 import { Upload, FileText, Trash2, Download, X, Plus } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -101,17 +101,12 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
 
       {showUpload && (
         <div className="mb-4 p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-color)] space-y-3">
-          <div>
-            <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Document Type</label>
-            <select
-              value={selectedType}
-              onChange={e => setSelectedType(e.target.value)}
-              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] appearance-none focus:outline-none transition-colors"
-              style={{ colorScheme: 'dark' }}
-            >
-              {docTypes.map(t => <option key={t} value={t} style={{ background: 'var(--bg-input)', color: 'var(--text-primary)' }}>{t}</option>)}
-            </select>
-          </div>
+          <Select
+            label="Document Type"
+            value={selectedType}
+            onChange={setSelectedType}
+            options={docTypes.map(t => ({ value: t, label: t }))}
+          />
           <input
             ref={fileRef}
             type="file"

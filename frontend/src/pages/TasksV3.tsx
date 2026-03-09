@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { Card, GlassCard, Button, Input, Avatar, ProgressRing, EmptyState } from '../components/v3';
+import { Card, GlassCard, Button, Input, Select, Avatar, ProgressRing, EmptyState, DatePicker } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import {
   Plus, X, CheckCircle2, Clock, Inbox, Calendar, Search, ChevronDown,
@@ -686,13 +686,14 @@ export default function TasksV3() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Type</label>
-                    <select value={form.task_type} onChange={e => setForm(p => ({...p,task_type:e.target.value}))}
-                      className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
-                      {TASK_TYPES.map(t => <option key={t} value={t}>{t.replace('_',' ').replace(/^\w/,c=>c.toUpperCase())}</option>)}
-                    </select>
+                    <Select
+                      value={form.task_type}
+                      onChange={v => setForm(p => ({...p, task_type: v}))}
+                      options={TASK_TYPES.map(t => ({ value: t, label: t.replace('_',' ').replace(/^\w/,c=>c.toUpperCase()) }))}
+                    />
                   </div>
                 </div>
-                <Input label="Due Date" value={form.due_date} onChange={v => setForm(p => ({...p,due_date:v}))} type="date" />
+                <DatePicker label="Due Date" value={form.due_date} onChange={v => setForm(p => ({...p,due_date:v}))} />
                 <div className="flex gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
                   <Button variant="gradient" onClick={addTask} disabled={!form.title}>Add Task</Button>

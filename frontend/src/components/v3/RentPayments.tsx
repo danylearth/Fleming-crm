@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Button, SectionHeader, EmptyState, Tag, Input, Select } from './index';
+import { Card, Button, SectionHeader, EmptyState, Tag, Input, Select, DatePicker } from './index';
 import { useApi } from '../../hooks/useApi';
 import { PoundSterling, CheckCircle2, Clock, AlertCircle, Plus, X } from 'lucide-react';
 
@@ -141,7 +141,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
       {showAdd && (
         <div className="mb-4 p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-color)] space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Due Date" value={form.due_date} onChange={v => setForm({ ...form, due_date: v })} type="date" />
+            <DatePicker label="Due Date" value={form.due_date} onChange={v => setForm({ ...form, due_date: v })} />
             <Input label="Amount (£)" value={form.amount_due} onChange={v => setForm({ ...form, amount_due: v })} placeholder="1200" />
           </div>
           <Button variant="gradient" size="sm" onClick={handleAdd}>

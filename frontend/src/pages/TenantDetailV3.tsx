@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, EmptyState } from '../components/v3';
+import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, EmptyState, DatePicker } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import RentPayments from '../components/v3/RentPayments';
 import { useApi } from '../hooks/useApi';
@@ -383,7 +383,7 @@ export default function TenantDetailV3() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" />
                     <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
-                    <Input label="Date of Birth" value={form.date_of_birth_1} onChange={v => setForm({ ...form, date_of_birth_1: v })} type="date" />
+                    <DatePicker label="Date of Birth" value={form.date_of_birth_1} onChange={v => setForm({ ...form, date_of_birth_1: v })} />
                   </div>
                   <div className="flex items-center gap-3 mt-2">
                     <label className="text-xs text-[var(--text-muted)]">Joint Tenancy?</label>
@@ -401,7 +401,7 @@ export default function TenantDetailV3() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <Input label="Email" value={form.email_2} onChange={v => setForm({ ...form, email_2: v })} type="email" />
                         <Input label="Phone" value={form.phone_2} onChange={v => setForm({ ...form, phone_2: v })} />
-                        <Input label="Date of Birth" value={form.date_of_birth_2} onChange={v => setForm({ ...form, date_of_birth_2: v })} type="date" />
+                        <DatePicker label="Date of Birth" value={form.date_of_birth_2} onChange={v => setForm({ ...form, date_of_birth_2: v })} />
                       </div>
                     </>
                   )}
@@ -485,7 +485,7 @@ export default function TenantDetailV3() {
               {isEditing('tenancy') ? (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <Input label="Start Date" value={form.tenancy_start_date} onChange={v => setForm({ ...form, tenancy_start_date: v })} type="date" />
+                    <DatePicker label="Start Date" value={form.tenancy_start_date} onChange={v => setForm({ ...form, tenancy_start_date: v })} />
                     <Select label="Tenancy Type" value={form.tenancy_type} onChange={v => setForm({ ...form, tenancy_type: v })}
                       options={[{ value: '', label: 'Select' }, { value: 'AST', label: 'AST' }, { value: 'HMO', label: 'HMO' }, { value: 'Rolling', label: 'Rolling' }, { value: 'Other', label: 'Other' }]} />
                   </div>
@@ -499,7 +499,7 @@ export default function TenantDetailV3() {
                     <YesNo value={!!form.has_end_date} onChange={v => setForm({ ...form, has_end_date: v })} />
                   </div>
                   {form.has_end_date && (
-                    <Input label="End Date" value={form.tenancy_end_date} onChange={v => setForm({ ...form, tenancy_end_date: v })} type="date" />
+                    <DatePicker label="End Date" value={form.tenancy_end_date} onChange={v => setForm({ ...form, tenancy_end_date: v })} />
                   )}
                   <Select label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })}
                     options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
@@ -598,7 +598,7 @@ export default function TenantDetailV3() {
                       {isEditing('checklist') ? (
                         <>
                           <Input label="Amount (£)" value={form.holding_deposit_amount} onChange={v => setForm({ ...form, holding_deposit_amount: v })} placeholder="0.00" />
-                          <Input label="Date" value={form.holding_deposit_date} onChange={v => setForm({ ...form, holding_deposit_date: v })} type="date" />
+                          <DatePicker label="Date" value={form.holding_deposit_date} onChange={v => setForm({ ...form, holding_deposit_date: v })} />
                         </>
                       ) : (
                         <>

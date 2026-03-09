@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { Button, Avatar, SearchBar, EmptyState, Input, Select } from '../components/v3';
+import { Button, Avatar, SearchBar, EmptyState, Input, Select, DatePicker } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { getPropertyImage } from '../utils/propertyImages';
 import {
@@ -189,7 +189,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
                   options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({
                     value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}${p.rent_amount ? ` — £${p.rent_amount}/mo` : ''}`
                   }))]} />
-                <Input label="Viewing Date" value={date} onChange={setDate} type="date" />
+                <DatePicker label="Viewing Date" value={date} onChange={setDate} />
                 <Input label="Viewing Time" value={time} onChange={setTime} type="time" />
                 <p className="text-xs text-[var(--text-muted)]">
                   Creates a Property Viewing. Card disappears from queue and reappears on the viewing date.
@@ -199,7 +199,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
 
             {mode === 'awaiting' && (
               <>
-                <Input label="Follow-up Date" value={date} onChange={setDate} type="date" />
+                <DatePicker label="Follow-up Date" value={date} onChange={setDate} />
                 <p className="text-xs text-[var(--text-muted)]">
                   Card disappears from the queue and reappears on this date.
                 </p>
@@ -208,7 +208,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
 
             {mode === 'onboarding' && (
               <>
-                <Input label="Follow-up Date (optional)" value={date} onChange={setDate} type="date" />
+                <DatePicker label="Follow-up Date (optional)" value={date} onChange={setDate} />
                 <p className="text-xs text-[var(--text-muted)]">
                   {date ? 'Card will disappear and reappear on this date.' : 'Card stays visible in the Onboarding column.'}
                 </p>

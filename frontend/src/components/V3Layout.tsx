@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
-import { Menu, LogOut, ChevronRight, X, Sun, Moon } from 'lucide-react';
+import { Menu, LogOut, ChevronLeft, ChevronRight, X, Sun, Moon } from 'lucide-react';
 import {
   DashboardIcon, EnquiriesIcon, PropertiesIcon, LandlordsIcon, TenantsIcon,
   BdmIcon, MaintenanceIcon, TasksIcon, FinancialsIcon, SettingsIcon
@@ -12,10 +12,10 @@ import { useTheme } from '../context/ThemeContext';
 
 const navItems = [
   { to: '/v3', icon: DashboardIcon, label: 'Dashboard' },
-  { to: '/v3/enquiries', icon: EnquiriesIcon, label: 'Tenant Enquiries' },
   { to: '/v3/properties', icon: PropertiesIcon, label: 'Properties' },
   { to: '/v3/landlords', icon: LandlordsIcon, label: 'Landlords' },
   { to: '/v3/tenants', icon: TenantsIcon, label: 'Tenants' },
+  { to: '/v3/enquiries', icon: EnquiriesIcon, label: 'Tenant Enquiries' },
   { to: '/v3/bdm', icon: BdmIcon, label: 'Landlord Enquiries' },
   { to: '/v3/maintenance', icon: MaintenanceIcon, label: 'Maintenance' },
   { to: '/v3/tasks', icon: TasksIcon, label: 'Tasks' },
@@ -73,11 +73,15 @@ export default function V3Layout({ children, title, breadcrumb, hideTopBar }: V3
           <button onClick={() => setMobileOpen(false)} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-secondary)] md:hidden">
             <X size={18} />
           </button>
-          {/* Collapse on desktop */}
-          <button onClick={() => setCollapsed(!collapsed)} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-secondary)] hidden md:block">
-            <Menu size={18} />
-          </button>
         </div>
+
+        {/* Desktop collapse toggle – edge-mounted arrow */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="absolute top-4 -right-3 z-10 w-6 h-6 rounded-full bg-[var(--bg-card)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors hidden md:flex"
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
 
         {/* Nav */}
         <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">

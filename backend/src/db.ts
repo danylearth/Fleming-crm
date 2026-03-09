@@ -444,6 +444,16 @@ db.exec(`
   
   CREATE INDEX IF NOT EXISTS idx_viewings_date ON property_viewings(viewing_date);
   CREATE INDEX IF NOT EXISTS idx_viewings_property ON property_viewings(property_id);
+
+  -- ============================================
+  -- AI CONFIGURATION
+  -- ============================================
+
+  CREATE TABLE IF NOT EXISTS ai_config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Migrations for existing databases

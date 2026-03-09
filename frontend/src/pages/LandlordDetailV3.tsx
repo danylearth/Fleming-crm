@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Select, Avatar, SectionHeader, EmptyState, Card } from '../components/v3';
+import { GlassCard, Button, Input, Select, Avatar, SectionHeader, EmptyState, Card, DatePicker } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import { useApi } from '../hooks/useApi';
 import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Search, ChevronDown } from 'lucide-react';
@@ -184,7 +184,7 @@ export default function LandlordDetailV3() {
               {editing ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input label="Full Name" value={form.name} onChange={v => setForm({ ...form, name: v })} />
-                  <Input label="Date of Birth" value={form.date_of_birth} onChange={v => setForm({ ...form, date_of_birth: v })} type="date" />
+                  <DatePicker label="Date of Birth" value={form.date_of_birth} onChange={v => setForm({ ...form, date_of_birth: v })} />
                   <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" />
                   <Input label="Alternative Email" value={form.alt_email} onChange={v => setForm({ ...form, alt_email: v })} type="email" />
                   <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />

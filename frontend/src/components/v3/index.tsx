@@ -73,14 +73,50 @@ export function Select({ label, value, onChange, options, className = '' }: {
   label?: string; value: string; onChange: (v: string) => void;
   options: { value: string; label: string }[]; className?: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find(o => o.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
   return (
-    <div className={className}>
+    <div className={`relative ${className}`} ref={ref}>
       {label && <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">{label}</label>}
-      <select value={value} onChange={e => onChange(e.target.value)}
-        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] appearance-none focus:outline-none focus:border-[var(--border-input)] transition-colors"
-        style={{ colorScheme: 'dark' }}>
-        {options.map(o => <option key={o.value} value={o.value} style={{ background: 'var(--bg-input)', color: 'var(--text-primary)' }}>{o.label}</option>)}
-      </select>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors text-left"
+      >
+        <span className={selected ? '' : 'text-[var(--text-muted)]'}>{selected?.label || 'Select...'}</span>
+        <svg className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-xl z-50 overflow-hidden">
+          <div className="max-h-56 overflow-y-auto py-1">
+            {options.map(o => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => { onChange(o.value); setOpen(false); }}
+                className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-[var(--bg-hover)] ${
+                  value === o.value ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-secondary)]'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -202,3 +238,6 @@ export type { Column } from './DataTable';
 // ─── SearchDropdown (re-export) ───
 export { SearchDropdown } from './SearchDropdown';
 export type { DropdownOption } from './SearchDropdown';
+
+// ─── DatePicker (re-export) ───
+export { DatePicker } from './DatePicker';

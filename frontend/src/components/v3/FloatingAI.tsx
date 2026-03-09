@@ -1,12 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { X, Send, Sparkles, ChevronDown } from 'lucide-react';
-
-interface AIMessage {
-  role: 'user' | 'assistant';
-  text: string;
-  time: string;
-}
+import { useAIChat, AIAction } from '../../hooks/useAIChat';
 
 const now = () => new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' });
 
@@ -21,147 +16,112 @@ const pageSuggestions: Record<string, string[]> = {
   '/v3/enquiries': [
     'Draft a response to the latest enquiry',
     'Which enquiries need follow-up?',
-    'Show conversion rate this month',
-    'Auto-assign enquiries to properties',
+    'Chase pending references',
+    'Show new enquiries',
   ],
   '/v3/properties': [
     'Which properties need cert renewal?',
     'Show vacant properties',
-    'Properties with highest rent yield',
-    'Compliance overview across portfolio',
+    'Compliance overview',
+    'Properties with rent review due',
   ],
   '/v3/landlords': [
-    'Landlords with expiring agreements',
+    'Email a landlord update',
     'Who has the most properties?',
-    'Draft landlord update email',
     'Landlords needing KYC renewal',
+    'Draft landlord update email',
   ],
   '/v3/tenants': [
     'Tenants with rent arrears',
     'Upcoming lease renewals',
-    'Draft tenant welcome pack',
-    'Show move-in dates this month',
+    'Send rent reminders',
+    'Show tenancy expiry dates',
   ],
   '/v3/bdm': [
     'Pipeline conversion rate',
     'Prospects needing follow-up',
     'Draft outreach email',
-    'Best performing lead sources',
+    'Show new leads',
   ],
   '/v3/maintenance': [
     'Urgent open issues',
-    'Average resolution time',
     'Which properties have most issues?',
+    'Show open maintenance',
     'Schedule contractor for open jobs',
   ],
   '/v3/tasks': [
     'What\'s overdue?',
-    'Reschedule today\'s tasks',
     'Show my completed tasks this week',
-    'Create task from last maintenance report',
+    'Create a new task',
+    'Prioritise my tasks',
   ],
   '/v3/financials': [
-    'Monthly rent collection rate',
+    'Monthly rent collection summary',
     'Who\'s in arrears?',
-    'Draft arrears letter',
-    'Revenue forecast next quarter',
+    'Send rent reminders',
+    'Financial overview',
   ],
 };
 
-// Context-aware responses
-function getAIResponse(msg: string, pathname: string): string {
-  const lower = msg.toLowerCase();
-
-  if (lower.includes('prioriti') || lower.includes('today') || lower.includes('morning') || lower.includes('attention')) {
-    return "Here's your priority list:\n\n1. Gas safety cert expiring — 12 Queens Drive (3 days left)\n2. 3 new enquiries need first contact\n3. Chase landlord ref for Eleanor Whitfield (2 days overdue)\n4. Viewing at 2pm — 8 Oak Street\n\nWant me to auto-send the reference chase?";
-  }
-  if (lower.includes('enquir') || lower.includes('applicant') || lower.includes('follow-up')) {
-    return "5 active enquiries:\n\n• Eleanor Whitfield — Viewing booked (14 Feb)\n• James Morton — New (awaiting call)\n• Sarah Chen — Referencing in progress\n\n2 need immediate attention. Want me to draft response emails?";
-  }
-  if (lower.includes('compliance') || lower.includes('cert') || lower.includes('gas') || lower.includes('epc') || lower.includes('renewal')) {
-    return "Compliance overview:\n\n⚠ 5 Gas Safety certs expiring within 30 days\n⚠ 3 EICR certs expiring within 30 days\n⚠ 2 EPC certs expiring within 30 days\n\n12 Queens Drive is most urgent — expires in 3 days. Want me to contact the gas engineer?";
-  }
-  if (lower.includes('rent') || lower.includes('arrear') || lower.includes('financ') || lower.includes('collection')) {
-    return "Financial snapshot:\n\n£8,450 collected this month\n£1,200 outstanding (2 tenants)\n£340 maintenance spend\n\nMrs. Patterson at 42 Victoria Road is 14 days late — second month running. Want me to generate an arrears letter?";
-  }
-  if (lower.includes('landlord') && (lower.includes('update') || lower.includes('email') || lower.includes('draft'))) {
-    return "Here's a draft landlord update:\n\n\"Dear [Landlord],\n\nMonthly property update for [Address]:\n• Rent: Collected on time\n• Maintenance: No open issues\n• Compliance: All certificates current\n• Next inspection: [Date]\n\nPlease don't hesitate to get in touch.\"\n\nShall I personalise this for a specific landlord?";
-  }
-  if (lower.includes('maintenance') || lower.includes('urgent') || lower.includes('issue')) {
-    return "Open maintenance:\n\n🔴 Boiler repair — 8 Oak Street (reported 3 days ago, urgent)\n🟡 Leak in bathroom — 15 Church Lane (2 days, high)\n🟢 Garden fence — 42 Victoria Road (5 days, low)\n\nThe boiler at Oak Street has been escalated. Want me to chase the contractor?";
-  }
-  if (lower.includes('task') || lower.includes('overdue') || lower.includes('schedule')) {
-    return "Task summary:\n\n✅ 15 completed this week\n⏳ 3 in progress\n🔴 2 overdue\n\nOverdue:\n• Chase reference — Eleanor Whitfield (2 days)\n• Submit EPC renewal — 22 High Street (1 day)\n\nWant me to reschedule or reassign?";
-  }
-  if (lower.includes('vacant') || lower.includes('empty')) {
-    return "2 vacant properties:\n\n• 15 Church Lane — Vacant since Jan 28 (17 days)\n• 33 Park Avenue — Vacant since Feb 1 (13 days)\n\nEstimated monthly loss: £2,100. Both have active enquiries. Want me to prioritise viewings?";
-  }
-  if (lower.includes('pipeline') || lower.includes('conversion')) {
-    return "BDM Pipeline:\n\n• 4 new leads\n• 2 meetings scheduled\n• 1 proposal sent\n• Conversion rate: 23% (last 90 days)\n\nTop source: Rightmove referrals. Want me to draft follow-ups for the meeting stage?";
-  }
-  if (lower.includes('welcome') || lower.includes('onboard')) {
-    return "Tenant onboarding checklist:\n\n☐ ID verification\n☐ Right to rent check\n☐ Guarantor details\n☐ Deposit registered (DPS)\n☐ Tenancy agreement signed\n☐ Inventory completed\n☐ Key handover scheduled\n\nWant me to generate the welcome pack PDF?";
-  }
-
-  // Default contextual response based on page
-  if (pathname.includes('properties')) {
-    return "I can help with property management — compliance tracking, vacancy analysis, rent reviews, or tenant history. What would you like to know?";
-  }
-  if (pathname.includes('landlord')) {
-    return "I can help with landlord communications, portfolio summaries, KYC tracking, or property performance reports. What do you need?";
-  }
-  if (pathname.includes('tenant')) {
-    return "I can help with tenant management — arrears tracking, lease renewals, reference chasing, or onboarding. What would you like?";
-  }
-  if (pathname.includes('enquir')) {
-    return "I can help manage enquiries — draft responses, schedule viewings, run reference checks, or convert to tenants. What would you like to do?";
-  }
-
-  return "I can help with compliance tracking, tenant management, financial reporting, maintenance scheduling, and more. What would you like to know?";
-}
-
 // Get greeting based on page
 function getGreeting(pathname: string): string {
-  if (pathname === '/v3') return "Morning. You've got 2 compliance certs expiring this week and 3 new enquiries. Want me to prioritise your day?";
-  if (pathname.includes('enquir')) return "You have 3 enquiries needing follow-up today. Want me to summarise them?";
-  if (pathname.includes('properties')) return "Viewing the portfolio. 2 properties have compliance items due soon. Need details?";
-  if (pathname.includes('landlord')) return "Looking at landlords. Anyone specific you need to update or review?";
-  if (pathname.includes('tenant')) return "Tenant overview ready. 1 rent payment overdue, 2 leases up for renewal this month.";
-  if (pathname.includes('bdm')) return "Pipeline has 4 new leads this week. Want to review the hottest prospects?";
-  if (pathname.includes('maintenance')) return "3 open maintenance items, 1 urgent. Want me to prioritise?";
-  if (pathname.includes('task')) return "You have 2 overdue tasks and 5 due today. Want me to reschedule anything?";
-  if (pathname.includes('financial')) return "Monthly collection is at 87%. 2 tenants outstanding. Want a breakdown?";
+  if (pathname === '/v3') return "Hi. I can help you manage your day — compliance checks, emails, rent reminders, and more. What do you need?";
+  if (pathname.includes('enquir')) return "Viewing enquiries. I can email applicants, chase references, or move enquiries. What would you like?";
+  if (pathname.includes('properties')) return "Property portfolio. I can check compliance, show voids, or help with rent reviews. Need anything?";
+  if (pathname.includes('landlord')) return "Landlord overview. I can draft update emails or check KYC status. What do you need?";
+  if (pathname.includes('tenant')) return "Tenant management. I can send rent reminders, check arrears, or review leases. How can I help?";
+  if (pathname.includes('bdm')) return "Business development pipeline. I can help with follow-ups or outreach. What would you like?";
+  if (pathname.includes('maintenance')) return "Maintenance requests. I can prioritise issues or help contact contractors. Need anything?";
+  if (pathname.includes('task')) return "Task overview. I can create tasks, mark them complete, or help you prioritise. What do you need?";
+  if (pathname.includes('financial')) return "Financial overview. I can show arrears, send rent reminders, or give a collection summary. What would you like?";
   return "How can I help?";
+}
+
+// Parse page context from pathname
+function getPageContext(pathname: string): { page: string; entityType?: string; entityId?: number } {
+  const context: { page: string; entityType?: string; entityId?: number } = { page: pathname };
+
+  const detailMatch = pathname.match(/\/v3\/(properties|tenants|landlords|enquiries|bdm|tasks|maintenance)\/(\d+)/);
+  if (detailMatch) {
+    const typeMap: Record<string, string> = {
+      properties: 'property', tenants: 'tenant', landlords: 'landlord',
+      enquiries: 'enquiry', bdm: 'landlord_bdm', tasks: 'task', maintenance: 'maintenance',
+    };
+    context.entityType = typeMap[detailMatch[1]] || detailMatch[1];
+    context.entityId = parseInt(detailMatch[2]);
+  }
+
+  return context;
 }
 
 export default function FloatingAI() {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<AIMessage[]>([]);
   const [input, setInput] = useState('');
-  const [typing, setTyping] = useState(false);
   const [hasUnread, setHasUnread] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const location = useLocation();
   const prevPath = useRef(location.pathname);
+  const { messages, typing, send, executeAction, setMessages, addMessage } = useAIChat();
+
+  // Initial greeting
+  useEffect(() => {
+    setMessages([{ role: 'assistant', text: getGreeting(location.pathname), status: 'done' }]);
+  }, []);
 
   // Reset greeting when page changes
   useEffect(() => {
     if (location.pathname !== prevPath.current) {
       prevPath.current = location.pathname;
-      setMessages([{ role: 'assistant', text: getGreeting(location.pathname), time: now() }]);
+      // Only reset if chat has been idle (no user messages in last set)
+      setMessages([{ role: 'assistant', text: getGreeting(location.pathname), status: 'done' }]);
       setHasUnread(!open);
     }
   }, [location.pathname, open]);
 
-  // Initial greeting
-  useEffect(() => {
-    setMessages([{ role: 'assistant', text: getGreeting(location.pathname), time: now() }]);
-  }, []);
-
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, typing]);
 
   useEffect(() => {
     if (open) {
@@ -173,18 +133,17 @@ export default function FloatingAI() {
   const handleSend = (text?: string) => {
     const msg = (text || input).trim();
     if (!msg) return;
-    setMessages(prev => [...prev, { role: 'user', text: msg, time: now() }]);
     setInput('');
-    setTyping(true);
+    const context = getPageContext(location.pathname);
+    send(msg, context);
+  };
 
-    setTimeout(() => {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        text: getAIResponse(msg, location.pathname),
-        time: now(),
-      }]);
-      setTyping(false);
-    }, 800 + Math.random() * 600);
+  const handleAction = (action: AIAction) => {
+    if (action.type === 'link' && action.href) {
+      window.location.href = action.href;
+      return;
+    }
+    executeAction(action.id, action);
   };
 
   const suggestions = pageSuggestions[location.pathname] || pageSuggestions['/v3'] || [];
@@ -216,15 +175,15 @@ export default function FloatingAI() {
                 <Sparkles size={16} className="text-white" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-[var(--text-primary)]">DOT</p>
-                <p className="text-[11px] text-[var(--text-muted)]">AI Assistant</p>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Assistant</p>
+                <p className="text-[11px] text-[var(--text-muted)]">Fleming AI</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
               <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
                 <ChevronDown size={18} />
               </button>
-              <button onClick={() => { setOpen(false); setMessages([{ role: 'assistant', text: getGreeting(location.pathname), time: now() }]); }} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
+              <button onClick={() => { setOpen(false); setMessages([{ role: 'assistant', text: getGreeting(location.pathname), status: 'done' }]); }} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
                 <X size={18} />
               </button>
             </div>
@@ -240,7 +199,7 @@ export default function FloatingAI() {
                       <div className="w-5 h-5 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center">
                         <Sparkles size={10} className="text-white" />
                       </div>
-                      <span className="text-[11px] text-[var(--text-muted)]">DOT · {msg.time}</span>
+                      <span className="text-[11px] text-[var(--text-muted)]">Assistant · {now()}</span>
                     </div>
                   )}
                   <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line ${
@@ -248,10 +207,31 @@ export default function FloatingAI() {
                       ? 'bg-gradient-to-br from-orange-500/20 to-pink-500/20 border border-orange-500/20 text-[var(--text-primary)]'
                       : 'bg-[var(--bg-input)] border border-[var(--border-subtle)] text-[var(--text-primary)]'
                   }`}>
-                    {msg.text}
+                    {formatMessageText(msg.text)}
                   </div>
                   {msg.role === 'user' && (
-                    <p className="text-[11px] text-[var(--text-muted)] text-right mt-1">{msg.time}</p>
+                    <p className="text-[11px] text-[var(--text-muted)] text-right mt-1">{now()}</p>
+                  )}
+                  {/* Action Buttons */}
+                  {msg.actions && msg.actions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {msg.actions.map((action) => (
+                        <button
+                          key={action.id}
+                          onClick={() => handleAction(action)}
+                          disabled={action.done}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                            action.done
+                              ? 'bg-emerald-500/20 text-emerald-400 cursor-default'
+                              : action.type === 'dismiss'
+                              ? 'bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                              : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border border-orange-500/20'
+                          }`}
+                        >
+                          {action.done ? `✓ ${action.label}` : action.label}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
@@ -293,7 +273,7 @@ export default function FloatingAI() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSend()}
-                placeholder='Ask DOT anything...'
+                placeholder='Ask anything...'
                 className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
               />
               <button onClick={() => handleSend()}
@@ -306,4 +286,15 @@ export default function FloatingAI() {
       )}
     </>
   );
+}
+
+// Simple markdown-like formatting for bold text
+function formatMessageText(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { Card, GlassCard, Button, ProgressRing, SectionHeader, EmptyState, Avatar, Tag, Input, Select } from '../components/v3';
+import { Card, GlassCard, Button, ProgressRing, SectionHeader, EmptyState, Avatar, Tag, Input, Select, DatePicker } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import RentPayments from '../components/v3/RentPayments';
 import { useApi } from '../hooks/useApi';
@@ -270,8 +270,8 @@ export default function PropertyDetailV3() {
                     options={[{ value: '', label: 'Select...' }, ...['A','B','C','D','E','F','G','H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
                   <Select label="EPC Grade" value={form.epc_grade} onChange={(v: string) => setForm({ ...form, epc_grade: v })}
                     options={[{ value: '', label: 'Select...' }, ...['A','B','C','D','E','F','G'].map(g => ({ value: g, label: `Grade ${g}` }))]} />
-                  <Input label="Rent Review Date" value={form.rent_review_date} onChange={(v: string) => setForm({ ...form, rent_review_date: v })} type="date" />
-                  <Input label="Onboarded Date" value={form.onboarded_date} onChange={(v: string) => setForm({ ...form, onboarded_date: v })} type="date" />
+                  <DatePicker label="Rent Review Date" value={form.rent_review_date} onChange={(v: string) => setForm({ ...form, rent_review_date: v })} />
+                  <DatePicker label="Onboarded Date" value={form.onboarded_date} onChange={(v: string) => setForm({ ...form, onboarded_date: v })} />
                   <div className="flex flex-wrap gap-2 col-span-full">
                     <Toggle label="Proof of Ownership" checked={form.proof_of_ownership_received} onChange={v => setForm({ ...form, proof_of_ownership_received: v })} />
                     <Toggle label="Has Gas" checked={form.has_gas} onChange={v => setForm({ ...form, has_gas: v })} />
@@ -307,8 +307,8 @@ export default function PropertyDetailV3() {
                 {editing ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <Toggle label="Leasehold Property" checked={form.is_leasehold} onChange={v => setForm({ ...form, is_leasehold: v })} />
-                    <Input label="Lease Start" value={form.leasehold_start_date} onChange={(v: string) => setForm({ ...form, leasehold_start_date: v })} type="date" />
-                    <Input label="Lease End" value={form.leasehold_end_date} onChange={(v: string) => setForm({ ...form, leasehold_end_date: v })} type="date" />
+                    <DatePicker label="Lease Start" value={form.leasehold_start_date} onChange={(v: string) => setForm({ ...form, leasehold_start_date: v })} />
+                    <DatePicker label="Lease End" value={form.leasehold_end_date} onChange={(v: string) => setForm({ ...form, leasehold_end_date: v })} />
                     <Input label="Leaseholder Info" value={form.leaseholder_info} onChange={(v: string) => setForm({ ...form, leaseholder_info: v })} className="col-span-full" />
                   </div>
                 ) : (
@@ -334,9 +334,9 @@ export default function PropertyDetailV3() {
                     <Toggle label="Live Tenancy" checked={form.has_live_tenancy} onChange={v => setForm({ ...form, has_live_tenancy: v })} />
                     <Select label="Tenancy Type" value={form.tenancy_type} onChange={(v: string) => setForm({ ...form, tenancy_type: v })}
                       options={[{ value: '', label: 'Select...' }, { value: 'AST', label: 'AST' }, { value: 'HMO', label: 'HMO' }, { value: 'Rolling', label: 'Rolling' }, { value: 'Other', label: 'Other' }]} />
-                    <Input label="Start Date" value={form.tenancy_start_date} onChange={(v: string) => setForm({ ...form, tenancy_start_date: v })} type="date" />
+                    <DatePicker label="Start Date" value={form.tenancy_start_date} onChange={(v: string) => setForm({ ...form, tenancy_start_date: v })} />
                     <Toggle label="Has End Date" checked={form.has_end_date} onChange={v => setForm({ ...form, has_end_date: v })} />
-                    {form.has_end_date && <Input label="End Date" value={form.tenancy_end_date} onChange={(v: string) => setForm({ ...form, tenancy_end_date: v })} type="date" />}
+                    {form.has_end_date && <DatePicker label="End Date" value={form.tenancy_end_date} onChange={(v: string) => setForm({ ...form, tenancy_end_date: v })} />}
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

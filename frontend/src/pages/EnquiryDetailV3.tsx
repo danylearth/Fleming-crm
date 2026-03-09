@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Avatar, Input, Select, EmptyState } from '../components/v3';
+import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { Save, Pencil, X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle, Calendar, ExternalLink, Upload, FileText, CheckCircle } from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
@@ -271,7 +271,7 @@ export default function EnquiryDetailV3() {
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
                         <Input label="First Name" value={form.first_name_1 || ''} onChange={v => setField('first_name_1', v)} />
                         <Input label="Surname" value={form.last_name_1 || ''} onChange={v => setField('last_name_1', v)} />
-                        <Input label="Date of Birth" value={form.date_of_birth_1 || ''} onChange={v => setField('date_of_birth_1', v)} type="date" />
+                        <DatePicker label="Date of Birth" value={form.date_of_birth_1 || ''} onChange={v => setField('date_of_birth_1', v)} />
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         <Input label="Email" value={form.email_1 || ''} onChange={v => setField('email_1', v)} type="email" />
@@ -397,13 +397,14 @@ export default function EnquiryDetailV3() {
             <GlassCard className="p-5">
               <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Linked Property</h4>
               {editing ? (
-                <select value={form.linked_property_id || ''} onChange={e => setField('linked_property_id', e.target.value ? Number(e.target.value) : null)}
-                  className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2.5 text-sm text-[var(--text-primary)] appearance-none focus:outline-none">
-                  <option value="">No property linked</option>
-                  {properties.map(p => (
-                    <option key={p.id} value={p.id}>{p.address}{p.postcode ? `, ${p.postcode}` : ''}</option>
-                  ))}
-                </select>
+                <Select
+                  value={String(form.linked_property_id || '')}
+                  onChange={v => setField('linked_property_id', v ? Number(v) : null)}
+                  options={[
+                    { value: '', label: 'No property linked' },
+                    ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` })),
+                  ]}
+                />
               ) : selectedProp ? (
                 <div onClick={() => navigate(`/v3/properties/${selectedProp.id}`)}
                   className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
@@ -501,12 +502,12 @@ export default function EnquiryDetailV3() {
                   <>
                     <Select label="Property" value={wfPropId} onChange={setWfPropId}
                       options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: p.address }))]} />
-                    <Input label="Date" value={wfDate} onChange={setWfDate} type="date" />
+                    <DatePicker label="Date" value={wfDate} onChange={setWfDate} />
                     <Input label="Time" value={wfTime} onChange={setWfTime} type="time" />
                   </>
                 )}
-                {workflowMode === 'follow_up' && <Input label="Follow-up Date" value={wfDate} onChange={setWfDate} type="date" />}
-                {workflowMode === 'onboarding' && <Input label="Follow-up Date (optional)" value={wfDate} onChange={setWfDate} type="date" />}
+                {workflowMode === 'follow_up' && <DatePicker label="Follow-up Date" value={wfDate} onChange={setWfDate} />}
+                {workflowMode === 'onboarding' && <DatePicker label="Follow-up Date (optional)" value={wfDate} onChange={setWfDate} />}
                 {workflowMode === 'reject' && (
                   <div>
                     <label className="block text-xs text-[var(--text-secondary)] mb-1.5">Reason (optional)</label>
@@ -514,7 +515,7 @@ export default function EnquiryDetailV3() {
                       className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none" />
                   </div>
                 )}
-                {workflowMode === 'convert' && <Input label="Tenancy Start Date" value={wfDate} onChange={setWfDate} type="date" />}
+                {workflowMode === 'convert' && <DatePicker label="Tenancy Start Date" value={wfDate} onChange={setWfDate} />}
                 <div className="flex gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setShowWorkflow(false)}>Cancel</Button>
                   <Button variant={workflowMode === 'reject' ? 'outline' : 'gradient'} onClick={handleWorkflow}
