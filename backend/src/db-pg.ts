@@ -293,6 +293,35 @@ export async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
       CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_type, entity_id);
     `);
+
+    // ============ MIGRATIONS ============
+    // Safe migrations using DO blocks — idempotent, won't fail if already applied
+
+    // Add new tenant columns
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS deposit_scheme TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS authority_to_contact INTEGER DEFAULT 0;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS proof_of_income INTEGER DEFAULT 0;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Update properties status constraint to new values
+    await client.query(`
+      DO $$ BEGIN
+        -- Update existing data to new status values
+        UPDATE properties SET status = 'to_let' WHERE status = 'available';
+        UPDATE properties SET status = 'full_management' WHERE status = 'maintenance';
+        UPDATE properties SET status = 'let_agreed' WHERE status = 'let';
+        -- Drop old constraint and add new one
+        ALTER TABLE properties DROP CONSTRAINT IF EXISTS properties_status_check;
+        ALTER TABLE properties ADD CONSTRAINT properties_status_check
+          CHECK(status IN ('to_let', 'let_agreed', 'full_management', 'rent_collection'));
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
     console.log('Database initialized');
   } finally {
     client.release();

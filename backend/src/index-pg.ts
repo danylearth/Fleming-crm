@@ -370,11 +370,45 @@ app.get('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
 app.post('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
-    const name = d.name || `${d.first_name_1} ${d.last_name_1}`;
-    const id = await insert('INSERT INTO tenants (name, first_name_1, last_name_1, email, phone, notes) VALUES ($1, $2, $3, $4, $5, $6)',
-      [name, d.first_name_1 || name, d.last_name_1 || '', d.email, d.phone, d.notes]);
+    const name = d.name || `${d.first_name_1 || ''} ${d.last_name_1 || ''}`.trim();
+    const id = await insert(`
+      INSERT INTO tenants (
+        name, title_1, first_name_1, last_name_1, email, phone, date_of_birth_1,
+        is_joint_tenancy, title_2, first_name_2, last_name_2, email_2, phone_2, date_of_birth_2,
+        nok_name, nok_relationship, nok_phone, nok_email,
+        kyc_completed_1, kyc_completed_2,
+        guarantor_required, guarantor_name, guarantor_address, guarantor_phone, guarantor_email,
+        guarantor_kyc_completed, guarantor_deed_received,
+        holding_deposit_received, holding_deposit_amount, holding_deposit_date,
+        application_forms_completed, authority_to_contact, proof_of_income, deposit_scheme,
+        property_id, tenancy_start_date, tenancy_type, has_end_date, tenancy_end_date,
+        monthly_rent, notes, emergency_contact
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+        $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42
+      )
+    `, [
+      name,
+      d.title_1 || null, d.first_name_1 || name, d.last_name_1 || '',
+      d.email || null, d.phone || null, d.date_of_birth_1 || null,
+      d.is_joint_tenancy || 0,
+      d.title_2 || null, d.first_name_2 || null, d.last_name_2 || null,
+      d.email_2 || null, d.phone_2 || null, d.date_of_birth_2 || null,
+      d.nok_name || null, d.nok_relationship || null, d.nok_phone || null, d.nok_email || null,
+      d.kyc_completed_1 || 0, d.kyc_completed_2 || 0,
+      d.guarantor_required || 0, d.guarantor_name || null, d.guarantor_address || null,
+      d.guarantor_phone || null, d.guarantor_email || null,
+      d.guarantor_kyc_completed || 0, d.guarantor_deed_received || 0,
+      d.holding_deposit_received || 0, d.holding_deposit_amount || null, d.holding_deposit_date || null,
+      d.application_forms_completed || 0, d.authority_to_contact || 0, d.proof_of_income || 0, d.deposit_scheme || null,
+      d.property_id || null, d.tenancy_start_date || null, d.tenancy_type || null,
+      d.has_end_date || 0, d.tenancy_end_date || null,
+      d.monthly_rent || null, d.notes || null, d.emergency_contact || null
+    ]);
+    await logAudit(req.user?.id, req.user?.email, 'create', 'tenant', id);
     res.json({ id });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to create tenant' });
   }
 });
@@ -395,11 +429,42 @@ app.get('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
 app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
-    const name = d.name || `${d.first_name_1} ${d.last_name_1}`;
-    await run(`UPDATE tenants SET name=$1, email=$2, phone=$3, property_id=$4, notes=$5, updated_at=CURRENT_TIMESTAMP WHERE id=$6`,
-      [name, d.email, d.phone, d.property_id, d.notes, req.params.id]);
-    res.json({ success: true });
+    if (d.first_name_1 && d.last_name_1 && !d.name) {
+      d.name = `${d.first_name_1} ${d.last_name_1}`;
+    }
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    const allowed = [
+      'name','title_1','first_name_1','last_name_1','email','phone','date_of_birth_1',
+      'is_joint_tenancy','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2',
+      'nok_name','nok_relationship','nok_phone','nok_email',
+      'kyc_completed_1','kyc_completed_2',
+      'guarantor_required','guarantor_name','guarantor_address','guarantor_phone','guarantor_email',
+      'guarantor_kyc_completed','guarantor_deed_received',
+      'holding_deposit_received','holding_deposit_amount','holding_deposit_date',
+      'application_forms_completed','authority_to_contact','proof_of_income','deposit_scheme',
+      'property_id','tenancy_start_date','tenancy_type','has_end_date','tenancy_end_date',
+      'monthly_rent','notes','emergency_contact'
+    ];
+    for (const key of allowed) {
+      if (key in d) {
+        fields.push(`${key}=$${idx++}`);
+        values.push(d[key]);
+      }
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    fields.push(`updated_at=CURRENT_TIMESTAMP`);
+    values.push(req.params.id);
+    await run(`UPDATE tenants SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'tenant', parseInt(req.params.id as string), req.body);
+    const updated = await queryOne(`
+      SELECT t.*, p.address as property_address FROM tenants t
+      LEFT JOIN properties p ON p.id = t.property_id WHERE t.id=$1
+    `, [req.params.id]);
+    res.json(updated);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to update tenant' });
   }
 });
@@ -423,11 +488,33 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
     const id = await insert(`
-      INSERT INTO properties (landlord_id, address, postcode, property_type, bedrooms, rent_amount, status, notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    `, [d.landlord_id, d.address, d.postcode, d.property_type || 'house', d.bedrooms || 1, d.rent_amount || 0, d.status || 'available', d.notes]);
+      INSERT INTO properties (
+        landlord_id, address, postcode, property_type, bedrooms,
+        is_leasehold, leasehold_start_date, leasehold_end_date, leaseholder_info,
+        proof_of_ownership_received, council_tax_band, service_type,
+        charge_percentage, total_charge, rent_amount,
+        has_live_tenancy, tenancy_start_date, tenancy_type, has_end_date, tenancy_end_date,
+        rent_review_date, eicr_expiry_date, epc_grade, epc_expiry_date,
+        has_gas, gas_safety_expiry_date, status, onboarded_date, notes
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+        $21,$22,$23,$24,$25,$26,$27,$28,$29
+      )
+    `, [
+      d.landlord_id, d.address, d.postcode, d.property_type || 'house', d.bedrooms || 1,
+      d.is_leasehold ? 1 : 0, d.leasehold_start_date || null, d.leasehold_end_date || null, d.leaseholder_info || null,
+      d.proof_of_ownership_received ? 1 : 0, d.council_tax_band || null, d.service_type || null,
+      d.charge_percentage || null, d.total_charge || null, d.rent_amount || 0,
+      d.has_live_tenancy ? 1 : 0, d.tenancy_start_date || null, d.tenancy_type || null,
+      d.has_end_date ? 1 : 0, d.tenancy_end_date || null,
+      d.rent_review_date || null, d.eicr_expiry_date || null, d.epc_grade || null, d.epc_expiry_date || null,
+      d.has_gas ? 1 : 0, d.gas_safety_expiry_date || null, d.status || 'to_let',
+      d.onboarded_date || null, d.notes || null
+    ]);
+    await logAudit(req.user?.id, req.user?.email, 'create', 'property', id);
     res.json({ id });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to create property' });
   }
 });
@@ -450,14 +537,41 @@ app.get('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
 app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
-    await run(`
-      UPDATE properties SET landlord_id=$1, address=$2, postcode=$3, property_type=$4, bedrooms=$5, 
-      rent_amount=$6, status=$7, eicr_expiry_date=$8, epc_grade=$9, epc_expiry_date=$10,
-      has_gas=$11, gas_safety_expiry_date=$12, notes=$13, updated_at=CURRENT_TIMESTAMP WHERE id=$14
-    `, [d.landlord_id, d.address, d.postcode, d.property_type, d.bedrooms, d.rent_amount, d.status,
-        d.eicr_expiry_date, d.epc_grade, d.epc_expiry_date, d.has_gas ? 1 : 0, d.gas_safety_expiry_date, d.notes, req.params.id]);
-    res.json({ success: true });
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    const boolFields = ['has_gas','is_leasehold','proof_of_ownership_received','has_live_tenancy','has_end_date'];
+    const allowed = [
+      'landlord_id','address','postcode','property_type','bedrooms',
+      'is_leasehold','leasehold_start_date','leasehold_end_date','leaseholder_info',
+      'proof_of_ownership_received','council_tax_band','service_type',
+      'charge_percentage','total_charge','rent_amount',
+      'has_live_tenancy','tenancy_start_date','tenancy_type','has_end_date','tenancy_end_date',
+      'rent_review_date','eicr_expiry_date','epc_grade','epc_expiry_date',
+      'has_gas','gas_safety_expiry_date','status','onboarded_date','notes'
+    ];
+    for (const key of allowed) {
+      if (key in d) {
+        let val = d[key];
+        if (boolFields.includes(key)) val = val ? 1 : 0;
+        fields.push(`${key}=$${idx++}`);
+        values.push(val);
+      }
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    fields.push(`updated_at=CURRENT_TIMESTAMP`);
+    values.push(req.params.id);
+    await run(`UPDATE properties SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'property', parseInt(req.params.id as string), req.body);
+    const updated = await queryOne(`
+      SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email,
+        (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant,
+        (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id
+      FROM properties p JOIN landlords l ON l.id = p.landlord_id WHERE p.id = $1
+    `, [req.params.id]);
+    res.json(updated);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to update property' });
   }
 });
@@ -637,6 +751,46 @@ app.get('/api/rent-payments', authMiddleware, async (req: AuthRequest, res) => {
     res.json(payments);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch rent payments' });
+  }
+});
+
+app.post('/api/rent-payments', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const d = req.body;
+    if (!d.property_id || !d.due_date || !d.amount_due) {
+      return res.status(400).json({ error: 'property_id, due_date, and amount_due are required' });
+    }
+    const id = await insert(
+      'INSERT INTO rent_payments (property_id, tenant_id, due_date, amount_due, status) VALUES ($1, $2, $3, $4, $5)',
+      [d.property_id, d.tenant_id || null, d.due_date, d.amount_due, 'pending']
+    );
+    await logAudit(req.user?.id, req.user?.email, 'create', 'rent_payment', id);
+    res.json({ id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create rent payment' });
+  }
+});
+
+app.put('/api/rent-payments/:id/pay', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const d = req.body;
+    const payment = await queryOne('SELECT * FROM rent_payments WHERE id = $1', [req.params.id as string]);
+    if (!payment) return res.status(404).json({ error: 'Payment not found' });
+
+    const amountPaid = d.amount_paid || payment.amount_due;
+    const paymentDate = d.payment_date || new Date().toISOString().split('T')[0];
+    const newStatus = amountPaid < payment.amount_due ? 'partial' : 'paid';
+
+    await run(
+      'UPDATE rent_payments SET amount_paid=$1, payment_date=$2, status=$3 WHERE id=$4',
+      [amountPaid, paymentDate, newStatus, req.params.id]
+    );
+    await logAudit(req.user?.id, req.user?.email, 'update', 'rent_payment', parseInt(req.params.id as string), { status: newStatus, amount_paid: amountPaid });
+    res.json({ success: true, status: newStatus });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to mark payment as paid' });
   }
 });
 
