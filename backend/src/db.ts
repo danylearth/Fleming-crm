@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import bcrypt from 'bcryptjs';
 import path from 'path';
 
 // Use DATABASE_PATH env var if set (for Render persistent disk), otherwise default to backend/fleming.db
@@ -607,5 +608,55 @@ db.exec(`
     FOREIGN KEY (property_id) REFERENCES properties(id)
   );
 `);
+
+// ============ SEED DATA (only on empty database) ============
+const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;
+if (userCount === 0) {
+  console.log('[Seed] Empty database detected — seeding demo data...');
+
+  // Admin users
+  const hash1 = bcrypt.hashSync('test123', 10);
+  const hash2 = bcrypt.hashSync('admin123', 10);
+  db.prepare('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)').run('d@planet.earth', hash1, 'Danyl', 'admin');
+  db.prepare('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)').run('admin@fleming.com', hash2, 'Admin', 'admin');
+
+  // Landlords
+  db.prepare(`INSERT INTO landlords (name, email, phone, landlord_type) VALUES (?, ?, ?, ?)`).run('James MacPherson', 'j.macpherson@email.com', '07700 700100', 'internal');
+  db.prepare(`INSERT INTO landlords (name, email, phone, landlord_type) VALUES (?, ?, ?, ?)`).run('Sarah Henderson', 's.henderson@email.com', '07700 700200', 'external');
+  db.prepare(`INSERT INTO landlords (name, email, phone, landlord_type) VALUES (?, ?, ?, ?)`).run('Fleming Lettings Ltd', 'office@fleming.com', '0131 555 0100', 'internal');
+
+  // Properties
+  db.prepare(`INSERT INTO properties (landlord_id, address, postcode, property_type, bedrooms, rent_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(1, '12A Leith Walk, Edinburgh EH6 5DT', 'EH6 5DT', 'flat', 2, 950, 'to_let');
+  db.prepare(`INSERT INTO properties (landlord_id, address, postcode, property_type, bedrooms, rent_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(1, '7/3 Easter Road, Edinburgh EH7 5PL', 'EH7 5PL', 'flat', 1, 750, 'to_let');
+  db.prepare(`INSERT INTO properties (landlord_id, address, postcode, property_type, bedrooms, rent_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(2, '15 Constitution Street, Edinburgh EH6 7BG', 'EH6 7BG', 'house', 3, 1200, 'to_let');
+  db.prepare(`INSERT INTO properties (landlord_id, address, postcode, property_type, bedrooms, rent_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(3, '21 Morningside Road, Edinburgh EH10 4DR', 'EH10 4DR', 'flat', 2, 1100, 'to_let');
+  db.prepare(`INSERT INTO properties (landlord_id, address, postcode, property_type, bedrooms, rent_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(3, '4 Stockbridge Crescent, Edinburgh EH3 5LR', 'EH3 5LR', 'flat', 3, 1400, 'to_let');
+
+  // Tenants
+  db.prepare(`INSERT INTO tenants (name, email, phone, property_id, status) VALUES (?, ?, ?, ?, ?)`).run('Emma Wilson', 'e.wilson@email.com', '07700 800100', 1, 'active');
+  db.prepare(`INSERT INTO tenants (name, email, phone, property_id, status) VALUES (?, ?, ?, ?, ?)`).run('David Brown', 'd.brown@email.com', '07700 800200', 3, 'active');
+
+  // Tenant Enquiries
+  db.prepare(`INSERT INTO tenant_enquiries (name_1, email_1, phone_1, status) VALUES (?, ?, ?, ?)`).run('Tom Anderson', 'tom@email.com', '07700 900100', 'new');
+  db.prepare(`INSERT INTO tenant_enquiries (name_1, email_1, phone_1, status) VALUES (?, ?, ?, ?)`).run('Jenny Liu', 'jenny@email.com', '07700 900200', 'new');
+  db.prepare(`INSERT INTO tenant_enquiries (name_1, email_1, phone_1, status) VALUES (?, ?, ?, ?)`).run('Ahmed Hassan', 'ahmed@email.com', '07700 900300', 'new');
+  db.prepare(`INSERT INTO tenant_enquiries (name_1, email_1, phone_1, status) VALUES (?, ?, ?, ?)`).run('Sophie Taylor', 'sophie@email.com', '07700 900400', 'new');
+
+  // BDM Prospects
+  db.prepare(`INSERT INTO landlords_bdm (name, email, phone, address, source, status, follow_up_date) VALUES (?, ?, ?, ?, ?, ?, ?)`).run('Patricia Young', 'p.young@email.com', '07700 700444', '33 Corstorphine Road, Edinburgh', 'Gumtree', 'follow_up', '2026-03-10');
+  db.prepare(`INSERT INTO landlords_bdm (name, email, phone, address, source, status) VALUES (?, ?, ?, ?, ?, ?)`).run('Andrew Campbell', 'a.campbell@email.com', '07700 700111', '45 Queen Street, Edinburgh', 'Rightmove', 'new');
+  db.prepare(`INSERT INTO landlords_bdm (name, email, phone, address, source, status) VALUES (?, ?, ?, ?, ?, ?)`).run('Derek Hamilton', 'd.hamilton@email.com', '07700 700555', '19 Dalry Road, Edinburgh', 'OpenRent', 'new');
+  db.prepare(`INSERT INTO landlords_bdm (name, email, phone, address, source, status) VALUES (?, ?, ?, ?, ?, ?)`).run('Ravnita Rayo', 'ray123@gmail.com', '079619876123', 'The Willows', 'Rightmove', 'new');
+  db.prepare(`INSERT INTO landlords_bdm (name, email, phone, address, source, status, follow_up_date) VALUES (?, ?, ?, ?, ?, ?, ?)`).run('Claire Robertson', 'c.robertson@email.com', '07700 700222', '12 Dundas Street, Edinburgh', 'Referral', 'contacted', '2026-03-12');
+  db.prepare(`INSERT INTO landlords_bdm (name, email, phone, address, source, status, follow_up_date) VALUES (?, ?, ?, ?, ?, ?, ?)`).run('Karen Mitchell', 'k.mitchell@email.com', '07700 700666', '27 Gorgie Road, Edinburgh', 'Referral', 'contacted', '2026-03-14');
+  db.prepare(`INSERT INTO landlords_bdm (name, email, phone, address, source, status, follow_up_date) VALUES (?, ?, ?, ?, ?, ?, ?)`).run('Michael Douglas', 'm.douglas@email.com', '07700 700333', '8 Haymarket Terrace, Edinburgh', 'Website', 'interested', '2026-03-15');
+
+  // Maintenance
+  db.prepare(`INSERT INTO maintenance (property_id, title, description, priority, status) VALUES (?, ?, ?, ?, ?)`).run(1, 'Boiler not heating water', 'Tenant reports no hot water since yesterday morning. Boiler showing E119 error code.', 'urgent', 'open');
+  db.prepare(`INSERT INTO maintenance (property_id, title, description, priority, status) VALUES (?, ?, ?, ?, ?)`).run(3, 'Leaking kitchen tap', 'Slow drip from kitchen mixer tap. Getting worse over past week.', 'medium', 'open');
+  db.prepare(`INSERT INTO maintenance (property_id, title, description, priority, status) VALUES (?, ?, ?, ?, ?)`).run(4, 'Bedroom window wont close', 'Handle mechanism broken on main bedroom window. Security concern.', 'high', 'open');
+
+  console.log('[Seed] Demo data created. Login: d@planet.earth / test123 or admin@fleming.com / admin123');
+}
 
 export default db;
