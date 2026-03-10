@@ -609,7 +609,12 @@ db.exec(`
   );
 `);
 
-// ============ SEED DATA (only on empty database) ============
+// ============ SEED DATA (only on empty database or FORCE_RESEED) ============
+if (process.env.FORCE_RESEED === 'true') {
+  console.log('[Seed] FORCE_RESEED detected — wiping and re-seeding...');
+  const tables = ['property_viewings', 'property_expenses', 'rent_payments', 'maintenance', 'tasks', 'tenancies', 'tenant_enquiries', 'tenants', 'properties', 'landlords_bdm', 'landlords', 'audit_log', 'documents', 'users'];
+  tables.forEach(t => { try { db.exec(`DELETE FROM ${t}`); } catch(e) {} });
+}
 const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;
 if (userCount === 0) {
   console.log('[Seed] Empty database detected — seeding comprehensive demo data...');
