@@ -47,7 +47,7 @@ function getMonthDays(year: number, month: number) {
   return cells;
 }
 
-export function DatePicker({ label, value, onChange, placeholder = 'dd-mm-yyyy', className = '' }: DatePickerProps) {
+export function DatePicker({ label, value, onChange, placeholder = 'DD-MM-YYYY', className = '' }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const [yearPicker, setYearPicker] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);

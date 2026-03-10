@@ -12,8 +12,8 @@ import { startScheduler } from './scheduler';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, '../uploads');
+// Ensure uploads directory exists (use UPLOADS_PATH env var for persistent disk on Render)
+const uploadsDir = process.env.UPLOADS_PATH || path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -491,13 +491,13 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
         updated_at=CURRENT_TIMESTAMP
       WHERE id=?
     `).run(
-      data.title_1, data.first_name_1, data.last_name_1, data.email_1, data.phone_1,
-      data.date_of_birth_1, data.current_address_1, data.employment_status_1, data.employer_1, data.income_1,
-      data.is_joint_application ? 1 : 0, data.title_2, data.first_name_2, data.last_name_2,
-      data.email_2, data.phone_2, data.date_of_birth_2, data.current_address_2,
-      data.employment_status_2, data.employer_2, data.income_2,
-      data.kyc_completed_1 ? 1 : 0, data.kyc_completed_2 ? 1 : 0, data.status, data.follow_up_date,
-      data.viewing_date, data.linked_property_id, data.notes, data.rejection_reason,
+      data.title_1 || null, data.first_name_1, data.last_name_1, data.email_1, data.phone_1 || null,
+      data.date_of_birth_1 || null, data.current_address_1 || null, data.employment_status_1 || null, data.employer_1 || null, data.income_1 || null,
+      data.is_joint_application ? 1 : 0, data.title_2 || null, data.first_name_2 || null, data.last_name_2 || null,
+      data.email_2 || null, data.phone_2 || null, data.date_of_birth_2 || null, data.current_address_2 || null,
+      data.employment_status_2 || null, data.employer_2 || null, data.income_2 || null,
+      data.kyc_completed_1 ? 1 : 0, data.kyc_completed_2 ? 1 : 0, data.status || 'new', data.follow_up_date || null,
+      data.viewing_date || null, data.linked_property_id || null, data.notes || null, data.rejection_reason || null,
       data.viewing_with || null, data.renting_requirements || null, data.is_permanent_address ? 1 : 0,
       req.params.id
     );
@@ -667,22 +667,28 @@ app.put('/api/tenants/:id', authMiddleware, (req: AuthRequest, res) => {
         is_joint_tenancy=?, title_2=?, first_name_2=?, last_name_2=?, email_2=?, phone_2=?, date_of_birth_2=?,
         nok_name=?, nok_relationship=?, nok_phone=?, nok_email=?,
         kyc_completed_1=?, kyc_completed_2=?,
+        kyc_primary_id=?, kyc_secondary_id=?, kyc_address_verification=?, kyc_personal_verification=?,
         guarantor_required=?, guarantor_name=?, guarantor_address=?, guarantor_phone=?, guarantor_email=?,
         guarantor_kyc_completed=?, guarantor_deed_received=?,
         holding_deposit_received=?, holding_deposit_amount=?, holding_deposit_date=?, application_forms_completed=?,
+        authority_to_contact=?, proof_of_income=?, deposit_scheme=?,
+        income_amount=?, income_employer=?, income_contract_type=?,
         property_id=?, tenancy_start_date=?, tenancy_type=?, has_end_date=?, tenancy_end_date=?, monthly_rent=?,
-        notes=?, updated_at=CURRENT_TIMESTAMP
+        move_in_date=?, status=?, notes=?, updated_at=CURRENT_TIMESTAMP
       WHERE id=?
     `).run(
-      name, data.title_1, data.first_name_1, data.last_name_1, data.email, data.phone, data.date_of_birth_1,
-      data.is_joint_tenancy ? 1 : 0, data.title_2, data.first_name_2, data.last_name_2, data.email_2, data.phone_2, data.date_of_birth_2,
-      data.nok_name, data.nok_relationship, data.nok_phone, data.nok_email,
+      name, data.title_1 || null, data.first_name_1, data.last_name_1, data.email || null, data.phone || null, data.date_of_birth_1 || null,
+      data.is_joint_tenancy ? 1 : 0, data.title_2 || null, data.first_name_2 || null, data.last_name_2 || null, data.email_2 || null, data.phone_2 || null, data.date_of_birth_2 || null,
+      data.nok_name || null, data.nok_relationship || null, data.nok_phone || null, data.nok_email || null,
       data.kyc_completed_1 ? 1 : 0, data.kyc_completed_2 ? 1 : 0,
+      data.kyc_primary_id ? 1 : 0, data.kyc_secondary_id ? 1 : 0, data.kyc_address_verification ? 1 : 0, data.kyc_personal_verification ? 1 : 0,
       data.guarantor_required ? 1 : 0, data.guarantor_name, data.guarantor_address, data.guarantor_phone, data.guarantor_email,
       data.guarantor_kyc_completed ? 1 : 0, data.guarantor_deed_received ? 1 : 0,
       data.holding_deposit_received ? 1 : 0, data.holding_deposit_amount, data.holding_deposit_date, data.application_forms_completed ? 1 : 0,
-      data.property_id, data.tenancy_start_date, data.tenancy_type, data.has_end_date ? 1 : 0, data.tenancy_end_date, data.monthly_rent,
-      data.notes, req.params.id
+      data.authority_to_contact ? 1 : 0, data.proof_of_income || null, data.deposit_scheme || null,
+      data.income_amount || null, data.income_employer || null, data.income_contract_type || null,
+      data.property_id, data.tenancy_start_date || null, data.tenancy_type || null, data.has_end_date ? 1 : 0, data.tenancy_end_date || null, data.monthly_rent || null,
+      data.move_in_date || null, data.status || 'active', data.notes, req.params.id
     );
 
     logAudit(req.user?.id, req.user?.email, 'update', 'tenant', parseInt(req.params.id), data);
@@ -690,6 +696,18 @@ app.put('/api/tenants/:id', authMiddleware, (req: AuthRequest, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update tenant' });
+  }
+});
+
+// Notes-only update for tenants (avoids full PUT validation)
+app.patch('/api/tenants/:id/notes', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { notes } = req.body;
+    db.prepare('UPDATE tenants SET notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(notes, req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update notes' });
   }
 });
 
@@ -781,12 +799,12 @@ app.put('/api/properties/:id', authMiddleware, (req: AuthRequest, res) => {
         has_gas=?, gas_safety_expiry_date=?, onboarded_date=?, notes=?, updated_at=CURRENT_TIMESTAMP
       WHERE id=?
     `).run(
-      data.landlord_id, data.address, data.postcode, data.property_type, data.bedrooms, data.rent_amount, data.status,
-      data.is_leasehold ? 1 : 0, data.leasehold_start_date, data.leasehold_end_date, data.leaseholder_info,
-      data.proof_of_ownership_received ? 1 : 0, data.council_tax_band, data.service_type, data.charge_percentage, data.total_charge,
-      data.has_live_tenancy ? 1 : 0, data.tenancy_start_date, data.tenancy_type, data.has_end_date ? 1 : 0, data.tenancy_end_date,
-      data.rent_review_date, data.eicr_expiry_date, data.epc_grade, data.epc_expiry_date,
-      data.has_gas ? 1 : 0, data.gas_safety_expiry_date, data.onboarded_date, data.notes, req.params.id
+      data.landlord_id, data.address, data.postcode, data.property_type || null, data.bedrooms, data.rent_amount, data.status || 'available',
+      data.is_leasehold ? 1 : 0, data.leasehold_start_date || null, data.leasehold_end_date || null, data.leaseholder_info || null,
+      data.proof_of_ownership_received ? 1 : 0, data.council_tax_band || null, data.service_type || null, data.charge_percentage, data.total_charge,
+      data.has_live_tenancy ? 1 : 0, data.tenancy_start_date || null, data.tenancy_type || null, data.has_end_date ? 1 : 0, data.tenancy_end_date || null,
+      data.rent_review_date || null, data.eicr_expiry_date || null, data.epc_grade || null, data.epc_expiry_date || null,
+      data.has_gas ? 1 : 0, data.gas_safety_expiry_date || null, data.onboarded_date || null, data.notes || null, req.params.id
     );
 
     logAudit(req.user?.id, req.user?.email, 'update', 'property', parseInt(req.params.id), data);
@@ -943,8 +961,10 @@ app.post('/api/maintenance', authMiddleware, (req: AuthRequest, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(
-      data.property_id, data.tenant_id, data.landlord_id, data.reporter_name, data.reporter_email, data.reporter_phone,
-      data.reporter_type, data.title, data.description, data.category, data.priority || 'medium'
+      data.property_id ?? null, data.tenant_id ?? null, data.landlord_id ?? null,
+      data.reporter_name ?? null, data.reporter_email ?? null, data.reporter_phone ?? null,
+      data.reporter_type ?? null, data.title ?? null, data.description ?? '', data.category ?? null,
+      data.priority || 'medium'
     );
 
     logAudit(req.user?.id, req.user?.email, 'create', 'maintenance', result.lastInsertRowid as number);

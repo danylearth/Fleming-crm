@@ -67,7 +67,7 @@ export default function LandlordDetailV3() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', address: '', notes: '',
+    name: '', email: '', phone: '', notes: '',
     alt_email: '', date_of_birth: '', home_address: '', referral_source: '',
     marketing_post: false, marketing_email: false, marketing_phone: false, marketing_sms: false,
     kyc_completed: false,
@@ -83,7 +83,7 @@ export default function LandlordDetailV3() {
   });
 
   const populateForm = (l: Landlord) => setForm({
-    name: l.name || '', email: l.email || '', phone: l.phone || '', address: l.address || '',
+    name: l.name || '', email: l.email || '', phone: l.phone || '',
     notes: '', alt_email: l.alt_email || '', date_of_birth: l.date_of_birth || '', home_address: l.home_address || '',
     referral_source: l.referral_source || '',
     marketing_post: !!l.marketing_post, marketing_email: !!l.marketing_email,

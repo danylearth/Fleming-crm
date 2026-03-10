@@ -315,7 +315,7 @@ export default function TenantDetailV3() {
     const note: TenantNote = { id: Date.now().toString(), text: noteText, author: user?.email || 'Unknown', created_at: new Date().toISOString() };
     const updated = [...notes, note];
     try {
-      await api.put(`/api/tenants/${id}`, { notes: JSON.stringify(updated) });
+      await api.patch(`/api/tenants/${id}/notes`, { notes: JSON.stringify(updated) });
       setNotes(updated);
       setNewNote('');
       api.post('/api/activity', { action: 'note_added', entity_type: 'tenant', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});

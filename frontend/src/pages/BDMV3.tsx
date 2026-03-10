@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState } from '../components/v3';
+import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DatePicker } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Mail, Phone, MapPin, Calendar, ChevronDown, Search, ArrowRight, UserPlus, XCircle, LayoutGrid, List } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
@@ -387,7 +387,7 @@ export default function BDMV3() {
             <Input label="Address" value={form.address} onChange={v => setForm({ ...form, address: v })} placeholder="Property or contact address" />
             <div className="grid grid-cols-2 gap-3">
               <Input label="Source" value={form.source} onChange={v => setForm({ ...form, source: v })} placeholder="e.g. Referral, Rightmove" />
-              <Input label="Follow-up Date" value={form.follow_up_date} onChange={v => setForm({ ...form, follow_up_date: v })} placeholder="YYYY-MM-DD" />
+              <DatePicker label="Follow-up Date" value={form.follow_up_date} onChange={v => setForm({ ...form, follow_up_date: v })} />
             </div>
             <div>
               <label className="block text-xs text-[var(--text-muted)] mb-1.5">Notes</label>
@@ -501,7 +501,7 @@ export default function BDMV3() {
             ) : workflowMode === 'follow_up' ? (
               <div className="space-y-4">
                 <p className="text-sm font-medium">Set Follow-up Date</p>
-                <Input label="Follow-up Date" value={workflowDate} onChange={setWorkflowDate} placeholder="YYYY-MM-DD" />
+                <DatePicker label="Follow-up Date" value={workflowDate} onChange={setWorkflowDate} />
                 <div className="flex gap-3">
                   <Button variant="ghost" onClick={() => dragTargetStatus ? setWorkflowProspect(null) : setWorkflowMode('choose')}>
                     {dragTargetStatus ? 'Cancel' : 'Back'}

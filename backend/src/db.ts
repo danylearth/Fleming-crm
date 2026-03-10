@@ -1,7 +1,9 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 
-const db = new Database(path.join(__dirname, '..', 'fleming.db'));
+// Use DATABASE_PATH env var if set (for Render persistent disk), otherwise default to backend/fleming.db
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '..', 'fleming.db');
+const db = new Database(dbPath);
 
 // Initialize tables - Fleming CRM Full Schema
 db.exec(`
@@ -456,6 +458,101 @@ db.exec(`
   );
 `);
 
+// Migrate audit_log to remove restrictive CHECK constraint (allows note_added, etc.)
+const auditSchema = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='audit_log'`).get() as any;
+if (auditSchema && auditSchema.sql && auditSchema.sql.includes('CHECK')) {
+  db.exec(`DROP TABLE IF EXISTS audit_log_new`);
+  db.exec(`
+    CREATE TABLE audit_log_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      user_email TEXT,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id INTEGER,
+      changes TEXT,
+      ip_address TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+    INSERT INTO audit_log_new SELECT * FROM audit_log;
+    DROP TABLE audit_log;
+    ALTER TABLE audit_log_new RENAME TO audit_log;
+    CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_date ON audit_log(created_at);
+  `);
+}
+
+// Cleanup leftover migration tables from any previous failed run
+db.exec(`DROP TABLE IF EXISTS properties_new`);
+db.exec(`DROP TABLE IF EXISTS audit_log_new`);
+
+// Migrate properties to allow expanded status values (to_let, let_agreed, full_management, rent_collection)
+// Check if the table schema has a CHECK constraint on status
+const propSchema = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='properties'`).get() as any;
+if (propSchema && propSchema.sql && propSchema.sql.includes('CHECK')) {
+  // Table has CHECK constraints — recreate without them
+  db.pragma('foreign_keys = OFF');
+  db.exec(`DROP TABLE IF EXISTS properties_new`);
+  db.exec(`
+    CREATE TABLE properties_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      landlord_id INTEGER NOT NULL,
+      address TEXT NOT NULL,
+      postcode TEXT NOT NULL,
+      property_type TEXT DEFAULT 'house',
+      bedrooms INTEGER DEFAULT 1,
+      is_leasehold INTEGER DEFAULT 0,
+      leasehold_start_date DATE,
+      leasehold_end_date DATE,
+      leaseholder_info TEXT,
+      proof_of_ownership_received INTEGER DEFAULT 0,
+      council_tax_band TEXT,
+      service_type TEXT,
+      charge_percentage REAL,
+      total_charge REAL,
+      rent_amount REAL NOT NULL,
+      has_live_tenancy INTEGER DEFAULT 0,
+      tenancy_start_date DATE,
+      tenancy_type TEXT,
+      has_end_date INTEGER DEFAULT 0,
+      tenancy_end_date DATE,
+      rent_review_date DATE,
+      eicr_expiry_date DATE,
+      epc_grade TEXT,
+      epc_expiry_date DATE,
+      has_gas INTEGER DEFAULT 0,
+      gas_safety_expiry_date DATE,
+      status TEXT DEFAULT 'to_let',
+      onboarded_date DATE,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (landlord_id) REFERENCES landlords(id)
+    );
+    INSERT INTO properties_new SELECT * FROM properties;
+    DROP TABLE properties;
+    ALTER TABLE properties_new RENAME TO properties;
+    CREATE INDEX IF NOT EXISTS idx_properties_landlord ON properties(landlord_id);
+    CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(status);
+    CREATE INDEX IF NOT EXISTS idx_properties_eicr ON properties(eicr_expiry_date);
+    CREATE INDEX IF NOT EXISTS idx_properties_epc ON properties(epc_expiry_date);
+    CREATE INDEX IF NOT EXISTS idx_properties_gas ON properties(gas_safety_expiry_date);
+    CREATE INDEX IF NOT EXISTS idx_properties_tenancy_end ON properties(tenancy_end_date);
+    CREATE INDEX IF NOT EXISTS idx_properties_rent_review ON properties(rent_review_date);
+  `);
+  db.pragma('foreign_keys = ON');
+  // Update old status values to new ones
+  try { db.prepare(`UPDATE properties SET status = 'to_let' WHERE status = 'available'`).run(); } catch (e2) {}
+  try { db.prepare(`UPDATE properties SET status = 'let_agreed' WHERE status = 'let'`).run(); } catch (e2) {}
+}
+
+// Also migrate tenants table to remove tenancy_type CHECK constraint
+try {
+  db.prepare(`UPDATE tenants SET tenancy_type = NULL WHERE tenancy_type = ''`).run();
+} catch (e) {}
+
 // Migrations for existing databases
 try {
   db.exec(`ALTER TABLE landlords ADD COLUMN landlord_type TEXT DEFAULT 'external' CHECK(landlord_type IN ('internal', 'external'))`);
@@ -484,6 +581,15 @@ try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN renting_requirements TEXT
 
 // Sprint 2: Permanent address flag on enquiries
 try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN is_permanent_address INTEGER DEFAULT 0`); } catch (e) {}
+
+// Sprint 2: Onboarding checklist fields
+for (const col of ['authority_to_contact INTEGER DEFAULT 0', 'proof_of_income TEXT', 'deposit_scheme TEXT']) {
+  try { db.exec(`ALTER TABLE tenants ADD COLUMN ${col}`); } catch (e) {}
+}
+
+// Sprint 2: Tenant status and move-in date
+try { db.exec(`ALTER TABLE tenants ADD COLUMN status TEXT DEFAULT 'active'`); } catch (e) {}
+try { db.exec(`ALTER TABLE tenants ADD COLUMN move_in_date DATE`); } catch (e) {}
 
 // Sprint 3: Landlord referral source
 try { db.exec(`ALTER TABLE landlords ADD COLUMN referral_source TEXT`); } catch (e) {}

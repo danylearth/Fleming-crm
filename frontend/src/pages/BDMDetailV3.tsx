@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Select, Avatar, SectionHeader } from '../components/v3';
+import { GlassCard, Button, Input, Select, Avatar, SectionHeader, DatePicker } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import { useApi } from '../hooks/useApi';
 import {
@@ -252,7 +252,7 @@ export default function BDMDetailV3() {
                   <Input label="Address" value={form.address} onChange={v => setForm({ ...form, address: v })} />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <Input label="Source" value={form.source} onChange={v => setForm({ ...form, source: v })} placeholder="e.g. Referral, Rightmove" />
-                    <Input label="Follow-up Date" value={form.follow_up_date} onChange={v => setForm({ ...form, follow_up_date: v })} placeholder="YYYY-MM-DD" />
+                    <DatePicker label="Follow-up Date" value={form.follow_up_date} onChange={v => setForm({ ...form, follow_up_date: v })} />
                   </div>
                   <Select label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })}
                     options={STATUSES} />

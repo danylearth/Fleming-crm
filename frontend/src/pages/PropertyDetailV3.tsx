@@ -105,7 +105,7 @@ export default function PropertyDetailV3() {
   const [expenseForm, setExpenseForm] = useState({ description: '', amount: '', category: 'maintenance', expense_date: '' });
 
   const populateForm = (p: PropertyDetail) => setForm({
-    address: p.address || '', postcode: p.postcode || '',
+    landlord_id: p.landlord_id, address: p.address || '', postcode: p.postcode || '',
     rent_amount: String(p.rent_amount || ''), bedrooms: String(p.bedrooms || ''),
     property_type: p.property_type || 'house', status: p.status || 'to_let',
     service_type: p.service_type || '', charge_percentage: String(p.charge_percentage ?? ''),
