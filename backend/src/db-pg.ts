@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { runInventoryMigration } from './db-inventory-migration';
 
 // Use DATABASE_URL from environment (Railway/Render provides this)
 const pool = new Pool({
@@ -325,6 +326,9 @@ export async function initDb() {
     `);
 
     console.log('Database initialized');
+
+    // Run inventory migration
+    await runInventoryMigration(pool);
   } finally {
     client.release();
   }

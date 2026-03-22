@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "Fleming CRM",
+    "slug": "fleming-crm",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a2332"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fleming.crm",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Fleming CRM needs access to your camera to capture property inventory photos.",
+        "NSPhotoLibraryUsageDescription": "Fleming CRM needs access to your photo library to save and upload inventory photos."
+      }
+    },
+    "android": {
+      "package": "com.fleming.crm",
+      "adaptiveIcon": {
+        "backgroundColor": "#1a2332",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Fleming CRM to access your camera to capture inventory photos."
+        }
+      ]
+    ]
+  }
+}
