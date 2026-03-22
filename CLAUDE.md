@@ -218,7 +218,13 @@ The system integrates with several UK government open data APIs to provide accur
 - `RESEND_API_KEY` - API key for Resend email service (optional)
 - `FORCE_RESEED` - Set to "true" to wipe and re-seed database on startup
 
-**Optional API Keys:**
+**Frontend Environment Variables:**
+- `VITE_API_URL` - Backend API URL (e.g., `http://localhost:3001` for dev, `https://fleming-crm-api-production-7e58.up.railway.app` for production)
+- `VITE_GOOGLE_PLACES_API_KEY` - Google Places API key for address autocomplete (optional)
+- Frontend `.env` file should have localhost for development
+- Production deployments (Vercel) use environment variables set in Vercel dashboard
+
+**Backend Optional API Keys:**
 - `EPC_API_KEY` - Register at https://epc.opendatacommunities.org (FREE)
 - `COMPANIES_HOUSE_API_KEY` - Register at https://developer.company-information.service.gov.uk (FREE)
 - `COUNCIL_TAX_API_KEY` - Subscribe at https://www.counciltaxfinder.com (PAID - Monthly subscription)
@@ -226,9 +232,17 @@ The system integrates with several UK government open data APIs to provide accur
 
 **Deployment Configurations:**
 - `render.yaml` - Render deployment with persistent disk for SQLite
-- `railway.json` - Railway deployment configuration
+- `railway.json` - Railway deployment configuration (backend API-only)
 - `vercel.json` - Vercel configuration (frontend static hosting)
 - `render-build.sh` - Production build script
+
+**Current Production Deployment:**
+- Frontend: https://fleming-portal.vercel.app (Vercel)
+- Backend: https://fleming-crm-api-production-7e58.up.railway.app (Railway)
+- Frontend env var `VITE_API_URL` must point to Railway backend URL
+- Backend serves API-only (no static frontend files)
+- Railway uses `index-pg.ts` entry point for PostgreSQL
+- Vercel deploys from root using `vercel.json` build configuration
 
 ### Data Seeding
 
@@ -291,3 +305,72 @@ logAudit(userId, userEmail, 'create', 'landlord', entityId, changesObject);
 6. **Conversion Workflows:** BDM → Landlord and Enquiry → Tenant conversions copy data and update status. Never delete the source record, only mark as converted.
 
 7. **Demo Data:** Production databases can auto-seed. Be careful with `FORCE_RESEED` as it wipes all data.
+
+## Deployment Troubleshooting
+
+### Common Railway Backend Issues
+
+**ENOENT Error (no such file or directory: frontend/dist/index.html):**
+- Cause: Root route handler in `index-pg.ts` calling `next()` when receiving HTML requests
+- Solution: Ensure root route (`GET /`) always returns JSON, never calls `next()`
+- The backend is API-only; all frontend static file serving should be commented out
+
+**Database Not Initialized:**
+- If login fails with "Invalid credentials" and no users exist, use setup endpoint:
+- `POST /api/auth/setup` with `{email, password, name}` to create first admin user
+- Check Railway logs to verify `DATABASE_URL` is set and database initialized successfully
+
+**Build Failures:**
+- Verify `railway.json` uses correct buildCommand: `./render-build.sh`
+- Verify `railway.json` uses correct startCommand: `cd backend && node dist/index-pg.js`
+- Check that `tsconfig.render.json` excludes SQLite files: `index.ts`, `db.ts`
+- Check that `tsconfig.render.json` includes PostgreSQL files via `src/**/*.ts`
+
+### Common Vercel Frontend Issues
+
+**ECONNREFUSED or Connection Errors:**
+- Verify `VITE_API_URL` environment variable is set in Vercel project settings
+- Must point to full Railway URL: `https://fleming-crm-api-production-7e58.up.railway.app`
+- Set for all environments: Production, Preview, Development
+- After changing env vars, trigger redeploy via `vercel --prod` or git push
+
+**Environment Variable Management:**
+```bash
+# Add environment variable to Vercel
+vercel env add VITE_API_URL production
+
+# Remove old environment variable
+vercel env rm VITE_API_URL production --yes
+
+# List current environment variables
+vercel env ls
+
+# Deploy to production
+vercel --prod
+```
+
+### Testing Production Deployment
+
+```bash
+# Test backend health
+curl https://fleming-crm-api-production-7e58.up.railway.app/api/health
+
+# Test backend login
+curl -X POST https://fleming-crm-api-production-7e58.up.railway.app/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@fleming.com","password":"admin123"}'
+
+# Create initial admin user if database is empty
+curl -X POST https://fleming-crm-api-production-7e58.up.railway.app/api/auth/setup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@fleming.com","password":"admin123","name":"Admin User"}'
+
+# Check frontend is serving
+curl https://fleming-portal.vercel.app
+```
+
+### Default Credentials
+
+If database is freshly initialized:
+- Email: `admin@fleming.com`
+- Password: `admin123`
