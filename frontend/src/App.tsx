@@ -49,6 +49,7 @@ import TasksV3 from './pages/TasksV3';
 import TaskDetailV3 from './pages/TaskDetailV3';
 import TransactionsV3 from './pages/TransactionsV3';
 import SettingsV3 from './pages/SettingsV3';
+import UsersV3 from './pages/UsersV3';
 
 function ProtectedRoute({ children, bare }: { children: React.ReactNode; bare?: boolean }) {
   const { user, loading } = useAuth();
@@ -153,6 +154,7 @@ function AppRoutes() {
       <Route path="/v3/tasks" element={<ProtectedRoute bare><TasksV3 /></ProtectedRoute>} />
       <Route path="/v3/tasks/:id" element={<ProtectedRoute bare><TaskDetailV3 /></ProtectedRoute>} />
       <Route path="/v3/financials" element={<ProtectedRoute bare><TransactionsV3 /></ProtectedRoute>} />
+      <Route path="/v3/users" element={<ProtectedRoute bare><UsersV3 /></ProtectedRoute>} />
       <Route path="/v3/settings" element={<ProtectedRoute bare><SettingsV3 /></ProtectedRoute>} />
     </Routes>
   );

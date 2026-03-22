@@ -7,7 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import db from './db';
-import { generateToken, authMiddleware, AuthRequest } from './auth';
+import { generateToken, authMiddleware, AuthRequest, requireRole } from './auth';
 import aiRouter from './ai/chat';
 import { startScheduler } from './scheduler';
 
@@ -103,6 +103,170 @@ app.post('/api/auth/setup', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Setup failed' });
+  }
+});
+
+// ============ USER MANAGEMENT (Admin-only) ============
+
+// Get all users
+app.get('/api/users', authMiddleware, requireRole('admin'), (req: AuthRequest, res) => {
+  try {
+    const users = db.prepare('SELECT id, email, name, role, department, is_active, created_at, last_login FROM users ORDER BY created_at DESC').all();
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Create new user (admin only)
+app.post('/api/users', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
+  try {
+    const { email, name, role, department } = req.body;
+
+    if (!email || !name || !role) {
+      return res.status(400).json({ error: 'Email, name, and role are required' });
+    }
+
+    // Generate temporary password
+    const tempPassword = Math.random().toString(36).slice(-10);
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    const stmt = db.prepare('INSERT INTO users (email, password, name, role, department, last_password_change) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)');
+    const result = stmt.run(email, hashedPassword, name, role, department || null);
+
+    logAudit(req.user?.id, req.user?.email, 'create', 'user', result.lastInsertRowid as number, { email, name, role, department });
+
+    res.json({
+      id: result.lastInsertRowid,
+      email,
+      name,
+      role,
+      department,
+      tempPassword // Return temp password only on creation
+    });
+  } catch (err: any) {
+    if (err.message?.includes('UNIQUE')) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+// Update user (admin only, or self for profile fields)
+app.put('/api/users/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const { name, email, role, department, is_active } = req.body;
+    const isSelf = req.user?.id === userId;
+    const isAdmin = req.user?.role === 'admin';
+
+    // Only admin can update other users or change role
+    if (!isSelf && !isAdmin) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    // Only admin can change role or is_active
+    if ((role || is_active !== undefined) && !isAdmin) {
+      return res.status(403).json({ error: 'Only admins can change role or active status' });
+    }
+
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (name) { updates.push('name = ?'); params.push(name); }
+    if (email && isAdmin) { updates.push('email = ?'); params.push(email); }
+    if (role && isAdmin) { updates.push('role = ?'); params.push(role); }
+    if (department !== undefined) { updates.push('department = ?'); params.push(department); }
+    if (is_active !== undefined && isAdmin) { updates.push('is_active = ?'); params.push(is_active); }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    params.push(userId);
+    const stmt = db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`);
+    stmt.run(...params);
+
+    logAudit(req.user?.id, req.user?.email, 'update', 'user', userId, { name, email, role, department, is_active });
+
+    const updated = db.prepare('SELECT id, email, name, role, department, is_active, created_at, last_login FROM users WHERE id = ?').get(userId);
+    res.json(updated);
+  } catch (err: any) {
+    if (err.message?.includes('UNIQUE')) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+// Reset user password (admin only)
+app.put('/api/users/:id/reset-password', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+
+    // Generate new temporary password
+    const tempPassword = Math.random().toString(36).slice(-10);
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    const stmt = db.prepare('UPDATE users SET password = ?, last_password_change = CURRENT_TIMESTAMP WHERE id = ?');
+    stmt.run(hashedPassword, userId);
+
+    logAudit(req.user?.id, req.user?.email, 'update', 'user', userId, { action: 'password_reset' });
+
+    res.json({ tempPassword });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// Change own password
+app.put('/api/auth/password', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ error: 'Old password and new password required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Verify old password
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user!.id) as any;
+    if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    // Update password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    db.prepare('UPDATE users SET password = ?, last_password_change = CURRENT_TIMESTAMP WHERE id = ?').run(hashedPassword, req.user!.id);
+
+    logAudit(req.user?.id, req.user?.email, 'update', 'user', req.user!.id, { action: 'password_change' });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// Delete/deactivate user (admin only)
+app.delete('/api/users/:id', authMiddleware, requireRole('admin'), (req: AuthRequest, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+
+    // Prevent deleting yourself
+    if (req.user?.id === userId) {
+      return res.status(400).json({ error: 'Cannot deactivate your own account' });
+    }
+
+    // Soft delete - just deactivate
+    db.prepare('UPDATE users SET is_active = 0 WHERE id = ?').run(userId);
+    logAudit(req.user?.id, req.user?.email, 'delete', 'user', userId);
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to deactivate user' });
   }
 });
 

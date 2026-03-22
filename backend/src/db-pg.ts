@@ -17,10 +17,12 @@ export async function initDb() {
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         name TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'staff' CHECK(role IN ('admin', 'staff')),
+        role TEXT NOT NULL DEFAULT 'staff' CHECK(role IN ('admin', 'manager', 'staff', 'viewer')),
+        department TEXT,
         is_active INTEGER DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_login TIMESTAMP
+        last_login TIMESTAMP,
+        last_password_change TIMESTAMP
       );
 
       -- AUDIT LOG

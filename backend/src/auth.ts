@@ -49,3 +49,22 @@ export function requireRole(...roles: string[]) {
     next();
   };
 }
+
+// Permission hierarchy helper
+export function hasPermission(userRole: string, requiredRole: 'viewer' | 'staff' | 'manager' | 'admin'): boolean {
+  const hierarchy = { 'viewer': 1, 'staff': 2, 'manager': 3, 'admin': 4 };
+  return hierarchy[userRole as keyof typeof hierarchy] >= hierarchy[requiredRole];
+}
+
+// Middleware to require minimum permission level
+export function requirePermission(minRole: 'viewer' | 'staff' | 'manager' | 'admin') {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    if (!hasPermission(req.user.role, minRole)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
+  };
+}

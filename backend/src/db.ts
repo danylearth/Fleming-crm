@@ -17,10 +17,12 @@ db.exec(`
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     name TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'staff' CHECK(role IN ('admin', 'staff')),
+    role TEXT NOT NULL DEFAULT 'staff' CHECK(role IN ('admin', 'manager', 'staff', 'viewer')),
+    department TEXT,
     is_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_login DATETIME
+    last_login DATETIME,
+    last_password_change DATETIME
   );
 
   -- ============================================
@@ -593,6 +595,10 @@ try { db.exec(`ALTER TABLE tenants ADD COLUMN move_in_date DATE`); } catch (e) {
 
 // Sprint 3: Landlord referral source
 try { db.exec(`ALTER TABLE landlords ADD COLUMN referral_source TEXT`); } catch (e) {}
+
+// User management: Add department and last_password_change columns
+try { db.exec(`ALTER TABLE users ADD COLUMN department TEXT`); } catch (e) {}
+try { db.exec(`ALTER TABLE users ADD COLUMN last_password_change DATETIME`); } catch (e) {}
 
 // Sprint 3: Property expenses table
 db.exec(`

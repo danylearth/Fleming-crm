@@ -8,9 +8,11 @@ import { Camera, Lock, Bell, Palette, Bot, Mail, Key, CheckCircle, AlertCircle }
 export default function SettingsV3() {
   const { user } = useAuth();
   const api = useApi();
+  const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordMsg, setPasswordMsg] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   // AI Config state
   const [resendApiKey, setResendApiKey] = useState('');
@@ -34,14 +36,35 @@ export default function SettingsV3() {
     }
   };
 
-  const handlePasswordChange = () => {
-    if (!newPassword || !confirmPassword) { setPasswordMsg('Please fill both fields'); return; }
-    if (newPassword !== confirmPassword) { setPasswordMsg('Passwords do not match'); return; }
-    if (newPassword.length < 6) { setPasswordMsg('Password must be at least 6 characters'); return; }
-    setPasswordMsg('Password updated (UI only)');
-    setNewPassword('');
-    setConfirmPassword('');
-    setTimeout(() => setPasswordMsg(''), 3000);
+  const handlePasswordChange = async () => {
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setPasswordMsg('Please fill all fields');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg('Passwords do not match');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordMsg('Password must be at least 6 characters');
+      return;
+    }
+
+    setPasswordLoading(true);
+    setPasswordMsg('');
+
+    try {
+      await api.put('/api/auth/password', { oldPassword, newPassword });
+      setPasswordMsg('Password updated successfully');
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordMsg(''), 3000);
+    } catch (err: any) {
+      setPasswordMsg(err.message || 'Failed to update password');
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   const handleSaveConfig = async () => {
@@ -87,15 +110,16 @@ export default function SettingsV3() {
         <GlassCard className="p-6">
           <SectionHeader title="Change Password" />
           <div className="space-y-4 max-w-sm">
+            <Input label="Current Password" value={oldPassword} onChange={setOldPassword} type="password" placeholder="••••••••" />
             <Input label="New Password" value={newPassword} onChange={setNewPassword} type="password" placeholder="••••••••" />
-            <Input label="Confirm Password" value={confirmPassword} onChange={setConfirmPassword} type="password" placeholder="••••••••" />
+            <Input label="Confirm New Password" value={confirmPassword} onChange={setConfirmPassword} type="password" placeholder="••••••••" />
             {passwordMsg && (
-              <p className={`text-xs ${passwordMsg.includes('match') || passwordMsg.includes('fill') || passwordMsg.includes('least') ? 'text-red-400' : 'text-emerald-400'}`}>
+              <p className={`text-xs ${passwordMsg.includes('match') || passwordMsg.includes('fill') || passwordMsg.includes('least') || passwordMsg.includes('Failed') || passwordMsg.includes('incorrect') ? 'text-red-400' : 'text-emerald-400'}`}>
                 {passwordMsg}
               </p>
             )}
-            <Button variant="primary" size="sm" onClick={handlePasswordChange}>
-              <Lock size={14} className="mr-2" /> Update Password
+            <Button variant="primary" size="sm" onClick={handlePasswordChange} disabled={passwordLoading}>
+              <Lock size={14} className="mr-2" /> {passwordLoading ? 'Updating...' : 'Update Password'}
             </Button>
           </div>
         </GlassCard>

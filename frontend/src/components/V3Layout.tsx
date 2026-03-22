@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
-import { Menu, LogOut, ChevronLeft, ChevronRight, X, Sun, Moon } from 'lucide-react';
+import { Menu, LogOut, ChevronLeft, ChevronRight, X, Sun, Moon, Users } from 'lucide-react';
 import {
   DashboardIcon, EnquiriesIcon, PropertiesIcon, LandlordsIcon, TenantsIcon,
   BdmIcon, MaintenanceIcon, TasksIcon, FinancialsIcon, SettingsIcon
@@ -11,16 +11,17 @@ import FloatingAI from './v3/FloatingAI';
 import { useTheme } from '../context/ThemeContext';
 
 const navItems = [
-  { to: '/v3', icon: DashboardIcon, label: 'Dashboard' },
-  { to: '/v3/properties', icon: PropertiesIcon, label: 'Properties' },
-  { to: '/v3/landlords', icon: LandlordsIcon, label: 'Landlords' },
-  { to: '/v3/tenants', icon: TenantsIcon, label: 'Tenants' },
-  { to: '/v3/enquiries', icon: EnquiriesIcon, label: 'Tenant Enquiries' },
-  { to: '/v3/bdm', icon: BdmIcon, label: 'Landlord Enquiries' },
-  { to: '/v3/maintenance', icon: MaintenanceIcon, label: 'Maintenance' },
-  { to: '/v3/tasks', icon: TasksIcon, label: 'Tasks' },
-  { to: '/v3/financials', icon: FinancialsIcon, label: 'Financials' },
-  { to: '/v3/settings', icon: SettingsIcon, label: 'Settings' },
+  { to: '/v3', icon: DashboardIcon, label: 'Dashboard', roles: null },
+  { to: '/v3/properties', icon: PropertiesIcon, label: 'Properties', roles: null },
+  { to: '/v3/landlords', icon: LandlordsIcon, label: 'Landlords', roles: null },
+  { to: '/v3/tenants', icon: TenantsIcon, label: 'Tenants', roles: null },
+  { to: '/v3/enquiries', icon: EnquiriesIcon, label: 'Tenant Enquiries', roles: null },
+  { to: '/v3/bdm', icon: BdmIcon, label: 'Landlord Enquiries', roles: null },
+  { to: '/v3/maintenance', icon: MaintenanceIcon, label: 'Maintenance', roles: null },
+  { to: '/v3/tasks', icon: TasksIcon, label: 'Tasks', roles: null },
+  { to: '/v3/financials', icon: FinancialsIcon, label: 'Financials', roles: null },
+  { to: '/v3/users', icon: Users, label: 'Team', roles: ['admin'] }, // Admin only
+  { to: '/v3/settings', icon: SettingsIcon, label: 'Settings', roles: null },
 ];
 
 const PORTFOLIO_OPTIONS = [
@@ -85,22 +86,24 @@ export default function V3Layout({ children, title, breadcrumb, hideTopBar }: V3
 
         {/* Nav */}
         <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-          {navItems.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/v3'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${isActive
-                  ? 'bg-[var(--bg-input)] text-[var(--text-primary)]'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]'
-                }`
-              }
-            >
-              <item.icon size={18} className="shrink-0" />
-              {(!collapsed || mobileOpen) && <span>{item.label}</span>}
-            </NavLink>
-          ))}
+          {navItems
+            .filter(item => !item.roles || (user?.role && item.roles.includes(user.role)))
+            .map(item => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/v3'}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${isActive
+                    ? 'bg-[var(--bg-input)] text-[var(--text-primary)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]'
+                  }`
+                }
+              >
+                <item.icon size={18} className="shrink-0" />
+                {(!collapsed || mobileOpen) && <span>{item.label}</span>}
+              </NavLink>
+            ))}
         </nav>
 
         {/* User */}
