@@ -14,8 +14,8 @@ npm install
 # We allow non-zero exit from tsc but verify the output exists
 npx tsc -p tsconfig.render.json || true
 
-if [ ! -f dist/index.js ]; then
-  echo "ERROR: backend/dist/index.js was not produced by tsc"
+if [ ! -f dist/index-pg.js ]; then
+  echo "ERROR: backend/dist/index-pg.js was not produced by tsc"
   exit 1
 fi
 

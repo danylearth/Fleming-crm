@@ -62,7 +62,7 @@ export default function PricePaidData({ postcode }: PricePaidDataProps) {
           </div>
           <Button
             onClick={loadPriceData}
-            variant="secondary"
+            variant="outline"
             disabled={loading || !postcode}
           >
             {loading ? (

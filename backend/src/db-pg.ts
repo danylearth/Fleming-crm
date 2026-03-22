@@ -1,9 +1,9 @@
 import { Pool } from 'pg';
 
-// Use DATABASE_URL from environment (Render provides this)
+// Use DATABASE_URL from environment (Railway/Render provides this)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('render.com') ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
 // Initialize tables - PostgreSQL Schema

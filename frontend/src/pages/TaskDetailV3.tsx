@@ -359,7 +359,7 @@ export default function TaskDetailV3() {
                     className="hidden"
                     disabled={uploading}
                   />
-                  <Button variant="outline" size="sm" disabled={uploading} as="span">
+                  <Button variant="outline" size="sm" disabled={uploading}>
                     <Upload size={14} className="mr-1.5" /> {uploading ? 'Uploading...' : 'Upload'}
                   </Button>
                 </label>

@@ -32,7 +32,7 @@ export default function PostcodeAutocomplete({
   const [showAddresses, setShowAddresses] = useState(false);
   const { loading, autocompletePostcode, lookupPostcode, fetchPricePaid } = useGovernmentAPIs();
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const debounceTimer = useRef<NodeJS.Timeout>();
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Click outside to close
   useEffect(() => {
@@ -48,7 +48,7 @@ export default function PostcodeAutocomplete({
 
   // Autocomplete as user types
   useEffect(() => {
-    if (debounceTimer.current) {
+    if (debounceTimer.current !== undefined) {
       clearTimeout(debounceTimer.current);
     }
 
@@ -65,7 +65,7 @@ export default function PostcodeAutocomplete({
     }
 
     return () => {
-      if (debounceTimer.current) {
+      if (debounceTimer.current !== undefined) {
         clearTimeout(debounceTimer.current);
       }
     };

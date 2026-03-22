@@ -380,7 +380,7 @@ export default function UsersV3() {
                 )}
 
                 <div className="flex gap-2 pt-2">
-                  <Button variant="secondary" onClick={() => setShowModal(false)} className="flex-1">Cancel</Button>
+                  <Button variant="outline" onClick={() => setShowModal(false)} className="flex-1">Cancel</Button>
                   <Button variant="primary" onClick={handleSave} disabled={saving} className="flex-1">
                     {saving ? 'Saving...' : editUser ? 'Update User' : 'Create User'}
                   </Button>

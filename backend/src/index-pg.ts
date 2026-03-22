@@ -7,6 +7,13 @@ import multer from 'multer';
 import pool, { initDb, query, queryOne, insert, run } from './db-pg';
 import { generateToken, authMiddleware, AuthRequest } from './auth';
 
+// Validate required environment variables
+if (!process.env.DATABASE_URL) {
+  console.error('ERROR: DATABASE_URL environment variable is required');
+  console.error('Please set DATABASE_URL to your PostgreSQL connection string');
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
