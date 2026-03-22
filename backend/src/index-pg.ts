@@ -51,8 +51,8 @@ app.get('/', (req, res, next) => {
   res.json({ status: 'ok' });
 });
 
-// Serve static files
-app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+// Serve static files (disabled in production - frontend deployed separately)
+// app.use(express.static(path.join(__dirname, '../../frontend/dist')));
 
 // ============ AUDIT LOGGING ============
 
@@ -826,10 +826,10 @@ app.post('/api/users', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-// SPA fallback
-app.get(/^(?!\/api).*/, (req, res) => {
-  res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
-});
+// SPA fallback (disabled in production - frontend deployed separately)
+// app.get(/^(?!\/api).*/, (req, res) => {
+//   res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
+// });
 
 // Start server
 async function start() {

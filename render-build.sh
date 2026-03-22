@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== Building frontend ==="
-cd frontend
-npm install
-npm run build
-cd ..
-
-echo "=== Building backend ==="
+echo "=== Building backend only (API) ==="
 cd backend
 npm install
 # tsc emits JS despite type errors (noEmitOnError: false in tsconfig.render.json)
@@ -19,4 +13,5 @@ if [ ! -f dist/index-pg.js ]; then
   exit 1
 fi
 
-echo "=== Build complete ==="
+echo "=== Backend build complete ==="
+echo "Note: Frontend should be deployed separately (e.g., to Vercel)"
