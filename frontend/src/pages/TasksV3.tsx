@@ -107,6 +107,7 @@ export default function TasksV3() {
   const [properties, setProperties] = useState<{ id: number; address: string; landlord_id: number | null }[]>([]);
   const [landlords, setLandlords] = useState<{ id: number; name: string }[]>([]);
   const [tenants, setTenants] = useState<{ id: number; name: string; property_id: number | null }[]>([]);
+  const [users, setUsers] = useState<{ id: number; name: string; email: string; role: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -116,7 +117,10 @@ export default function TasksV3() {
   const [filterTenant, setFilterTenant] = useState<number | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending', due_date: '', task_type: 'manual' });
+  const [form, setForm] = useState({
+    title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending',
+    due_date: '', task_type: 'manual', entity_type: '', entity_id: null as number | null
+  });
 
   // View mode
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
@@ -132,11 +136,12 @@ export default function TasksV3() {
 
   const load = async () => {
     try {
-      const [data, props, lands, tens] = await Promise.all([
-        api.get('/api/tasks'), api.get('/api/properties'), api.get('/api/landlords'), api.get('/api/tenants'),
+      const [data, props, lands, tens, usrs] = await Promise.all([
+        api.get('/api/tasks'), api.get('/api/properties'), api.get('/api/landlords'),
+        api.get('/api/tenants'), api.get('/api/users'),
       ]);
       setTasks(Array.isArray(data) ? data : data.tasks || []);
-      setProperties(props); setLandlords(lands); setTenants(tens);
+      setProperties(props); setLandlords(lands); setTenants(tens); setUsers(usrs);
     } catch { setTasks([]); }
     setLoading(false);
   };
@@ -181,7 +186,25 @@ export default function TasksV3() {
     try { await api.put(`/api/tasks/${id}`, { status }); await load(); } catch {}
   };
   const addTask = async () => {
-    try { await api.post('/api/tasks', form); setShowAdd(false); setForm({ title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending', due_date: '', task_type: 'manual' }); await load(); } catch {}
+    try {
+      const payload: any = { ...form };
+      // Only include entity fields if entity_type is set
+      if (!form.entity_type) {
+        delete payload.entity_type;
+        delete payload.entity_id;
+      }
+      console.log('Creating task with payload:', payload);
+      await api.post('/api/tasks', payload);
+      setShowAdd(false);
+      setForm({
+        title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending',
+        due_date: '', task_type: 'manual', entity_type: '', entity_id: null
+      });
+      await load();
+    } catch (err) {
+      console.error('Failed to create task:', err);
+      alert('Failed to create task. Check console for details.');
+    }
   };
 
   const completionPct = tasks.length > 0 ? Math.round((counts.completed / tasks.length) * 100) : 0;
@@ -671,7 +694,15 @@ export default function TasksV3() {
               <div className="space-y-4">
                 <Input label="Title" value={form.title} onChange={v => setForm(p => ({...p,title:v}))} placeholder="Task title" />
                 <Input label="Description" value={form.description} onChange={v => setForm(p => ({...p,description:v}))} placeholder="Description..." />
-                <Input label="Assigned To" value={form.assigned_to} onChange={v => setForm(p => ({...p,assigned_to:v}))} placeholder="Person name" />
+                <Select
+                  label="Assigned To"
+                  value={form.assigned_to}
+                  onChange={v => setForm(p => ({...p,assigned_to:v}))}
+                  options={[
+                    { value: '', label: 'Select user...' },
+                    ...users.map(u => ({ value: u.name, label: `${u.name} (${u.role})` }))
+                  ]}
+                />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Priority</label>
@@ -694,6 +725,58 @@ export default function TasksV3() {
                   </div>
                 </div>
                 <DatePicker label="Due Date" value={form.due_date} onChange={v => setForm(p => ({...p,due_date:v}))} />
+
+                {/* Entity Linking */}
+                <div className="border-t border-[var(--border-subtle)] pt-4 space-y-3">
+                  <p className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Link to (Optional)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Select
+                      label="Link Type"
+                      value={form.entity_type}
+                      onChange={v => setForm(p => ({...p, entity_type: v, entity_id: null}))}
+                      options={[
+                        { value: '', label: 'None' },
+                        { value: 'property', label: 'Property' },
+                        { value: 'landlord', label: 'Landlord' },
+                        { value: 'tenant', label: 'Tenant' },
+                      ]}
+                    />
+                    {form.entity_type === 'property' && (
+                      <Select
+                        label="Property"
+                        value={String(form.entity_id || '')}
+                        onChange={v => setForm(p => ({...p, entity_id: v ? Number(v) : null}))}
+                        options={[
+                          { value: '', label: 'Select property...' },
+                          ...properties.map(p => ({ value: String(p.id), label: p.address }))
+                        ]}
+                      />
+                    )}
+                    {form.entity_type === 'landlord' && (
+                      <Select
+                        label="Landlord"
+                        value={String(form.entity_id || '')}
+                        onChange={v => setForm(p => ({...p, entity_id: v ? Number(v) : null}))}
+                        options={[
+                          { value: '', label: 'Select landlord...' },
+                          ...landlords.map(l => ({ value: String(l.id), label: l.name }))
+                        ]}
+                      />
+                    )}
+                    {form.entity_type === 'tenant' && (
+                      <Select
+                        label="Tenant"
+                        value={String(form.entity_id || '')}
+                        onChange={v => setForm(p => ({...p, entity_id: v ? Number(v) : null}))}
+                        options={[
+                          { value: '', label: 'Select tenant...' },
+                          ...tenants.map(t => ({ value: String(t.id), label: t.name }))
+                        ]}
+                      />
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
                   <Button variant="gradient" onClick={addTask} disabled={!form.title}>Add Task</Button>

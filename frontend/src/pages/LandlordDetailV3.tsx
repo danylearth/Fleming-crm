@@ -95,18 +95,22 @@ export default function LandlordDetailV3() {
     try { return JSON.parse(raw || '[]'); } catch { return raw ? [{ id: '1', text: raw, author: 'System', created_at: '' }] : []; }
   };
 
+  const loadDetail = async () => {
+    try {
+      const [l, props] = await Promise.all([
+        api.get(`/api/landlords/${id}`),
+        api.get('/api/properties'),
+      ]);
+      setLandlord(l);
+      populateForm(l);
+      setNotes(parseNotes(l.notes));
+      setProperties(props.filter((p: Property) => p.landlord_id === Number(id)));
+    } catch (e) { console.error(e); }
+  };
+
   useEffect(() => {
     (async () => {
-      try {
-        const [l, props] = await Promise.all([
-          api.get(`/api/landlords/${id}`),
-          api.get('/api/properties'),
-        ]);
-        setLandlord(l);
-        populateForm(l);
-        setNotes(parseNotes(l.notes));
-        setProperties(props.filter((p: Property) => p.landlord_id === Number(id)));
-      } catch (e) { console.error(e); }
+      await loadDetail();
       setLoading(false);
     })();
   }, [id]);
@@ -133,11 +137,12 @@ export default function LandlordDetailV3() {
     const noteText = notesInput.trim();
     const newNote = { id: Date.now().toString(), text: noteText, author: user?.email || 'Unknown', created_at: new Date().toISOString() };
     const updated = [...notes, newNote];
-    setNotes(updated);
     setNotesInput('');
     try {
       await api.put(`/api/landlords/${id}`, { ...form, notes: JSON.stringify(updated) });
       api.post('/api/activity', { action: 'note_added', entity_type: 'landlord', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
+      // Reload the data to show the new note
+      await loadDetail();
     } catch (e) { console.error(e); }
   };
 

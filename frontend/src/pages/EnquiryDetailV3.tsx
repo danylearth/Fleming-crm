@@ -192,6 +192,8 @@ export default function EnquiryDetailV3() {
     await save({ notes: newNotes });
     api.post('/api/activity', { action: 'note_added', entity_type: 'tenant_enquiry', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
     setNoteDraft('');
+    // Reload the data to show the new note
+    await loadDetail();
   };
 
   if (loading) {

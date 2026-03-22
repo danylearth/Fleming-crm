@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
@@ -815,6 +817,38 @@ app.put('/api/properties/:id', authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
+app.delete('/api/properties/:id', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    // Delete associated documents first
+    const documents = db.prepare('SELECT * FROM documents WHERE entity_type = ? AND entity_id = ?').all('property', req.params.id) as any[];
+    for (const doc of documents) {
+      const filePath = path.join(uploadsDir, doc.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+    db.prepare('DELETE FROM documents WHERE entity_type = ? AND entity_id = ?').run('property', req.params.id);
+
+    // Delete associated tasks
+    db.prepare('DELETE FROM tasks WHERE entity_type = ? AND entity_id = ?').run('property', req.params.id);
+
+    // Delete associated rent payments
+    db.prepare('DELETE FROM rent_payments WHERE property_id = ?').run(req.params.id);
+
+    // Update tenants to unlink from this property
+    db.prepare('UPDATE tenants SET property_id = NULL WHERE property_id = ?').run(req.params.id);
+
+    // Delete the property
+    db.prepare('DELETE FROM properties WHERE id = ?').run(req.params.id);
+
+    logAudit(req.user?.id, req.user?.email, 'delete', 'property', parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to delete property:', err);
+    res.status(500).json({ error: 'Failed to delete property' });
+  }
+});
+
 // ============ TASKS ============
 
 app.get('/api/tasks', authMiddleware, (req: AuthRequest, res) => {
@@ -839,13 +873,34 @@ app.get('/api/tasks', authMiddleware, (req: AuthRequest, res) => {
 app.get('/api/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const task = db.prepare(`
-      SELECT t.*, u.name as assigned_to_name FROM tasks t
-      LEFT JOIN users u ON u.id = t.assigned_to
-      WHERE t.id = ?
-    `).get(req.params.id);
+      SELECT t.* FROM tasks t WHERE t.id = ?
+    `).get(req.params.id) as any;
     if (!task) return res.status(404).json({ error: 'Task not found' });
-    res.json(task);
+
+    // Get related entity details
+    let relatedEntity = null;
+    if (task.entity_type && task.entity_id) {
+      if (task.entity_type === 'property') {
+        relatedEntity = db.prepare('SELECT id, address, landlord_id FROM properties WHERE id = ?').get(task.entity_id);
+      } else if (task.entity_type === 'landlord') {
+        relatedEntity = db.prepare('SELECT id, name, email, phone FROM landlords WHERE id = ?').get(task.entity_id);
+      } else if (task.entity_type === 'tenant') {
+        relatedEntity = db.prepare('SELECT id, name, email, phone, property_id FROM tenants WHERE id = ?').get(task.entity_id);
+      } else if (task.entity_type === 'tenant_enquiry') {
+        relatedEntity = db.prepare('SELECT id, first_name_1, last_name_1, email_1, phone_1, status FROM tenant_enquiries WHERE id = ?').get(task.entity_id);
+      }
+    }
+
+    // Get attached documents
+    const documents = db.prepare(`
+      SELECT * FROM documents
+      WHERE entity_type = 'task' AND entity_id = ?
+      ORDER BY uploaded_at DESC
+    `).all(task.id);
+
+    res.json({ ...task, relatedEntity, documents });
   } catch (err) {
+    console.error('Failed to fetch task:', err);
     res.status(500).json({ error: 'Failed to fetch task' });
   }
 });
@@ -853,6 +908,7 @@ app.get('/api/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
 app.post('/api/tasks', authMiddleware, (req: AuthRequest, res) => {
   try {
     const { title, description, priority, assigned_to, entity_type, entity_id, due_date, task_type } = req.body;
+    console.log('Creating task with body:', req.body);
     const stmt = db.prepare(`
       INSERT INTO tasks (title, description, priority, assigned_to, entity_type, entity_id, due_date, task_type)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -862,25 +918,50 @@ app.post('/api/tasks', authMiddleware, (req: AuthRequest, res) => {
     logAudit(req.user?.id, req.user?.email, 'create', 'task', result.lastInsertRowid as number);
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
+    console.error('Failed to create task:', err);
     res.status(500).json({ error: 'Failed to create task' });
   }
 });
 
 app.put('/api/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
-    const { title, description, priority, status, assigned_to, due_date, follow_up_date, notes } = req.body;
+    const { title, description, priority, status, assigned_to, due_date, follow_up_date, notes, entity_type, entity_id, task_type } = req.body;
     const completed_at = status === 'completed' ? new Date().toISOString() : null;
 
     db.prepare(`
-      UPDATE tasks SET title=?, description=?, priority=?, status=?, assigned_to=?, 
-        due_date=?, follow_up_date=?, notes=?, completed_at=?, updated_at=CURRENT_TIMESTAMP
+      UPDATE tasks SET title=?, description=?, priority=?, status=?, assigned_to=?,
+        due_date=?, follow_up_date=?, notes=?, completed_at=?, entity_type=?, entity_id=?, task_type=?, updated_at=CURRENT_TIMESTAMP
       WHERE id=?
-    `).run(title, description, priority, status, assigned_to, due_date, follow_up_date, notes, completed_at, req.params.id);
+    `).run(title, description, priority, status, assigned_to, due_date, follow_up_date, notes, completed_at, entity_type, entity_id, task_type, req.params.id);
 
     logAudit(req.user?.id, req.user?.email, 'update', 'task', parseInt(req.params.id), req.body);
     res.json({ success: true });
   } catch (err) {
+    console.error('Failed to update task:', err);
     res.status(500).json({ error: 'Failed to update task' });
+  }
+});
+
+app.delete('/api/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    // Delete associated documents first
+    const documents = db.prepare('SELECT * FROM documents WHERE entity_type = ? AND entity_id = ?').all('task', req.params.id) as any[];
+    for (const doc of documents) {
+      const filePath = path.join(uploadsDir, doc.file_name);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+    db.prepare('DELETE FROM documents WHERE entity_type = ? AND entity_id = ?').run('task', req.params.id);
+
+    // Delete the task
+    db.prepare('DELETE FROM tasks WHERE id = ?').run(req.params.id);
+
+    logAudit(req.user?.id, req.user?.email, 'delete', 'task', parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to delete task:', err);
+    res.status(500).json({ error: 'Failed to delete task' });
   }
 });
 
@@ -1276,14 +1357,36 @@ app.get('/api/epc-lookup', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const postcode = (req.query.postcode as string || '').trim();
     if (!postcode) return res.status(400).json({ error: 'Postcode required' });
+
+    const apiEmail = process.env.EPC_API_EMAIL;
     const apiKey = process.env.EPC_API_KEY;
-    if (!apiKey) return res.status(501).json({ error: 'EPC API key not configured' });
+
+    if (!apiKey || !apiEmail) {
+      return res.status(501).json({ error: 'EPC API credentials not configured' });
+    }
+
     const url = `https://epc.opendatacommunities.org/api/v1/domestic/search?postcode=${encodeURIComponent(postcode)}&size=10`;
     const response = await fetch(url, {
-      headers: { Authorization: `Basic ${Buffer.from(`${apiKey}:`).toString('base64')}`, Accept: 'application/json' }
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${apiEmail}:${apiKey}`).toString('base64')}`,
+        Accept: 'application/json'
+      }
     });
-    if (!response.ok) return res.status(response.status).json({ error: 'EPC API error' });
-    const data = await response.json();
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('EPC API error:', response.status, errorText);
+      return res.status(response.status).json({ error: 'EPC API error' });
+    }
+
+    const text = await response.text();
+
+    // Handle empty responses
+    if (!text || text.length === 0) {
+      return res.json([]);
+    }
+
+    const data = JSON.parse(text);
     const results = (data.rows || []).map((r: any) => ({
       address: r.address,
       postcode: r.postcode,
@@ -1294,8 +1397,11 @@ app.get('/api/epc-lookup', authMiddleware, async (req: AuthRequest, res) => {
       inspection_date: r['inspection-date'],
       certificate_number: r['lmk-key'],
     }));
+
+    logAudit(req.user?.id, req.user?.email, 'view', 'epc_lookup');
     res.json(results);
   } catch (err) {
+    console.error('EPC API error:', err);
     res.status(500).json({ error: 'Failed to fetch EPC data' });
   }
 });
@@ -1306,22 +1412,247 @@ app.get('/api/council-tax-lookup', authMiddleware, async (req: AuthRequest, res)
   try {
     const postcode = (req.query.postcode as string || '').trim();
     if (!postcode) return res.status(400).json({ error: 'Postcode required' });
-    // Council tax band lookup via gov.uk VOA API
+
+    // Council tax band lookup via CouncilTaxFinder.com API
     const apiKey = process.env.COUNCIL_TAX_API_KEY;
     if (!apiKey) return res.status(501).json({ error: 'Council Tax API key not configured' });
-    const url = `https://api.voa.gov.uk/council-tax/properties?postcode=${encodeURIComponent(postcode)}`;
+
+    const url = `https://www.counciltaxfinder.com/api/?postcode=${encodeURIComponent(postcode)}&key=${apiKey}`;
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' }
+      headers: { Accept: 'application/json' }
     });
+
     if (!response.ok) return res.status(response.status).json({ error: 'Council Tax API error' });
+
     const data = await response.json();
-    const results = (data.properties || data.results || []).map((r: any) => ({
-      address: r.address || r.formattedAddress,
-      band: r.councilTaxBand || r.band,
-    }));
+
+    // CouncilTaxFinder returns array of properties with: address, council, band, annual_tax, monthly_tax, council_website
+    // Map to our expected format (array with address and band)
+    const results = Array.isArray(data) ? data.map((r: any) => ({
+      address: r.address,
+      band: r.band,
+      council: r.council,
+      annualTax: r.annual_tax,
+      monthlyTax: r.monthly_tax,
+    })) : [];
+
     res.json(results);
   } catch (err) {
+    console.error('Council tax lookup error:', err);
     res.status(500).json({ error: 'Failed to fetch council tax data' });
+  }
+});
+
+// ============ LAND REGISTRY PRICE PAID ============
+
+app.get('/api/land-registry/price-paid', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const postcode = (req.query.postcode as string || '').trim();
+    if (!postcode) return res.status(400).json({ error: 'Postcode required' });
+
+    // HM Land Registry Price Paid Data API - Free, Open Government License
+    // Using SPARQL endpoint for price paid data
+    const cleanPostcode = postcode.replace(/\s/g, '').toUpperCase();
+    const url = `http://landregistry.data.gov.uk/data/ppi/transaction-record.json?_pageSize=20&propertyAddress.postcode=${encodeURIComponent(cleanPostcode)}`;
+
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' }
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Land Registry API error' });
+    }
+
+    const data = await response.json();
+    const results = (data.result?.items || []).map((item: any) => ({
+      address: item.propertyAddress?.saon
+        ? `${item.propertyAddress.saon} ${item.propertyAddress.paon} ${item.propertyAddress.street}`
+        : `${item.propertyAddress?.paon || ''} ${item.propertyAddress?.street || ''}`.trim(),
+      postcode: item.propertyAddress?.postcode,
+      price: item.pricePaid,
+      date: item.transactionDate,
+      property_type: item.propertyType?.label,
+      estate_type: item.estateType?.label,
+      transaction_id: item.transactionId
+    }));
+
+    logAudit(req.user?.id, req.user?.email, 'view', 'land_registry_lookup');
+    res.json(results);
+  } catch (err) {
+    console.error('Land Registry error:', err);
+    res.status(500).json({ error: 'Failed to fetch Land Registry data' });
+  }
+});
+
+// ============ POSTCODES.IO ============
+
+app.get('/api/postcode/lookup', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const postcode = (req.query.postcode as string || '').trim();
+    if (!postcode) return res.status(400).json({ error: 'Postcode required' });
+
+    // Postcodes.io - Free UK postcode API, no authentication required
+    const url = `https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return res.status(404).json({ error: 'Postcode not found' });
+      }
+      return res.status(response.status).json({ error: 'Postcodes.io API error' });
+    }
+
+    const data = await response.json();
+
+    if (data.status === 200 && data.result) {
+      const result = {
+        postcode: data.result.postcode,
+        latitude: data.result.latitude,
+        longitude: data.result.longitude,
+        admin_district: data.result.admin_district,
+        admin_ward: data.result.admin_ward,
+        parish: data.result.parish,
+        parliamentary_constituency: data.result.parliamentary_constituency,
+        region: data.result.region,
+        country: data.result.country,
+        quality: data.result.quality,
+        eastings: data.result.eastings,
+        northings: data.result.northings,
+        outcode: data.result.outcode,
+        incode: data.result.incode
+      };
+      res.json(result);
+    } else {
+      res.status(404).json({ error: 'Postcode not found' });
+    }
+  } catch (err) {
+    console.error('Postcodes.io error:', err);
+    res.status(500).json({ error: 'Failed to lookup postcode' });
+  }
+});
+
+app.get('/api/postcode/autocomplete', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const query = (req.query.query as string || '').trim();
+    if (!query || query.length < 2) {
+      return res.status(400).json({ error: 'Query must be at least 2 characters' });
+    }
+
+    // Postcodes.io autocomplete endpoint
+    const url = `https://api.postcodes.io/postcodes/${encodeURIComponent(query)}/autocomplete`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      return res.json({ result: [] }); // Return empty array for no results
+    }
+
+    const data = await response.json();
+    res.json({ result: data.result || [] });
+  } catch (err) {
+    console.error('Postcodes.io autocomplete error:', err);
+    res.status(500).json({ error: 'Failed to autocomplete postcode' });
+  }
+});
+
+// ============ COMPANIES HOUSE ============
+
+app.get('/api/companies-house/search', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const query = (req.query.query as string || '').trim();
+    if (!query) return res.status(400).json({ error: 'Company name or number required' });
+
+    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
+    if (!apiKey) {
+      return res.status(501).json({ error: 'Companies House API key not configured' });
+    }
+
+    // Companies House API - Free with registration
+    const url = `https://api.company-information.service.gov.uk/search/companies?q=${encodeURIComponent(query)}&items_per_page=10`;
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(apiKey + ':').toString('base64')}`,
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Companies House API error' });
+    }
+
+    const data = await response.json();
+    const results = (data.items || []).map((item: any) => ({
+      company_number: item.company_number,
+      company_name: item.title,
+      company_status: item.company_status,
+      company_type: item.company_type,
+      date_of_creation: item.date_of_creation,
+      address: item.address ? {
+        line_1: item.address.address_line_1,
+        line_2: item.address.address_line_2,
+        locality: item.address.locality,
+        postal_code: item.address.postal_code,
+        country: item.address.country
+      } : null
+    }));
+
+    logAudit(req.user?.id, req.user?.email, 'view', 'companies_house_search');
+    res.json(results);
+  } catch (err) {
+    console.error('Companies House error:', err);
+    res.status(500).json({ error: 'Failed to search Companies House' });
+  }
+});
+
+app.get('/api/companies-house/company/:companyNumber', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const companyNumber = req.params.companyNumber;
+    if (!companyNumber) return res.status(400).json({ error: 'Company number required' });
+
+    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
+    if (!apiKey) {
+      return res.status(501).json({ error: 'Companies House API key not configured' });
+    }
+
+    const url = `https://api.company-information.service.gov.uk/company/${encodeURIComponent(companyNumber)}`;
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(apiKey + ':').toString('base64')}`,
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return res.status(404).json({ error: 'Company not found' });
+      }
+      return res.status(response.status).json({ error: 'Companies House API error' });
+    }
+
+    const data = await response.json();
+    const result = {
+      company_number: data.company_number,
+      company_name: data.company_name,
+      company_status: data.company_status,
+      company_type: data.type,
+      date_of_creation: data.date_of_creation,
+      jurisdiction: data.jurisdiction,
+      registered_office_address: data.registered_office_address,
+      accounts: data.accounts,
+      confirmation_statement: data.confirmation_statement,
+      sic_codes: data.sic_codes,
+      has_insolvency_history: data.has_insolvency_history,
+      has_charges: data.has_charges
+    };
+
+    logAudit(req.user?.id, req.user?.email, 'view', 'companies_house_detail', undefined, { company_number: companyNumber });
+    res.json(result);
+  } catch (err) {
+    console.error('Companies House error:', err);
+    res.status(500).json({ error: 'Failed to fetch company details' });
   }
 });
 
@@ -1329,10 +1660,8 @@ app.get('/api/council-tax-lookup', authMiddleware, async (req: AuthRequest, res)
 
 app.get('/api/users', authMiddleware, (req: AuthRequest, res) => {
   try {
-    if (req.user?.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-    const users = db.prepare('SELECT id, email, name, role, is_active, created_at, last_login FROM users').all();
+    // Return active users for task assignment (accessible to all authenticated users)
+    const users = db.prepare('SELECT id, email, name, role FROM users WHERE is_active = 1').all();
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch users' });

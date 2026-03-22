@@ -55,7 +55,7 @@ export function SearchDropdown({
                 )}
             </button>
             {open && (
-                <div className="absolute top-full left-0 mt-1 w-72 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-xl z-50 overflow-hidden">
+                <div className="absolute top-full left-0 mt-1 w-72 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-xl z-[9999] overflow-hidden">
                     <div className="p-2">
                         <input
                             type="text"

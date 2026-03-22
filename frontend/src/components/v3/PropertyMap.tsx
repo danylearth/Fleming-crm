@@ -49,6 +49,13 @@ const POSTCODE_COORDS: Record<string, [number, number]> = {
   'WV': [52.59, -2.13], 'YO': [53.96, -1.08],
 };
 
+// Simple deterministic hash function for property ID
+function hashPropertyId(id: number): number {
+  // Use property ID to generate consistent "random" offset
+  const x = Math.sin(id * 12.9898) * 43758.5453;
+  return x - Math.floor(x); // Returns value between 0 and 1
+}
+
 function getCoords(property: Property): [number, number] | null {
   if (property.lat && property.lng) return [property.lat, property.lng];
   if (!property.postcode) return null;
@@ -57,22 +64,34 @@ function getCoords(property: Property): [number, number] | null {
   const prefix2 = pc.substring(0, 2);
   const prefix1 = pc.substring(0, 1);
   const base = POSTCODE_COORDS[prefix2] || POSTCODE_COORDS[prefix1];
-  if (!base) return [51.5 + Math.random() * 0.1 - 0.05, -0.1 + Math.random() * 0.1 - 0.05]; // London fallback
-  // Add small random offset so pins don't stack
-  return [base[0] + (Math.random() - 0.5) * 0.02, base[1] + (Math.random() - 0.5) * 0.02];
+
+  // Use property ID for deterministic offset
+  const hash1 = hashPropertyId(property.id);
+  const hash2 = hashPropertyId(property.id + 1000); // Different seed for lat/lng
+
+  if (!base) return [51.5 + hash1 * 0.1 - 0.05, -0.1 + hash2 * 0.1 - 0.05]; // London fallback
+  // Add small deterministic offset so pins don't stack but stay consistent
+  return [base[0] + (hash1 - 0.5) * 0.02, base[1] + (hash2 - 0.5) * 0.02];
 }
 
 // Custom gradient marker
-function createMarkerIcon(status: string) {
-  const color = status === 'let' || status === 'active' ? '#22c55e' : status === 'vacant' ? '#f97316' : '#ec4899';
+function createMarkerIcon(status: string, isHighlighted: boolean, isOtherHighlighted: boolean) {
+  const opacity = isOtherHighlighted ? '0.3' : '1';
+  const scale = isHighlighted ? '1.2' : '1';
+  const boxShadow = isHighlighted ? '0 6px 24px rgba(249,115,22,0.6)' : '0 4px 12px rgba(249,115,22,0.3)';
+  const borderWidth = isHighlighted ? '3px' : '2px';
+
   return L.divIcon({
     className: 'custom-marker',
     html: `<div style="
       width: 36px; height: 36px; border-radius: 50%;
       background: linear-gradient(135deg, #f97316, #ec4899);
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 12px rgba(249,115,22,0.3);
-      border: 2px solid rgba(255,255,255,0.2);
+      box-shadow: ${boxShadow};
+      border: ${borderWidth} solid rgba(255,255,255,0.2);
+      opacity: ${opacity};
+      transform: scale(${scale});
+      transition: all 0.2s ease;
     ">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
@@ -88,13 +107,15 @@ function createMarkerIcon(status: string) {
 interface PropertyMapProps {
   properties: Property[];
   onPropertyClick?: (id: number) => void;
+  highlightedPropertyId?: number | null;
   className?: string;
   height?: string;
 }
 
-export default function PropertyMap({ properties, onPropertyClick, className = '', height = '100%' }: PropertyMapProps) {
+export default function PropertyMap({ properties, onPropertyClick, highlightedPropertyId = null, className = '', height = '100%' }: PropertyMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
+  const markersRef = useRef<Map<number, L.Marker>>(new Map());
 
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
@@ -130,15 +151,20 @@ export default function PropertyMap({ properties, onPropertyClick, className = '
     map.eachLayer(layer => {
       if (layer instanceof L.Marker) map.removeLayer(layer);
     });
+    markersRef.current.clear();
 
     const bounds: L.LatLngTuple[] = [];
+    const isAnyHighlighted = highlightedPropertyId !== null;
 
     properties.forEach(prop => {
       const coords = getCoords(prop);
       if (!coords) return;
       bounds.push(coords);
 
-      const marker = L.marker(coords, { icon: createMarkerIcon(prop.status) });
+      const isHighlighted = highlightedPropertyId === prop.id;
+      const isOtherHighlighted = isAnyHighlighted && !isHighlighted;
+
+      const marker = L.marker(coords, { icon: createMarkerIcon(prop.status, isHighlighted, isOtherHighlighted) });
       marker.bindPopup(`
         <div style="font-family: Lufga, sans-serif; min-width: 160px;">
           <strong style="font-size: 13px;">${prop.address}</strong>
@@ -153,12 +179,13 @@ export default function PropertyMap({ properties, onPropertyClick, className = '
       }
 
       marker.addTo(map);
+      markersRef.current.set(prop.id, marker);
     });
 
     if (bounds.length > 0) {
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
     }
-  }, [properties, onPropertyClick]);
+  }, [properties, onPropertyClick, highlightedPropertyId]);
 
   return (
     <>

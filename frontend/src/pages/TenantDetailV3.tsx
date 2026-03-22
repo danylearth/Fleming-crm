@@ -176,14 +176,18 @@ export default function TenantDetailV3() {
   // Guarantor expand
   const [guarantorExpanded, setGuarantorExpanded] = useState(false);
 
+  const loadDetail = async () => {
+    try {
+      const t = await api.get(`/api/tenants/${id}`);
+      setTenant(t);
+      setForm(tenantToForm(t));
+    } catch (e) { console.error(e); }
+  };
+
   // Load tenant
   useEffect(() => {
     (async () => {
-      try {
-        const t = await api.get(`/api/tenants/${id}`);
-        setTenant(t);
-        setForm(tenantToForm(t));
-      } catch (e) { console.error(e); }
+      await loadDetail();
       setLoading(false);
     })();
   }, [id]);
@@ -314,11 +318,12 @@ export default function TenantDetailV3() {
     const noteText = newNote.trim();
     const note: TenantNote = { id: Date.now().toString(), text: noteText, author: user?.email || 'Unknown', created_at: new Date().toISOString() };
     const updated = [...notes, note];
+    setNewNote('');
     try {
       await api.patch(`/api/tenants/${id}/notes`, { notes: JSON.stringify(updated) });
-      setNotes(updated);
-      setNewNote('');
       api.post('/api/activity', { action: 'note_added', entity_type: 'tenant', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
+      // Reload the data to show the new note
+      await loadDetail();
     } catch (e) { console.error(e); }
     setAddingNote(false);
   };

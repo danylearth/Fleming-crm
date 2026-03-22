@@ -5,7 +5,8 @@ import { Card, GlassCard, Button, Input, Select, Avatar, EmptyState, DatePicker 
 import { useApi } from '../hooks/useApi';
 import {
   ArrowLeft, Pencil, Save, X, Calendar, Clock, User, Building2,
-  CheckCircle2, AlertTriangle, Inbox, Plus, Trash2
+  CheckCircle2, AlertTriangle, Inbox, Plus, Trash2, FileText, Download,
+  Upload, Link as LinkIcon, UserCircle, Users, Home
 } from 'lucide-react';
 
 interface Task {
@@ -16,10 +17,23 @@ interface Task {
   priority: string;
   status: string;
   due_date: string;
+  follow_up_date?: string;
+  notes?: string;
   created_at: string;
   entity_type?: string;
   entity_id?: number;
   task_type?: string;
+  relatedEntity?: any;
+  documents?: Document[];
+}
+
+interface Document {
+  id: number;
+  filename: string;
+  original_name: string;
+  mime_type: string;
+  size: number;
+  uploaded_at: string;
 }
 
 const PRIORITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -45,12 +59,29 @@ export default function TaskDetailV3() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Partial<Task>>({});
+  const [uploading, setUploading] = useState(false);
+
+  // Entity options for linking
+  const [properties, setProperties] = useState<any[]>([]);
+  const [landlords, setLandlords] = useState<any[]>([]);
+  const [tenants, setTenants] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
 
   const load = async () => {
     try {
-      const data = await api.get(`/api/tasks/${id}`);
-      setTask(data);
-      setForm(data);
+      const [taskData, props, lands, tens, usrs] = await Promise.all([
+        api.get(`/api/tasks/${id}`),
+        api.get('/api/properties'),
+        api.get('/api/landlords'),
+        api.get('/api/tenants'),
+        api.get('/api/users'),
+      ]);
+      setTask(taskData);
+      setForm(taskData);
+      setProperties(props);
+      setLandlords(lands);
+      setTenants(tens);
+      setUsers(usrs);
     } catch (e) {
       console.error(e);
     }
@@ -68,6 +99,7 @@ export default function TaskDetailV3() {
       setEditing(false);
     } catch (e) {
       console.error(e);
+      alert('Failed to save task');
     }
     setSaving(false);
   };
@@ -75,7 +107,7 @@ export default function TaskDetailV3() {
   const updateStatus = async (status: string) => {
     if (!task) return;
     try {
-      await api.put(`/api/tasks/${task.id}`, { status });
+      await api.put(`/api/tasks/${task.id}`, { ...task, status });
       await load();
     } catch (e) {
       console.error(e);
@@ -83,12 +115,56 @@ export default function TaskDetailV3() {
   };
 
   const deleteTask = async () => {
-    if (!task || !confirm('Delete this task?')) return;
+    if (!task || !confirm('Delete this task? This will also delete all attached files.')) return;
     try {
       await api.delete(`/api/tasks/${task.id}`);
       navigate('/v3/tasks');
     } catch (e) {
       console.error(e);
+      alert('Failed to delete task');
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !task) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('doc_type', 'task_attachment');
+
+      const response = await fetch(`/api/documents/task/${task.id}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+      await load();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to upload file');
+    }
+    setUploading(false);
+    e.target.value = ''; // Reset input
+  };
+
+  const downloadDocument = (docId: number, filename: string) => {
+    window.open(`/api/documents/download/${docId}`, '_blank');
+  };
+
+  const deleteDocument = async (docId: number) => {
+    if (!confirm('Delete this file?')) return;
+    try {
+      await api.delete(`/api/documents/${docId}`);
+      await load();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete file');
     }
   };
 
@@ -124,7 +200,7 @@ export default function TaskDetailV3() {
 
   return (
     <V3Layout title="Task">
-      <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+      <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
         {/* Back button */}
         <button onClick={() => navigate('/v3/tasks')} className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
           <ArrowLeft size={16} /> Back to Tasks
@@ -220,8 +296,25 @@ export default function TaskDetailV3() {
               )}
             </Card>
 
+            {/* Notes */}
+            <Card className="p-5">
+              <h3 className="text-sm font-semibold mb-3">Notes</h3>
+              {editing ? (
+                <textarea
+                  value={form.notes || ''}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  className="w-full min-h-[100px] bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 text-sm resize-none outline-none"
+                  placeholder="Additional notes..."
+                />
+              ) : (
+                <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap">
+                  {task.notes || 'No notes'}
+                </p>
+              )}
+            </Card>
+
             {/* Status actions */}
-            {task.status !== 'completed' && (
+            {task.status !== 'completed' && !editing && (
               <Card className="p-5">
                 <h3 className="text-sm font-semibold mb-3">Actions</h3>
                 <div className="flex flex-wrap gap-2">
@@ -254,6 +347,58 @@ export default function TaskDetailV3() {
                 </div>
               </Card>
             )}
+
+            {/* Documents */}
+            <Card className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold">Attachments</h3>
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    disabled={uploading}
+                  />
+                  <Button variant="outline" size="sm" disabled={uploading} as="span">
+                    <Upload size={14} className="mr-1.5" /> {uploading ? 'Uploading...' : 'Upload'}
+                  </Button>
+                </label>
+              </div>
+
+              {task.documents && task.documents.length > 0 ? (
+                <div className="space-y-2">
+                  {task.documents.map(doc => (
+                    <div key={doc.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors">
+                      <div className="w-9 h-9 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center">
+                        <FileText size={16} className="text-[var(--text-muted)]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{doc.original_name}</p>
+                        <p className="text-xs text-[var(--text-muted)]">
+                          {(doc.size / 1024).toFixed(1)} KB • {new Date(doc.uploaded_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => downloadDocument(doc.id, doc.original_name)}
+                          className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                        >
+                          <Download size={14} />
+                        </button>
+                        <button
+                          onClick={() => deleteDocument(doc.id)}
+                          className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-red-400 hover:text-red-300 transition-colors"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--text-muted)] text-center py-4">No attachments</p>
+              )}
+            </Card>
           </div>
 
           {/* Right column - Meta */}
@@ -282,6 +427,28 @@ export default function TaskDetailV3() {
                 </div>
               </div>
 
+              {/* Follow-up date */}
+              {(editing || task.follow_up_date) && (
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center text-[var(--text-muted)]">
+                    <Calendar size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Follow-up Date</p>
+                    {editing ? (
+                      <DatePicker
+                        value={form.follow_up_date?.slice(0, 10) || ''}
+                        onChange={v => setForm(f => ({ ...f, follow_up_date: v }))}
+                      />
+                    ) : (
+                      <p className="text-sm font-medium">
+                        {task.follow_up_date ? new Date(task.follow_up_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not set'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Assigned to */}
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center text-[var(--text-muted)]">
@@ -290,11 +457,13 @@ export default function TaskDetailV3() {
                 <div className="flex-1">
                   <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Assigned To</p>
                   {editing ? (
-                    <input
+                    <Select
                       value={form.assigned_to || ''}
-                      onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))}
-                      className="w-full bg-transparent border-b border-[var(--border-input)] text-sm outline-none"
-                      placeholder="Person name"
+                      onChange={v => setForm(f => ({ ...f, assigned_to: v }))}
+                      options={[
+                        { value: '', label: 'Unassigned' },
+                        ...users.map(u => ({ value: u.name, label: `${u.name} (${u.role})` }))
+                      ]}
                     />
                   ) : (
                     <div className="flex items-center gap-2">
@@ -354,24 +523,109 @@ export default function TaskDetailV3() {
               )}
             </Card>
 
-            {/* Entity link */}
-            {task.entity_type && task.entity_id && (
-              <Card className="p-5">
-                <h3 className="text-sm font-semibold mb-3">Linked To</h3>
+            {/* Entity linking - Always editable */}
+            <Card className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <LinkIcon size={14} /> Linked Entity
+                </h3>
+                {!editing && (
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                )}
+              </div>
+
+              {editing ? (
+                <div className="space-y-3">
+                  <Select
+                    label="Link Type"
+                    value={form.entity_type || ''}
+                    onChange={v => setForm(f => ({ ...f, entity_type: v, entity_id: undefined }))}
+                    options={[
+                      { value: '', label: 'None' },
+                      { value: 'property', label: 'Property' },
+                      { value: 'landlord', label: 'Landlord' },
+                      { value: 'tenant', label: 'Tenant' },
+                    ]}
+                  />
+
+                  {form.entity_type === 'property' && (
+                    <Select
+                      label="Property"
+                      value={String(form.entity_id || '')}
+                      onChange={v => setForm(f => ({ ...f, entity_id: v ? Number(v) : undefined }))}
+                      options={[
+                        { value: '', label: 'Select property...' },
+                        ...properties.map(p => ({ value: String(p.id), label: p.address }))
+                      ]}
+                    />
+                  )}
+
+                  {form.entity_type === 'landlord' && (
+                    <Select
+                      label="Landlord"
+                      value={String(form.entity_id || '')}
+                      onChange={v => setForm(f => ({ ...f, entity_id: v ? Number(v) : undefined }))}
+                      options={[
+                        { value: '', label: 'Select landlord...' },
+                        ...landlords.map(l => ({ value: String(l.id), label: l.name }))
+                      ]}
+                    />
+                  )}
+
+                  {form.entity_type === 'tenant' && (
+                    <Select
+                      label="Tenant"
+                      value={String(form.entity_id || '')}
+                      onChange={v => setForm(f => ({ ...f, entity_id: v ? Number(v) : undefined }))}
+                      options={[
+                        { value: '', label: 'Select tenant...' },
+                        ...tenants.map(t => ({ value: String(t.id), label: t.name }))
+                      ]}
+                    />
+                  )}
+                </div>
+              ) : task.entity_type && task.entity_id ? (
                 <button
-                  onClick={() => navigate(`/v3/${task.entity_type === 'property' ? 'properties' : task.entity_type + 's'}/${task.entity_id}`)}
+                  onClick={() => {
+                    const base = task.entity_type === 'property' ? 'properties' :
+                                 task.entity_type === 'landlord' ? 'landlords' :
+                                 task.entity_type === 'tenant' ? 'tenants' : '';
+                    if (base) navigate(`/v3/${base}/${task.entity_id}`);
+                  }}
                   className="flex items-center gap-3 w-full p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors"
                 >
                   <div className="w-9 h-9 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center text-[var(--text-muted)]">
-                    <Building2 size={16} />
+                    {task.entity_type === 'property' && <Building2 size={16} />}
+                    {task.entity_type === 'landlord' && <UserCircle size={16} />}
+                    {task.entity_type === 'tenant' && <Users size={16} />}
                   </div>
-                  <div className="text-left">
+                  <div className="text-left flex-1">
                     <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{task.entity_type}</p>
-                    <p className="text-sm font-medium">View {task.entity_type}</p>
+                    {task.relatedEntity && (
+                      <p className="text-sm font-medium">
+                        {task.entity_type === 'property' && task.relatedEntity.address}
+                        {task.entity_type === 'landlord' && task.relatedEntity.name}
+                        {task.entity_type === 'tenant' && task.relatedEntity.name}
+                        {task.entity_type === 'tenant_enquiry' && `${task.relatedEntity.first_name_1} ${task.relatedEntity.last_name_1}`}
+                      </p>
+                    )}
                   </div>
+                  <ArrowLeft size={16} className="rotate-180 text-[var(--text-muted)]" />
                 </button>
-              </Card>
-            )}
+              ) : (
+                <div className="text-center py-3">
+                  <p className="text-sm text-[var(--text-muted)] mb-2">Not linked to any entity</p>
+                  <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                    <LinkIcon size={12} className="mr-1" /> Link Entity
+                  </Button>
+                </div>
+              )}
+            </Card>
           </div>
         </div>
       </div>

@@ -50,7 +50,10 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
   }, [entityType, entityId]);
 
   const handleUpload = async (file: File) => {
-    if (!selectedType) return;
+    if (!selectedType) {
+      alert('Please select a document type');
+      return;
+    }
     setUploading(true);
     try {
       const fd = new FormData();
@@ -61,12 +64,22 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: fd,
       });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Upload failed');
+      }
+
       const newDoc = await res.json();
       if (newDoc.id) {
         setDocs(prev => [{ ...newDoc, uploaded_at: new Date().toISOString() }, ...prev]);
         setShowUpload(false);
+        setSelectedType('');
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error('Upload error:', e);
+      alert(e instanceof Error ? e.message : 'Failed to upload document');
+    }
     setUploading(false);
   };
 

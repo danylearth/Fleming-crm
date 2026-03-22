@@ -314,7 +314,10 @@ export default function EnquiriesV3() {
       setShowAdd(false);
       setForm({ name: '', email: '', phone: '', notes: '', property_id: '' });
       await load();
-    } catch { }
+    } catch (error) {
+      console.error('Failed to add enquiry:', error);
+      alert('Failed to add enquiry. Please try again.');
+    }
     setSaving(false);
   };
 
@@ -366,7 +369,10 @@ export default function EnquiriesV3() {
       }
       setWorkflowEnquiry(null);
       await load();
-    } catch { }
+    } catch (error) {
+      console.error('Failed to update enquiry workflow:', error);
+      alert('Failed to update enquiry. Please try again.');
+    }
     setWfLoading(false);
   };
 
@@ -396,7 +402,10 @@ export default function EnquiriesV3() {
         try {
           await api.put(`/api/tenant-enquiries/${enquiryId}`, { ...raw, status: newStatus });
           await load();
-        } catch { }
+        } catch (error) {
+          console.error('Failed to update enquiry status:', error);
+          alert('Failed to update enquiry status. Please try again.');
+        }
       }
     }
   };

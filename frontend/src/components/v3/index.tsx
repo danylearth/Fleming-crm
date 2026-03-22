@@ -249,3 +249,8 @@ export type { DropdownOption } from './SearchDropdown';
 
 // ─── DatePicker (re-export) ───
 export { DatePicker } from './DatePicker';
+
+// ─── Government API Components (re-export) ───
+export { default as PricePaidData } from './PricePaidData';
+export { default as PostcodeAutocomplete } from './PostcodeAutocomplete';
+export { default as CompaniesHouseLookup } from './CompaniesHouseLookup';

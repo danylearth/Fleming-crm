@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, Avatar, SearchDropdown } from '../components/v3';
+import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, Avatar, SearchDropdown, PostcodeAutocomplete } from '../components/v3';
+import AddressAutocomplete from '../components/v3/AddressAutocomplete';
 import { useApi } from '../hooks/useApi';
 import { Building2, Plus, List, Map, X, Search, ChevronDown, User } from 'lucide-react';
 import PropertyMap from '../components/v3/PropertyMap';
@@ -57,6 +58,8 @@ export default function PropertiesV3() {
   const [landlordFilter, setLandlordFilter] = useState<number | null>(null);
   const [tenantFilter, setTenantFilter] = useState<number | null>(null);
   const { portfolioFilter } = usePortfolio();
+  // Map hover state
+  const [hoveredPropertyId, setHoveredPropertyId] = useState<number | null>(null);
 
   const load = () => {
     Promise.all([api.get('/api/properties'), api.get('/api/landlords'), api.get('/api/tenants')])
@@ -165,8 +168,60 @@ export default function PropertiesV3() {
         {loading ? (
           <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
         ) : viewMode === 'map' ? (
-          <div className="h-[calc(100vh-320px)] rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
-            <PropertyMap properties={filtered} onPropertyClick={(id) => navigate(`/v3/properties/${id}`)} />
+          <div className="h-[calc(100vh-320px)] rounded-2xl overflow-hidden border border-[var(--border-subtle)] flex">
+            {/* Property List Sidebar */}
+            <div
+              className="w-96 border-r border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 overflow-y-auto"
+              onMouseLeave={() => setHoveredPropertyId(null)}
+            >
+              <div className="p-4 space-y-2">
+                {filtered.map(p => {
+                  const isHovered = hoveredPropertyId === p.id;
+                  const isOtherHovered = hoveredPropertyId !== null && hoveredPropertyId !== p.id;
+                  return (
+                    <div
+                      key={p.id}
+                      onMouseEnter={() => setHoveredPropertyId(p.id)}
+                      onClick={() => navigate(`/v3/properties/${p.id}`)}
+                      className={`bg-[var(--bg-card)] border rounded-xl p-4 hover:border-[var(--accent-orange)]/40 hover:shadow-lg transition-all cursor-pointer group ${
+                        isHovered ? 'border-[var(--accent-orange)]/40 shadow-lg scale-[1.02] z-10' :
+                        isOtherHovered ? 'opacity-40 border-[var(--border-subtle)]' :
+                        'border-[var(--border-subtle)]'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center shrink-0 transition-all ${
+                          isOtherHovered ? 'opacity-50' : ''
+                        }`}>
+                          <Building2 size={18} className="text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-semibold text-sm truncate transition-colors ${
+                            isHovered ? 'text-[var(--accent-orange)]' : ''
+                          }`}>{p.address}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{p.postcode}</p>
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <span className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${statusStyle(p.status)}`}>
+                              {statusLabel(p.status)}
+                            </span>
+                            <span className="text-xs text-[var(--text-muted)]">{p.bedrooms} bed</span>
+                            <span className="text-xs font-semibold text-[var(--text-primary)]">£{p.rent_amount?.toLocaleString()}/mo</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Map */}
+            <div className="flex-1 relative">
+              <PropertyMap
+                properties={filtered}
+                onPropertyClick={(id) => navigate(`/v3/properties/${id}`)}
+                highlightedPropertyId={hoveredPropertyId}
+              />
+            </div>
           </div>
         ) : filtered.length === 0 ? (
           <EmptyState message={search || statusFilter !== 'all' ? 'No properties match your filters' : 'No properties yet — add your first one'} />
@@ -318,9 +373,32 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
           </div>
         )}
 
-        <Input label="Address *" value={form.address} onChange={(v: string) => setForm((f: any) => ({ ...f, address: v }))} placeholder="Property address" />
+        <div className="relative">
+          <AddressAutocomplete
+            label="Address *"
+            value={form.address}
+            onChange={(v: string) => setForm((f: any) => ({ ...f, address: v }))}
+            onSelect={(place) => {
+              setForm((f: any) => ({
+                ...f,
+                address: place.address,
+                postcode: place.postcode || f.postcode
+              }));
+            }}
+            placeholder="Start typing an address..."
+          />
+        </div>
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Postcode" value={form.postcode} onChange={(v: string) => setForm((f: any) => ({ ...f, postcode: v }))} placeholder="e.g. SW1A 1AA" />
+          <div>
+            <PostcodeAutocomplete
+              label="Postcode"
+              value={form.postcode}
+              onChange={(v: string) => setForm((f: any) => ({ ...f, postcode: v }))}
+              onAddressSelect={(address: string) => setForm((f: any) => ({ ...f, address: address }))}
+              placeholder="e.g. SW1A 1AA"
+              showDropdownOnAddress={true}
+            />
+          </div>
           <Input label="Rent (£/month)" value={form.rent_amount} onChange={(v: string) => setForm((f: any) => ({ ...f, rent_amount: v }))} placeholder="0" />
         </div>
         <div className="grid grid-cols-2 gap-3">

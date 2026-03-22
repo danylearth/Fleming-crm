@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { Card, GlassCard, Button, ProgressRing, SectionHeader, EmptyState, Avatar, Tag, Input, Select, DatePicker } from '../components/v3';
+import { Card, GlassCard, Button, ProgressRing, SectionHeader, EmptyState, Avatar, Tag, Input, Select, DatePicker, PricePaidData } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import ActivityTimeline from '../components/v3/ActivityTimeline';
 import AddressAutocomplete from '../components/v3/AddressAutocomplete';
@@ -52,6 +52,10 @@ interface Expense {
   category: string; expense_date: string;
 }
 
+interface User {
+  id: number; name: string; email: string; role: string;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   to_let: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
   let_agreed: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -65,6 +69,14 @@ const EPC_COLORS: Record<string, string> = {
   A: 'bg-emerald-500 text-white', B: 'bg-emerald-400 text-white', C: 'bg-lime-500 text-white',
   D: 'bg-yellow-500 text-black', E: 'bg-amber-500 text-white', F: 'bg-orange-500 text-white', G: 'bg-red-500 text-white',
 };
+
+const PRIORITY_COLORS: Record<string, string> = {
+  low: 'bg-blue-500/20 text-blue-400',
+  medium: 'bg-amber-500/20 text-amber-400',
+  high: 'bg-red-500/20 text-red-400',
+};
+const PRIORITY_LABELS: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High' };
+const TASK_TYPES = ['manual', 'viewing', 'follow_up', 'document', 'maintenance', 'onboarding', 'compliance', 'other'];
 
 function ReadField({ label, value }: { label: string; value: string | React.ReactNode }) {
   return (
@@ -97,12 +109,22 @@ export default function PropertyDetailV3() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Record<string, any>>({});
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [expenseForm, setExpenseForm] = useState({ description: '', amount: '', category: 'maintenance', expense_date: '' });
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [taskForm, setTaskForm] = useState({
+    title: '',
+    description: '',
+    assigned_to: '',
+    priority: 'medium',
+    due_date: '',
+    task_type: 'manual'
+  });
 
   const populateForm = (p: PropertyDetail) => setForm({
     landlord_id: p.landlord_id, address: p.address || '', postcode: p.postcode || '',
@@ -121,20 +143,26 @@ export default function PropertyDetailV3() {
     has_gas: !!p.has_gas, gas_safety_expiry_date: p.gas_safety_expiry_date || '',
   });
 
-  useEffect(() => {
-    Promise.all([
-      api.get(`/api/properties/${id}`),
-      api.get('/api/tasks').catch(() => []),
-      api.get('/api/maintenance').catch(() => []),
-      api.get(`/api/property-expenses/${id}`).catch(() => []),
-    ]).then(([prop, tks, maint, exps]) => {
+  const loadDetail = async () => {
+    try {
+      const [prop, tks, maint, exps, usrs] = await Promise.all([
+        api.get(`/api/properties/${id}`),
+        api.get('/api/tasks').catch(() => []),
+        api.get('/api/maintenance').catch(() => []),
+        api.get(`/api/property-expenses/${id}`).catch(() => []),
+        api.get('/api/users').catch(() => []),
+      ]);
       setProperty(prop);
       populateForm(prop);
       setTasks(Array.isArray(tks) ? tks : []);
       setMaintenance(Array.isArray(maint) ? maint.filter((m: MaintenanceRecord) => m.property_id === Number(id)) : []);
       setExpenses(Array.isArray(exps) ? exps : []);
-    }).catch(() => {})
-    .finally(() => setLoading(false));
+      setUsers(Array.isArray(usrs) ? usrs : []);
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadDetail().finally(() => setLoading(false));
   }, [id]);
 
   const handleSave = async () => {
@@ -180,6 +208,31 @@ export default function PropertyDetailV3() {
   };
 
   const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+  const addTask = async () => {
+    try {
+      await api.post('/api/tasks', {
+        ...taskForm,
+        entity_type: 'property',
+        entity_id: property?.id
+      });
+      // Reload all property data including the new task
+      await loadDetail();
+      // Reset form and close modal
+      setTaskForm({
+        title: '',
+        description: '',
+        assigned_to: '',
+        priority: 'medium',
+        due_date: '',
+        task_type: 'manual'
+      });
+      setShowAddTask(false);
+    } catch (err) {
+      console.error('Failed to create task:', err);
+      alert('Failed to create task');
+    }
+  };
 
   if (loading) {
     return (
@@ -295,11 +348,45 @@ export default function PropertyDetailV3() {
                     <div className="col-span-full flex gap-2">
                       <button type="button" onClick={async () => {
                         try {
+                          console.log('Fetching EPC data for postcode:', form.postcode);
                           const data = await api.get(`/api/epc-lookup?postcode=${encodeURIComponent(form.postcode)}`);
-                          if (data.length > 0) setForm(f => ({ ...f, epc_grade: data[0].current_rating || f.epc_grade }));
-                        } catch {}
+                          console.log('EPC data received:', data);
+
+                          if (data && data.length > 0) {
+                            // Try to match by address, or use first result
+                            const match = data.find((cert: any) =>
+                              cert.address?.toLowerCase().includes(form.address.toLowerCase())
+                            ) || data[0];
+
+                            console.log('Using EPC certificate:', match);
+
+                            const updates: any = {};
+
+                            // Set EPC grade
+                            if (match.current_rating) {
+                              updates.epc_grade = match.current_rating;
+                            }
+
+                            // Calculate expiry date (EPC certificates are valid for 10 years)
+                            if (match.lodgement_date) {
+                              const lodgementDate = new Date(match.lodgement_date);
+                              const expiryDate = new Date(lodgementDate);
+                              expiryDate.setFullYear(expiryDate.getFullYear() + 10);
+                              updates.epc_expiry_date = expiryDate.toISOString().split('T')[0];
+                              console.log('EPC expiry date calculated:', updates.epc_expiry_date);
+                            }
+
+                            setForm(f => ({ ...f, ...updates }));
+                          } else {
+                            console.log('No EPC data found for this postcode');
+                            alert('No EPC data found for this postcode. Try entering the data manually.');
+                          }
+                        } catch (error) {
+                          console.error('Failed to fetch EPC data:', error);
+                          alert('Failed to fetch EPC data. Please try again or enter manually.');
+                        }
                       }} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-colors">
-                        Auto-fetch EPC
+                        Sync EPC Data
                       </button>
                       <button type="button" onClick={async () => {
                         try {
@@ -403,7 +490,11 @@ export default function PropertyDetailV3() {
 
             {/* Tasks */}
             <Card className="p-6">
-              <SectionHeader title="Tasks" action={() => navigate('/v3/tasks')} actionLabel="View All" />
+              <SectionHeader
+                title="Tasks"
+                action={() => setShowAddTask(true)}
+                actionLabel="Add New"
+              />
               {propertyTasks.length ? (
                 <div className="space-y-2">
                   {propertyTasks.map(task => (
@@ -598,6 +689,9 @@ export default function PropertyDetailV3() {
               </Card>
             )}
 
+            {/* Land Registry Price Data */}
+            {property.postcode && <PricePaidData postcode={property.postcode} />}
+
             {/* Documents */}
             <DocumentUpload entityType="property" entityId={property.id} />
 
@@ -608,6 +702,58 @@ export default function PropertyDetailV3() {
             </Card>
           </div>
         </div>
+
+        {/* Add Task Modal */}
+        {showAddTask && (
+          <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-end md:items-center justify-center z-50" onClick={() => setShowAddTask(false)}>
+            <div className="bg-[var(--bg-card)] rounded-t-2xl md:rounded-2xl border border-[var(--border-input)] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-bold">Add Task for {property.address}</h3>
+                <button onClick={() => setShowAddTask(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+              </div>
+              <div className="space-y-4">
+                <Input label="Title" value={taskForm.title} onChange={v => setTaskForm(p => ({...p, title: v}))} placeholder="Task title" />
+                <Input label="Description" value={taskForm.description} onChange={v => setTaskForm(p => ({...p, description: v}))} placeholder="Description..." />
+                <Select
+                  label="Assigned To"
+                  value={taskForm.assigned_to}
+                  onChange={v => setTaskForm(p => ({...p, assigned_to: v}))}
+                  options={[
+                    { value: '', label: 'Select user...' },
+                    ...users.map(u => ({ value: u.name, label: `${u.name} (${u.role})` }))
+                  ]}
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Priority</label>
+                    <div className="flex gap-1.5">
+                      {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
+                        <button key={k} onClick={() => setTaskForm(p => ({...p, priority: k}))}
+                          className={`flex-1 text-xs py-2 rounded-lg border font-medium transition-colors ${
+                            taskForm.priority === k ? PRIORITY_COLORS[k] + ' border-current' : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
+                          }`}>{v}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Type</label>
+                    <Select
+                      value={taskForm.task_type}
+                      onChange={v => setTaskForm(p => ({...p, task_type: v}))}
+                      options={TASK_TYPES.map(t => ({ value: t, label: t.replace('_', ' ').replace(/^\w/, c => c.toUpperCase()) }))}
+                    />
+                  </div>
+                </div>
+                <DatePicker label="Due Date" value={taskForm.due_date} onChange={v => setTaskForm(p => ({...p, due_date: v}))} />
+
+                <div className="flex gap-3 pt-2">
+                  <Button variant="ghost" onClick={() => setShowAddTask(false)}>Cancel</Button>
+                  <Button variant="gradient" onClick={addTask} disabled={!taskForm.title}>Add Task</Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </V3Layout>
   );

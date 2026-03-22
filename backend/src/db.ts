@@ -375,22 +375,21 @@ db.exec(`
     description TEXT,
     priority TEXT DEFAULT 'medium' CHECK(priority IN ('low', 'medium', 'high')),
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'archived')),
-    -- Assignment
-    assigned_to INTEGER,
+    -- Assignment (stores user name as TEXT)
+    assigned_to TEXT,
     -- Related entity
-    entity_type TEXT CHECK(entity_type IN ('property', 'tenant', 'landlord', 'enquiry', 'maintenance', 'general')),
+    entity_type TEXT CHECK(entity_type IN ('property', 'tenant', 'landlord', 'enquiry', 'tenant_enquiry', 'maintenance', 'general')),
     entity_id INTEGER,
     -- Scheduling
     due_date DATE,
     follow_up_date DATE,
     -- Auto-generated task type
-    task_type TEXT CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up')),
+    task_type TEXT CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', 'viewing', 'document', 'onboarding', 'compliance', 'other')),
     -- Notes
     notes TEXT,
     completed_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (assigned_to) REFERENCES users(id)
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
   
   CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
@@ -404,7 +403,7 @@ db.exec(`
   
   CREATE TABLE IF NOT EXISTS documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    entity_type TEXT NOT NULL CHECK(entity_type IN ('landlord', 'landlord_bdm', 'tenant', 'tenant_enquiry', 'property', 'maintenance')),
+    entity_type TEXT NOT NULL CHECK(entity_type IN ('landlord', 'landlord_bdm', 'tenant', 'tenant_enquiry', 'property', 'maintenance', 'task')),
     entity_id INTEGER NOT NULL,
     doc_type TEXT NOT NULL,
     filename TEXT NOT NULL,
