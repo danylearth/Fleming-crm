@@ -6,6 +6,7 @@ import fs from 'fs';
 import multer from 'multer';
 import pool, { initDb, query, queryOne, insert, run } from './db-pg';
 import { generateToken, authMiddleware, AuthRequest } from './auth';
+import { registerInventoryRoutes } from './inventory-routes';
 
 // Validate required environment variables
 if (!process.env.DATABASE_URL) {
@@ -46,9 +47,13 @@ app.use(express.json());
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
-app.get('/', (req, res, next) => {
-  if (req.headers.accept?.includes('text/html')) return next();
-  res.json({ status: 'ok' });
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Fleming CRM API',
+    timestamp: new Date().toISOString(),
+    documentation: '/api/health'
+  });
 });
 
 // Serve static files (disabled in production - frontend deployed separately)
@@ -825,6 +830,9 @@ app.post('/api/users', authMiddleware, async (req: AuthRequest, res) => {
     res.status(500).json({ error: 'Failed to create user' });
   }
 });
+
+// ============ INVENTORY ROUTES ============
+registerInventoryRoutes(app, authMiddleware);
 
 // SPA fallback (disabled in production - frontend deployed separately)
 // app.get(/^(?!\/api).*/, (req, res) => {
