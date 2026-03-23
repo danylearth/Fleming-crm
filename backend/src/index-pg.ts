@@ -643,7 +643,7 @@ app.post('/api/tenants/bulk-delete', authMiddleware, async (req: AuthRequest, re
 
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
     // Update properties to remove tenant references
-    await run(`UPDATE properties SET current_tenant = NULL WHERE id IN (SELECT property_id FROM tenants WHERE id IN (${placeholders}))`, ids);
+    await run(`UPDATE properties SET has_live_tenancy = 0, tenancy_start_date = NULL WHERE id IN (SELECT property_id FROM tenants WHERE id IN (${placeholders}))`, ids);
     // Delete tenants
     const result = await run(`DELETE FROM tenants WHERE id IN (${placeholders})`, ids);
 
