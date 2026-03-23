@@ -1,12 +1,10 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-// Change this to your backend URL
-// For local development, use your computer's IP address (not localhost)
-// Example: 'http://192.168.1.100:3001'
+// Backend API URL
 const API_BASE_URL = __DEV__
-  ? 'http://192.168.0.123:3001' // Your local network IP address
-  : 'https://your-production-api.com'; // Replace with your Railway/Render URL
+  ? 'http://192.168.0.123:3001' // Your local network IP address for development
+  : 'https://fleming-crm-api-production-7e58.up.railway.app'; // Production Railway URL
 
 const TOKEN_KEY = 'fleming_auth_token';
 

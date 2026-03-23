@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant Enquiry Form - Fleming Lettings</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --navy: #1a2332;
+            --gold: #d4af37;
+            --bg-dark: #0f1419;
+            --bg-card: #1a2332;
+            --bg-input: #243041;
+            --border: #2d3748;
+            --text-primary: #ffffff;
+            --text-secondary: #a0aec0;
+            --text-muted: #718096;
+            --orange: #f59e0b;
+            --error: #ef4444;
+            --success: #10b981;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--navy) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 20px;
+        }
+
+        .logo {
+            font-size: 32px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--gold) 0%, var(--orange) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .description {
+            font-size: 14px;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .card {
+            background: rgba(26, 35, 50, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--gold);
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-icon {
+            font-size: 18px;
+        }
+
+        .form-row {
+            display: grid;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .form-row.two-col {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .form-row.three-col {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        label .required {
+            color: var(--error);
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="tel"],
+        input[type="date"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 14px;
+            color: var(--text-primary);
+            transition: all 0.2s;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--gold);
+            box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0aec0' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .radio-option {
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .radio-option input[type="radio"] {
+            display: none;
+        }
+
+        .radio-option label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 16px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+            font-weight: 500;
+            margin: 0;
+        }
+
+        .radio-option input[type="radio"]:checked + label {
+            background: rgba(212, 175, 55, 0.2);
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+
+        .checkbox-group {
+            margin-top: 8px;
+        }
+
+        .checkbox-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .checkbox-option input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            cursor: pointer;
+            accent-color: var(--gold);
+        }
+
+        .checkbox-option label {
+            margin: 0;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            cursor: pointer;
+        }
+
+        .checkbox-option label a {
+            color: var(--gold);
+            text-decoration: none;
+        }
+
+        .checkbox-option label a:hover {
+            text-decoration: underline;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 16px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, var(--gold) 0%, var(--orange) 100%);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 16px rgba(212, 175, 55, 0.3);
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .alert {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: var(--success);
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--error);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Multi-select styling */
+        .multi-select-wrapper {
+            position: relative;
+        }
+
+        .multi-select-display {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            min-height: 45px;
+            padding: 8px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .multi-select-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            background: var(--gold);
+            color: var(--navy);
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .multi-select-tag button {
+            background: none;
+            border: none;
+            color: var(--navy);
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            padding: 0;
+        }
+
+        .multi-select-placeholder {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .multi-select-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 300px;
+            overflow-y: auto;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-top: 4px;
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .multi-select-option {
+            padding: 12px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--text-secondary);
+            transition: background 0.2s;
+        }
+
+        .multi-select-option:hover {
+            background: var(--bg-input);
+        }
+
+        .multi-select-option.selected {
+            background: rgba(212, 175, 55, 0.2);
+            color: var(--gold);
+        }
+
+        @media (max-width: 768px) {
+            .card {
+                padding: 20px;
+            }
+
+            .form-row.two-col,
+            .form-row.three-col {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .logo {
+                font-size: 24px;
+            }
+
+            .subtitle {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="logo">FLEMING LETTINGS</h1>
+            <p class="subtitle">Tenant Enquiry Form</p>
+            <p class="description">Let's get you set up! Fill in your details below to register your interest in renting with Fleming Lettings. All information is securely held and used to help us find you the perfect property.</p>
+        </div>
+
+        <div id="successAlert" class="alert alert-success hidden">
+            ✓ Thank you! Your enquiry has been submitted successfully. We'll be in touch soon.
+        </div>
+
+        <div id="errorAlert" class="alert alert-error hidden">
+            ✗ <span id="errorMessage">Something went wrong. Please try again.</span>
+        </div>
+
+        <form id="enquiryForm">
+            <!-- Registration Type -->
+            <div class="card">
+                <div class="section-title">
+                    <span class="section-icon">👥</span>
+                    Registration Type
+                </div>
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="sole" name="registration_type" value="sole" checked>
+                        <label for="sole">Sole Application</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="joint" name="registration_type" value="joint">
+                        <label for="joint">Joint Application</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Primary Applicant -->
+            <div class="card">
+                <div class="section-title">
+                    <span class="section-icon">👤</span>
+                    Primary Applicant Details
+                </div>
+
+                <div class="form-row three-col">
+                    <div class="form-group">
+                        <label>First Name <span class="required">*</span></label>
+                        <input type="text" name="first_name_1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Surname <span class="required">*</span></label>
+                        <input type="text" name="last_name_1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Date of Birth <span class="required">*</span></label>
+                        <input type="date" name="date_of_birth_1" required>
+                    </div>
+                </div>
+
+                <div class="form-row two-col">
+                    <div class="form-group">
+                        <label>Email Address <span class="required">*</span></label>
+                        <input type="email" name="email_1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Contact Number <span class="required">*</span></label>
+                        <input type="tel" name="phone_1" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Nationality <span class="required">*</span></label>
+                    <select name="nationality_1" required>
+                        <option value="">Please select an option</option>
+                        <option value="British">English, Welsh, Scottish, Northern Irish or British</option>
+                        <option value="Irish">Irish</option>
+                        <option value="Gypsy or Irish Traveller">Gypsy or Irish Traveller</option>
+                        <option value="Roma">Roma</option>
+                        <option value="Indian">Indian</option>
+                        <option value="Pakistani">Pakistani</option>
+                        <option value="Bangladeshi">Bangladeshi</option>
+                        <option value="Chinese">Chinese</option>
+                        <option value="African">African</option>
+                        <option value="Caribbean">Caribbean</option>
+                        <option value="Arab">Arab</option>
+                        <option value="White and Black Caribbean">White and Black Caribbean</option>
+                        <option value="White and Black African">White and Black African</option>
+                        <option value="White and Asian">White and Asian</option>
+                        <option value="Any other Mixed background">Any other Mixed or multiple ethnic background</option>
+                        <option value="Any other Asian background">Any other Asian background</option>
+                        <option value="Any other White background">Any other White background</option>
+                        <option value="Any other Black background">Any other Black, Black British, or Caribbean background</option>
+                        <option value="Any other ethnic group">Any other ethnic group</option>
+                        <option value="Rather not say">Rather not say</option>
+                    </select>
+                </div>
+
+                <div class="form-row three-col">
+                    <div class="form-group">
+                        <label>Home Address <span class="required">*</span></label>
+                        <input type="text" name="current_address_1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Postcode <span class="required">*</span></label>
+                        <input type="text" name="postcode_1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Years at Address <span class="required">*</span></label>
+                        <input type="number" name="years_at_address_1" min="0" step="0.1" required>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Employment (Primary) -->
+            <div class="card">
+                <div class="section-title">
+                    <span class="section-icon">💼</span>
+                    Employment Information (Primary Applicant)
+                </div>
+
+                <div class="form-row two-col">
+                    <div class="form-group">
+                        <label>Employment Status <span class="required">*</span></label>
+                        <select name="employment_status_1" required>
+                            <option value="">Please select an option</option>
+                            <option value="Full-Time Employed">Full-Time Employed</option>
+                            <option value="Part-Time Employed">Part-Time Employed</option>
+                            <option value="Self-Employed">Self-Employed</option>
+                            <option value="Unemployed">Unemployed</option>
+                            <option value="Student">Student</option>
+                            <option value="Retired">Retired</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Industry of Employment</label>
+                        <select name="industry_1">
+                            <option value="">Please select an option</option>
+                            <option value="Administration">Administration</option>
+                            <option value="Animal care">Animal care</option>
+                            <option value="Beauty and wellbeing">Beauty and wellbeing</option>
+                            <option value="Business and finance">Business and finance</option>
+                            <option value="Computing, technology and digital">Computing, technology and digital</option>
+                            <option value="Construction and trades">Construction and trades</option>
+                            <option value="Creative and media">Creative and media</option>
+                            <option value="Delivery and storage">Delivery and storage</option>
+                            <option value="Emergency and uniform services">Emergency and uniform services</option>
+                            <option value="Engineering and maintenance">Engineering and maintenance</option>
+                            <option value="Environment and land">Environment and land</option>
+                            <option value="Government services">Government services</option>
+                            <option value="Healthcare">Healthcare</option>
+                            <option value="Home services">Home services</option>
+                            <option value="Hospitality and food">Hospitality and food</option>
+                            <option value="Law and legal">Law and legal</option>
+                            <option value="Managerial">Managerial</option>
+                            <option value="Manufacturing">Manufacturing</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row three-col">
+                    <div class="form-group">
+                        <label>Job Title</label>
+                        <input type="text" name="job_title_1">
+                    </div>
+                    <div class="form-group">
+                        <label>Years in Employment</label>
+                        <input type="number" name="years_employed_1" min="0" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Annual Salary (£)</label>
+                        <input type="number" name="income_1" min="0" step="100">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Position Type</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="contract_1" name="contract_type_1" value="Contract role">
+                            <label for="contract_1">Contract role</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="fixed_1" name="contract_type_1" value="Fixed term">
+                            <label for="fixed_1">Fixed term</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="temp_1" name="contract_type_1" value="Temporary or agency">
+                            <label for="temp_1">Temporary/Agency</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="perm_1" name="contract_type_1" value="Permanent" checked>
+                            <label for="perm_1">Permanent</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Joint Applicant Section (hidden by default) -->
+            <div id="jointApplicantSection" class="hidden">
+                <!-- Joint Applicant Details -->
+                <div class="card">
+                    <div class="section-title">
+                        <span class="section-icon">👥</span>
+                        Joint Applicant Details
+                    </div>
+
+                    <div class="form-row three-col">
+                        <div class="form-group">
+                            <label>First Name <span class="required">*</span></label>
+                            <input type="text" name="first_name_2">
+                        </div>
+                        <div class="form-group">
+                            <label>Surname <span class="required">*</span></label>
+                            <input type="text" name="last_name_2">
+                        </div>
+                        <div class="form-group">
+                            <label>Date of Birth <span class="required">*</span></label>
+                            <input type="date" name="date_of_birth_2">
+                        </div>
+                    </div>
+
+                    <div class="form-row two-col">
+                        <div class="form-group">
+                            <label>Email Address <span class="required">*</span></label>
+                            <input type="email" name="email_2">
+                        </div>
+                        <div class="form-group">
+                            <label>Contact Number <span class="required">*</span></label>
+                            <input type="tel" name="phone_2">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Nationality <span class="required">*</span></label>
+                        <select name="nationality_2">
+                            <option value="">Please select an option</option>
+                            <option value="British">English, Welsh, Scottish, Northern Irish or British</option>
+                            <option value="Irish">Irish</option>
+                            <option value="Gypsy or Irish Traveller">Gypsy or Irish Traveller</option>
+                            <option value="Roma">Roma</option>
+                            <option value="Indian">Indian</option>
+                            <option value="Pakistani">Pakistani</option>
+                            <option value="Bangladeshi">Bangladeshi</option>
+                            <option value="Chinese">Chinese</option>
+                            <option value="African">African</option>
+                            <option value="Caribbean">Caribbean</option>
+                            <option value="Arab">Arab</option>
+                            <option value="White and Black Caribbean">White and Black Caribbean</option>
+                            <option value="White and Black African">White and Black African</option>
+                            <option value="White and Asian">White and Asian</option>
+                            <option value="Any other Mixed background">Any other Mixed or multiple ethnic background</option>
+                            <option value="Any other Asian background">Any other Asian background</option>
+                            <option value="Any other White background">Any other White background</option>
+                            <option value="Any other Black background">Any other Black, Black British, or Caribbean background</option>
+                            <option value="Any other ethnic group">Any other ethnic group</option>
+                            <option value="Rather not say">Rather not say</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row three-col">
+                        <div class="form-group">
+                            <label>Home Address <span class="required">*</span></label>
+                            <input type="text" name="current_address_2">
+                        </div>
+                        <div class="form-group">
+                            <label>Postcode <span class="required">*</span></label>
+                            <input type="text" name="postcode_2">
+                        </div>
+                        <div class="form-group">
+                            <label>Years at Address <span class="required">*</span></label>
+                            <input type="number" name="years_at_address_2" min="0" step="0.1">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Employment (Joint) -->
+                <div class="card">
+                    <div class="section-title">
+                        <span class="section-icon">💼</span>
+                        Employment Information (Joint Applicant)
+                    </div>
+
+                    <div class="form-row two-col">
+                        <div class="form-group">
+                            <label>Employment Status <span class="required">*</span></label>
+                            <select name="employment_status_2">
+                                <option value="">Please select an option</option>
+                                <option value="Full-Time Employed">Full-Time Employed</option>
+                                <option value="Part-Time Employed">Part-Time Employed</option>
+                                <option value="Self-Employed">Self-Employed</option>
+                                <option value="Unemployed">Unemployed</option>
+                                <option value="Student">Student</option>
+                                <option value="Retired">Retired</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Industry of Employment</label>
+                            <select name="industry_2">
+                                <option value="">Please select an option</option>
+                                <option value="Administration">Administration</option>
+                                <option value="Animal care">Animal care</option>
+                                <option value="Beauty and wellbeing">Beauty and wellbeing</option>
+                                <option value="Business and finance">Business and finance</option>
+                                <option value="Computing, technology and digital">Computing, technology and digital</option>
+                                <option value="Construction and trades">Construction and trades</option>
+                                <option value="Creative and media">Creative and media</option>
+                                <option value="Delivery and storage">Delivery and storage</option>
+                                <option value="Emergency and uniform services">Emergency and uniform services</option>
+                                <option value="Engineering and maintenance">Engineering and maintenance</option>
+                                <option value="Environment and land">Environment and land</option>
+                                <option value="Government services">Government services</option>
+                                <option value="Healthcare">Healthcare</option>
+                                <option value="Home services">Home services</option>
+                                <option value="Hospitality and food">Hospitality and food</option>
+                                <option value="Law and legal">Law and legal</option>
+                                <option value="Managerial">Managerial</option>
+                                <option value="Manufacturing">Manufacturing</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row three-col">
+                        <div class="form-group">
+                            <label>Job Title</label>
+                            <input type="text" name="job_title_2">
+                        </div>
+                        <div class="form-group">
+                            <label>Years in Employment</label>
+                            <input type="number" name="years_employed_2" min="0" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label>Annual Salary (£)</label>
+                            <input type="number" name="income_2" min="0" step="100">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Position Type</label>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="contract_2" name="contract_type_2" value="Contract role">
+                                <label for="contract_2">Contract role</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="fixed_2" name="contract_type_2" value="Fixed term">
+                                <label for="fixed_2">Fixed term</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="temp_2" name="contract_type_2" value="Temporary or agency">
+                                <label for="temp_2">Temporary/Agency</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="perm_2" name="contract_type_2" value="Permanent" checked>
+                                <label for="perm_2">Permanent</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Property Requirements -->
+            <div class="card">
+                <div class="section-title">
+                    <span class="section-icon">🏠</span>
+                    Property Requirements
+                </div>
+
+                <div class="form-group">
+                    <label>Interested Property (Optional)</label>
+                    <select name="linked_property_id" id="propertySelect">
+                        <option value="">Select a property (optional)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Type of Tenancy</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="longterm" name="tenancy_type" value="Long-term rent" checked>
+                            <label for="longterm">Long-term rent</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="shortterm" name="tenancy_type" value="Short-term rent">
+                            <label for="shortterm">Short-term rent</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="interim" name="tenancy_type" value="Interim rent">
+                            <label for="interim">Interim rent</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Reason for Renting</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="firsttime" name="reason_for_renting" value="First time tenant" checked>
+                            <label for="firsttime">First time tenant</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="family" name="reason_for_renting" value="Family move">
+                            <label for="family">Family move</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="work" name="reason_for_renting" value="Workplace relocation">
+                            <label for="work">Workplace relocation</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="student" name="reason_for_renting" value="Studying/student move">
+                            <label for="student">Studying/Student</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="other" name="reason_for_renting" value="Other">
+                            <label for="other">Other</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Type of Property</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="house" name="property_type_wanted" value="House" checked>
+                            <label for="house">House</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="bungalow" name="property_type_wanted" value="Bungalow">
+                            <label for="bungalow">Bungalow</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="flat" name="property_type_wanted" value="Flat">
+                            <label for="flat">Flat</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="studio" name="property_type_wanted" value="Studio apartment">
+                            <label for="studio">Studio</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row two-col">
+                    <div class="form-group">
+                        <label>Number of Bedrooms <span class="required">*</span></label>
+                        <select name="bedrooms_required" required>
+                            <option value="">Select...</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5+</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Parking Required?</label>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="parking_yes" name="parking_required" value="Yes">
+                                <label for="parking_yes">Yes</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="parking_no" name="parking_required" value="No" checked>
+                                <label for="parking_no">No</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="parking_pref" name="parking_required" value="Preferred">
+                                <label for="parking_pref">Preferred</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Preferred Locations (Select multiple)</label>
+                    <div class="multi-select-wrapper">
+                        <div class="multi-select-display" id="multiSelectDisplay">
+                            <span class="multi-select-placeholder">Click to select locations...</span>
+                        </div>
+                        <div class="multi-select-dropdown hidden" id="multiSelectDropdown"></div>
+                    </div>
+                    <input type="hidden" name="preferred_locations" id="preferredLocations">
+                </div>
+            </div>
+
+            <!-- Additional Notes -->
+            <div class="card">
+                <div class="section-title">
+                    <span class="section-icon">📝</span>
+                    Additional Information
+                </div>
+
+                <div class="form-group">
+                    <label>Additional Notes</label>
+                    <textarea name="notes" placeholder="Anything else you'd like us to know about your application..."></textarea>
+                </div>
+            </div>
+
+            <!-- Terms & Conditions -->
+            <div class="card">
+                <div class="checkbox-group">
+                    <div class="checkbox-option">
+                        <input type="checkbox" id="terms" name="terms" required>
+                        <label for="terms">
+                            I have read and agree to the <a href="https://fleminglettings.co.uk/terms-and-conditions/" target="_blank">Terms and Conditions</a> <span class="required">*</span>
+                        </label>
+                    </div>
+                    <div class="checkbox-option">
+                        <input type="checkbox" id="privacy" name="privacy" required>
+                        <label for="privacy">
+                            I consent to Fleming Lettings holding the details submitted in line with their <a href="https://fleminglettings.co.uk/privacy-policy/" target="_blank">Privacy Policy</a> <span class="required">*</span>
+                        </label>
+                    </div>
+                    <div class="checkbox-option">
+                        <input type="checkbox" id="marketing" name="marketing">
+                        <label for="marketing">
+                            I would like to receive marketing communications and property updates from Fleming Lettings
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="submit-btn" id="submitBtn">
+                Submit Enquiry
+            </button>
+        </form>
+    </div>
+
+    <script>
+        // Configuration
+        const API_URL = 'https://fleming-crm-api-production-7e58.up.railway.app';
+
+        // Multi-select locations data
+        const LOCATIONS = [
+            'Aldridge', 'All Saints', 'Ashmore', 'Beechdale', 'Birmingham', 'Bilston',
+            'Birchills', 'Blakenhall', 'Bloxwich', 'Bradely', 'Bradmore', 'Brewood',
+            'Bridgenorth', 'Brownhills', 'Bushbury', 'Castlecroft', 'Codsall', 'Compton',
+            'Coven', 'Coventry', 'Darlaston', 'Essington', 'Featherstone', 'Finchfield',
+            'Fordhouses', 'Graiseley', 'Heath Town', 'Highgate', 'Lanesfield', 'Lichfield',
+            'Low Hill', 'Merridale', 'Monmore Green', 'Moseley', 'Moxley', 'Park Village',
+            'Pelsall', 'Pendeford', 'Penkridge', 'Pennfields', 'Pool Green', 'Portobello',
+            'Priestfield', 'Shareshill', 'Shelfield', 'Shorthill', 'Shrewsbury', 'Spring Bank',
+            'Telford', 'Tettenhall', 'Tettenhall Wood', 'Tipton', 'Walsall', 'Walsall Wood',
+            'Wednesbury', 'Wednesfield', 'Whitemore Reans', 'Willenhall', 'Wolverhampton'
+        ];
+
+        let selectedLocations = [];
+
+        // Initialize multi-select
+        function initMultiSelect() {
+            const display = document.getElementById('multiSelectDisplay');
+            const dropdown = document.getElementById('multiSelectDropdown');
+
+            // Populate dropdown
+            LOCATIONS.forEach(location => {
+                const option = document.createElement('div');
+                option.className = 'multi-select-option';
+                option.textContent = location;
+                option.addEventListener('click', () => toggleLocation(location));
+                dropdown.appendChild(option);
+            });
+
+            // Toggle dropdown
+            display.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdown.classList.toggle('hidden');
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', () => {
+                dropdown.classList.add('hidden');
+            });
+
+            dropdown.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+        }
+
+        function toggleLocation(location) {
+            const index = selectedLocations.indexOf(location);
+            if (index > -1) {
+                selectedLocations.splice(index, 1);
+            } else {
+                selectedLocations.push(location);
+            }
+            updateMultiSelectDisplay();
+        }
+
+        function updateMultiSelectDisplay() {
+            const display = document.getElementById('multiSelectDisplay');
+            const hiddenInput = document.getElementById('preferredLocations');
+            const dropdown = document.getElementById('multiSelectDropdown');
+
+            // Update display
+            display.innerHTML = '';
+            if (selectedLocations.length === 0) {
+                const placeholder = document.createElement('span');
+                placeholder.className = 'multi-select-placeholder';
+                placeholder.textContent = 'Click to select locations...';
+                display.appendChild(placeholder);
+            } else {
+                selectedLocations.forEach(location => {
+                    const tag = document.createElement('div');
+                    tag.className = 'multi-select-tag';
+                    tag.innerHTML = `
+                        ${location}
+                        <button type="button" onclick="removeLocation('${location}')">&times;</button>
+                    `;
+                    display.appendChild(tag);
+                });
+            }
+
+            // Update dropdown selection state
+            const options = dropdown.querySelectorAll('.multi-select-option');
+            options.forEach(option => {
+                if (selectedLocations.includes(option.textContent)) {
+                    option.classList.add('selected');
+                } else {
+                    option.classList.remove('selected');
+                }
+            });
+
+            // Update hidden input
+            hiddenInput.value = selectedLocations.join(',');
+        }
+
+        function removeLocation(location) {
+            const index = selectedLocations.indexOf(location);
+            if (index > -1) {
+                selectedLocations.splice(index, 1);
+                updateMultiSelectDisplay();
+            }
+        }
+
+        // Load properties from API
+        async function loadProperties() {
+            try {
+                const response = await fetch(`${API_URL}/api/public/properties`);
+                if (!response.ok) return;
+
+                const properties = await response.json();
+                const select = document.getElementById('propertySelect');
+
+                properties.forEach(property => {
+                    const option = document.createElement('option');
+                    option.value = property.id;
+                    const rent = property.rent_amount ? ` - £${property.rent_amount}/mo` : '';
+                    option.textContent = `${property.address}${property.postcode ? ', ' + property.postcode : ''}${rent}`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load properties:', error);
+            }
+        }
+
+        // Handle registration type toggle
+        document.querySelectorAll('input[name="registration_type"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const jointSection = document.getElementById('jointApplicantSection');
+                const jointInputs = jointSection.querySelectorAll('input, select');
+
+                if (e.target.value === 'joint') {
+                    jointSection.classList.remove('hidden');
+                    // Make joint fields required
+                    jointInputs.forEach(input => {
+                        if (input.name.includes('_2')) {
+                            const label = document.querySelector(`label[for="${input.id}"]`);
+                            if (label && label.querySelector('.required')) {
+                                input.required = true;
+                            }
+                        }
+                    });
+                } else {
+                    jointSection.classList.add('hidden');
+                    // Remove required from joint fields
+                    jointInputs.forEach(input => {
+                        input.required = false;
+                    });
+                }
+            });
+        });
+
+        // Handle form submission
+        document.getElementById('enquiryForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            const successAlert = document.getElementById('successAlert');
+            const errorAlert = document.getElementById('errorAlert');
+            const errorMessage = document.getElementById('errorMessage');
+
+            // Hide alerts
+            successAlert.classList.add('hidden');
+            errorAlert.classList.add('hidden');
+
+            // Disable submit button
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+
+            try {
+                const formData = new FormData(e.target);
+                const data = {};
+
+                // Convert form data to object
+                formData.forEach((value, key) => {
+                    // Skip empty values
+                    if (value && value.trim() !== '') {
+                        data[key] = value;
+                    }
+                });
+
+                // Set is_joint_application flag
+                data.is_joint_application = data.registration_type === 'joint' ? 1 : 0;
+
+                // Set default status
+                data.status = 'new';
+
+                // Convert linked_property_id to number if present
+                if (data.linked_property_id) {
+                    data.linked_property_id = parseInt(data.linked_property_id);
+                }
+
+                console.log('Submitting data:', data);
+
+                const response = await fetch(`${API_URL}/api/public/tenant-enquiries`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to submit enquiry');
+                }
+
+                // Success
+                successAlert.classList.remove('hidden');
+                e.target.reset();
+                selectedLocations = [];
+                updateMultiSelectDisplay();
+
+                // Scroll to top
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            } catch (error) {
+                console.error('Submission error:', error);
+                errorMessage.textContent = error.message || 'Something went wrong. Please try again.';
+                errorAlert.classList.remove('hidden');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Enquiry';
+            }
+        });
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initMultiSelect();
+            loadProperties();
+        });
+
+        // Make removeLocation available globally
+        window.removeLocation = removeLocation;
+    </script>
+</body>
+</html>
