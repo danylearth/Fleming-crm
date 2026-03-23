@@ -480,8 +480,8 @@ app.post('/api/landlords/bulk-delete', authMiddleware, (req: AuthRequest, res) =
     }
 
     const placeholders = ids.map(() => '?').join(',');
-    // Delete associated properties first (cascade delete)
-    db.prepare(`DELETE FROM properties WHERE landlord_id IN (${placeholders})`).run(...ids);
+    // Unlink properties instead of deleting them (to avoid cascade issues)
+    db.prepare(`UPDATE properties SET landlord_id = NULL WHERE landlord_id IN (${placeholders})`).run(...ids);
     // Then delete landlords
     db.prepare(`DELETE FROM landlords WHERE id IN (${placeholders})`).run(...ids);
 
@@ -1103,6 +1103,47 @@ app.delete('/api/properties/:id', authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
+// Bulk delete properties
+app.post('/api/properties/bulk-delete', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    for (const id of ids) {
+      // Delete associated documents first
+      const documents = db.prepare('SELECT * FROM documents WHERE entity_type = ? AND entity_id = ?').all('property', id) as any[];
+      for (const doc of documents) {
+        const filePath = path.join(uploadsDir, doc.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+      db.prepare('DELETE FROM documents WHERE entity_type = ? AND entity_id = ?').run('property', id);
+
+      // Delete associated tasks
+      db.prepare('DELETE FROM tasks WHERE entity_type = ? AND entity_id = ?').run('property', id);
+
+      // Delete associated rent payments
+      db.prepare('DELETE FROM rent_payments WHERE property_id = ?').run(id);
+
+      // Update tenants to unlink from this property
+      db.prepare('UPDATE tenants SET property_id = NULL WHERE property_id = ?').run(id);
+
+      // Delete the property
+      db.prepare('DELETE FROM properties WHERE id = ?').run(id);
+
+      logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'property', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error('Failed to bulk delete properties:', err);
+    res.status(500).json({ error: 'Failed to bulk delete properties' });
+  }
+});
+
 // ============ TASKS ============
 
 app.get('/api/tasks', authMiddleware, (req: AuthRequest, res) => {
@@ -1216,6 +1257,38 @@ app.delete('/api/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
   } catch (err) {
     console.error('Failed to delete task:', err);
     res.status(500).json({ error: 'Failed to delete task' });
+  }
+});
+
+// Bulk delete tasks
+app.post('/api/tasks/bulk-delete', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    for (const id of ids) {
+      // Delete associated documents first
+      const documents = db.prepare('SELECT * FROM documents WHERE entity_type = ? AND entity_id = ?').all('task', id) as any[];
+      for (const doc of documents) {
+        const filePath = path.join(uploadsDir, doc.file_name);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+      db.prepare('DELETE FROM documents WHERE entity_type = ? AND entity_id = ?').run('task', id);
+
+      // Delete the task
+      db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+
+      logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'task', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error('Failed to bulk delete tasks:', err);
+    res.status(500).json({ error: 'Failed to bulk delete tasks' });
   }
 });
 

@@ -216,7 +216,7 @@ db.exec(`
   
   CREATE TABLE IF NOT EXISTS properties (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    landlord_id INTEGER NOT NULL,
+    landlord_id INTEGER,
     -- Address
     address TEXT NOT NULL,
     postcode TEXT NOT NULL,
@@ -500,7 +500,7 @@ if (propSchema && propSchema.sql && propSchema.sql.includes('CHECK')) {
   db.exec(`
     CREATE TABLE properties_new (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      landlord_id INTEGER NOT NULL,
+      landlord_id INTEGER,
       address TEXT NOT NULL,
       postcode TEXT NOT NULL,
       property_type TEXT DEFAULT 'house',
@@ -544,7 +544,7 @@ if (propSchema && propSchema.sql && propSchema.sql.includes('CHECK')) {
     CREATE INDEX IF NOT EXISTS idx_properties_tenancy_end ON properties(tenancy_end_date);
     CREATE INDEX IF NOT EXISTS idx_properties_rent_review ON properties(rent_review_date);
   `);
-  db.pragma('foreign_keys = ON');
+  db.pragma('foreign_keys = OFF');
   // Update old status values to new ones
   try { db.prepare(`UPDATE properties SET status = 'to_let' WHERE status = 'available'`).run(); } catch (e2) {}
   try { db.prepare(`UPDATE properties SET status = 'let_agreed' WHERE status = 'let'`).run(); } catch (e2) {}
