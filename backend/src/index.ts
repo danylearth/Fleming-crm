@@ -983,7 +983,7 @@ app.get('/api/properties', authMiddleware, (req: AuthRequest, res) => {
       SELECT p.*, l.name as landlord_name, l.landlord_type,
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant
       FROM properties p
-      JOIN landlords l ON l.id = p.landlord_id
+      LEFT JOIN landlords l ON l.id = p.landlord_id
       ORDER BY p.address
     `).all();
     res.json(properties);
@@ -1030,7 +1030,7 @@ app.get('/api/properties/:id', authMiddleware, (req: AuthRequest, res) => {
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant,
         (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id
       FROM properties p
-      JOIN landlords l ON l.id = p.landlord_id
+      LEFT JOIN landlords l ON l.id = p.landlord_id
       WHERE p.id = ?
     `).get(req.params.id);
     if (!property) return res.status(404).json({ error: 'Property not found' });

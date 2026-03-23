@@ -92,13 +92,16 @@ export default function LandlordsV3() {
   const totalProps = properties.length;
 
   const handleSave = async () => {
-    if (!form.name.trim() || selectedPropertyIds.length === 0) return;
+    if (!form.name.trim()) return;
     setSaving(true);
     try {
       const newLandlord = await api.post('/api/landlords', form);
-      await Promise.all(selectedPropertyIds.map(pid =>
-        api.put(`/api/properties/${pid}`, { landlord_id: newLandlord.id })
-      ));
+      // Only update properties if some were selected
+      if (selectedPropertyIds.length > 0) {
+        await Promise.all(selectedPropertyIds.map(pid =>
+          api.put(`/api/properties/${pid}`, { landlord_id: newLandlord.id })
+        ));
+      }
       setShowModal(false);
       setForm({ name: '', email: '', phone: '', address: '', notes: '', landlord_type: 'external' });
       setSelectedPropertyIds([]);
@@ -385,12 +388,12 @@ export default function LandlordsV3() {
             />
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="ghost" onClick={() => setShowModal(false)}>Cancel</Button>
-              <Button variant="gradient" onClick={handleSave} disabled={saving || !form.name.trim() || selectedPropertyIds.length === 0}>
+              <Button variant="gradient" onClick={handleSave} disabled={saving || !form.name.trim()}>
                 {saving ? 'Saving...' : 'Save'}
               </Button>
             </div>
             {selectedPropertyIds.length === 0 && (
-              <p className="text-xs text-amber-400 text-center">At least one property is required</p>
+              <p className="text-xs text-[var(--text-muted)] text-center">Optional: You can link properties later</p>
             )}
           </div>
         </div>
@@ -429,11 +432,11 @@ function PropertyMultiSelect({ properties, selected, onChange }: {
 
   return (
     <div ref={ref} className="relative">
-      <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Property *</label>
+      <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Property (Optional)</label>
       <button type="button" onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-left hover:border-[var(--accent-orange)]/40 transition-colors">
         <span className={selected.length > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}>
-          {selected.length === 0 ? 'Select properties...' :
+          {selected.length === 0 ? 'Select properties (optional)...' :
             selected.length === 1 ? selectedProps[0]?.address :
               `${selected.length} properties selected`}
         </span>

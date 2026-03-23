@@ -521,10 +521,13 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
 
         <div className="flex gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.address || !form.landlord_id}>
+          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.address}>
             {saving ? 'Creating...' : 'Create Property'}
           </Button>
         </div>
+        {!form.landlord_id && (
+          <p className="text-xs text-[var(--text-muted)] text-center">Optional: You can link a landlord later</p>
+        )}
       </div>
     </div>
   );
