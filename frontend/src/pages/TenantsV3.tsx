@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable, type Column } from '../components/v3';
+import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Mail, Phone, Building2, Calendar, Search, ChevronDown, LayoutGrid, List, User, MapPin } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
@@ -70,6 +71,9 @@ export default function TenantsV3() {
   const [coords, setCoords] = useState<Record<number, [number, number]>>({});
   const [hoveredTenantId, setHoveredTenantId] = useState<number | null>(null);
   const { portfolioFilter } = usePortfolio();
+  // Bulk actions state
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const load = async () => {
     try {
@@ -188,6 +192,41 @@ export default function TenantsV3() {
     if (!d) return '';
     return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedIds.length} tenant${selectedIds.length !== 1 ? 's' : ''}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      await api.post('/api/tenants/bulk-delete', { ids: selectedIds });
+      setSelectedIds([]);
+      await load();
+    } catch (e) {
+      console.error('Bulk delete error:', e);
+      alert('Failed to delete tenants. Please try again.');
+    }
+    setIsDeleting(false);
+  };
+
+  const toggleSelectTenant = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filtered.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map(t => t.id));
+    }
+  };
 
   return (
     <V3Layout title="Tenants" breadcrumb={[{ label: 'Tenants' }]}>
@@ -360,16 +399,52 @@ export default function TenantsV3() {
           ))}
         </div>
 
+        {/* Bulk Actions */}
+        <BulkActions
+          selectedIds={selectedIds}
+          onClearSelection={() => setSelectedIds([])}
+          onBulkDelete={handleBulkDelete}
+          entityName="tenant"
+          isDeleting={isDeleting}
+        />
+
         {/* Content */}
         {loading ? (
           <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
         ) : filtered.length === 0 ? (
           <EmptyState message={search || statusFilter !== 'all' ? 'No tenants match your filters' : 'No tenants yet — add your first one'} />
         ) : viewMode === 'list' ? (
-          <DataTable<Tenant>
-            columns={[
-              {
-                key: 'name', header: 'Name',
+          <>
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="checkbox"
+                checked={selectedIds.length === filtered.length && filtered.length > 0}
+                onChange={toggleSelectAll}
+                className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
+              />
+              <span className="text-sm text-gray-400">
+                {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
+              </span>
+            </div>
+            <DataTable<Tenant>
+              columns={[
+                {
+                  key: '_select', header: '', width: 'w-12',
+                  render: (t) => (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(t.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        toggleSelectTenant(t.id);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
+                    />
+                  ),
+                },
+                {
+                  key: 'name', header: 'Name',
                 render: (t) => (
                   <div className="flex items-center gap-3">
                     <Avatar name={t.name} size="sm" />
@@ -433,7 +508,8 @@ export default function TenantsV3() {
             data={filtered}
             rowKey={(t) => t.id}
             onRowClick={(t) => navigate(`/v3/tenants/${t.id}`)}
-          />
+            />
+          </>
         ) : (
           /* ===== CARD + MAP SPLIT VIEW ===== */
           <div className="flex gap-4" style={{ height: 'calc(100vh - 320px)', minHeight: '400px' }}>

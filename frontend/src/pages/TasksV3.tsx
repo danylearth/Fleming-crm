@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { Card, GlassCard, Button, Input, Select, Avatar, ProgressRing, EmptyState, DatePicker } from '../components/v3';
+import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
 import {
   Plus, X, CheckCircle2, Clock, Inbox, Calendar, Search, ChevronDown,
@@ -121,6 +122,9 @@ export default function TasksV3() {
     title: '', description: '', assigned_to: '', priority: 'medium', status: 'pending',
     due_date: '', task_type: 'manual', entity_type: '', entity_id: null as number | null
   });
+  // Bulk actions state
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // View mode
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
@@ -209,6 +213,41 @@ export default function TasksV3() {
 
   const completionPct = tasks.length > 0 ? Math.round((counts.completed / tasks.length) * 100) : 0;
   const hasFilters = filterProperty || filterLandlord || filterTenant || filterType;
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedIds.length} task${selectedIds.length !== 1 ? 's' : ''}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      await api.post('/api/tasks/bulk-delete', { ids: selectedIds });
+      setSelectedIds([]);
+      await load();
+    } catch (e) {
+      console.error('Bulk delete error:', e);
+      alert('Failed to delete tasks. Please try again.');
+    }
+    setIsDeleting(false);
+  };
+
+  const toggleSelectTask = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filtered.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map(t => t.id));
+    }
+  };
 
   // Calendar helpers
   const miniGrid = getMonthGrid(calYear, calMonth);
@@ -299,7 +338,29 @@ export default function TasksV3() {
           ) : filtered.length === 0 ? (
             <EmptyState message={hasFilters || search ? 'No tasks match your filters' : 'No tasks yet'} icon={<CheckCircle2 size={32} />} />
           ) : (
-            <div className="space-y-3">
+            <>
+              {/* Bulk Actions */}
+              <BulkActions
+                selectedIds={selectedIds}
+                onClearSelection={() => setSelectedIds([])}
+                onBulkDelete={handleBulkDelete}
+                entityName="task"
+                isDeleting={isDeleting}
+              />
+
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length === filtered.length && filtered.length > 0}
+                  onChange={toggleSelectAll}
+                  className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
+                />
+                <span className="text-sm text-gray-400">
+                  {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
+                </span>
+              </div>
+
+              <div className="space-y-3">
               {filtered.map(task => {
                 const overdue = isOverdue(task);
                 const taskPct = task.status === 'completed' ? 100 : task.status === 'in_progress' ? 50 : 0;
@@ -307,6 +368,16 @@ export default function TasksV3() {
                   <Card key={task.id} className={`p-4 md:p-5 ${overdue ? 'border-red-500/40' : ''}`} hover onClick={() => navigate(`/v3/tasks/${task.id}`)}>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(task.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            toggleSelectTask(task.id);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
+                        />
                         <ProgressRing value={taskPct} size={40} strokeWidth={3} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -340,7 +411,8 @@ export default function TasksV3() {
                   </Card>
                 );
               })}
-            </div>
+              </div>
+            </>
           )
         )}
 

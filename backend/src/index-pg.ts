@@ -238,6 +238,28 @@ app.delete('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) =
   }
 });
 
+app.post('/api/landlords/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    await run(`UPDATE properties SET landlord_id = NULL WHERE landlord_id IN (${placeholders})`, ids);
+    const result = await run(`DELETE FROM landlords WHERE id IN (${placeholders})`, ids);
+
+    for (const id of ids) {
+      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'landlord', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk delete landlords' });
+  }
+});
+
 // ============ LANDLORDS BDM ============
 
 app.get('/api/landlords-bdm', authMiddleware, async (req: AuthRequest, res) => {
@@ -287,16 +309,37 @@ app.post('/api/landlords-bdm/:id/convert', authMiddleware, async (req: AuthReque
   try {
     const prospect = await queryOne('SELECT * FROM landlords_bdm WHERE id = $1', [req.params.id as string]);
     if (!prospect) return res.status(404).json({ error: 'Prospect not found' });
-    
+
     const landlordId = await insert(
       'INSERT INTO landlords (name, email, phone, address, notes) VALUES ($1, $2, $3, $4, $5)',
       [prospect.name, prospect.email, prospect.phone, prospect.address, prospect.notes]
     );
     await run("UPDATE landlords_bdm SET status = 'onboarded', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id as string]);
-    
+
     res.json({ landlord_id: landlordId });
   } catch (err) {
     res.status(500).json({ error: 'Failed to convert prospect' });
+  }
+});
+
+app.post('/api/landlords-bdm/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    const result = await run(`DELETE FROM landlords_bdm WHERE id IN (${placeholders})`, ids);
+
+    for (const id of ids) {
+      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'landlord_bdm', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk delete landlords BDM' });
   }
 });
 
@@ -315,15 +358,102 @@ app.get('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) =
   }
 });
 
+// Public endpoint for external form submissions (no auth required)
+app.post('/api/public/tenant-enquiries', async (req, res) => {
+  try {
+    const d = req.body;
+    const fields = [
+      'title_1', 'first_name_1', 'last_name_1', 'email_1', 'phone_1',
+      'date_of_birth_1', 'current_address_1', 'employment_status_1',
+      'employer_1', 'income_1', 'is_joint_application',
+      'title_2', 'first_name_2', 'last_name_2', 'email_2', 'phone_2',
+      'date_of_birth_2', 'current_address_2', 'employment_status_2',
+      'employer_2', 'income_2', 'linked_property_id', 'notes', 'status'
+    ];
+
+    const values: any[] = [];
+    const placeholders: string[] = [];
+    const cols: string[] = [];
+
+    let idx = 1;
+    for (const field of fields) {
+      if (field in d && d[field] !== '' && d[field] !== null) {
+        cols.push(field);
+        placeholders.push(`$${idx++}`);
+        values.push(d[field]);
+      }
+    }
+
+    // Ensure status is set
+    if (!cols.includes('status')) {
+      cols.push('status');
+      placeholders.push(`$${idx++}`);
+      values.push('new');
+    }
+
+    const id = await insert(
+      `INSERT INTO tenant_enquiries (${cols.join(', ')}) VALUES (${placeholders.join(', ')})`,
+      values
+    );
+
+    res.json({ id, success: true, message: 'Enquiry submitted successfully' });
+  } catch (err) {
+    console.error('Public enquiry submission error:', err);
+    res.status(500).json({ error: 'Failed to submit enquiry' });
+  }
+});
+
+// Internal authenticated endpoint
 app.post('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
-    const id = await insert(`
-      INSERT INTO tenant_enquiries (title_1, first_name_1, last_name_1, email_1, phone_1, status, notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [d.title_1, d.first_name_1, d.last_name_1, d.email_1, d.phone_1, 'new', d.notes]);
+    const fields = [
+      'title_1', 'first_name_1', 'last_name_1', 'email_1', 'phone_1',
+      'date_of_birth_1', 'current_address_1', 'employment_status_1',
+      'employer_1', 'income_1', 'is_joint_application',
+      'title_2', 'first_name_2', 'last_name_2', 'email_2', 'phone_2',
+      'date_of_birth_2', 'current_address_2', 'employment_status_2',
+      'employer_2', 'income_2', 'linked_property_id', 'notes', 'status'
+    ];
+
+    const values: any[] = [];
+    const placeholders: string[] = [];
+    const cols: string[] = [];
+
+    let idx = 1;
+    for (const field of fields) {
+      if (field in d && d[field] !== '' && d[field] !== null) {
+        cols.push(field);
+        placeholders.push(`$${idx++}`);
+        values.push(d[field]);
+      }
+    }
+
+    // Ensure required fields
+    if (!cols.includes('first_name_1')) {
+      return res.status(400).json({ error: 'First name is required' });
+    }
+    if (!cols.includes('last_name_1')) {
+      return res.status(400).json({ error: 'Last name is required' });
+    }
+    if (!cols.includes('email_1')) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    if (!cols.includes('status')) {
+      cols.push('status');
+      placeholders.push(`$${idx++}`);
+      values.push('new');
+    }
+
+    const id = await insert(
+      `INSERT INTO tenant_enquiries (${cols.join(', ')}) VALUES (${placeholders.join(', ')})`,
+      values
+    );
+
+    await logAudit(req.user?.id, req.user?.email, 'create', 'tenant_enquiry', id, d);
     res.json({ id });
   } catch (err) {
+    console.error('Enquiry creation error:', err);
     res.status(500).json({ error: 'Failed to create enquiry' });
   }
 });
@@ -362,6 +492,27 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Failed to update enquiry' });
+  }
+});
+
+app.post('/api/tenant-enquiries/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    const result = await run(`DELETE FROM tenant_enquiries WHERE id IN (${placeholders})`, ids);
+
+    for (const id of ids) {
+      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'tenant_enquiry', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk delete tenant enquiries' });
   }
 });
 
@@ -481,7 +632,47 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+app.post('/api/tenants/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    // Update properties to remove tenant references
+    await run(`UPDATE properties SET current_tenant = NULL WHERE id IN (SELECT property_id FROM tenants WHERE id IN (${placeholders}))`, ids);
+    // Delete tenants
+    const result = await run(`DELETE FROM tenants WHERE id IN (${placeholders})`, ids);
+
+    for (const id of ids) {
+      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'tenant', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk delete tenants' });
+  }
+});
+
 // ============ PROPERTIES ============
+
+// Public endpoint to get available properties for enquiry form
+app.get('/api/public/properties', async (req, res) => {
+  try {
+    const properties = await query(`
+      SELECT p.id, p.address, p.postcode, p.property_type, p.bedrooms, p.rent_amount
+      FROM properties p
+      WHERE p.status = 'available'
+      ORDER BY p.address
+    `);
+    res.json(properties);
+  } catch (err) {
+    console.error('Public properties fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch properties' });
+  }
+});
 
 app.get('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
   try {
@@ -588,6 +779,38 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
   }
 });
 
+app.post('/api/properties/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    // Update tenants to remove property references
+    await run(`UPDATE tenants SET property_id = NULL WHERE property_id IN (${placeholders})`, ids);
+    // Update maintenance records to remove property references (or delete them if cascading is preferred)
+    await run(`DELETE FROM maintenance WHERE property_id IN (${placeholders})`, ids);
+    // Update rent payments to remove property references
+    await run(`DELETE FROM rent_payments WHERE property_id IN (${placeholders})`, ids);
+    // Delete tasks linked to these properties
+    await run(`DELETE FROM tasks WHERE entity_type = 'property' AND entity_id IN (${placeholders})`, ids);
+    // Delete documents linked to these properties
+    await run(`DELETE FROM documents WHERE entity_type = 'property' AND entity_id IN (${placeholders})`, ids);
+    // Delete properties
+    const result = await run(`DELETE FROM properties WHERE id IN (${placeholders})`, ids);
+
+    for (const id of ids) {
+      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'property', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk delete properties' });
+  }
+});
+
 // ============ TASKS ============
 
 app.get('/api/tasks', authMiddleware, async (req: AuthRequest, res) => {
@@ -628,6 +851,27 @@ app.put('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+app.post('/api/tasks/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    const result = await run(`DELETE FROM tasks WHERE id IN (${placeholders})`, ids);
+
+    for (const id of ids) {
+      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'task', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk delete tasks' });
+  }
+});
+
 // ============ MAINTENANCE ============
 
 app.get('/api/maintenance', authMiddleware, async (req: AuthRequest, res) => {
@@ -664,6 +908,27 @@ app.put('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) =>
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update maintenance' });
+  }
+});
+
+app.post('/api/maintenance/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    const result = await run(`DELETE FROM maintenance WHERE id IN (${placeholders})`, ids);
+
+    for (const id of ids) {
+      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'maintenance', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk delete maintenance requests' });
   }
 });
 

@@ -131,7 +131,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         return res.status(404).json({ error: 'Inventory not found' });
       }
 
-      await logAudit(req.user?.id, req.user?.email, 'view', 'inventory', parseInt(req.params.id));
+      await logAudit(req.user?.id, req.user?.email, 'view', 'inventory', parseInt(req.params.id as string));
       res.json(inventory);
     } catch (err) {
       console.error(err);
@@ -148,7 +148,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         [overall_condition || null, notes || null, status || 'in_progress', req.params.id]
       );
 
-      await logAudit(req.user?.id, req.user?.email, 'update', 'inventory', parseInt(req.params.id), req.body);
+      await logAudit(req.user?.id, req.user?.email, 'update', 'inventory', parseInt(req.params.id as string), req.body);
       res.json({ success: true });
     } catch (err) {
       console.error(err);
@@ -163,7 +163,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         [req.params.id]
       );
 
-      await logAudit(req.user?.id, req.user?.email, 'update', 'inventory', parseInt(req.params.id), { status: 'completed' });
+      await logAudit(req.user?.id, req.user?.email, 'update', 'inventory', parseInt(req.params.id as string), { status: 'completed' });
       res.json({ success: true });
     } catch (err) {
       console.error(err);
@@ -185,7 +185,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
       }
 
       await run(`DELETE FROM inventories WHERE id = $1`, [req.params.id]);
-      await logAudit(req.user?.id, req.user?.email, 'delete', 'inventory', parseInt(req.params.id));
+      await logAudit(req.user?.id, req.user?.email, 'delete', 'inventory', parseInt(req.params.id as string));
       res.json({ success: true });
     } catch (err) {
       console.error(err);

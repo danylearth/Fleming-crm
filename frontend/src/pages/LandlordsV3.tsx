@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable, type Column, SearchDropdown } from '../components/v3';
+import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Building2, Phone, Mail, Search, Check, LayoutGrid, List, User } from 'lucide-react';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
@@ -38,6 +39,9 @@ export default function LandlordsV3() {
   // Filter state
   const [tenantFilter, setTenantFilter] = useState<number | null>(null);
   const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
+  // Bulk actions state
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const load = async () => {
     try {
@@ -100,6 +104,41 @@ export default function LandlordsV3() {
       await load();
     } catch (e) { console.error(e); }
     setSaving(false);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedIds.length} landlord${selectedIds.length !== 1 ? 's' : ''}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      await api.post('/api/landlords/bulk-delete', { ids: selectedIds });
+      setSelectedIds([]);
+      await load();
+    } catch (e) {
+      console.error('Bulk delete error:', e);
+      alert('Failed to delete landlords. Please try again.');
+    }
+    setIsDeleting(false);
+  };
+
+  const toggleSelectLandlord = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filtered.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map(l => l.id));
+    }
   };
 
   return (
@@ -172,16 +211,52 @@ export default function LandlordsV3() {
           ))}
         </div>
 
+        {/* Bulk Actions */}
+        <BulkActions
+          selectedIds={selectedIds}
+          onClearSelection={() => setSelectedIds([])}
+          onBulkDelete={handleBulkDelete}
+          entityName="landlord"
+          isDeleting={isDeleting}
+        />
+
         {/* Content */}
         {loading ? (
           <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
         ) : filtered.length === 0 ? (
           <EmptyState message={search || filter !== 'all' ? 'No landlords match your filters' : 'No landlords yet — add your first one'} />
         ) : viewMode === 'list' ? (
-          <DataTable<Landlord & { _props: Property[] }>
-            columns={[
-              {
-                key: 'name', header: 'Name',
+          <>
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="checkbox"
+                checked={selectedIds.length === filtered.length && filtered.length > 0}
+                onChange={toggleSelectAll}
+                className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
+              />
+              <span className="text-sm text-gray-400">
+                {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
+              </span>
+            </div>
+            <DataTable<Landlord & { _props: Property[] }>
+              columns={[
+                {
+                  key: '_select', header: '', width: 'w-12',
+                  render: (l) => (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(l.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        toggleSelectLandlord(l.id);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
+                    />
+                  ),
+                },
+                {
+                  key: 'name', header: 'Name',
                 render: (l) => (
                   <div className="flex items-center gap-3">
                     <Avatar name={l.name} size="sm" />
@@ -229,6 +304,7 @@ export default function LandlordsV3() {
             rowKey={(l) => l.id}
             onRowClick={(l) => navigate(`/v3/landlords/${l.id}`)}
           />
+          </>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filtered.map(l => {

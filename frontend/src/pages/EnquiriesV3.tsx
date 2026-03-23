@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState, DataTable, DatePicker } from '../components/v3';
+import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, ArrowLeft, Calendar, Upload, FileText, ExternalLink, Save, User, Users, Briefcase, Home, LayoutGrid, List, Building2, ChevronDown, Pencil, ArrowRight, XCircle, CheckCircle, Mail, Phone } from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
@@ -263,6 +264,9 @@ export default function EnquiriesV3() {
   const [wfPropId, setWfPropId] = useState('');
   const [wfReason, setWfReason] = useState('');
   const [wfLoading, setWfLoading] = useState(false);
+  // Bulk actions state
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const load = async () => {
     try {
@@ -378,6 +382,41 @@ export default function EnquiriesV3() {
 
   const propertyMap = properties.reduce((acc, p) => { acc[p.id] = p; return acc; }, {} as Record<number, Property>);
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedIds.length} enquir${selectedIds.length !== 1 ? 'ies' : 'y'}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      await api.post('/api/tenant-enquiries/bulk-delete', { ids: selectedIds });
+      setSelectedIds([]);
+      await load();
+    } catch (e) {
+      console.error('Bulk delete error:', e);
+      alert('Failed to delete enquiries. Please try again.');
+    }
+    setIsDeleting(false);
+  };
+
+  const toggleSelectEnquiry = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filtered.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map(e => e.id));
+    }
+  };
+
   // Kanban columns — reuse STATUSES minus converted/rejected
   const kanbanStatuses = STATUSES.filter(s => !['converted', 'rejected'].includes(s.key));
 
@@ -471,6 +510,15 @@ export default function EnquiriesV3() {
           ))}
         </div>
 
+        {/* Bulk Actions */}
+        <BulkActions
+          selectedIds={selectedIds}
+          onClearSelection={() => setSelectedIds([])}
+          onBulkDelete={handleBulkDelete}
+          entityName="enquiry"
+          isDeleting={isDeleting}
+        />
+
         {/* Content */}
         {loading ? (
           <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
@@ -552,10 +600,37 @@ export default function EnquiriesV3() {
           <EmptyState message={search || statusFilter !== 'active' ? 'No enquiries match your filters' : 'No enquiries yet — add your first one'} />
         ) : (
           /* ==================== LIST VIEW ==================== */
-          <DataTable<Enquiry>
-            columns={[
-              {
-                key: 'name', header: 'Name',
+          <>
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="checkbox"
+                checked={selectedIds.length === filtered.length && filtered.length > 0}
+                onChange={toggleSelectAll}
+                className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
+              />
+              <span className="text-sm text-gray-400">
+                {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
+              </span>
+            </div>
+            <DataTable<Enquiry>
+              columns={[
+                {
+                  key: '_select', header: '', width: 'w-12',
+                  render: (e) => (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(e.id)}
+                      onChange={(ev) => {
+                        ev.stopPropagation();
+                        toggleSelectEnquiry(e.id);
+                      }}
+                      onClick={(ev) => ev.stopPropagation()}
+                      className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
+                    />
+                  ),
+                },
+                {
+                  key: 'name', header: 'Name',
                 render: (e) => (
                   <div className="flex items-center gap-3">
                     <Avatar name={e.name} size="sm" />
@@ -617,7 +692,8 @@ export default function EnquiriesV3() {
             data={filtered}
             rowKey={(e) => e.id}
             onRowClick={(e) => navigate(`/v3/enquiries/${e.id}`)}
-          />
+            />
+          </>
         )}
       </div>
 
