@@ -246,8 +246,10 @@ app.post('/api/landlords/bulk-delete', authMiddleware, async (req: AuthRequest, 
     }
 
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-    await run(`UPDATE properties SET landlord_id = NULL WHERE landlord_id IN (${placeholders})`, ids);
-    const result = await run(`DELETE FROM landlords WHERE id IN (${placeholders})`, ids);
+    // Delete associated properties first (cascade delete)
+    await run(`DELETE FROM properties WHERE landlord_id IN (${placeholders})`, ids);
+    // Then delete landlords
+    await run(`DELETE FROM landlords WHERE id IN (${placeholders})`, ids);
 
     for (const id of ids) {
       await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'landlord', id);

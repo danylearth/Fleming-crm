@@ -125,6 +125,7 @@ export default function TasksV3() {
   // Bulk actions state
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   // View mode
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
@@ -326,6 +327,15 @@ export default function TasksV3() {
               <FilterDropdown icon={Tag} label="Type" value={filterType}
                 displayValue={filterType ? filterType.replace('_',' ') : undefined} onClear={() => setFilterType(null)}
                 items={TASK_TYPES.map(t => ({ id: t, label: t.replace('_',' ').replace(/^\w/,c=>c.toUpperCase()) }))} onSelect={id => setFilterType(id)} />
+              <Button
+                variant={editMode ? "outline" : "secondary"}
+                onClick={() => {
+                  setEditMode(!editMode);
+                  if (editMode) setSelectedIds([]);
+                }}
+              >
+                {editMode ? 'Cancel' : 'Edit'}
+              </Button>
               <Button variant="gradient" onClick={() => setShowAdd(true)}><Plus size={14} className="mr-1.5" /> Add Task</Button>
             </div>
           </div>
@@ -340,44 +350,50 @@ export default function TasksV3() {
           ) : (
             <>
               {/* Bulk Actions */}
-              <BulkActions
-                selectedIds={selectedIds}
-                onClearSelection={() => setSelectedIds([])}
-                onBulkDelete={handleBulkDelete}
-                entityName="task"
-                isDeleting={isDeleting}
-              />
-
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.length === filtered.length && filtered.length > 0}
-                  onChange={toggleSelectAll}
-                  className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
+              {editMode && (
+                <BulkActions
+                  selectedIds={selectedIds}
+                  onClearSelection={() => setSelectedIds([])}
+                  onBulkDelete={handleBulkDelete}
+                  entityName="task"
+                  isDeleting={isDeleting}
                 />
-                <span className="text-sm text-gray-400">
-                  {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
-                </span>
-              </div>
+              )}
+
+              {editMode && (
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.length === filtered.length && filtered.length > 0}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+                  />
+                  <span className="text-sm text-gray-400">
+                    {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
+                  </span>
+                </div>
+              )}
 
               <div className="space-y-3">
               {filtered.map(task => {
                 const overdue = isOverdue(task);
                 const taskPct = task.status === 'completed' ? 100 : task.status === 'in_progress' ? 50 : 0;
                 return (
-                  <Card key={task.id} className={`p-4 md:p-5 ${overdue ? 'border-red-500/40' : ''}`} hover onClick={() => navigate(`/v3/tasks/${task.id}`)}>
+                  <Card key={task.id} className={`p-4 md:p-5 ${overdue ? 'border-red-500/40' : ''} ${!editMode ? 'cursor-pointer' : ''}`} hover onClick={() => !editMode && navigate(`/v3/tasks/${task.id}`)}>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(task.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            toggleSelectTask(task.id);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
-                        />
+                        {editMode && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(task.id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleSelectTask(task.id);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+                          />
+                        )}
                         <ProgressRing value={taskPct} size={40} strokeWidth={3} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">

@@ -60,6 +60,7 @@ export default function BDMV3() {
   // Bulk actions state
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   const load = async () => {
     try {
@@ -231,6 +232,15 @@ export default function BDMV3() {
               <LayoutGrid size={16} />
             </button>
           </div>
+          <Button
+            variant={editMode ? "outline" : "secondary"}
+            onClick={() => {
+              setEditMode(!editMode);
+              if (editMode) setSelectedIds([]);
+            }}
+          >
+            {editMode ? 'Cancel' : 'Edit'}
+          </Button>
           <Button variant="gradient" onClick={() => setShowModal(true)}>
             <Plus size={16} className="mr-2" /> Add Prospect
           </Button>
@@ -250,13 +260,15 @@ export default function BDMV3() {
         </div>
 
         {/* Bulk Actions */}
-        <BulkActions
-          selectedIds={selectedIds}
-          onClearSelection={() => setSelectedIds([])}
-          onBulkDelete={handleBulkDelete}
-          entityName="prospect"
-          isDeleting={isDeleting}
-        />
+        {editMode && (
+          <BulkActions
+            selectedIds={selectedIds}
+            onClearSelection={() => setSelectedIds([])}
+            onBulkDelete={handleBulkDelete}
+            entityName="prospect"
+            isDeleting={isDeleting}
+          />
+        )}
 
         {/* Content */}
         {loading ? (
@@ -346,21 +358,23 @@ export default function BDMV3() {
         ) : (
           /* ==================== LIST VIEW ==================== */
           <div className="overflow-x-auto">
-            <div className="flex items-center gap-2 mb-2 px-4">
-              <input
-                type="checkbox"
-                checked={selectedIds.length === filtered.length && filtered.length > 0}
-                onChange={toggleSelectAll}
-                className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
-              />
-              <span className="text-sm text-gray-400">
-                {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
-              </span>
-            </div>
+            {editMode && (
+              <div className="flex items-center gap-2 mb-2 px-4">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length === filtered.length && filtered.length > 0}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+                />
+                <span className="text-sm text-gray-400">
+                  {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
+                </span>
+              </div>
+            )}
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
-                  <th className="text-left py-3 px-4 font-medium w-12"></th>
+                  {editMode && <th className="text-left py-3 px-4 font-medium w-12"></th>}
                   <th className="text-left py-3 px-4 font-medium">Name</th>
                   <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Contact</th>
                   <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Address</th>
@@ -373,20 +387,22 @@ export default function BDMV3() {
               <tbody>
                 {filtered.map(p => (
                   <tr key={p.id}
-                    onClick={() => navigate(`/v3/bdm/${p.id}`)}
-                    className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                    <td className="py-3 px-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(p.id)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          toggleSelectProspect(p.id);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
-                      />
-                    </td>
+                    onClick={() => !editMode && navigate(`/v3/bdm/${p.id}`)}
+                    className={`border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] ${!editMode ? 'cursor-pointer' : ''} transition-colors`}>
+                    {editMode && (
+                      <td className="py-3 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(p.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            toggleSelectProspect(p.id);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+                        />
+                      </td>
+                    )}
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         <Avatar name={p.name} size="sm" />

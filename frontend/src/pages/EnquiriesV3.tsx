@@ -267,6 +267,7 @@ export default function EnquiriesV3() {
   // Bulk actions state
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   const load = async () => {
     try {
@@ -482,6 +483,15 @@ export default function EnquiriesV3() {
               <LayoutGrid size={16} />
             </button>
           </div>
+          <Button
+            variant={editMode ? "outline" : "secondary"}
+            onClick={() => {
+              setEditMode(!editMode);
+              if (editMode) setSelectedIds([]);
+            }}
+          >
+            {editMode ? 'Cancel' : 'Edit'}
+          </Button>
           <Button variant="gradient" onClick={() => setShowAdd(true)}>
             <Plus size={16} className="mr-2" /> Add Enquiry
           </Button>
@@ -511,13 +521,15 @@ export default function EnquiriesV3() {
         </div>
 
         {/* Bulk Actions */}
-        <BulkActions
-          selectedIds={selectedIds}
-          onClearSelection={() => setSelectedIds([])}
-          onBulkDelete={handleBulkDelete}
-          entityName="enquiry"
-          isDeleting={isDeleting}
-        />
+        {editMode && (
+          <BulkActions
+            selectedIds={selectedIds}
+            onClearSelection={() => setSelectedIds([])}
+            onBulkDelete={handleBulkDelete}
+            entityName="enquiry"
+            isDeleting={isDeleting}
+          />
+        )}
 
         {/* Content */}
         {loading ? (
@@ -601,22 +613,24 @@ export default function EnquiriesV3() {
         ) : (
           /* ==================== LIST VIEW ==================== */
           <>
-            <div className="flex items-center gap-2 mb-2">
-              <input
-                type="checkbox"
-                checked={selectedIds.length === filtered.length && filtered.length > 0}
-                onChange={toggleSelectAll}
-                className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
-              />
-              <span className="text-sm text-gray-400">
-                {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
-              </span>
-            </div>
+            {editMode && (
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length === filtered.length && filtered.length > 0}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+                />
+                <span className="text-sm text-gray-400">
+                  {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
+                </span>
+              </div>
+            )}
             <DataTable<Enquiry>
               columns={[
-                {
-                  key: '_select', header: '', width: 'w-12',
-                  render: (e) => (
+                ...(editMode ? [{
+                  key: '_select' as const, header: '', width: 'w-12',
+                  render: (e: Enquiry) => (
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(e.id)}
@@ -625,10 +639,10 @@ export default function EnquiriesV3() {
                         toggleSelectEnquiry(e.id);
                       }}
                       onClick={(ev) => ev.stopPropagation()}
-                      className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
+                      className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
                     />
                   ),
-                },
+                }] : []),
                 {
                   key: 'name', header: 'Name',
                 render: (e) => (
@@ -691,7 +705,7 @@ export default function EnquiriesV3() {
             ]}
             data={filtered}
             rowKey={(e) => e.id}
-            onRowClick={(e) => navigate(`/v3/enquiries/${e.id}`)}
+            onRowClick={(e) => !editMode && navigate(`/v3/enquiries/${e.id}`)}
             />
           </>
         )}

@@ -472,6 +472,30 @@ app.delete('/api/landlords/:id', authMiddleware, (req: AuthRequest, res) => {
   } catch (err) { res.status(500).json({ error: 'Failed to delete landlord' }); }
 });
 
+app.post('/api/landlords/bulk-delete', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    // Delete associated properties first (cascade delete)
+    db.prepare(`DELETE FROM properties WHERE landlord_id IN (${placeholders})`).run(...ids);
+    // Then delete landlords
+    db.prepare(`DELETE FROM landlords WHERE id IN (${placeholders})`).run(...ids);
+
+    for (const id of ids) {
+      logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'landlord', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk delete landlords' });
+  }
+});
+
 // ============ LANDLORDS BDM ============
 
 app.get('/api/landlords-bdm', authMiddleware, (req: AuthRequest, res) => {
@@ -561,6 +585,27 @@ app.post('/api/landlords-bdm/:id/convert', authMiddleware, (req: AuthRequest, re
     res.json({ landlord_id: result.lastInsertRowid });
   } catch (err) {
     res.status(500).json({ error: 'Failed to convert prospect' });
+  }
+});
+
+app.post('/api/landlords-bdm/bulk-delete', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    db.prepare(`DELETE FROM landlords_bdm WHERE id IN (${placeholders})`).run(...ids);
+
+    for (const id of ids) {
+      logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'landlord_bdm', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk delete landlords BDM' });
   }
 });
 
@@ -761,6 +806,27 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
   }
 });
 
+app.post('/api/tenant-enquiries/bulk-delete', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    db.prepare(`DELETE FROM tenant_enquiries WHERE id IN (${placeholders})`).run(...ids);
+
+    for (const id of ids) {
+      logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'tenant_enquiry', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk delete tenant enquiries' });
+  }
+});
+
 // ============ TENANTS ============
 
 app.get('/api/tenants', authMiddleware, (req: AuthRequest, res) => {
@@ -883,6 +949,30 @@ app.delete('/api/tenants/:id', authMiddleware, (req: AuthRequest, res) => {
     logAudit(req.user?.id, req.user?.email, 'delete', 'tenant', parseInt(req.params.id));
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: 'Failed to delete tenant' }); }
+});
+
+app.post('/api/tenants/bulk-delete', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    // Update properties to remove tenant references
+    db.prepare(`UPDATE properties SET has_live_tenancy = 0, tenancy_start_date = NULL WHERE id IN (SELECT property_id FROM tenants WHERE id IN (${placeholders}))`).run(...ids);
+    // Delete tenants
+    db.prepare(`DELETE FROM tenants WHERE id IN (${placeholders})`).run(...ids);
+
+    for (const id of ids) {
+      logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'tenant', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk delete tenants' });
+  }
 });
 
 // ============ PROPERTIES ============
@@ -1234,6 +1324,27 @@ app.put('/api/maintenance/:id', authMiddleware, (req: AuthRequest, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update maintenance' });
+  }
+});
+
+app.post('/api/maintenance/bulk-delete', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    db.prepare(`DELETE FROM maintenance WHERE id IN (${placeholders})`).run(...ids);
+
+    for (const id of ids) {
+      logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'maintenance', id);
+    }
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk delete maintenance requests' });
   }
 });
 

@@ -69,6 +69,7 @@ export default function MaintenanceV3() {
   // Bulk actions state
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   const load = async () => {
     try {
@@ -183,6 +184,15 @@ export default function MaintenanceV3() {
         {/* Search + Add */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="flex-1"><SearchBar value={search} onChange={setSearch} placeholder="Search maintenance..." /></div>
+          <Button
+            variant={editMode ? "outline" : "secondary"}
+            onClick={() => {
+              setEditMode(!editMode);
+              if (editMode) setSelectedIds([]);
+            }}
+          >
+            {editMode ? 'Cancel' : 'Edit'}
+          </Button>
           <Button variant="gradient" onClick={() => setShowAdd(true)}>
             <Plus size={16} className="mr-2" /> Report Issue
           </Button>
@@ -228,13 +238,15 @@ export default function MaintenanceV3() {
         </div>
 
         {/* Bulk Actions */}
-        <BulkActions
-          selectedIds={selectedIds}
-          onClearSelection={() => setSelectedIds([])}
-          onBulkDelete={handleBulkDelete}
-          entityName="maintenance item"
-          isDeleting={isDeleting}
-        />
+        {editMode && (
+          <BulkActions
+            selectedIds={selectedIds}
+            onClearSelection={() => setSelectedIds([])}
+            onBulkDelete={handleBulkDelete}
+            entityName="maintenance item"
+            isDeleting={isDeleting}
+          />
+        )}
 
         {/* Content */}
         {loading ? (
@@ -243,22 +255,24 @@ export default function MaintenanceV3() {
           <EmptyState message={search || statusFilter !== 'all' ? 'No maintenance items match your filters' : 'No maintenance items yet'} />
         ) : (
           <>
-            <div className="flex items-center gap-2 mb-2">
-              <input
-                type="checkbox"
-                checked={selectedIds.length === filtered.length && filtered.length > 0}
-                onChange={toggleSelectAll}
-                className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
-              />
-              <span className="text-sm text-gray-400">
-                {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
-              </span>
-            </div>
+            {editMode && (
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length === filtered.length && filtered.length > 0}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+                />
+                <span className="text-sm text-gray-400">
+                  {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
+                </span>
+              </div>
+            )}
             <DataTable<MaintenanceItem>
               columns={[
-                {
-                  key: '_select', header: '', width: 'w-12',
-                  render: (item) => (
+                ...(editMode ? [{
+                  key: '_select' as const, header: '', width: 'w-12',
+                  render: (item: MaintenanceItem) => (
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(item.id)}
@@ -267,10 +281,10 @@ export default function MaintenanceV3() {
                         toggleSelectItem(item.id);
                       }}
                       onClick={(e) => e.stopPropagation()}
-                      className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
+                      className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
                     />
                   ),
-                },
+                }] : []),
                 {
                   key: 'title', header: 'Title',
                 render: (item) => (
@@ -325,7 +339,7 @@ export default function MaintenanceV3() {
             ]}
             data={filtered}
             rowKey={(item) => item.id}
-            onRowClick={(item) => setExpanded(expanded === item.id ? null : item.id)}
+            onRowClick={(item) => !editMode && setExpanded(expanded === item.id ? null : item.id)}
             expandedId={expanded}
             expandedRow={(item) => (
               <div className="px-4 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)] space-y-3">

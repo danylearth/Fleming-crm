@@ -19,14 +19,14 @@ export default function BulkActions({
   if (selectedIds.length === 0) return null;
 
   return (
-    <div className="bg-navy-800 border border-gold-500/30 rounded-lg p-4 mb-6 flex items-center justify-between">
+    <div className="bg-[var(--bg-card)] border border-[var(--accent-orange)]/30 rounded-xl p-4 mb-6 flex items-center justify-between shadow-sm">
       <div className="flex items-center gap-4">
-        <span className="text-white font-medium">
+        <span className="text-[var(--text-primary)] font-medium">
           {selectedIds.length} {entityName}{selectedIds.length !== 1 ? 's' : ''} selected
         </span>
         <button
           onClick={onClearSelection}
-          className="text-gold-400 hover:text-gold-300 text-sm underline"
+          className="text-[var(--accent-orange)] hover:text-[var(--accent-orange)]/80 text-sm underline"
         >
           Clear selection
         </button>
@@ -35,7 +35,7 @@ export default function BulkActions({
       <button
         onClick={onBulkDelete}
         disabled={isDeleting}
-        className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+        className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
       >
         <Trash2 className="w-4 h-4" />
         {isDeleting ? 'Deleting...' : 'Delete Selected'}

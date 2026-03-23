@@ -64,6 +64,7 @@ export default function PropertiesV3() {
   // Bulk actions state
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   const load = () => {
     Promise.all([api.get('/api/properties'), api.get('/api/landlords'), api.get('/api/tenants')])
@@ -154,7 +155,7 @@ export default function PropertiesV3() {
           ))}
         </div>
 
-        {/* Search + View Toggle + Add */}
+        {/* Search + View Toggle + Edit + Add */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="flex-1"><SearchBar value={search} onChange={setSearch} placeholder="Search properties..." /></div>
           <div className="flex items-center gap-1 bg-[var(--bg-input)] rounded-xl p-1 border border-[var(--border-input)]">
@@ -167,6 +168,15 @@ export default function PropertiesV3() {
               <Map size={16} />
             </button>
           </div>
+          <Button
+            variant={editMode ? "outline" : "secondary"}
+            onClick={() => {
+              setEditMode(!editMode);
+              if (editMode) setSelectedIds([]);
+            }}
+          >
+            {editMode ? 'Cancel' : 'Edit'}
+          </Button>
           <Button variant="gradient" onClick={() => setShowAdd(true)}>
             <Plus size={16} className="mr-2" /> Add Property
           </Button>
@@ -204,13 +214,15 @@ export default function PropertiesV3() {
         </div>
 
         {/* Bulk Actions */}
-        <BulkActions
-          selectedIds={selectedIds}
-          onClearSelection={() => setSelectedIds([])}
-          onBulkDelete={handleBulkDelete}
-          entityName="property"
-          isDeleting={isDeleting}
-        />
+        {editMode && (
+          <BulkActions
+            selectedIds={selectedIds}
+            onClearSelection={() => setSelectedIds([])}
+            onBulkDelete={handleBulkDelete}
+            entityName="property"
+            isDeleting={isDeleting}
+          />
+        )}
 
         {/* Content */}
         {loading ? (
@@ -275,21 +287,23 @@ export default function PropertiesV3() {
           <EmptyState message={search || statusFilter !== 'all' ? 'No properties match your filters' : 'No properties yet — add your first one'} />
         ) : (
           <div className="overflow-x-auto">
-            <div className="flex items-center gap-2 mb-2 px-4">
-              <input
-                type="checkbox"
-                checked={selectedIds.length === filtered.length && filtered.length > 0}
-                onChange={toggleSelectAll}
-                className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
-              />
-              <span className="text-sm text-gray-400">
-                {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
-              </span>
-            </div>
+            {editMode && (
+              <div className="flex items-center gap-2 mb-2 px-4">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length === filtered.length && filtered.length > 0}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+                />
+                <span className="text-sm text-[var(--text-secondary)]">
+                  {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
+                </span>
+              </div>
+            )}
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
-                  <th className="text-left py-3 px-4 font-medium w-12"></th>
+                  {editMode && <th className="text-left py-3 px-4 font-medium w-12"></th>}
                   <th className="text-left py-3 px-4 font-medium">Address</th>
                   <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Postcode</th>
                   <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Landlord</th>
@@ -302,20 +316,22 @@ export default function PropertiesV3() {
               <tbody>
                 {filtered.map(p => (
                   <tr key={p.id}
-                    onClick={() => navigate(`/v3/properties/${p.id}`)}
-                    className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                    <td className="py-3 px-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(p.id)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          toggleSelectProperty(p.id);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="rounded border-gray-600 bg-navy-700 text-gold-500 focus:ring-gold-500 focus:ring-offset-navy-900"
-                      />
-                    </td>
+                    onClick={() => !editMode && navigate(`/v3/properties/${p.id}`)}
+                    className={`border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] transition-colors ${!editMode ? 'cursor-pointer' : ''}`}>
+                    {editMode && (
+                      <td className="py-3 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(p.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            toggleSelectProperty(p.id);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+                        />
+                      </td>
+                    )}
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center shrink-0">
