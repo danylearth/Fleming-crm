@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant Enquiry Form - Fleming Lettings</title>
+
+    <!-- Switzer Font -->
+    <style>
+        @font-face {
+            font-family: 'Switzer';
+            src: local('Switzer');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Switzer', Arial, sans-serif;
+            background-color: #eeeeee;
+            color: #000000;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .header h1 {
+            font-size: 36px;
+            color: #DC006D;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 18px;
+            color: #666;
+        }
+
+        .form-wrapper {
+            background-color: #ffffff;
+            padding: 50px;
+            border-radius: 0;
+            box-shadow: 6px 6px 9px rgba(0, 0, 0, 0.2);
+        }
+
+        .form-section {
+            margin-bottom: 40px;
+        }
+
+        .form-section h2 {
+            font-size: 24px;
+            color: #25073B;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #DC006D;
+        }
+
+        .form-section h3 {
+            font-size: 20px;
+            color: #000;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+
+        .form-section h4 {
+            font-size: 18px;
+            color: #000;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 20px;
+        }
+
+        .form-row.single {
+            grid-template-columns: 1fr;
+        }
+
+        .applicant-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+        }
+
+        .applicant-column {
+            padding: 25px;
+        }
+
+        .applicant-column.second {
+            border-left: 1px dashed #ccc;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #000;
+        }
+
+        label .required {
+            color: #e63232;
+            margin-left: 3px;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="tel"],
+        input[type="date"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            font-family: 'Switzer', Arial, sans-serif;
+            border: none;
+            background-color: #eee;
+            color: #000;
+            transition: background-color 0.2s;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: 2px solid #DC006D;
+            background-color: #fff;
+        }
+
+        textarea {
+            min-height: 130px;
+            resize: vertical;
+        }
+
+        .radio-group,
+        .checkbox-group {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .radio-group label,
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            font-weight: 400;
+            cursor: pointer;
+        }
+
+        input[type="radio"],
+        input[type="checkbox"] {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .submit-btn {
+            background-color: #DC006D;
+            color: #ffffff;
+            padding: 16px 40px;
+            font-size: 16px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Switzer', Arial, sans-serif;
+            margin-top: 30px;
+        }
+
+        .submit-btn:hover {
+            background-color: #25073B;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(220, 0, 109, 0.3);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            border-radius: 0;
+            display: none;
+        }
+
+        .alert.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .form-wrapper {
+                padding: 30px 20px;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+                gap: 0;
+            }
+
+            .applicant-columns {
+                grid-template-columns: 1fr;
+                gap: 0;
+            }
+
+            .applicant-column.second {
+                border-left: none;
+                border-top: 1px dashed #ccc;
+                padding-top: 30px;
+                margin-top: 30px;
+            }
+        }
+
+        hr {
+            border: none;
+            border-top: 1px dashed #ccc;
+            margin: 30px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Tenant Enquiry Form</h1>
+            <p>Let's get ready to rent! Please fill in your details to register with Fleming Lettings.</p>
+        </div>
+
+        <div class="form-wrapper">
+            <!-- Alert Messages -->
+            <div id="successAlert" class="alert success">
+                <strong>Success!</strong> Thank you for your enquiry. We will be in touch shortly.
+            </div>
+            <div id="errorAlert" class="alert error">
+                <strong>Error!</strong> <span id="errorMessage"></span>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="loading" class="loading">
+                <p>Submitting your enquiry...</p>
+            </div>
+
+            <form id="tenantEnquiryForm">
+                <!-- Registration Type -->
+                <div class="form-section">
+                    <h2>Registration Type</h2>
+                    <div class="form-group">
+                        <label><strong>Is this a sole or joint registration?</strong> <span class="required">*</span></label>
+                        <div class="radio-group">
+                            <label>
+                                <input type="radio" name="registration_type" value="Sole" checked required>
+                                <span>Sole</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="registration_type" value="Joint">
+                                <span>Joint</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Applicants -->
+                <div class="form-section">
+                    <h2>Applicant Details</h2>
+
+                    <div class="applicant-columns">
+                        <!-- Applicant 1 -->
+                        <div class="applicant-column">
+                            <h4>Applicant 1</h4>
+
+                            <div class="form-group">
+                                <label>First Name <span class="required">*</span></label>
+                                <input type="text" name="FirstName" placeholder="First Name" required maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Surname <span class="required">*</span></label>
+                                <input type="text" name="Surname" placeholder="Last Name" required maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Home Address <span class="required">*</span></label>
+                                <input type="text" name="address" placeholder="Home Address" required maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Postcode <span class="required">*</span></label>
+                                <input type="text" name="Postcode" placeholder="Postcode" required maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Years at Address <span class="required">*</span></label>
+                                <input type="text" name="yearofaddress" placeholder="Years at Address" required maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Date of Birth <span class="required">*</span></label>
+                                <input type="date" name="dob" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Email Address <span class="required">*</span></label>
+                                <input type="email" name="form_email" placeholder="Email" required maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Contact Number <span class="required">*</span></label>
+                                <input type="tel" name="contactNumber" placeholder="Contact Number" required maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Nationality <span class="required">*</span></label>
+                                <select name="Nationality" required>
+                                    <option value="">Please select an option</option>
+                                    <option value="English, Welsh, Scottish, Northern Irish or British">English, Welsh, Scottish, Northern Irish or British</option>
+                                    <option value="Irish">Irish</option>
+                                    <option value="African">African</option>
+                                    <option value="Arab">Arab</option>
+                                    <option value="Bangladeshi">Bangladeshi</option>
+                                    <option value="Caribbean">Caribbean</option>
+                                    <option value="Chinese">Chinese</option>
+                                    <option value="Gypsy or Irish Traveller">Gypsy or Irish Traveller</option>
+                                    <option value="Indian">Indian</option>
+                                    <option value="Pakistani">Pakistani</option>
+                                    <option value="Roma">Roma</option>
+                                    <option value="White and Black Caribbean">White and Black Caribbean</option>
+                                    <option value="White and Black African">White and Black African</option>
+                                    <option value="White and Asian">White and Asian</option>
+                                    <option value="Any other Mixed or multiple ethnic background">Any other Mixed or multiple ethnic background</option>
+                                    <option value="Any other Asian background">Any other Asian background</option>
+                                    <option value="Any other White background">Any other White background</option>
+                                    <option value="Any other Black, Black British, or Caribbean background">Any other Black, Black British, or Caribbean background</option>
+                                    <option value="Any other ethnic group">Any other ethnic group</option>
+                                    <option value="Rather not say">Rather not say</option>
+                                </select>
+                            </div>
+
+                            <h3>Employment History</h3>
+
+                            <div class="form-group">
+                                <label>Employment Status <span class="required">*</span></label>
+                                <select name="EmploymentStatus" required>
+                                    <option value="">Please select an option</option>
+                                    <option value="Full-Time Employed">Full-Time Employed</option>
+                                    <option value="Part-Time Employed">Part-Time Employed</option>
+                                    <option value="Self-Employed">Self-Employed</option>
+                                    <option value="Unemployed">Unemployed</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Happy to provide further information? <span class="required">*</span></label>
+                                <div class="radio-group">
+                                    <label>
+                                        <input type="radio" name="furtherinformation" value="Yes" checked>
+                                        <span>Yes</span>
+                                    </label>
+                                    <label>
+                                        <input type="radio" name="furtherinformation" value="No">
+                                        <span>No</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div id="employmentDetails1">
+                                <div class="form-group">
+                                    <label>Industry of Employment</label>
+                                    <select name="IndustryofEmployment">
+                                        <option value="">Please select an option</option>
+                                        <option value="Administration">Administration</option>
+                                        <option value="Animal care">Animal care</option>
+                                        <option value="Beauty and wellbeing">Beauty and wellbeing</option>
+                                        <option value="Business and finance">Business and finance</option>
+                                        <option value="Computing, technology and digital">Computing, technology and digital</option>
+                                        <option value="Construction and trades">Construction and trades</option>
+                                        <option value="Creative and media">Creative and media</option>
+                                        <option value="Delivery and storage">Delivery and storage</option>
+                                        <option value="Emergency and uniform services">Emergency and uniform services</option>
+                                        <option value="Engineering and maintenance">Engineering and maintenance</option>
+                                        <option value="Environment and land">Environment and land</option>
+                                        <option value="Government services">Government services</option>
+                                        <option value="Healthcare">Healthcare</option>
+                                        <option value="Home services">Home services</option>
+                                        <option value="Hospitality and food">Hospitality and food</option>
+                                        <option value="Law and legal">Law and legal</option>
+                                        <option value="Managerial">Managerial</option>
+                                        <option value="Manufacturing">Manufacturing</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Job Title</label>
+                                    <input type="text" name="job_title" placeholder="Job Title" maxlength="400">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Years in Employment</label>
+                                    <input type="text" name="YearsinEmployment" placeholder="Years in Employment" maxlength="400">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Annual Salary or Yearly Equivalent</label>
+                                    <input type="number" name="AnnualSalary" placeholder="Annual Salary" step="0.01">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Is this a contract role or fixed term position?</label>
+                                    <div class="radio-group">
+                                        <label>
+                                            <input type="radio" name="position" value="Contract role position">
+                                            <span>Contract role</span>
+                                        </label>
+                                        <label>
+                                            <input type="radio" name="position" value="Fixed term position">
+                                            <span>Fixed term</span>
+                                        </label>
+                                        <label>
+                                            <input type="radio" name="position" value="Temporary or agency role">
+                                            <span>Temporary/agency</span>
+                                        </label>
+                                        <label>
+                                            <input type="radio" name="position" value="Permanent position">
+                                            <span>Permanent</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Applicant 2 (Hidden by default) -->
+                        <div class="applicant-column second hidden" id="applicant2">
+                            <h4>Applicant 2</h4>
+
+                            <div class="form-group">
+                                <label>First Name <span class="required">*</span></label>
+                                <input type="text" name="FirstName2" placeholder="First Name" maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Surname <span class="required">*</span></label>
+                                <input type="text" name="Surname2" placeholder="Last Name" maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Home Address <span class="required">*</span></label>
+                                <input type="text" name="address2" placeholder="Home Address" maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Postcode <span class="required">*</span></label>
+                                <input type="text" name="Postcode2" placeholder="Postcode" maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Years at Address <span class="required">*</span></label>
+                                <input type="text" name="yearofaddress2" placeholder="Years at Address" maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Date of Birth <span class="required">*</span></label>
+                                <input type="date" name="dob2">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Email Address <span class="required">*</span></label>
+                                <input type="email" name="form_email2" placeholder="Email" maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Contact Number <span class="required">*</span></label>
+                                <input type="tel" name="contactNumber2" placeholder="Contact Number" maxlength="400">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Nationality <span class="required">*</span></label>
+                                <select name="Nationality2">
+                                    <option value="">Please select an option</option>
+                                    <option value="English, Welsh, Scottish, Northern Irish or British">English, Welsh, Scottish, Northern Irish or British</option>
+                                    <option value="Irish">Irish</option>
+                                    <option value="African">African</option>
+                                    <option value="Arab">Arab</option>
+                                    <option value="Bangladeshi">Bangladeshi</option>
+                                    <option value="Caribbean">Caribbean</option>
+                                    <option value="Chinese">Chinese</option>
+                                    <option value="Indian">Indian</option>
+                                    <option value="Pakistani">Pakistani</option>
+                                    <option value="Rather not say">Rather not say</option>
+                                </select>
+                            </div>
+
+                            <h3>Employment History</h3>
+
+                            <div class="form-group">
+                                <label>Employment Status <span class="required">*</span></label>
+                                <select name="EmploymentStatus2">
+                                    <option value="">Please select an option</option>
+                                    <option value="Full-Time Employed">Full-Time Employed</option>
+                                    <option value="Part-Time Employed">Part-Time Employed</option>
+                                    <option value="Self-Employed">Self-Employed</option>
+                                    <option value="Unemployed">Unemployed</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Happy to provide further information?</label>
+                                <div class="radio-group">
+                                    <label>
+                                        <input type="radio" name="furtherinformation2" value="Yes" checked>
+                                        <span>Yes</span>
+                                    </label>
+                                    <label>
+                                        <input type="radio" name="furtherinformation2" value="No">
+                                        <span>No</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div id="employmentDetails2">
+                                <div class="form-group">
+                                    <label>Industry of Employment</label>
+                                    <select name="IndustryofEmployment2">
+                                        <option value="">Please select an option</option>
+                                        <option value="Administration">Administration</option>
+                                        <option value="Healthcare">Healthcare</option>
+                                        <option value="Business and finance">Business and finance</option>
+                                        <option value="Engineering">Engineering</option>
+                                        <!-- Add more options as needed -->
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Job Title</label>
+                                    <input type="text" name="job_title2" placeholder="Job Title" maxlength="400">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Years in Employment</label>
+                                    <input type="text" name="YearsinEmployment2" placeholder="Years in Employment" maxlength="400">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Annual Salary or Yearly Equivalent</label>
+                                    <input type="number" name="AnnualSalary2" placeholder="Annual Salary" step="0.01">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Position Type</label>
+                                    <div class="radio-group">
+                                        <label>
+                                            <input type="radio" name="position2" value="Contract role position">
+                                            <span>Contract</span>
+                                        </label>
+                                        <label>
+                                            <input type="radio" name="position2" value="Permanent position">
+                                            <span>Permanent</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Property Requirements -->
+                <div class="form-section">
+                    <h2>Property Requirements</h2>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Preferred Location</label>
+                            <input type="text" name="preferred_location" placeholder="e.g., City Centre, Outskirts" maxlength="200">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Number of Bedrooms</label>
+                            <select name="bedrooms">
+                                <option value="">Select...</option>
+                                <option value="1">1 Bedroom</option>
+                                <option value="2">2 Bedrooms</option>
+                                <option value="3">3 Bedrooms</option>
+                                <option value="4">4 Bedrooms</option>
+                                <option value="5">5+ Bedrooms</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Monthly Rent Budget (£)</label>
+                            <input type="number" name="monthly_rent_budget" placeholder="e.g., 1200" step="50">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Preferred Move-in Date</label>
+                            <input type="date" name="move_in_date">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Do you have pets?</label>
+                        <div class="radio-group">
+                            <label>
+                                <input type="radio" name="pets" value="Yes">
+                                <span>Yes</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="pets" value="No" checked>
+                                <span>No</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group hidden" id="petDetailsGroup">
+                        <label>Pet Details</label>
+                        <textarea name="pet_details" placeholder="Please provide details about your pet(s)"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Additional Requirements</label>
+                        <textarea name="additional_requirements" placeholder="Any specific requirements or preferences..."></textarea>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Additional Information -->
+                <div class="form-section">
+                    <h2>Additional Information</h2>
+
+                    <div class="form-group">
+                        <label>How did you hear about us?</label>
+                        <select name="referral_source">
+                            <option value="">Please select...</option>
+                            <option value="Google Search">Google Search</option>
+                            <option value="Social Media">Social Media (Facebook, Instagram, etc.)</option>
+                            <option value="Rightmove">Rightmove</option>
+                            <option value="Zoopla">Zoopla</option>
+                            <option value="Referral">Referral from friend/family</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Additional Comments</label>
+                        <textarea name="comments" placeholder="Any additional information you'd like to share..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="gdpr_consent" required>
+                            <span>I agree to the Terms & Conditions and Privacy Policy <span class="required">*</span></span>
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="marketing_consent">
+                            <span>I would like to receive property updates and marketing communications from Fleming Lettings</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" class="submit-btn">Submit Enquiry</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // API Configuration
+        const API_URL = 'https://fleming-crm-api-production-7e58.up.railway.app/api/public/tenant-enquiry';
+
+        // Form elements
+        const form = document.getElementById('tenantEnquiryForm');
+        const registrationTypeInputs = document.querySelectorAll('input[name="registration_type"]');
+        const applicant2Section = document.getElementById('applicant2');
+        const employmentDetails1 = document.getElementById('employmentDetails1');
+        const employmentDetails2 = document.getElementById('employmentDetails2');
+        const furtherInfo1 = document.querySelectorAll('input[name="furtherinformation"]');
+        const furtherInfo2 = document.querySelectorAll('input[name="furtherinformation2"]');
+        const petsInputs = document.querySelectorAll('input[name="pets"]');
+        const petDetailsGroup = document.getElementById('petDetailsGroup');
+        const successAlert = document.getElementById('successAlert');
+        const errorAlert = document.getElementById('errorAlert');
+        const errorMessage = document.getElementById('errorMessage');
+        const loading = document.getElementById('loading');
+
+        // Toggle Applicant 2 section
+        registrationTypeInputs.forEach(input => {
+            input.addEventListener('change', (e) => {
+                if (e.target.value === 'Joint') {
+                    applicant2Section.classList.remove('hidden');
+                    // Make Applicant 2 fields required
+                    applicant2Section.querySelectorAll('input[required], select[required]').forEach(field => {
+                        field.setAttribute('required', 'required');
+                    });
+                } else {
+                    applicant2Section.classList.add('hidden');
+                    // Remove required from Applicant 2 fields
+                    applicant2Section.querySelectorAll('input, select').forEach(field => {
+                        field.removeAttribute('required');
+                    });
+                }
+            });
+        });
+
+        // Toggle Employment Details for Applicant 1
+        furtherInfo1.forEach(input => {
+            input.addEventListener('change', (e) => {
+                if (e.target.value === 'Yes') {
+                    employmentDetails1.classList.remove('hidden');
+                } else {
+                    employmentDetails1.classList.add('hidden');
+                }
+            });
+        });
+
+        // Toggle Employment Details for Applicant 2
+        furtherInfo2.forEach(input => {
+            input.addEventListener('change', (e) => {
+                if (e.target.value === 'Yes') {
+                    employmentDetails2.classList.remove('hidden');
+                } else {
+                    employmentDetails2.classList.add('hidden');
+                }
+            });
+        });
+
+        // Toggle Pet Details
+        petsInputs.forEach(input => {
+            input.addEventListener('change', (e) => {
+                if (e.target.value === 'Yes') {
+                    petDetailsGroup.classList.remove('hidden');
+                } else {
+                    petDetailsGroup.classList.add('hidden');
+                }
+            });
+        });
+
+        // Form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Hide previous alerts
+            successAlert.classList.remove('show');
+            errorAlert.classList.remove('show');
+
+            // Show loading
+            loading.classList.add('show');
+
+            // Get form data
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            // Convert checkboxes to boolean
+            data.gdpr_consent = formData.get('gdpr_consent') ? true : false;
+            data.marketing_consent = formData.get('marketing_consent') ? true : false;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                // Hide loading
+                loading.classList.remove('show');
+
+                if (response.ok && result.success) {
+                    // Show success message
+                    successAlert.classList.add('show');
+
+                    // Reset form
+                    form.reset();
+                    applicant2Section.classList.add('hidden');
+
+                    // Scroll to top
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                    // Hide success message after 10 seconds
+                    setTimeout(() => {
+                        successAlert.classList.remove('show');
+                    }, 10000);
+                } else {
+                    // Show error message
+                    errorMessage.textContent = result.message || 'An error occurred. Please try again.';
+                    errorAlert.classList.add('show');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            } catch (error) {
+                // Hide loading
+                loading.classList.remove('show');
+
+                // Show error message
+                errorMessage.textContent = 'Network error. Please check your connection and try again.';
+                errorAlert.classList.add('show');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -34,6 +34,23 @@ npm run start        # Production server (compiled JS)
 npm run seed:pg      # Seed PostgreSQL with demo data
 ```
 
+### Mobile (from mobile directory)
+```bash
+cd mobile
+npm install
+npm run start        # Start Expo dev server
+npm run android      # Run on Android emulator/device
+npm run ios          # Run on iOS simulator/device
+npm run web          # Run in web browser
+```
+
+### Public Form (static HTML)
+```bash
+cd public-form
+python3 -m http.server 8000  # Test locally at http://localhost:8000/tenant-enquiry.html
+# Or deploy tenant-enquiry.html to any static host (Vercel, Netlify, etc.)
+```
+
 ### Full Stack (from root)
 ```bash
 npm run dev:frontend    # Start frontend dev server
@@ -121,6 +138,39 @@ The codebase contains three iterations of the UI (V1, V2, V3). V3 is the current
 - Navy primary: `#1a2332`
 - Gold accent: `#d4af37`
 
+### Mobile App Structure
+
+**React Native/Expo App:**
+The codebase includes a mobile app in the `/mobile` directory for on-the-go CRM access.
+
+**Stack:**
+- React Native 0.81.5
+- Expo ~54.0.0
+- TypeScript
+- React Navigation for routing
+- TanStack Query for data fetching
+- Expo SecureStore for token storage
+
+**API Configuration:**
+- Development: Connects to local backend via network IP (configure in `src/services/api.ts`)
+- Production: Connects to Railway backend URL
+- Change `API_BASE_URL` in `src/services/api.ts` to point to your backend
+- Development requires your local network IP (not localhost) for physical device testing
+- Current dev IP: `192.168.0.123:3001` (update this to match your local network)
+
+**Key Files:**
+- `App.tsx` - Root component with providers (Query, Theme, Auth)
+- `src/context/AuthContext.tsx` - Mobile authentication state
+- `src/context/ThemeContext.tsx` - Light/dark theme switching
+- `src/services/api.ts` - API client with token management
+- `src/navigation/AppNavigator.tsx` - Navigation structure
+
+**Authentication:**
+- Uses Expo SecureStore for token persistence (more secure than AsyncStorage)
+- Token automatically attached to all API requests via interceptor
+- Auto-logout on 401 responses
+- Same JWT tokens as web frontend
+
 ### Database Schema
 
 **Core Entities:**
@@ -207,6 +257,48 @@ The system integrates with several UK government open data APIs to provide accur
 
 **Hook:**
 - `useGovernmentAPIs()` - Custom React hook providing methods for all government APIs
+
+### Public Tenant Enquiry Form
+
+**Standalone Form:**
+The `/public-form` directory contains a standalone HTML form for tenant enquiries that can be hosted separately from the main CRM.
+
+**Purpose:**
+- Embeddable on external website (fleminglettings.co.uk)
+- No authentication required
+- Directly submits to CRM via public API endpoints
+- Matches CRM navy/gold theme
+
+**Public API Endpoints:**
+The backend provides public endpoints specifically for this form (no auth required):
+- `GET /api/public/properties` - List available properties
+- `POST /api/public/tenant-enquiries` - Submit new enquiry
+
+**Deployment:**
+- Single file: `tenant-enquiry.html`
+- Can be hosted on any static hosting (Vercel, Netlify, GitHub Pages, etc.)
+- Configure API URL on line 922 to point to backend
+- Supports subdomain deployment (e.g., `enquiry.fleminglettings.co.uk`)
+
+**Features:**
+- Responsive design (mobile/tablet/desktop)
+- Property selection from CRM database
+- Joint tenant applications support
+- Full KYC data capture (personal details, employment, address history)
+- Terms/privacy consent checkboxes
+- Direct integration with CRM tenant enquiries pipeline
+
+**Data Flow:**
+1. User submits form on external site
+2. POST to `/api/public/tenant-enquiries`
+3. Record created in `tenant_enquiries` table with status "new"
+4. Enquiry appears in CRM Enquiries module for staff to manage
+5. Staff can progress through pipeline: new → viewing_booked → onboarding → converted
+
+**Customization:**
+- Change API URL: Edit line 922 in `tenant-enquiry.html`
+- Modify styling: CSS variables in `<style>` block (lines 7-439)
+- Add/remove fields: Ensure `name` attributes match database columns
 
 ### Environment Configuration
 
@@ -305,6 +397,10 @@ logAudit(userId, userEmail, 'create', 'landlord', entityId, changesObject);
 6. **Conversion Workflows:** BDM → Landlord and Enquiry → Tenant conversions copy data and update status. Never delete the source record, only mark as converted.
 
 7. **Demo Data:** Production databases can auto-seed. Be careful with `FORCE_RESEED` as it wipes all data.
+
+8. **Public API Endpoints:** The `/api/public/*` routes are intentionally unauthenticated for the external enquiry form. These should remain public but consider implementing rate limiting to prevent abuse.
+
+9. **Mobile Development:** When testing the mobile app on physical devices, use your local network IP address in the API configuration (found in `mobile/src/services/api.ts`), not `localhost` or `127.0.0.1`. The app needs to connect to your development machine over the local network.
 
 ## Deployment Troubleshooting
 
