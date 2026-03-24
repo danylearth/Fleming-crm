@@ -611,6 +611,197 @@ app.post('/api/landlords-bdm/bulk-delete', authMiddleware, (req: AuthRequest, re
 
 // ============ TENANT ENQUIRIES ============
 
+// PUBLIC ENDPOINT - Get available properties for tenant enquiry form
+app.get('/api/public/properties', (req, res) => {
+  try {
+    const properties = db.prepare(`
+      SELECT id, address, postcode, property_type, bedrooms, rent_amount, status
+      FROM properties
+      WHERE status IN ('to_let', 'available')
+      ORDER BY address
+    `).all();
+    res.json(properties);
+  } catch (err) {
+    console.error('Error fetching public properties:', err);
+    res.status(500).json({ error: 'Failed to fetch properties' });
+  }
+});
+
+// PUBLIC ENDPOINT - No authentication required
+// This endpoint receives submissions from the Fleming Lettings public tenant enquiry form
+app.post('/api/tenant-enquiries/public', async (req, res) => {
+  try {
+    const {
+      // Registration type
+      registration_type,
+      // Applicant 1
+      FirstName,
+      Surname,
+      address,
+      Postcode,
+      yearofaddress,
+      dob,
+      form_email,
+      contactNumber,
+      Nationality,
+      // Employment
+      EmploymentStatus,
+      job_title,
+      AnnualSalary,
+      // Applicant 2 (if joint)
+      FirstName2,
+      Surname2,
+      address2,
+      Postcode2,
+      yearofaddress2,
+      dob2,
+      form_email2,
+      contactNumber2,
+      Nationality2,
+      EmploymentStatus2,
+      job_title2,
+      AnnualSalary2,
+      // Property requirements
+      tenancylookingfor,
+      reasonforrenting,
+      typeofproperty,
+      noofbedrooms,
+      roadparking,
+      rent_min,
+      rent_max,
+      // Property selection
+      property_id
+    } = req.body;
+
+    // Validation
+    if (!FirstName || !Surname || !form_email || !contactNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: First Name, Surname, Email, and Contact Number are required'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form_email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email address'
+      });
+    }
+
+    // Check for duplicate submissions (within last 24 hours)
+    const recentSubmission = db.prepare(`
+      SELECT id FROM tenant_enquiries
+      WHERE email_1 = ?
+      AND created_at > datetime('now', '-24 hours')
+      LIMIT 1
+    `).get(form_email);
+
+    if (recentSubmission) {
+      return res.status(409).json({
+        success: false,
+        error: 'A recent enquiry with this email already exists. Please contact us if you need to update your details.'
+      });
+    }
+
+    // Determine if joint application
+    const is_joint = registration_type === 'Joint' ? 1 : 0;
+
+    // Get client IP for audit
+    const client_ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    // Insert into database
+    const result = db.prepare(`
+      INSERT INTO tenant_enquiries (
+        first_name_1, last_name_1, email_1, phone_1, current_address_1, postcode_1,
+        years_at_address_1, date_of_birth_1, nationality_1, employment_status_1,
+        job_title_1, annual_salary_1, income_1,
+        is_joint_application,
+        first_name_2, last_name_2, email_2, phone_2, current_address_2, postcode_2,
+        years_at_address_2, date_of_birth_2, nationality_2, employment_status_2,
+        job_title_2, annual_salary_2, income_2,
+        preferred_tenancy_type, reason_for_renting, property_type, bedrooms,
+        parking_required, monthly_rent_budget,
+        linked_property_id, form_submission_ip, form_version, status, created_at
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+      )
+    `).run(
+      // Applicant 1
+      FirstName,
+      Surname,
+      form_email,
+      contactNumber,
+      address || null,
+      Postcode || null,
+      yearofaddress || null,
+      dob || null,
+      Nationality || null,
+      EmploymentStatus || null,
+      job_title || null,
+      AnnualSalary ? parseFloat(AnnualSalary) : null,
+      AnnualSalary ? parseFloat(AnnualSalary) : null, // income_1 (same as annual_salary)
+      // Joint
+      is_joint,
+      // Applicant 2
+      FirstName2 || null,
+      Surname2 || null,
+      form_email2 || null,
+      contactNumber2 || null,
+      address2 || null,
+      Postcode2 || null,
+      yearofaddress2 || null,
+      dob2 || null,
+      Nationality2 || null,
+      EmploymentStatus2 || null,
+      job_title2 || null,
+      AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
+      AnnualSalary2 ? parseFloat(AnnualSalary2) : null, // income_2
+      // Property requirements
+      tenancylookingfor || null,
+      reasonforrenting || null,
+      typeofproperty || null,
+      noofbedrooms ? parseInt(noofbedrooms) : null,
+      roadparking || null,
+      rent_max ? parseFloat(rent_max) : null,
+      // Property linking
+      property_id ? parseInt(property_id) : null,
+      // Metadata
+      client_ip,
+      'v1',
+      'new'
+    );
+
+    const enquiryId = result.lastInsertRowid;
+
+    // Log audit
+    logAudit(undefined, 'public_form', 'create', 'tenant_enquiry', Number(enquiryId), {
+      name: `${FirstName} ${Surname}`,
+      email: form_email,
+      is_joint
+    });
+
+    // Return success response
+    res.status(201).json({
+      success: true,
+      message: 'Thank you! Your enquiry has been received. We will be in touch shortly.',
+      enquiry_id: enquiryId,
+      reference: `ENQ-${enquiryId}`
+    });
+
+  } catch (error: any) {
+    console.error('Error creating tenant enquiry:', error);
+    res.status(500).json({
+      success: false,
+      error: 'An error occurred while submitting your enquiry. Please try again or contact us directly.'
+    });
+  }
+});
+
 app.get('/api/tenant-enquiries', authMiddleware, (req: AuthRequest, res) => {
   try {
     const enquiries = db.prepare(`
@@ -689,6 +880,11 @@ app.get('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
 app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const data = req.body;
+    const enquiryId = parseInt(req.params.id);
+
+    // Get current enquiry to check for status change
+    const currentEnquiry = db.prepare('SELECT status, first_name_1, last_name_1 FROM tenant_enquiries WHERE id = ?').get(enquiryId) as any;
+    const statusChanged = currentEnquiry && currentEnquiry.status !== data.status;
 
     db.prepare(`
       UPDATE tenant_enquiries SET
@@ -710,10 +906,64 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
       data.kyc_completed_1 ? 1 : 0, data.kyc_completed_2 ? 1 : 0, data.status || 'new', data.follow_up_date || null,
       data.viewing_date || null, data.linked_property_id || null, data.notes || null, data.rejection_reason || null,
       data.viewing_with || null, data.renting_requirements || null, data.is_permanent_address ? 1 : 0,
-      req.params.id
+      enquiryId
     );
 
-    logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', parseInt(req.params.id), data);
+    // Create tasks based on status change
+    if (statusChanged) {
+      const applicantName = `${data.first_name_1} ${data.last_name_1}`;
+
+      // Follow-up task
+      if (data.status === 'awaiting_response' && data.follow_up_date) {
+        db.prepare(`
+          INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, task_type, due_date, assigned_to)
+          VALUES (?, ?, 'pending', 'medium', 'tenant_enquiry', ?, 'follow_up', ?, ?)
+        `).run(
+          `Follow up with ${applicantName}`,
+          `Contact tenant enquiry regarding their property search.\nEmail: ${data.email_1}\nPhone: ${data.phone_1 || 'Not provided'}`,
+          enquiryId,
+          data.follow_up_date,
+          req.user?.name || null
+        );
+      }
+
+      // Onboarding tasks
+      if (data.status === 'onboarding') {
+        const onboardingTasks = [
+          { title: `ID Verification - ${applicantName}`, description: 'Verify photo ID (passport/driving license) for applicant 1', priority: 'high', days: 0 },
+          { title: `Right to Rent Check - ${applicantName}`, description: 'Complete Right to Rent check as per UK law', priority: 'high', days: 0 },
+          { title: `Reference Check - ${applicantName}`, description: 'Request and verify employment/landlord references', priority: 'high', days: 1 },
+          { title: `Credit Check - ${applicantName}`, description: 'Run credit check and affordability assessment', priority: 'medium', days: 1 },
+          { title: `Tenancy Agreement - ${applicantName}`, description: 'Prepare and send tenancy agreement for review', priority: 'medium', days: 3 },
+        ];
+
+        if (data.is_joint_application && data.first_name_2) {
+          onboardingTasks.push(
+            { title: `ID Verification - ${data.first_name_2} ${data.last_name_2}`, description: 'Verify photo ID for applicant 2', priority: 'high', days: 0 },
+            { title: `Right to Rent Check - ${data.first_name_2} ${data.last_name_2}`, description: 'Complete Right to Rent check for applicant 2', priority: 'high', days: 0 }
+          );
+        }
+
+        const today = new Date();
+        onboardingTasks.forEach(task => {
+          const dueDate = new Date(today);
+          dueDate.setDate(dueDate.getDate() + task.days);
+          db.prepare(`
+            INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, task_type, due_date, assigned_to)
+            VALUES (?, ?, 'pending', ?, 'tenant_enquiry', ?, 'onboarding', ?, ?)
+          `).run(
+            task.title,
+            task.description,
+            task.priority,
+            enquiryId,
+            dueDate.toISOString().split('T')[0],
+            req.user?.name || null
+          );
+        });
+      }
+    }
+
+    logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, data);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -1470,7 +1720,7 @@ app.get('/api/property-viewings', authMiddleware, (req: AuthRequest, res) => {
 
 app.post('/api/property-viewings', authMiddleware, (req: AuthRequest, res) => {
   try {
-    const { property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes } = req.body;
+    const { property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to } = req.body;
     const stmt = db.prepare(`
       INSERT INTO property_viewings (property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -1483,8 +1733,21 @@ app.post('/api/property-viewings', authMiddleware, (req: AuthRequest, res) => {
         .run(viewing_date, enquiry_id);
     }
 
+    // Create a task for the viewing
+    const property = db.prepare('SELECT address FROM properties WHERE id = ?').get(property_id) as any;
+    const taskTitle = `Property Viewing: ${viewer_name}`;
+    const taskDescription = `Conduct property viewing at ${property?.address || 'Unknown Property'}\nTime: ${viewing_time || 'Not specified'}\nContact: ${viewer_phone || viewer_email}`;
+
+    db.prepare(`
+      INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, task_type, due_date, assigned_to)
+      VALUES (?, ?, 'pending', 'high', 'tenant_enquiry', ?, 'viewing', ?, ?)
+    `).run(taskTitle, taskDescription, enquiry_id || null, viewing_date, assigned_to || req.user?.name || null);
+
+    logAudit(req.user?.id, req.user?.email, 'create', 'property_viewing', Number(result.lastInsertRowid), { viewer_name, viewing_date, property_id });
+
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
+    console.error('Error creating viewing:', err);
     res.status(500).json({ error: 'Failed to create viewing' });
   }
 });

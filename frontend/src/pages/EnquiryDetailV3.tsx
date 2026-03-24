@@ -95,6 +95,7 @@ export default function EnquiryDetailV3() {
   const [data, setData] = useState<Record<string, any> | null>(null);
   const [form, setForm] = useState<Record<string, any>>({});
   const [properties, setProperties] = useState<{ id: number; address: string; postcode?: string; rent_amount?: number }[]>([]);
+  const [users, setUsers] = useState<{ id: number; name: string; email: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -110,18 +111,21 @@ export default function EnquiryDetailV3() {
   const [wfPropId, setWfPropId] = useState('');
   const [wfReason, setWfReason] = useState('');
   const [wfViewingWith, setWfViewingWith] = useState('');
+  const [wfAssignedTo, setWfAssignedTo] = useState('');
   const [wfLoading, setWfLoading] = useState(false);
 
   const loadDetail = useCallback(async () => {
     try {
-      const [d, props] = await Promise.all([
+      const [d, props, usersList] = await Promise.all([
         api.get(`/api/tenant-enquiries/${id}`),
         api.get('/api/properties').catch(() => []),
+        api.get('/api/users').catch(() => []),
       ]);
       setData(d);
       setForm({ ...d });
       if (d.is_joint_application || d.first_name_2 || d.last_name_2) setJointApp(true);
       setProperties(Array.isArray(props) ? props : []);
+      setUsers(Array.isArray(usersList) ? usersList : []);
     } catch {}
     setLoading(false);
   }, [id, api]);
@@ -150,6 +154,7 @@ export default function EnquiryDetailV3() {
               property_id: Number(wfPropId), enquiry_id: Number(id),
               viewer_name: name, viewer_email: form.email_1 || '',
               viewer_phone: form.phone_1 || '', viewing_date: wfDate, viewing_time: wfTime,
+              assigned_to: wfAssignedTo || null,
             });
             await save({ status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate, viewing_with: wfViewingWith || null });
           }
@@ -236,7 +241,7 @@ export default function EnquiryDetailV3() {
           </div>
           <div className="flex gap-2">
             {!['converted', 'rejected'].includes(form.status) && (
-              <Button variant="gradient" size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); }}>
+              <Button variant="gradient" size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); }}>
                 <ArrowRight size={14} className="mr-1.5" /> Progress / Reject
               </Button>
             )}
@@ -543,11 +548,13 @@ export default function EnquiryDetailV3() {
                 <button onClick={() => setWorkflowMode('choose')} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">← Back</button>
                 {workflowMode === 'viewing' && (
                   <>
-                    <Select label="Property" value={wfPropId} onChange={setWfPropId}
+                    <Select label="Property *" value={wfPropId} onChange={setWfPropId}
                       options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: p.address }))]} />
-                    <DatePicker label="Date" value={wfDate} onChange={setWfDate} />
+                    <DatePicker label="Date *" value={wfDate} onChange={setWfDate} />
                     <Input label="Time" value={wfTime} onChange={setWfTime} type="time" />
-                    <Input label="Viewing With" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Agent name" />
+                    <Select label="Assign To" value={wfAssignedTo} onChange={setWfAssignedTo}
+                      options={[{ value: '', label: 'Unassigned' }, ...users.map(u => ({ value: u.name, label: u.name }))]} />
+                    <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Special instructions" />
                   </>
                 )}
                 {workflowMode === 'follow_up' && <DatePicker label="Follow-up Date" value={wfDate} onChange={setWfDate} />}
