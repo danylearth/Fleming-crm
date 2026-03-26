@@ -167,8 +167,8 @@ export default function LandlordsV3() {
         email: form.email,
         phone: form.phone,
         address: form.postcode ? `${form.address}, ${form.postcode}` : form.address,
-        landlord_type: 'external', // Always external for client landlords
-        notes: form.entity_type === 'company' ? `Company Number: ${form.company_number || 'N/A'}` : ''
+        company_number: form.entity_type === 'company' ? form.company_number : null,
+        notes: form.notes || null
       };
 
       const newLandlord = await api.post('/api/landlords', landlordData);

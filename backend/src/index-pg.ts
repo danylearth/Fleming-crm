@@ -185,14 +185,15 @@ app.get('/api/landlords', authMiddleware, async (req: AuthRequest, res) => {
 
 app.post('/api/landlords', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { name, email, phone, address, notes } = req.body;
+    const { name, email, phone, address, notes, company_number } = req.body;
     const id = await insert(
-      'INSERT INTO landlords (name, email, phone, address, notes) VALUES ($1, $2, $3, $4, $5)',
-      [name, email || null, phone || null, address || null, notes || null]
+      'INSERT INTO landlords (name, email, phone, address, notes, company_number) VALUES ($1, $2, $3, $4, $5, $6)',
+      [name, email || null, phone || null, address || null, notes || null, company_number || null]
     );
     await logAudit(req.user?.id, req.user?.email, 'create', 'landlord', id);
     res.json({ id });
   } catch (err) {
+    console.error('Failed to create landlord:', err);
     res.status(500).json({ error: 'Failed to create landlord' });
   }
 });
