@@ -247,13 +247,37 @@ app.post('/api/landlords/bulk-delete', authMiddleware, async (req: AuthRequest, 
     }
 
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-    // Delete associated properties first (cascade delete)
-    await run(`DELETE FROM properties WHERE landlord_id IN (${placeholders})`, ids);
-    // Then delete landlords
+
+    // Get all property IDs for these landlords
+    const properties = await query(`SELECT id FROM properties WHERE landlord_id IN (${placeholders})`, ids);
+    const propertyIds = properties.map((p: any) => p.id);
+
+    if (propertyIds.length > 0) {
+      const propPlaceholders = propertyIds.map((_, i) => `$${i + 1}`).join(',');
+
+      // Delete all records associated with these properties
+      await run(`UPDATE tenants SET property_id = NULL WHERE property_id IN (${propPlaceholders})`, propertyIds);
+      await run(`DELETE FROM maintenance WHERE property_id IN (${propPlaceholders})`, propertyIds);
+      await run(`DELETE FROM rent_payments WHERE property_id IN (${propPlaceholders})`, propertyIds);
+      await run(`DELETE FROM tasks WHERE entity_type = 'property' AND entity_id IN (${propPlaceholders})`, propertyIds);
+      await run(`DELETE FROM documents WHERE entity_type = 'property' AND entity_id IN (${propPlaceholders})`, propertyIds);
+      await run(`DELETE FROM property_viewings WHERE property_id IN (${propPlaceholders})`, propertyIds);
+      await run(`DELETE FROM property_landlords WHERE property_id IN (${propPlaceholders})`, propertyIds);
+
+      // Delete the properties
+      await run(`DELETE FROM properties WHERE id IN (${propPlaceholders})`, propertyIds);
+    }
+
+    // Delete records directly associated with landlords
+    await run(`DELETE FROM directors WHERE landlord_id IN (${placeholders})`, ids);
+    await run(`DELETE FROM tasks WHERE entity_type = 'landlord' AND entity_id IN (${placeholders})`, ids);
+    await run(`DELETE FROM documents WHERE entity_type = 'landlord' AND entity_id IN (${placeholders})`, ids);
+
+    // Finally delete the landlords
     await run(`DELETE FROM landlords WHERE id IN (${placeholders})`, ids);
 
     for (const id of ids) {
-      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'landlord', id);
+      await logAudit(req.user?.id, req.user?.email, 'delete', 'landlord', id);
     }
 
     res.json({ success: true, deleted: ids.length });
@@ -587,7 +611,7 @@ app.post('/api/landlords-bdm/bulk-delete', authMiddleware, async (req: AuthReque
     const result = await run(`DELETE FROM landlords_bdm WHERE id IN (${placeholders})`, ids);
 
     for (const id of ids) {
-      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'landlord_bdm', id);
+      await logAudit(req.user?.id, req.user?.email, 'delete', 'landlord_bdm', id);
     }
 
     res.json({ success: true, deleted: ids.length });
@@ -953,7 +977,7 @@ app.post('/api/tenant-enquiries/bulk-delete', authMiddleware, async (req: AuthRe
     const result = await run(`DELETE FROM tenant_enquiries WHERE id IN (${placeholders})`, ids);
 
     for (const id of ids) {
-      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'tenant_enquiry', id);
+      await logAudit(req.user?.id, req.user?.email, 'delete', 'tenant_enquiry', id);
     }
 
     res.json({ success: true, deleted: ids.length });
@@ -1093,7 +1117,7 @@ app.post('/api/tenants/bulk-delete', authMiddleware, async (req: AuthRequest, re
     const result = await run(`DELETE FROM tenants WHERE id IN (${placeholders})`, ids);
 
     for (const id of ids) {
-      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'tenant', id);
+      await logAudit(req.user?.id, req.user?.email, 'delete', 'tenant', id);
     }
 
     res.json({ success: true, deleted: ids.length });
@@ -1248,7 +1272,7 @@ app.post('/api/properties/bulk-delete', authMiddleware, async (req: AuthRequest,
     const result = await run(`DELETE FROM properties WHERE id IN (${placeholders})`, ids);
 
     for (const id of ids) {
-      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'property', id);
+      await logAudit(req.user?.id, req.user?.email, 'delete', 'property', id);
     }
 
     res.json({ success: true, deleted: ids.length });
@@ -1322,7 +1346,7 @@ app.post('/api/tasks/bulk-delete', authMiddleware, async (req: AuthRequest, res)
     const result = await run(`DELETE FROM tasks WHERE id IN (${placeholders})`, ids);
 
     for (const id of ids) {
-      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'task', id);
+      await logAudit(req.user?.id, req.user?.email, 'delete', 'task', id);
     }
 
     res.json({ success: true, deleted: ids.length });
@@ -1395,7 +1419,7 @@ app.post('/api/maintenance/bulk-delete', authMiddleware, async (req: AuthRequest
     const result = await run(`DELETE FROM maintenance WHERE id IN (${placeholders})`, ids);
 
     for (const id of ids) {
-      await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'maintenance', id);
+      await logAudit(req.user?.id, req.user?.email, 'delete', 'maintenance', id);
     }
 
     res.json({ success: true, deleted: ids.length });
