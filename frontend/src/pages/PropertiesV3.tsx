@@ -389,7 +389,10 @@ export default function PropertiesV3() {
               setShowAdd(false);
               resetForm();
               navigate(`/v3/properties/${res.id}`);
-            } catch (e) { console.error(e); }
+            } catch (e: any) {
+              console.error('Property creation error:', e);
+              alert(`Failed to create property: ${e?.response?.data?.error || e?.message || 'Unknown error'}`);
+            }
             setSaving(false);
           }}
         />}
