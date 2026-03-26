@@ -276,17 +276,145 @@
             gap: 15px;
         }
 
-        @media (max-width: 600px) {
+        /* Mobile Optimization */
+        @media (max-width: 768px) {
             .two-col {
                 grid-template-columns: 1fr;
+                gap: 12px;
             }
-            
+
+            .container {
+                border-radius: 0;
+                max-width: 100%;
+            }
+
             .form-wrapper {
-                padding: 40px 25px;
+                padding: 30px 20px;
+                min-height: auto;
             }
-            
+
+            .header {
+                padding: 15px 20px;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .logo {
+                height: 40px;
+            }
+
+            .back-button {
+                font-size: 13px;
+                padding: 6px 16px;
+            }
+
             .step h2 {
-                font-size: 24px;
+                font-size: 22px;
+                margin-bottom: 15px;
+            }
+
+            .step p {
+                font-size: 14px;
+                margin-bottom: 20px;
+            }
+
+            .form-group label {
+                font-size: 14px;
+                margin-bottom: 6px;
+            }
+
+            .form-group input,
+            .form-group select,
+            .form-group textarea {
+                font-size: 16px; /* Prevents zoom on iOS */
+                padding: 12px 14px;
+            }
+
+            .btn {
+                width: 100%;
+                padding: 14px 20px;
+                font-size: 15px;
+            }
+
+            .button-group {
+                flex-direction: column-reverse;
+                gap: 12px;
+            }
+
+            .button-group .btn {
+                margin: 0;
+            }
+
+            /* Radio buttons on mobile */
+            .radio-group {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .radio-group label {
+                font-size: 15px;
+            }
+
+            /* Select dropdowns */
+            select {
+                background-position: right 10px center;
+                padding-right: 35px;
+            }
+
+            /* Checkbox groups */
+            .checkbox-group {
+                font-size: 14px;
+                line-height: 1.5;
+            }
+
+            /* Error messages */
+            .error-message {
+                font-size: 13px;
+                padding: 10px;
+            }
+        }
+
+        /* Small mobile devices */
+        @media (max-width: 480px) {
+            body {
+                padding: 0;
+            }
+
+            .form-wrapper {
+                padding: 25px 15px;
+            }
+
+            .header {
+                padding: 12px 15px;
+            }
+
+            .step h2 {
+                font-size: 20px;
+            }
+
+            .logo {
+                height: 35px;
+            }
+
+            .back-button {
+                font-size: 12px;
+                padding: 5px 12px;
+            }
+        }
+
+        /* Touch-friendly improvements */
+        @media (hover: none) and (pointer: coarse) {
+            .btn,
+            .back-button,
+            input[type="radio"],
+            input[type="checkbox"] {
+                min-height: 44px; /* Apple recommended touch target */
+            }
+
+            .form-group input,
+            .form-group select,
+            .form-group textarea {
+                min-height: 44px;
             }
         }
 
@@ -402,11 +530,27 @@
                     <div class="input-group">
                         <label>Nationality *</label>
                         <select name="Nationality" required>
-                            <option value="">Please select</option>
-                            <option value="English, Welsh, Scottish, Northern Irish or British">British</option>
+                            <option value="">Please select an option</option>
+                            <option value="English, Welsh, Scottish, Northern Irish or British">English, Welsh, Scottish, Northern Irish or British</option>
                             <option value="Irish">Irish</option>
-                            <option value="Other EU">Other EU</option>
-                            <option value="Other">Other</option>
+                            <option value="Gypsy or Irish Traveller">Gypsy or Irish Traveller</option>
+                            <option value="Any other White background">Any other White background</option>
+                            <option value="White and Black Caribbean">White and Black Caribbean</option>
+                            <option value="White and Black African">White and Black African</option>
+                            <option value="White and Asian">White and Asian</option>
+                            <option value="Any other Mixed or multiple ethnic background">Any other Mixed or multiple ethnic background</option>
+                            <option value="Indian">Indian</option>
+                            <option value="Pakistani">Pakistani</option>
+                            <option value="Bangladeshi">Bangladeshi</option>
+                            <option value="Chinese">Chinese</option>
+                            <option value="Any other Asian background">Any other Asian background</option>
+                            <option value="African">African</option>
+                            <option value="Caribbean">Caribbean</option>
+                            <option value="Any other Black, Black British, or Caribbean background">Any other Black, Black British, or Caribbean background</option>
+                            <option value="Arab">Arab</option>
+                            <option value="Roma">Roma</option>
+                            <option value="Any other ethnic group">Any other ethnic group</option>
+                            <option value="Rather not say">Rather not say</option>
                         </select>
                     </div>
 
@@ -475,6 +619,50 @@
                         <input type="text" name="contactNumber2">
                     </div>
 
+                    <div class="two-col">
+                        <div class="input-group">
+                            <label>Date of Birth</label>
+                            <input type="date" name="dob2">
+                        </div>
+                        <div class="input-group">
+                            <label>Nationality</label>
+                            <select name="Nationality2">
+                                <option value="">Please select an option</option>
+                                <option value="English, Welsh, Scottish, Northern Irish or British">English, Welsh, Scottish, Northern Irish or British</option>
+                                <option value="Irish">Irish</option>
+                                <option value="Gypsy or Irish Traveller">Gypsy or Irish Traveller</option>
+                                <option value="Any other White background">Any other White background</option>
+                                <option value="White and Black Caribbean">White and Black Caribbean</option>
+                                <option value="White and Black African">White and Black African</option>
+                                <option value="White and Asian">White and Asian</option>
+                                <option value="Any other Mixed or multiple ethnic background">Any other Mixed or multiple ethnic background</option>
+                                <option value="Indian">Indian</option>
+                                <option value="Pakistani">Pakistani</option>
+                                <option value="Bangladeshi">Bangladeshi</option>
+                                <option value="Chinese">Chinese</option>
+                                <option value="Any other Asian background">Any other Asian background</option>
+                                <option value="African">African</option>
+                                <option value="Caribbean">Caribbean</option>
+                                <option value="Any other Black, Black British, or Caribbean background">Any other Black, Black British, or Caribbean background</option>
+                                <option value="Arab">Arab</option>
+                                <option value="Roma">Roma</option>
+                                <option value="Any other ethnic group">Any other ethnic group</option>
+                                <option value="Rather not say">Rather not say</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="two-col">
+                        <div class="input-group">
+                            <label>Current Address</label>
+                            <input type="text" name="address2">
+                        </div>
+                        <div class="input-group">
+                            <label>Postcode</label>
+                            <input type="text" name="Postcode2">
+                        </div>
+                    </div>
+
                     <div class="input-group">
                         <label>Employment Status</label>
                         <select name="EmploymentStatus2">
@@ -484,6 +672,17 @@
                             <option value="Self-Employed">Self-Employed</option>
                             <option value="Unemployed">Unemployed</option>
                         </select>
+                    </div>
+
+                    <div class="two-col">
+                        <div class="input-group">
+                            <label>Job Title</label>
+                            <input type="text" name="job_title2">
+                        </div>
+                        <div class="input-group">
+                            <label>Annual Salary (£)</label>
+                            <input type="number" name="AnnualSalary2" min="0">
+                        </div>
                     </div>
 
                     <div class="button-group">
