@@ -12,7 +12,8 @@ import { getPropertyImage } from '../utils/propertyImages';
 import {
   Building2, Bed, PoundSterling, MapPin, User, Users,
   CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
-  AlertTriangle, ShieldCheck, FileText, Plus, Wrench, Trash2, StickyNote
+  AlertTriangle, ShieldCheck, FileText, Plus, Wrench, Trash2, StickyNote,
+  Upload, Camera, Trash
 } from 'lucide-react';
 
 interface PropertyDetail {
@@ -37,6 +38,7 @@ interface PropertyDetail {
   gas_safety_expiry_date: string | null; has_gas: number;
   notes: string | null;
   amenities: string | null;
+  image_url: string | null;
 }
 
 interface Task {
@@ -167,6 +169,10 @@ export default function PropertyDetailV3() {
     email_1: '',
     phone_1: '',
   });
+
+  // Image upload state
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const imageInputRef = useState<HTMLInputElement | null>(null)[0];
 
   const populateForm = (p: PropertyDetail) => setForm({
     landlord_id: p.landlord_id, address: p.address || '', postcode: p.postcode || '',
@@ -432,6 +438,61 @@ export default function PropertyDetailV3() {
     }
   };
 
+  // Image upload handlers
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/gif'].includes(file.type)) {
+      alert('Please upload a JPEG, PNG, or GIF image');
+      return;
+    }
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image must be smaller than 10MB');
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      await api.post(`/api/properties/${id}/image`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      // Reload property to get updated image_url
+      await loadDetail();
+    } catch (err: any) {
+      console.error('Failed to upload image:', err);
+      alert(err.response?.data?.error || 'Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+      // Reset input
+      if (event.target) event.target.value = '';
+    }
+  };
+
+  const handleDeleteImage = async () => {
+    if (!confirm('Are you sure you want to delete this property image?')) return;
+
+    setUploadingImage(true);
+    try {
+      await api.delete(`/api/properties/${id}/image`);
+      await loadDetail();
+    } catch (err: any) {
+      console.error('Failed to delete image:', err);
+      alert(err.response?.data?.error || 'Failed to delete image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   if (loading) {
     return (
       <V3Layout title="Property" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: 'Loading...' }]}>
@@ -466,12 +527,16 @@ export default function PropertyDetailV3() {
     if (gasDays !== null && gasDays <= 30) reminders.push({ label: 'Gas Safety', days: gasDays });
   }
 
+  const imageUrl = property.image_url
+    ? `${import.meta.env.VITE_API_URL}/uploads/${property.image_url}`
+    : getPropertyImage(property.id, 1200, 400);
+
   return (
     <V3Layout title="" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: property.address }]}>
       <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         {/* Hero */}
         <div className="relative h-48 sm:h-56 md:h-64 rounded-xl sm:rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
-          <img src={getPropertyImage(property.id, 1200, 400)} alt={property.address}
+          <img src={imageUrl} alt={property.address}
             className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
           <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-t from-black/70 to-transparent">
             <div className="flex items-center gap-2 mb-1">
@@ -493,6 +558,41 @@ export default function PropertyDetailV3() {
             ) : (
               <Button variant="ghost" size="sm" onClick={() => setEditing(true)} className="bg-black/40 backdrop-blur-sm text-white text-xs sm:text-sm">
                 <Pencil size={14} className="mr-0 sm:mr-1" /> <span className="hidden sm:inline">Edit</span>
+              </Button>
+            )}
+          </div>
+          {/* Image Upload/Delete Buttons */}
+          <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex gap-2">
+            <input
+              type="file"
+              ref={(el) => { if (el) (imageInputRef as any) = el; }}
+              onChange={handleImageUpload}
+              accept="image/jpeg,image/jpg,image/png,image/gif"
+              className="hidden"
+              id="property-image-upload"
+            />
+            <label htmlFor="property-image-upload">
+              <Button
+                as="span"
+                variant="ghost"
+                size="sm"
+                disabled={uploadingImage}
+                className="bg-black/40 backdrop-blur-sm text-white text-xs sm:text-sm cursor-pointer"
+              >
+                <Camera size={14} className="mr-0 sm:mr-1" />
+                <span className="hidden sm:inline">{uploadingImage ? 'Uploading...' : property.image_url ? 'Change' : 'Upload'}</span>
+              </Button>
+            </label>
+            {property.image_url && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDeleteImage}
+                disabled={uploadingImage}
+                className="bg-black/40 backdrop-blur-sm text-white text-xs sm:text-sm"
+              >
+                <Trash size={14} className="mr-0 sm:mr-1" />
+                <span className="hidden sm:inline">Delete</span>
               </Button>
             )}
           </div>
