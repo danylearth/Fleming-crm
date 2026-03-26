@@ -1145,10 +1145,10 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
         charge_percentage, total_charge, rent_amount,
         has_live_tenancy, tenancy_start_date, tenancy_type, has_end_date, tenancy_end_date,
         rent_review_date, eicr_expiry_date, epc_grade, epc_expiry_date,
-        has_gas, gas_safety_expiry_date, status, onboarded_date, notes
+        has_gas, gas_safety_expiry_date, status, onboarded_date, notes, amenities
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-        $21,$22,$23,$24,$25,$26,$27,$28,$29
+        $21,$22,$23,$24,$25,$26,$27,$28,$29,$30
       )
     `, [
       d.landlord_id, d.address, d.postcode, d.property_type || 'house', d.bedrooms || 1,
@@ -1159,7 +1159,7 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
       d.has_end_date ? 1 : 0, d.tenancy_end_date || null,
       d.rent_review_date || null, d.eicr_expiry_date || null, d.epc_grade || null, d.epc_expiry_date || null,
       d.has_gas ? 1 : 0, d.gas_safety_expiry_date || null, d.status || 'to_let',
-      d.onboarded_date || null, d.notes || null
+      d.onboarded_date || null, d.notes || null, d.amenities || null
     ]);
     await logAudit(req.user?.id, req.user?.email, 'create', 'property', id);
     res.json({ id });
