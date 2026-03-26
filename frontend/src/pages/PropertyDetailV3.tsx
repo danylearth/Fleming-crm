@@ -288,6 +288,7 @@ export default function PropertyDetailV3() {
 
       const response = await api.post('/api/tasks', {
         ...taskForm,
+        assigned_to: taskForm.assigned_to ? Number(taskForm.assigned_to) : null,
         entity_type: 'property',
         entity_id: property?.id
       });
