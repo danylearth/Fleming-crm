@@ -1198,7 +1198,7 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
       'charge_percentage','total_charge','rent_amount',
       'has_live_tenancy','tenancy_start_date','tenancy_type','has_end_date','tenancy_end_date',
       'rent_review_date','eicr_expiry_date','epc_grade','epc_expiry_date',
-      'has_gas','gas_safety_expiry_date','status','onboarded_date','notes'
+      'has_gas','gas_safety_expiry_date','status','onboarded_date','notes','amenities','tenant_id'
     ];
     for (const key of allowed) {
       if (key in d) {
