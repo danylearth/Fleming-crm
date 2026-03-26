@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 export default function LoginV3() {
   const [email, setEmail] = useState('');
@@ -11,6 +12,7 @@ export default function LoginV3() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { theme } = useTheme();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,10 +39,11 @@ export default function LoginV3() {
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-10">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center mb-5 shadow-lg shadow-pink-500/20">
-            <span className="text-2xl font-bold text-white">F</span>
-          </div>
-          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-1">Fleming Lettings</h1>
+          <img
+            src={theme === 'dark' ? '/logo-light.png' : '/logo-dark.png'}
+            alt="Fleming Lettings"
+            className="h-14 w-auto object-contain mb-3"
+          />
           <p className="text-[var(--text-muted)] text-sm">Property management, simplified</p>
         </div>
 
@@ -97,12 +100,6 @@ export default function LoginV3() {
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-center gap-2 mt-8 text-[var(--text-faint)] text-xs">
-          <Sparkles size={12} />
-          <span>Powered by DOT AI</span>
         </div>
       </div>
     </div>
