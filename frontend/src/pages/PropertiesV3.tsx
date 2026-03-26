@@ -381,7 +381,7 @@ export default function PropertiesV3() {
             try {
               const res = await api.post('/api/properties', {
                 ...form,
-                landlord_id: Number(form.landlord_id),
+                landlord_id: form.landlord_id ? Number(form.landlord_id) : null,
                 bedrooms: Number(form.bedrooms),
                 rent_amount: Number(form.rent_amount) || 0,
                 has_gas: form.has_gas,
