@@ -855,17 +855,16 @@ export default function LandlordDetailV3() {
                     setPropSaving(true);
                     try {
                       // Link existing property to landlord via property_landlords junction table
-                      await api.post('/api/property-landlords', {
-                        property_id: Number(selectedPropertyId),
+                      await api.post(`/api/properties/${selectedPropertyId}/landlords`, {
                         landlord_id: Number(id),
                         is_primary: 1,
                         ownership_entity_type: 'individual'
                       });
                       setShowAddProp(false);
                       await loadDetail();
-                    } catch (e) {
-                      console.error(e);
-                      alert('Failed to link property');
+                    } catch (e: any) {
+                      console.error('Failed to link property:', e);
+                      alert(`Failed to link property: ${e?.response?.data?.error || e?.message || 'Unknown error'}`);
                     }
                     setPropSaving(false);
                   }}>
@@ -884,7 +883,10 @@ export default function LandlordDetailV3() {
                       });
                       setShowAddProp(false);
                       navigate(`/v3/properties/${res.id}`);
-                    } catch (e) { console.error(e); }
+                    } catch (e: any) {
+                      console.error('Property creation error:', e);
+                      alert(`Failed to create property: ${e?.response?.data?.error || e?.message || 'Unknown error'}`);
+                    }
                     setPropSaving(false);
                   }}>
                     {propSaving ? 'Creating...' : 'Create Property'}
