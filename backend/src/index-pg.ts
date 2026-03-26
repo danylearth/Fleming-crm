@@ -227,6 +227,16 @@ app.put('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+app.get('/api/landlords/:id/properties', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const properties = await query('SELECT * FROM properties WHERE landlord_id = $1 ORDER BY address', [id]);
+    res.json(properties);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch landlord properties' });
+  }
+});
+
 app.delete('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = req.params.id as string;
