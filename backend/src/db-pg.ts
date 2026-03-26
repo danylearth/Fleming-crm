@@ -435,6 +435,17 @@ export async function initDb() {
       console.log('[Migration] landlord_type column added successfully.');
     }
 
+    // Add image_url column to properties table if it doesn't exist
+    const imageUrlCheck = await client.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'properties' AND column_name = 'image_url'
+    `);
+    if (imageUrlCheck.rows.length === 0) {
+      console.log('[Migration] Adding image_url column to properties...');
+      await client.query(`ALTER TABLE properties ADD COLUMN image_url TEXT`);
+      console.log('[Migration] image_url column added successfully.');
+    }
+
     // Run inventory migration
     await runInventoryMigration(pool);
   } finally {

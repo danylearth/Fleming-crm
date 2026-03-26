@@ -1603,6 +1603,82 @@ app.post('/api/users', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+// ============ PROPERTY IMAGE UPLOAD ============
+
+app.post('/api/properties/:id/image', authMiddleware, upload.single('image'), async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    // Check if property exists
+    const property = await queryOne('SELECT * FROM properties WHERE id = $1', [id]);
+    if (!property) {
+      return res.status(404).json({ error: 'Property not found' });
+    }
+
+    // Delete old image if exists
+    if (property.image_url) {
+      const oldImagePath = path.join(uploadsDir, property.image_url);
+      if (fs.existsSync(oldImagePath)) {
+        fs.unlinkSync(oldImagePath);
+      }
+    }
+
+    // Update property with new image filename
+    const imageUrl = file.filename;
+    await run('UPDATE properties SET image_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [imageUrl, id]);
+
+    await logAudit(req.user?.id, req.user?.email, 'update', 'property', parseInt(id), { image_url: imageUrl });
+    res.json({ success: true, image_url: imageUrl });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to upload property image' });
+  }
+});
+
+app.delete('/api/properties/:id/image', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if property exists
+    const property = await queryOne('SELECT * FROM properties WHERE id = $1', [id]);
+    if (!property) {
+      return res.status(404).json({ error: 'Property not found' });
+    }
+
+    // Delete image file if exists
+    if (property.image_url) {
+      const imagePath = path.join(uploadsDir, property.image_url);
+      if (fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+      }
+    }
+
+    // Update property to remove image
+    await run('UPDATE properties SET image_url = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
+
+    await logAudit(req.user?.id, req.user?.email, 'update', 'property', parseInt(id), { image_url: null });
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete property image' });
+  }
+});
+
+// Serve property images
+app.get('/uploads/:filename', (req, res) => {
+  const filePath = path.join(uploadsDir, req.params.filename);
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ error: 'File not found' });
+  }
+});
+
 // ============ INVENTORY ROUTES ============
 registerInventoryRoutes(app, authMiddleware);
 
