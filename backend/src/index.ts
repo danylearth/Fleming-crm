@@ -427,6 +427,78 @@ app.post('/api/landlords', authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
+// Check for duplicate landlords (must be before /:id route)
+app.get('/api/landlords/check-duplicates', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { email, phone, exclude_id } = req.query;
+    const results: any[] = [];
+
+    if (email) {
+      // Check landlords
+      const landlordByEmail = db.prepare(
+        'SELECT id, name, email, phone FROM landlords WHERE email = ? AND id != ?'
+      ).all(email, exclude_id || 0) as any[];
+      landlordByEmail.forEach(l => results.push({ ...l, source: 'landlords', match_type: 'email' }));
+
+      // Check tenants
+      const tenantByEmail = db.prepare(
+        'SELECT id, name, email, phone FROM tenants WHERE email = ? OR email_2 = ?'
+      ).all(email, email) as any[];
+      tenantByEmail.forEach(t => results.push({ ...t, source: 'tenants', match_type: 'email' }));
+
+      // Check enquiries
+      const enqByEmail = db.prepare(
+        'SELECT id, first_name_1, last_name_1, email_1 as email, phone_1 as phone FROM tenant_enquiries WHERE email_1 = ? OR email_2 = ?'
+      ).all(email, email) as any[];
+      enqByEmail.forEach(e => results.push({
+        ...e,
+        name: `${e.first_name_1} ${e.last_name_1}`,
+        source: 'tenant_enquiries',
+        match_type: 'email'
+      }));
+    }
+
+    if (phone) {
+      const landlordByPhone = db.prepare(
+        'SELECT id, name, email, phone FROM landlords WHERE phone = ? AND id != ?'
+      ).all(phone, exclude_id || 0) as any[];
+      landlordByPhone.forEach(l => {
+        if (!results.find(r => r.source === 'landlords' && r.id === l.id)) {
+          results.push({ ...l, source: 'landlords', match_type: 'phone' });
+        }
+      });
+
+      const tenantByPhone = db.prepare(
+        'SELECT id, name, email, phone FROM tenants WHERE phone = ? OR phone_2 = ?'
+      ).all(phone, phone) as any[];
+      tenantByPhone.forEach(t => {
+        if (!results.find(r => r.source === 'tenants' && r.id === t.id)) {
+          results.push({ ...t, source: 'tenants', match_type: 'phone' });
+        }
+      });
+
+      const enqByPhone = db.prepare(
+        'SELECT id, first_name_1, last_name_1, email_1 as email, phone_1 as phone FROM tenant_enquiries WHERE phone_1 = ? OR phone_2 = ?'
+      ).all(phone, phone) as any[];
+      enqByPhone.forEach(e => {
+        if (!results.find(r => r.source === 'tenant_enquiries' && r.id === e.id)) {
+          results.push({
+            ...e,
+            name: `${e.first_name_1} ${e.last_name_1}`,
+            source: 'tenant_enquiries',
+            match_type: 'phone'
+          });
+        }
+      });
+    }
+
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Duplicate check failed' });
+  }
+});
+
 app.get('/api/landlords/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
     const landlord = db.prepare(`
@@ -444,15 +516,15 @@ app.get('/api/landlords/:id', authMiddleware, (req: AuthRequest, res) => {
 
 app.put('/api/landlords/:id', authMiddleware, (req: AuthRequest, res) => {
   try {
-    const { name, email, phone, alt_email, date_of_birth, home_address,
+    const { name, email, phone, alt_email, date_of_birth, home_address, company_number,
       marketing_post, marketing_email, marketing_phone, marketing_sms,
       kyc_completed, notes, landlord_type, referral_source } = req.body;
 
     db.prepare(`
-      UPDATE landlords SET name=?, email=?, phone=?, alt_email=?, date_of_birth=?, home_address=?,
+      UPDATE landlords SET name=?, email=?, phone=?, alt_email=?, date_of_birth=?, home_address=?, company_number=?,
         marketing_post=?, marketing_email=?, marketing_phone=?, marketing_sms=?,
         kyc_completed=?, notes=?, landlord_type=?, referral_source=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
-    `).run(name, email, phone, alt_email, date_of_birth, home_address,
+    `).run(name, email, phone, alt_email, date_of_birth, home_address, company_number || null,
       marketing_post ? 1 : 0, marketing_email ? 1 : 0, marketing_phone ? 1 : 0, marketing_sms ? 1 : 0,
       kyc_completed ? 1 : 0, notes, landlord_type || 'external', referral_source || null, req.params.id);
 
@@ -493,6 +565,223 @@ app.post('/api/landlords/bulk-delete', authMiddleware, (req: AuthRequest, res) =
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to bulk delete landlords' });
+  }
+});
+
+// ============ DIRECTORS ============
+
+// Get all directors (for search functionality)
+app.get('/api/directors', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const directors = db.prepare('SELECT * FROM directors ORDER BY name').all();
+    res.json(directors);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch directors' });
+  }
+});
+
+// Get all directors for a landlord
+app.get('/api/landlords/:landlordId/directors', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { archived } = req.query;
+    const archivedFilter = archived === 'true' ? 1 : 0;
+    const directors = db.prepare('SELECT * FROM directors WHERE landlord_id = ? AND archived = ? ORDER BY created_at DESC').all(req.params.landlordId, archivedFilter);
+    res.json(directors);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch directors' });
+  }
+});
+
+// Create a director
+app.post('/api/landlords/:landlordId/directors', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { name, email, phone, date_of_birth, role, kyc_completed, notes } = req.body;
+    const stmt = db.prepare(`
+      INSERT INTO directors (landlord_id, name, email, phone, date_of_birth, role, kyc_completed, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      req.params.landlordId,
+      name,
+      email || null,
+      phone || null,
+      date_of_birth || null,
+      role || null,
+      kyc_completed ? 1 : 0,
+      notes || null
+    );
+    logAudit(req.user?.id, req.user?.email, 'create', 'director', result.lastInsertRowid as number);
+    res.json({ id: result.lastInsertRowid });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create director' });
+  }
+});
+
+// Update a director
+app.put('/api/directors/:id', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { name, email, phone, date_of_birth, role, kyc_completed, notes } = req.body;
+    db.prepare(`
+      UPDATE directors SET name=?, email=?, phone=?, date_of_birth=?, role=?, kyc_completed=?, notes=?, updated_at=CURRENT_TIMESTAMP
+      WHERE id=?
+    `).run(name, email || null, phone || null, date_of_birth || null, role || null, kyc_completed ? 1 : 0, notes || null, req.params.id);
+
+    logAudit(req.user?.id, req.user?.email, 'update', 'director', parseInt(req.params.id), req.body);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update director' });
+  }
+});
+
+// Delete a director
+app.delete('/api/directors/:id', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    // Archive instead of delete
+    db.prepare('UPDATE directors SET archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.params.id);
+    logAudit(req.user?.id, req.user?.email, 'archive', 'director', parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to archive director' });
+  }
+});
+
+// Reinstate an archived director
+app.post('/api/directors/:id/reinstate', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    db.prepare('UPDATE directors SET archived = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.params.id);
+    logAudit(req.user?.id, req.user?.email, 'reinstate', 'director', parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reinstate director' });
+  }
+});
+
+// Get all properties for a landlord (via junction table)
+app.get('/api/landlords/:landlordId/properties', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const properties = db.prepare(`
+      SELECT p.*, pl.is_primary, pl.ownership_percentage, pl.ownership_entity_type
+      FROM properties p
+      INNER JOIN property_landlords pl ON p.id = pl.property_id
+      WHERE pl.landlord_id = ?
+      ORDER BY pl.is_primary DESC, p.address ASC
+    `).all(req.params.landlordId);
+    res.json(properties);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch properties' });
+  }
+});
+
+// Get companies where a landlord is a director (by matching name)
+app.get('/api/landlords/:landlordId/director-of', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const landlord = db.prepare('SELECT name FROM landlords WHERE id = ?').get(req.params.landlordId) as { name: string } | undefined;
+    if (!landlord) {
+      return res.json([]);
+    }
+
+    // Find all companies where this landlord's name matches a director's name
+    const companies = db.prepare(`
+      SELECT l.id, l.name, l.email, l.phone, d.role, d.id as director_id
+      FROM directors d
+      JOIN landlords l ON d.landlord_id = l.id
+      WHERE d.name = ?
+      ORDER BY l.name
+    `).all(landlord.name);
+
+    res.json(companies);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch director relationships' });
+  }
+});
+
+// ============ PROPERTY LANDLORDS (Many-to-Many) ============
+
+// Get all landlords for a property
+app.get('/api/properties/:propertyId/landlords', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const landlords = db.prepare(`
+      SELECT l.*, pl.is_primary, pl.ownership_percentage, pl.ownership_entity_type, pl.id as link_id
+      FROM property_landlords pl
+      JOIN landlords l ON pl.landlord_id = l.id
+      WHERE pl.property_id = ?
+      ORDER BY pl.is_primary DESC, l.name
+    `).all(req.params.propertyId);
+    res.json(landlords);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch property landlords' });
+  }
+});
+
+// Add landlord to property
+app.post('/api/properties/:propertyId/landlords', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { landlord_id, is_primary, ownership_percentage, ownership_entity_type } = req.body;
+
+    // If setting as primary, unset other primary landlords
+    if (is_primary) {
+      db.prepare('UPDATE property_landlords SET is_primary = 0 WHERE property_id = ?').run(req.params.propertyId);
+    }
+
+    const stmt = db.prepare(`
+      INSERT INTO property_landlords (property_id, landlord_id, is_primary, ownership_percentage, ownership_entity_type)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      req.params.propertyId,
+      landlord_id,
+      is_primary ? 1 : 0,
+      ownership_percentage || null,
+      ownership_entity_type || 'individual'
+    );
+
+    logAudit(req.user?.id, req.user?.email, 'create', 'property_landlord', result.lastInsertRowid as number, { property_id: req.params.propertyId, landlord_id });
+    res.json({ id: result.lastInsertRowid, success: true });
+  } catch (err: any) {
+    if (err.message && err.message.includes('UNIQUE')) {
+      res.status(400).json({ error: 'This landlord is already linked to this property' });
+    } else {
+      res.status(500).json({ error: 'Failed to add landlord to property' });
+    }
+  }
+});
+
+// Update property landlord link (e.g., change primary status)
+app.put('/api/property-landlords/:linkId', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { is_primary, ownership_percentage, ownership_entity_type } = req.body;
+    const link = db.prepare('SELECT * FROM property_landlords WHERE id = ?').get(req.params.linkId) as any;
+
+    if (!link) return res.status(404).json({ error: 'Link not found' });
+
+    // If setting as primary, unset other primary landlords for this property
+    if (is_primary) {
+      db.prepare('UPDATE property_landlords SET is_primary = 0 WHERE property_id = ?').run(link.property_id);
+    }
+
+    db.prepare(`
+      UPDATE property_landlords
+      SET is_primary = ?, ownership_percentage = ?, ownership_entity_type = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(is_primary ? 1 : 0, ownership_percentage || null, ownership_entity_type || 'individual', req.params.linkId);
+
+    logAudit(req.user?.id, req.user?.email, 'update', 'property_landlord', parseInt(req.params.linkId), { is_primary, ownership_percentage, ownership_entity_type });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update property landlord link' });
+  }
+});
+
+// Remove landlord from property
+app.delete('/api/property-landlords/:linkId', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    db.prepare('DELETE FROM property_landlords WHERE id = ?').run(req.params.linkId);
+    logAudit(req.user?.id, req.user?.email, 'delete', 'property_landlord', parseInt(req.params.linkId));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to remove landlord from property' });
   }
 });
 
@@ -624,6 +913,199 @@ app.get('/api/public/properties', (req, res) => {
   } catch (err) {
     console.error('Error fetching public properties:', err);
     res.status(500).json({ error: 'Failed to fetch properties' });
+  }
+});
+
+// PUBLIC ENDPOINT - No authentication required
+// This endpoint receives submissions from the Fleming Lettings public landlord enquiry form
+app.post('/api/public/landlord-enquiries', async (req, res) => {
+  try {
+    const {
+      // Registration type
+      registration_type,
+      // Applicant 1
+      firstName,
+      surname,
+      address,
+      postcode,
+      yearsAtAddress,
+      dob,
+      nationality,
+      email,
+      phone,
+      // Applicant 2 (if joint)
+      firstName2,
+      surname2,
+      address2,
+      postcode2,
+      yearsAtAddress2,
+      dob2,
+      nationality2,
+      email2,
+      phone2,
+      // Property details
+      propertyAddress,
+      propertyPostcode,
+      bedrooms,
+      offroadParking,
+      alreadyLet,
+      mortgageAttached,
+      // If already let
+      tenancyType,
+      currentManagement,
+      lengthOfLet,
+      monthlyRentalIncome,
+      consideringRentIncrease,
+      newRentAmount,
+      // Property info
+      ownershipStructure,
+      propertyCondition,
+      lookingForNewTenant,
+      newTenantReason,
+      // Compliance
+      epcCertificate,
+      eicrCertificate,
+      gasCertificate,
+      // Additional
+      additionalNotes,
+      marketingConsent
+    } = req.body;
+
+    // Validation
+    if (!firstName || !surname || !email || !phone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: First Name, Surname, Email, and Phone are required'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email address'
+      });
+    }
+
+    // Check for duplicate submissions (within last 24 hours)
+    const recentSubmission = db.prepare(`
+      SELECT id FROM landlords_bdm
+      WHERE email = ?
+      AND created_at > datetime('now', '-24 hours')
+      LIMIT 1
+    `).get(email);
+
+    if (recentSubmission) {
+      return res.status(409).json({
+        success: false,
+        error: 'A recent enquiry with this email already exists. Please contact us if you need to update your details.'
+      });
+    }
+
+    // Determine if joint application
+    const is_joint = registration_type === 'Joint' ? 1 : 0;
+
+    // Build comprehensive notes field
+    let notes = '';
+
+    // Personal details
+    notes += `=== LANDLORD DETAILS ===\n`;
+    notes += `Registration Type: ${registration_type}\n`;
+    notes += `Name: ${firstName} ${surname}\n`;
+    notes += `Address: ${address}, ${postcode}\n`;
+    notes += `Years at Address: ${yearsAtAddress}\n`;
+    notes += `Date of Birth: ${dob}\n`;
+    notes += `Nationality: ${nationality}\n`;
+    notes += `Contact: ${email} | ${phone}\n\n`;
+
+    if (is_joint) {
+      notes += `=== JOINT APPLICANT ===\n`;
+      notes += `Name: ${firstName2} ${surname2}\n`;
+      notes += `Address: ${address2}, ${postcode2}\n`;
+      notes += `Years at Address: ${yearsAtAddress2}\n`;
+      notes += `Date of Birth: ${dob2}\n`;
+      notes += `Nationality: ${nationality2}\n`;
+      notes += `Contact: ${email2} | ${phone2}\n\n`;
+    }
+
+    // Property details
+    notes += `=== PROPERTY DETAILS ===\n`;
+    notes += `Address: ${propertyAddress}, ${propertyPostcode}\n`;
+    notes += `Bedrooms: ${bedrooms}\n`;
+    notes += `Offroad Parking: ${offroadParking}\n`;
+    notes += `Already Let: ${alreadyLet}\n`;
+    notes += `Mortgage Attached: ${mortgageAttached}\n`;
+    notes += `Ownership Structure: ${ownershipStructure}\n`;
+    notes += `Property Condition: ${propertyCondition}\n\n`;
+
+    if (alreadyLet === 'Yes') {
+      notes += `=== CURRENT TENANCY ===\n`;
+      notes += `Tenancy Type: ${tenancyType}\n`;
+      notes += `Current Management: ${currentManagement}\n`;
+      notes += `Length of Let: ${lengthOfLet} months\n`;
+      notes += `Monthly Rental Income: £${monthlyRentalIncome}\n`;
+      notes += `Considering Rent Increase: ${consideringRentIncrease}\n`;
+      if (consideringRentIncrease === 'Yes' && newRentAmount) {
+        notes += `New Rent Amount: £${newRentAmount}\n`;
+      }
+      notes += `\n`;
+    }
+
+    notes += `=== TENANT SOURCING ===\n`;
+    notes += `Looking for New Tenant: ${lookingForNewTenant}\n`;
+    if (lookingForNewTenant === 'Yes' && newTenantReason) {
+      notes += `Reason: ${newTenantReason}\n`;
+    }
+    notes += `\n`;
+
+    notes += `=== COMPLIANCE CERTIFICATES ===\n`;
+    notes += `EPC: ${epcCertificate}\n`;
+    notes += `EICR: ${eicrCertificate}\n`;
+    notes += `Gas Safety: ${gasCertificate}\n\n`;
+
+    if (additionalNotes) {
+      notes += `=== ADDITIONAL NOTES ===\n`;
+      notes += `${additionalNotes}\n\n`;
+    }
+
+    notes += `=== MARKETING ===\n`;
+    notes += `Marketing Consent: ${marketingConsent === 'on' ? 'Yes' : 'No'}\n`;
+
+    // Get client IP for audit
+    const client_ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    notes += `\nForm submitted from IP: ${client_ip}\n`;
+    notes += `Submission date: ${new Date().toISOString()}\n`;
+
+    // Insert into landlords_bdm table
+    const result = db.prepare(`
+      INSERT INTO landlords_bdm (
+        name, email, phone, address, status, source, notes, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(
+      `${firstName} ${surname}`,
+      email,
+      phone,
+      `${address}, ${postcode}`,
+      'new',
+      'Website Enquiry Form',
+      notes
+    );
+
+    console.log(`[LANDLORD ENQUIRY] New submission from ${firstName} ${surname} (${email})`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Landlord enquiry submitted successfully',
+      enquiry_id: result.lastInsertRowid
+    });
+
+  } catch (error) {
+    console.error('[LANDLORD ENQUIRY ERROR]', error);
+    res.status(500).json({
+      success: false,
+      error: 'An error occurred while processing your enquiry. Please try again or contact us directly.'
+    });
   }
 });
 
@@ -1270,6 +1752,39 @@ app.post('/api/properties', authMiddleware, (req: AuthRequest, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to create property' });
+  }
+});
+
+// Link property to landlord via junction table
+app.post('/api/property-landlords', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { property_id, landlord_id, is_primary, ownership_percentage, ownership_entity_type } = req.body;
+
+    const stmt = db.prepare(`
+      INSERT INTO property_landlords (property_id, landlord_id, is_primary, ownership_percentage, ownership_entity_type)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      property_id,
+      landlord_id,
+      is_primary ? 1 : 0,
+      ownership_percentage || null,
+      ownership_entity_type || 'individual'
+    );
+
+    logAudit(req.user?.id, req.user?.email, 'create', 'property_landlord_link', result.lastInsertRowid as number, {
+      property_id,
+      landlord_id,
+      ownership_entity_type
+    });
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (err: any) {
+    console.error(err);
+    if (err.message?.includes('UNIQUE constraint failed')) {
+      res.status(400).json({ error: 'This property is already linked to this landlord' });
+    } else {
+      res.status(500).json({ error: 'Failed to link property to landlord' });
+    }
   }
 });
 

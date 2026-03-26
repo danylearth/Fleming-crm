@@ -7,11 +7,12 @@ import ActivityTimeline from '../components/v3/ActivityTimeline';
 import AddressAutocomplete from '../components/v3/AddressAutocomplete';
 import RentPayments from '../components/v3/RentPayments';
 import { useApi } from '../hooks/useApi';
+import { useAuth } from '../context/AuthContext';
 import { getPropertyImage } from '../utils/propertyImages';
 import {
   Building2, Bed, PoundSterling, MapPin, User, Users,
   CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
-  AlertTriangle, ShieldCheck, FileText, Plus, Wrench, Trash2
+  AlertTriangle, ShieldCheck, FileText, Plus, Wrench, Trash2, StickyNote
 } from 'lucide-react';
 
 interface PropertyDetail {
@@ -35,6 +36,7 @@ interface PropertyDetail {
   eicr_expiry_date: string | null; epc_expiry_date: string | null;
   gas_safety_expiry_date: string | null; has_gas: number;
   notes: string | null;
+  amenities: string | null;
 }
 
 interface Task {
@@ -54,6 +56,17 @@ interface Expense {
 
 interface User {
   id: number; name: string; email: string; role: string;
+}
+
+interface PropertyLandlord {
+  id: number; name: string; email: string; phone: string;
+  link_id: number; is_primary: number; ownership_percentage: number | null;
+  ownership_entity_type: 'individual' | 'company';
+}
+
+interface Landlord {
+  id: number; name: string; email: string; phone: string;
+  company_number?: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -105,6 +118,7 @@ export default function PropertyDetailV3() {
   const { id } = useParams();
   const api = useApi();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [property, setProperty] = useState<PropertyDetail | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
@@ -126,6 +140,34 @@ export default function PropertyDetailV3() {
     task_type: 'manual'
   });
 
+  // Landlords state
+  const [propertyLandlords, setPropertyLandlords] = useState<PropertyLandlord[]>([]);
+  const [allLandlords, setAllLandlords] = useState<Landlord[]>([]);
+  const [showAddLandlord, setShowAddLandlord] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ type: 'add' | 'remove' | 'setPrimary'; data: any } | null>(null);
+  const [landlordSearch, setLandlordSearch] = useState('');
+  const [selectedLandlordId, setSelectedLandlordId] = useState<number | null>(null);
+  const [ownershipEntityType, setOwnershipEntityType] = useState<'individual' | 'company'>('individual');
+
+  // Notes state
+  const [notes, setNotes] = useState<{ id: string; text: string; author: string; created_at: string }[]>([]);
+  const [landlordNotes, setLandlordNotes] = useState<{ id: string; text: string; author: string; created_at: string }[]>([]);
+  const [notesFilter, setNotesFilter] = useState<'property' | 'landlord'>('property');
+  const [notesInput, setNotesInput] = useState('');
+
+  // Tenant state
+  const [allTenants, setAllTenants] = useState<any[]>([]);
+  const [showTenantModal, setShowTenantModal] = useState(false);
+  const [tenantModalMode, setTenantModalMode] = useState<'select' | 'create'>('select');
+  const [tenantSearch, setTenantSearch] = useState('');
+  const [newTenantForm, setNewTenantForm] = useState({
+    first_name_1: '',
+    last_name_1: '',
+    email_1: '',
+    phone_1: '',
+  });
+
   const populateForm = (p: PropertyDetail) => setForm({
     landlord_id: p.landlord_id, address: p.address || '', postcode: p.postcode || '',
     rent_amount: String(p.rent_amount || ''), bedrooms: String(p.bedrooms || ''),
@@ -141,23 +183,47 @@ export default function PropertyDetailV3() {
     tenancy_end_date: p.tenancy_end_date || '',
     eicr_expiry_date: p.eicr_expiry_date || '', epc_expiry_date: p.epc_expiry_date || '',
     has_gas: !!p.has_gas, gas_safety_expiry_date: p.gas_safety_expiry_date || '',
+    amenities: p.amenities || '',
   });
+
+  const parseNotes = (raw: string | null) => {
+    try { return JSON.parse(raw || '[]'); } catch { return raw ? [{ id: '1', text: raw, author: 'System', created_at: '' }] : []; }
+  };
 
   const loadDetail = async () => {
     try {
-      const [prop, tks, maint, exps, usrs] = await Promise.all([
+      const [prop, tks, maint, exps, usrs, propLandlords, landlords, tenants] = await Promise.all([
         api.get(`/api/properties/${id}`),
         api.get('/api/tasks').catch(() => []),
         api.get('/api/maintenance').catch(() => []),
         api.get(`/api/property-expenses/${id}`).catch(() => []),
         api.get('/api/users').catch(() => []),
+        api.get(`/api/properties/${id}/landlords`).catch(() => []),
+        api.get('/api/landlords').catch(() => []),
+        api.get('/api/tenants').catch(() => []),
       ]);
       setProperty(prop);
       populateForm(prop);
+      setPropertyLandlords(propLandlords);
+      setAllLandlords(landlords);
+      setAllTenants(Array.isArray(tenants) ? tenants : []);
       setTasks(Array.isArray(tks) ? tks : []);
       setMaintenance(Array.isArray(maint) ? maint.filter((m: MaintenanceRecord) => m.property_id === Number(id)) : []);
       setExpenses(Array.isArray(exps) ? exps : []);
       setUsers(Array.isArray(usrs) ? usrs : []);
+
+      // Parse property notes
+      setNotes(parseNotes(prop.notes));
+
+      // Fetch landlord notes if we have a landlord
+      if (prop.landlord_id) {
+        try {
+          const landlord = await api.get(`/api/landlords/${prop.landlord_id}`);
+          setLandlordNotes(parseNotes(landlord.notes));
+        } catch (e) {
+          setLandlordNotes([]);
+        }
+      }
     } catch {}
   };
 
@@ -179,7 +245,10 @@ export default function PropertyDetailV3() {
       setProperty(updated);
       populateForm(updated);
       setEditing(false);
-    } catch (e) { console.error(e); }
+    } catch (e: any) {
+      console.error('Save error:', e);
+      alert(`Failed to save: ${e.response?.data?.error || e.message || 'Unknown error'}`);
+    }
     setSaving(false);
   };
 
@@ -211,11 +280,20 @@ export default function PropertyDetailV3() {
 
   const addTask = async () => {
     try {
-      await api.post('/api/tasks', {
+      console.log('Creating task with data:', {
         ...taskForm,
         entity_type: 'property',
         entity_id: property?.id
       });
+
+      const response = await api.post('/api/tasks', {
+        ...taskForm,
+        entity_type: 'property',
+        entity_id: property?.id
+      });
+
+      console.log('Task created successfully:', response);
+
       // Reload all property data including the new task
       await loadDetail();
       // Reset form and close modal
@@ -228,9 +306,128 @@ export default function PropertyDetailV3() {
         task_type: 'manual'
       });
       setShowAddTask(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create task:', err);
-      alert('Failed to create task');
+      console.error('Error response:', err.response?.data);
+      alert(`Failed to create task: ${err.response?.data?.error || err.message || 'Unknown error'}`);
+    }
+  };
+
+  const addNote = async () => {
+    if (!notesInput.trim() || !property) return;
+    const noteText = notesInput.trim();
+    const newNote = { id: Date.now().toString(), text: noteText, author: user?.email || 'Unknown', created_at: new Date().toISOString() };
+    setNotesInput('');
+
+    try {
+      if (notesFilter === 'property') {
+        // Add note to property
+        const updated = [...notes, newNote];
+        await api.put(`/api/properties/${id}`, { notes: JSON.stringify(updated) });
+        api.post('/api/activity', { action: 'note_added', entity_type: 'property', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
+      } else if (property.landlord_id) {
+        // Add note to landlord
+        const updated = [...landlordNotes, newNote];
+        await api.put(`/api/landlords/${property.landlord_id}`, { notes: JSON.stringify(updated) });
+        api.post('/api/activity', { action: 'note_added', entity_type: 'landlord', entity_id: property.landlord_id, changes: { text: noteText } }).catch(() => {});
+      }
+      await loadDetail();
+    } catch (e) { console.error(e); }
+  };
+
+  // Landlord management handlers
+  const handleAddLandlord = (landlordId: number) => {
+    setPendingAction({ type: 'add', data: { landlordId, ownershipEntityType } });
+    setShowConfirmModal(true);
+  };
+
+  const handleRemoveLandlord = (linkId: number, landlordName: string) => {
+    setPendingAction({ type: 'remove', data: { linkId, landlordName } });
+    setShowConfirmModal(true);
+  };
+
+  const handleSetPrimary = (linkId: number, landlordName: string) => {
+    setPendingAction({ type: 'setPrimary', data: { linkId, landlordName } });
+    setShowConfirmModal(true);
+  };
+
+  const confirmAction = async () => {
+    if (!pendingAction) return;
+
+    try {
+      if (pendingAction.type === 'add') {
+        await api.post(`/api/properties/${id}/landlords`, {
+          landlord_id: pendingAction.data.landlordId,
+          is_primary: propertyLandlords.length === 0 ? 1 : 0,
+          ownership_entity_type: pendingAction.data.ownershipEntityType
+        });
+      } else if (pendingAction.type === 'remove') {
+        await api.delete(`/api/property-landlords/${pendingAction.data.linkId}`);
+      } else if (pendingAction.type === 'setPrimary') {
+        await api.put(`/api/property-landlords/${pendingAction.data.linkId}`, {
+          is_primary: 1
+        });
+      }
+
+      await loadDetail();
+      setShowConfirmModal(false);
+      setShowAddLandlord(false);
+      setPendingAction(null);
+      setSelectedLandlordId(null);
+      setLandlordSearch('');
+      setOwnershipEntityType('individual'); // Reset to default
+    } catch (err: any) {
+      console.error('Failed to manage landlord:', err);
+      alert(err.response?.data?.error || 'Failed to update property landlords');
+    }
+  };
+
+  // Tenant management handlers
+  const handleLinkTenant = async (tenantId: number) => {
+    try {
+      await api.put(`/api/properties/${id}`, {
+        tenant_id: tenantId
+      });
+      await loadDetail();
+      setShowTenantModal(false);
+      setTenantSearch('');
+    } catch (err: any) {
+      console.error('Failed to link tenant:', err);
+      alert(err.response?.data?.error || 'Failed to link tenant to property');
+    }
+  };
+
+  const handleCreateAndLinkTenant = async () => {
+    try {
+      // Create new tenant
+      const newTenant = await api.post('/api/tenants', newTenantForm);
+      // Link to property
+      await api.put(`/api/properties/${id}`, {
+        tenant_id: newTenant.id
+      });
+      await loadDetail();
+      setShowTenantModal(false);
+      setNewTenantForm({
+        first_name_1: '',
+        last_name_1: '',
+        email_1: '',
+        phone_1: '',
+      });
+    } catch (err: any) {
+      console.error('Failed to create tenant:', err);
+      alert(err.response?.data?.error || 'Failed to create tenant');
+    }
+  };
+
+  const handleRemoveTenant = async () => {
+    try {
+      await api.put(`/api/properties/${id}`, {
+        tenant_id: null
+      });
+      await loadDetail();
+    } catch (err: any) {
+      console.error('Failed to remove tenant:', err);
+      alert(err.response?.data?.error || 'Failed to remove tenant');
     }
   };
 
@@ -270,31 +467,31 @@ export default function PropertyDetailV3() {
 
   return (
     <V3Layout title="" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: property.address }]}>
-      <div className="p-4 md:p-6 space-y-6 max-w-7xl">
+      <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         {/* Hero */}
-        <div className="relative h-40 md:h-56 rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
+        <div className="relative h-48 sm:h-56 md:h-64 rounded-xl sm:rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
           <img src={getPropertyImage(property.id, 1200, 400)} alt={property.address}
             className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
-          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/60 to-transparent">
+          <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-t from-black/70 to-transparent">
             <div className="flex items-center gap-2 mb-1">
-              <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusColor}`}>{statusLbl}</span>
+              <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full border font-medium ${statusColor}`}>{statusLbl}</span>
             </div>
-            <h1 className="text-2xl font-bold text-white">{property.address}</h1>
-            <p className="text-white/60 text-sm">{property.postcode}</p>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white line-clamp-1">{property.address}</h1>
+            <p className="text-white/60 text-xs sm:text-sm">{property.postcode}</p>
           </div>
-          <div className="absolute top-4 right-4 flex gap-2">
+          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex gap-2">
             {editing ? (
               <>
-                <Button variant="ghost" size="sm" onClick={cancelEdit} className="bg-black/40 backdrop-blur-sm text-white">
-                  <X size={14} className="mr-1" /> Cancel
+                <Button variant="ghost" size="sm" onClick={cancelEdit} className="bg-black/40 backdrop-blur-sm text-white text-xs sm:text-sm">
+                  <X size={14} className="mr-0 sm:mr-1" /> <span className="hidden sm:inline">Cancel</span>
                 </Button>
-                <Button variant="gradient" size="sm" onClick={handleSave} disabled={saving}>
-                  <Save size={14} className="mr-1" /> {saving ? 'Saving...' : 'Save'}
+                <Button variant="gradient" size="sm" onClick={handleSave} disabled={saving} className="text-xs sm:text-sm">
+                  <Save size={14} className="mr-0 sm:mr-1" /> <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save'}</span>
                 </Button>
               </>
             ) : (
-              <Button variant="ghost" size="sm" onClick={() => setEditing(true)} className="bg-black/40 backdrop-blur-sm text-white">
-                <Pencil size={14} className="mr-1" /> Edit
+              <Button variant="ghost" size="sm" onClick={() => setEditing(true)} className="bg-black/40 backdrop-blur-sm text-white text-xs sm:text-sm">
+                <Pencil size={14} className="mr-0 sm:mr-1" /> <span className="hidden sm:inline">Edit</span>
               </Button>
             )}
           </div>
@@ -304,44 +501,97 @@ export default function PropertyDetailV3() {
           {/* LEFT COLUMN — 2/3 */}
           <div className="lg:col-span-2 space-y-6">
             {/* Details */}
-            <GlassCard className="p-6">
+            <GlassCard className="p-4 sm:p-6">
               <SectionHeader title="Details" />
               {editing ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <AddressAutocomplete label="Address" value={form.address} onChange={(v: string) => setForm({ ...form, address: v })}
-                    onSelect={p => { if (p.postcode) setForm(f => ({ ...f, postcode: p.postcode || f.postcode })); }} />
-                  <Input label="Postcode" value={form.postcode} onChange={(v: string) => setForm({ ...form, postcode: v })} />
-                  <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />
-                  <Select label="Type" value={form.property_type} onChange={(v: string) => setForm({ ...form, property_type: v })}
-                    options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
-                  <Input label="Bedrooms" value={form.bedrooms} onChange={(v: string) => setForm({ ...form, bedrooms: v })} />
-                  <Select label="Status" value={form.status} onChange={(v: string) => setForm({ ...form, status: v })}
-                    options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }]} />
-                </div>
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                    <AddressAutocomplete label="Address" value={form.address} onChange={(v: string) => setForm({ ...form, address: v })}
+                      onSelect={p => { if (p.postcode) setForm(f => ({ ...f, postcode: p.postcode || f.postcode })); }} />
+                    <Input label="Postcode" value={form.postcode} onChange={(v: string) => setForm({ ...form, postcode: v })} />
+                    <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />
+                    <Select label="Type" value={form.property_type} onChange={(v: string) => setForm({ ...form, property_type: v })}
+                      options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
+                    <Input label="Bedrooms" value={form.bedrooms} onChange={(v: string) => setForm({ ...form, bedrooms: v })} />
+                    <Select label="Status" value={form.status} onChange={(v: string) => setForm({ ...form, status: v })}
+                      options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }]} />
+                  </div>
+                  <div className="mt-4">
+                    <label className="block text-xs font-medium text-[var(--text-secondary)] mb-2">
+                      Amenities & Features
+                    </label>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {['Garden', 'Driveway', 'Parking', 'Garage', 'Balcony', 'Patio', 'Furnished', 'Part Furnished', 'Dishwasher', 'Washing Machine', 'Dryer', 'WiFi', 'Central Heating', 'Double Glazing', 'Security Alarm', 'EV Charging', 'Pets Allowed', 'Storage'].map((amenity) => {
+                        const isSelected = form.amenities?.toLowerCase().includes(amenity.toLowerCase());
+                        return (
+                          <button
+                            key={amenity}
+                            type="button"
+                            onClick={() => {
+                              const currentAmenities = form.amenities || '';
+                              if (isSelected) {
+                                // Remove the amenity
+                                const regex = new RegExp(`\\b${amenity}\\b,?\\s*`, 'gi');
+                                const updated = currentAmenities.replace(regex, '').replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '').trim();
+                                setForm({ ...form, amenities: updated });
+                              } else {
+                                // Add the amenity
+                                const updated = currentAmenities ? `${currentAmenities}, ${amenity}` : amenity;
+                                setForm({ ...form, amenities: updated });
+                              }
+                            }}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
+                              isSelected
+                                ? 'bg-[var(--accent-orange)]/15 border-[var(--accent-orange)]/50 text-[var(--accent-orange)]'
+                                : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-[var(--accent-orange)]/30'
+                            }`}
+                          >
+                            {amenity}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <textarea
+                      value={form.amenities || ''}
+                      onChange={(e) => setForm({ ...form, amenities: e.target.value })}
+                      placeholder="Add custom amenities or features..."
+                      className="w-full px-3 py-2 text-sm bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--accent)] resize-none"
+                      rows={2}
+                    />
+                  </div>
+                </>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <ReadField label="Type" value={<span className="capitalize">{property.property_type}</span>} />
-                  <ReadField label="Bedrooms" value={String(property.bedrooms)} />
-                  <ReadField label="Rent" value={`£${property.rent_amount?.toLocaleString()}/mo`} />
-                  <ReadField label="Postcode" value={property.postcode} />
-                  <ReadField label="Status" value={
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusColor}`}>{statusLbl}</span>
-                  } />
-                </div>
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                    <ReadField label="Type" value={<span className="capitalize">{property.property_type}</span>} />
+                    <ReadField label="Bedrooms" value={String(property.bedrooms)} />
+                    <ReadField label="Rent" value={`£${property.rent_amount?.toLocaleString()}/mo`} />
+                    <ReadField label="Postcode" value={property.postcode} />
+                    <ReadField label="Status" value={
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusColor}`}>{statusLbl}</span>
+                    } />
+                  </div>
+                  {property.amenities && (
+                    <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+                      <p className="text-xs text-[var(--text-muted)] mb-1.5">Amenities & Features</p>
+                      <p className="text-sm whitespace-pre-wrap">{property.amenities}</p>
+                    </div>
+                  )}
+                </>
               )}
             </GlassCard>
 
             {/* Management */}
-            <GlassCard className="p-6">
+            <GlassCard className="p-4 sm:p-6">
               <SectionHeader title="Management" />
               {editing ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   <Select label="Service Type" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v })}
                     options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
                   <Input label="Charge (%)" value={form.charge_percentage} onChange={(v: string) => setForm({ ...form, charge_percentage: v })} placeholder="e.g. 10" />
                   <Input label="Total Charge (£)" value={form.total_charge} onChange={(v: string) => setForm({ ...form, total_charge: v })} />
                   <Select label="Council Tax Band" value={form.council_tax_band} onChange={(v: string) => setForm({ ...form, council_tax_band: v })}
-                    options={[{ value: '', label: 'Select...' }, ...['A','B','C','D','E','F','G','H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
+                    options={[{ value: '', label: 'Select...' }, { value: 'TBC', label: 'TBC' }, ...['A','B','C','D','E','F','G','H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
                   <Select label="EPC Grade" value={form.epc_grade} onChange={(v: string) => setForm({ ...form, epc_grade: v })}
                     options={[{ value: '', label: 'Select...' }, ...['A','B','C','D','E','F','G'].map(g => ({ value: g, label: `Grade ${g}` }))]} />
                   {form.postcode && (
@@ -406,7 +656,7 @@ export default function PropertyDetailV3() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                   <ReadField label="Service Type" value={
                     property.service_type === 'full_management' ? 'Full Management' :
                     property.service_type === 'rent_collection' ? 'Rent Collection' :
@@ -430,17 +680,17 @@ export default function PropertyDetailV3() {
 
             {/* Leasehold (conditional) */}
             {(editing ? form.is_leasehold : property.is_leasehold) ? (
-              <GlassCard className="p-6">
+              <GlassCard className="p-4 sm:p-6">
                 <SectionHeader title="Leasehold" />
                 {editing ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <Toggle label="Leasehold Property" checked={form.is_leasehold} onChange={v => setForm({ ...form, is_leasehold: v })} />
                     <DatePicker label="Lease Start" value={form.leasehold_start_date} onChange={(v: string) => setForm({ ...form, leasehold_start_date: v })} />
                     <DatePicker label="Lease End" value={form.leasehold_end_date} onChange={(v: string) => setForm({ ...form, leasehold_end_date: v })} />
                     <Input label="Leaseholder Info" value={form.leaseholder_info} onChange={(v: string) => setForm({ ...form, leaseholder_info: v })} className="col-span-full" />
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                     <ReadField label="Lease Start" value={formatDate(property.leasehold_start_date)} />
                     <ReadField label="Lease End" value={formatDate(property.leasehold_end_date)} />
                     <ReadField label="Leaseholder Info" value={property.leaseholder_info} />
@@ -455,19 +705,58 @@ export default function PropertyDetailV3() {
 
             {/* Current Tenancy (hidden if to_let) */}
             {!isToLet && (
-              <GlassCard className="p-6">
-                <SectionHeader title="Current Tenancy" />
-                {editing ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <Toggle label="Live Tenancy" checked={form.has_live_tenancy} onChange={v => setForm({ ...form, has_live_tenancy: v })} />
-                    <Select label="Tenancy Type" value={form.tenancy_type} onChange={(v: string) => setForm({ ...form, tenancy_type: v })}
-                      options={[{ value: '', label: 'Select...' }, { value: 'AST', label: 'AST' }, { value: 'HMO', label: 'HMO' }, { value: 'Rolling', label: 'Rolling' }, { value: 'Other', label: 'Other' }]} />
-                    <DatePicker label="Start Date" value={form.tenancy_start_date} onChange={(v: string) => setForm({ ...form, tenancy_start_date: v })} />
-                    <Toggle label="Has End Date" checked={form.has_end_date} onChange={v => setForm({ ...form, has_end_date: v })} />
-                    {form.has_end_date && <DatePicker label="End Date" value={form.tenancy_end_date} onChange={(v: string) => setForm({ ...form, tenancy_end_date: v })} />}
+              <GlassCard className="p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
+                  <SectionHeader title="Current Tenancy" />
+                  {!editing && !property.current_tenant && (
+                    <Button variant="outline" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('select'); }}>
+                      <Plus size={14} className="mr-1.5" /> <span className="hidden sm:inline">Add Tenant</span><span className="sm:hidden">Add</span>
+                    </Button>
+                  )}
+                  {!editing && property.current_tenant && (
+                    <Button variant="ghost" size="sm" onClick={handleRemoveTenant} className="text-red-400 hover:text-red-300">
+                      <Trash2 size={14} className="mr-1.5" /> <span className="hidden sm:inline">Remove</span>
+                    </Button>
+                  )}
+                </div>
+                {property.current_tenant && !editing && (
+                  <div className="mb-4 p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={property.current_tenant} size="md" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{property.current_tenant}</p>
+                        <p className="text-xs text-[var(--text-muted)]">Current Tenant</p>
+                      </div>
+                      <button
+                        onClick={() => (property.current_tenant_id || property.tenant_id) && navigate(`/v3/tenants/${property.current_tenant_id || property.tenant_id}`)}
+                        className="text-xs text-[var(--accent-orange)] hover:underline"
+                      >
+                        View
+                      </button>
+                    </div>
                   </div>
+                )}
+                {editing ? (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                      <Toggle label="Live Tenancy" checked={form.has_live_tenancy} onChange={v => setForm({ ...form, has_live_tenancy: v })} />
+                      <Select label="Tenancy Type" value={form.tenancy_type} onChange={(v: string) => setForm({ ...form, tenancy_type: v })}
+                        options={[{ value: '', label: 'Select...' }, { value: 'AST', label: 'AST' }, { value: 'HMO', label: 'HMO' }, { value: 'Rolling', label: 'Rolling' }, { value: 'Other', label: 'Other' }]} />
+                      <DatePicker label="Start Date" value={form.tenancy_start_date} onChange={(v: string) => setForm({ ...form, tenancy_start_date: v })} />
+                      <Toggle label="Has End Date" checked={form.has_end_date} onChange={v => setForm({ ...form, has_end_date: v })} />
+                      {form.has_end_date && <DatePicker label="End Date" value={form.tenancy_end_date} onChange={(v: string) => setForm({ ...form, tenancy_end_date: v })} />}
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+                      <h3 className="text-sm font-semibold mb-3 text-[var(--text-secondary)]">Compliance Certificates</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                        <DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={(v: string) => setForm({ ...form, eicr_expiry_date: v })} />
+                        <DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={(v: string) => setForm({ ...form, epc_expiry_date: v })} />
+                        {form.has_gas && <DatePicker label="Gas Safety Expiry Date" value={form.gas_safety_expiry_date} onChange={(v: string) => setForm({ ...form, gas_safety_expiry_date: v })} />}
+                      </div>
+                    </div>
+                  </>
                 ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                     <ReadField label="Tenancy Type" value={property.tenancy_type} />
                     <ReadField label="Start Date" value={formatDate(property.tenancy_start_date)} />
                     {property.has_end_date ? <ReadField label="End Date" value={formatDate(property.tenancy_end_date)} /> : null}
@@ -489,7 +778,7 @@ export default function PropertyDetailV3() {
             )}
 
             {/* Tasks */}
-            <Card className="p-6">
+            <Card className="p-4 sm:p-6">
               <SectionHeader
                 title="Tasks"
                 action={() => setShowAddTask(true)}
@@ -518,12 +807,16 @@ export default function PropertyDetailV3() {
             </Card>
 
             {/* Maintenance */}
-            <Card className="p-6">
-              <SectionHeader title="Maintenance" action={() => navigate('/v3/maintenance')} actionLabel="View All" />
+            <Card className="p-4 sm:p-6">
+              <SectionHeader title="Maintenance" />
               {maintenance.length ? (
                 <div className="space-y-2">
                   {maintenance.slice(0, 5).map(m => (
-                    <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors">
+                    <div
+                      key={m.id}
+                      onClick={() => navigate(`/v3/maintenance/${m.id}`)}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+                    >
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
                         m.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
                         m.status === 'in_progress' ? 'bg-blue-500/20 text-blue-400' :
@@ -536,6 +829,7 @@ export default function PropertyDetailV3() {
                         <p className="text-[10px] text-[var(--text-muted)]">{m.status === 'completed' ? 'Completed' : m.status === 'in_progress' ? 'In Progress' : 'Open'}</p>
                       </div>
                       <Tag>{m.priority}</Tag>
+                      <ChevronRight size={14} className="text-[var(--text-muted)]" />
                     </div>
                   ))}
                 </div>
@@ -545,7 +839,7 @@ export default function PropertyDetailV3() {
             </Card>
 
             {/* Expenses */}
-            <Card className="p-6">
+            <Card className="p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader title="Expenses" />
                 <Button variant="outline" size="sm" onClick={() => setShowExpenseForm(!showExpenseForm)}>
@@ -553,9 +847,9 @@ export default function PropertyDetailV3() {
                 </Button>
               </div>
               {showExpenseForm && (
-                <div className="mb-4 p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] space-y-3">
+                <div className="mb-4 p-3 sm:p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] space-y-3">
                   <Input label="Description" value={expenseForm.description} onChange={(v: string) => setExpenseForm(f => ({ ...f, description: v }))} placeholder="e.g. Boiler repair" />
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Input label="Amount (£)" value={expenseForm.amount} onChange={(v: string) => setExpenseForm(f => ({ ...f, amount: v }))} type="number" />
                     <Select label="Category" value={expenseForm.category} onChange={(v: string) => setExpenseForm(f => ({ ...f, category: v }))}
                       options={[{ value: 'maintenance', label: 'Maintenance' }, { value: 'insurance', label: 'Insurance' }, { value: 'legal', label: 'Legal' }, { value: 'service_charge', label: 'Service Charge' }, { value: 'other', label: 'Other' }]} />
@@ -612,9 +906,9 @@ export default function PropertyDetailV3() {
           </div>
 
           {/* RIGHT COLUMN — 1/3 */}
-          <div className="space-y-6">
+          <div className="lg:col-span-1 space-y-4 sm:space-y-6">
             {/* Compliance Overview */}
-            <Card className="p-6">
+            <Card className="p-4 sm:p-6">
               <SectionHeader title="Compliance" />
               <div className="flex justify-center mb-4">
                 <ProgressRing value={overallCompliance()} size={90} strokeWidth={7} />
@@ -628,7 +922,7 @@ export default function PropertyDetailV3() {
 
             {/* Compliance Reminders */}
             {reminders.length > 0 && (
-              <Card className="p-6 border-amber-500/30">
+              <Card className="p-4 sm:p-6 border-amber-500/30">
                 <div className="flex items-center gap-2 mb-3">
                   <AlertTriangle size={16} className="text-amber-400" />
                   <span className="text-sm font-semibold text-amber-400">Expiring Soon</span>
@@ -646,48 +940,69 @@ export default function PropertyDetailV3() {
               </Card>
             )}
 
-            {/* Landlord */}
-            <Card className="p-6">
-              <SectionHeader title="Landlord" />
-              {property.landlord_name ? (
-                <div onClick={() => property.landlord_id && navigate(`/v3/landlords/${property.landlord_id}`)}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                  <Avatar name={property.landlord_name} size="md" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{property.landlord_name}</p>
-                    <p className="text-xs text-[var(--text-muted)]">Landlord</p>
-                  </div>
-                  <ChevronRight size={16} className="text-[var(--text-muted)]" />
-                </div>
+            {/* Landlords */}
+            <Card className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
+                <SectionHeader title="Landlords" />
+                <Button variant="outline" size="sm" onClick={() => setShowAddLandlord(true)}>
+                  <Plus size={14} className="mr-1.5" /> <span className="hidden sm:inline">Add Landlord</span><span className="sm:hidden">Add</span>
+                </Button>
+              </div>
+              {propertyLandlords.length === 0 ? (
+                <EmptyState message="No landlords linked" />
               ) : (
-                <p className="text-sm text-[var(--text-muted)]">No landlord linked</p>
+                <div className="space-y-2">
+                  {propertyLandlords.map(landlord => (
+                    <div key={landlord.link_id}
+                      className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors group">
+                      <div
+                        onClick={() => navigate(`/v3/landlords/${landlord.id}`)}
+                        className="flex items-center gap-3 flex-1 cursor-pointer">
+                        <Avatar name={landlord.name} size="md" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium truncate">{landlord.name}</p>
+                            {landlord.is_primary === 1 && (
+                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 whitespace-nowrap">
+                                Primary
+                              </span>
+                            )}
+                            <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap ${
+                              landlord.ownership_entity_type === 'company'
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : 'bg-green-500/20 text-green-400'
+                            }`}>
+                              {landlord.ownership_entity_type === 'company' ? 'Limited Company' : 'Individual'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[var(--text-muted)]">{landlord.email || landlord.phone || 'Landlord'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {landlord.is_primary !== 1 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleSetPrimary(landlord.link_id, landlord.name)}
+                            className="text-xs"
+                          >
+                            Set Primary
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveLandlord(landlord.link_id, landlord.name)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </Card>
-
-            {/* Tenant (hidden if to_let) */}
-            {!isToLet && (
-              <Card className="p-6">
-                <SectionHeader title="Tenant" />
-                {property.current_tenant ? (
-                  <div onClick={() => (property.current_tenant_id || property.tenant_id) && navigate(`/v3/tenants/${property.current_tenant_id || property.tenant_id}`)}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                    <Avatar name={property.current_tenant} size="md" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{property.current_tenant}</p>
-                      <p className="text-xs text-[var(--text-muted)]">Current Tenant</p>
-                    </div>
-                    <ChevronRight size={16} className="text-[var(--text-muted)]" />
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-sm text-[var(--text-muted)]">No tenant assigned</p>
-                    <Button variant="outline" size="sm" onClick={() => navigate(`/v3/tenants?createFor=${property.id}`)}>
-                      <Plus size={14} className="mr-1.5" />Create Tenant
-                    </Button>
-                  </div>
-                )}
-              </Card>
-            )}
 
             {/* Land Registry Price Data */}
             {property.postcode && <PricePaidData postcode={property.postcode} />}
@@ -696,7 +1011,69 @@ export default function PropertyDetailV3() {
             <DocumentUpload entityType="property" entityId={property.id} />
 
             {/* Activity */}
-            <Card className="p-6">
+            {/* Notes */}
+            <Card className="p-4 sm:p-6">
+              <SectionHeader title="Notes" />
+
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-2 mb-4">
+                <button
+                  onClick={() => setNotesFilter('property')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    notesFilter === 'property'
+                      ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                      : 'bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                  }`}
+                >
+                  Property ({notes.length})
+                </button>
+                {property.landlord_id && (
+                  <button
+                    onClick={() => setNotesFilter('landlord')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      notesFilter === 'landlord'
+                        ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                        : 'bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    Landlord ({landlordNotes.length})
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {(notesFilter === 'property' ? notes : landlordNotes).length === 0 && (
+                  <p className="text-sm text-[var(--text-muted)]">No notes yet</p>
+                )}
+                {(notesFilter === 'property' ? notes : landlordNotes).map(n => (
+                  <div key={n.id} className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-[var(--bg-hover)] flex items-center justify-center shrink-0 mt-0.5">
+                      <StickyNote size={14} className="text-[var(--text-muted)]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm">{n.text}</p>
+                      <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                        {n.author}{n.created_at ? ` · ${new Date(n.created_at).toLocaleDateString()}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex gap-2 mt-2">
+                  <input
+                    value={notesInput}
+                    onChange={e => setNotesInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addNote()}
+                    placeholder={`Add a note to ${notesFilter}...`}
+                    className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/40 transition-colors"
+                  />
+                  <Button variant="gradient" onClick={addNote} disabled={!notesInput.trim()}>
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-4 sm:p-6">
               <SectionHeader title="Activity" />
               <ActivityTimeline entityType="property" entityId={property.id} />
             </Card>
@@ -705,13 +1082,13 @@ export default function PropertyDetailV3() {
 
         {/* Add Task Modal */}
         {showAddTask && (
-          <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-end md:items-center justify-center z-50" onClick={() => setShowAddTask(false)}>
-            <div className="bg-[var(--bg-card)] rounded-t-2xl md:rounded-2xl border border-[var(--border-input)] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold">Add Task for {property.address}</h3>
-                <button onClick={() => setShowAddTask(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+          <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setShowAddTask(false)}>
+            <div className="bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl border border-[var(--border-input)] w-full sm:max-w-[480px] max-h-[90vh] overflow-y-auto p-4 sm:p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4 sm:mb-5">
+                <h3 className="text-base sm:text-lg font-bold line-clamp-1 pr-2">Add Task for {property.address}</h3>
+                <button onClick={() => setShowAddTask(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0"><X size={18} /></button>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 <Input label="Title" value={taskForm.title} onChange={v => setTaskForm(p => ({...p, title: v}))} placeholder="Task title" />
                 <Input label="Description" value={taskForm.description} onChange={v => setTaskForm(p => ({...p, description: v}))} placeholder="Description..." />
                 <Select
@@ -750,6 +1127,261 @@ export default function PropertyDetailV3() {
                   <Button variant="ghost" onClick={() => setShowAddTask(false)}>Cancel</Button>
                   <Button variant="gradient" onClick={addTask} disabled={!taskForm.title}>Add Task</Button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Landlord Modal */}
+        {showAddLandlord && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowAddLandlord(false)}>
+            <div className="bg-[var(--bg-elevated)] rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="sticky top-0 bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)] px-6 py-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Add Landlord to Property</h2>
+                <button onClick={() => setShowAddLandlord(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+                    Ownership Type
+                  </label>
+                  <div className="flex items-center gap-1 bg-[var(--bg-input)] rounded-xl p-1 border border-[var(--border-input)] mb-4">
+                    <button
+                      type="button"
+                      onClick={() => setOwnershipEntityType('individual')}
+                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        ownershipEntityType === 'individual'
+                          ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                          : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                      }`}>
+                      Individual
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOwnershipEntityType('company')}
+                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        ownershipEntityType === 'company'
+                          ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                          : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                      }`}>
+                      Limited Company
+                    </button>
+                  </div>
+                  <Input
+                    label="Search Landlords"
+                    value={landlordSearch}
+                    onChange={setLandlordSearch}
+                    placeholder="Search by name, email, or phone..."
+                  />
+                </div>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {allLandlords
+                    .filter(l =>
+                      !propertyLandlords.find(pl => pl.id === l.id) &&
+                      (ownershipEntityType === 'company' ? !!l.company_number : !l.company_number) &&
+                      (landlordSearch === '' ||
+                        l.name.toLowerCase().includes(landlordSearch.toLowerCase()) ||
+                        l.email?.toLowerCase().includes(landlordSearch.toLowerCase()) ||
+                        l.phone?.toLowerCase().includes(landlordSearch.toLowerCase()))
+                    )
+                    .map(landlord => (
+                      <div
+                        key={landlord.id}
+                        onClick={() => {
+                          setSelectedLandlordId(landlord.id);
+                          handleAddLandlord(landlord.id);
+                        }}
+                        className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
+                        <Avatar name={landlord.name} size="sm" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{landlord.name}</p>
+                          <p className="text-xs text-[var(--text-muted)] truncate">{landlord.email || landlord.phone || '—'}</p>
+                        </div>
+                        <ChevronRight size={16} className="text-[var(--text-muted)]" />
+                      </div>
+                    ))}
+                  {allLandlords.filter(l =>
+                    !propertyLandlords.find(pl => pl.id === l.id) &&
+                    (ownershipEntityType === 'company' ? !!l.company_number : !l.company_number) &&
+                    (landlordSearch === '' ||
+                      l.name.toLowerCase().includes(landlordSearch.toLowerCase()) ||
+                      l.email?.toLowerCase().includes(landlordSearch.toLowerCase()) ||
+                      l.phone?.toLowerCase().includes(landlordSearch.toLowerCase()))
+                  ).length === 0 && (
+                    <EmptyState message={landlordSearch ? "No landlords match your search" : `No ${ownershipEntityType === 'company' ? 'limited company' : 'individual'} landlords available`} />
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Confirmation Modal */}
+        {showConfirmModal && pendingAction && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowConfirmModal(false)}>
+            <div className="bg-[var(--bg-elevated)] rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center">
+                    <AlertTriangle size={24} className="text-amber-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold">Confirm Action</h2>
+                    <p className="text-sm text-[var(--text-muted)]">This is an important change</p>
+                  </div>
+                </div>
+                <p className="text-sm text-[var(--text-secondary)] mb-6">
+                  {pendingAction.type === 'add' &&
+                    `Are you sure you want to add this landlord to the property? ${propertyLandlords.length === 0 ? 'They will be set as the primary landlord.' : ''}`
+                  }
+                  {pendingAction.type === 'remove' &&
+                    `Are you sure you want to remove ${pendingAction.data.landlordName} from this property? This action cannot be undone.`
+                  }
+                  {pendingAction.type === 'setPrimary' &&
+                    `Are you sure you want to set ${pendingAction.data.landlordName} as the primary landlord? The current primary landlord will be changed to a secondary landlord.`
+                  }
+                </p>
+                <div className="flex gap-3">
+                  <Button variant="ghost" onClick={() => {
+                    setShowConfirmModal(false);
+                    setPendingAction(null);
+                  }} className="flex-1">
+                    Cancel
+                  </Button>
+                  <Button variant="gradient" onClick={confirmAction} className="flex-1">
+                    Confirm
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add/Select Tenant Modal */}
+        {showTenantModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setShowTenantModal(false)}>
+            <div className="bg-[var(--bg-elevated)] rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="sticky top-0 bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)] px-4 sm:px-6 py-4 flex items-center justify-between">
+                <h2 className="text-base sm:text-lg font-semibold">Add Tenant to Property</h2>
+                <button onClick={() => setShowTenantModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-4 sm:p-6">
+                {/* Mode Selector */}
+                <div className="mb-4">
+                  <div className="flex items-center gap-1 bg-[var(--bg-input)] rounded-xl p-1 border border-[var(--border-input)]">
+                    <button
+                      type="button"
+                      onClick={() => setTenantModalMode('select')}
+                      className={`flex-1 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        tenantModalMode === 'select'
+                          ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                          : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                      }`}>
+                      Select Existing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTenantModalMode('create')}
+                      className={`flex-1 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        tenantModalMode === 'create'
+                          ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                          : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                      }`}>
+                      Create New
+                    </button>
+                  </div>
+                </div>
+
+                {tenantModalMode === 'select' ? (
+                  <>
+                    <Input
+                      label="Search Tenants"
+                      value={tenantSearch}
+                      onChange={setTenantSearch}
+                      placeholder="Search by name, email, or phone..."
+                      className="mb-4"
+                    />
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {allTenants
+                        .filter(t =>
+                          tenantSearch === '' ||
+                          `${t.first_name_1} ${t.last_name_1}`.toLowerCase().includes(tenantSearch.toLowerCase()) ||
+                          t.email_1?.toLowerCase().includes(tenantSearch.toLowerCase()) ||
+                          t.phone_1?.toLowerCase().includes(tenantSearch.toLowerCase())
+                        )
+                        .map(tenant => (
+                          <div
+                            key={tenant.id}
+                            onClick={() => handleLinkTenant(tenant.id)}
+                            className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
+                            <Avatar name={`${tenant.first_name_1} ${tenant.last_name_1}`} size="sm" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{tenant.first_name_1} {tenant.last_name_1}</p>
+                              <p className="text-xs text-[var(--text-muted)] truncate">{tenant.email_1 || tenant.phone_1 || '—'}</p>
+                            </div>
+                            <ChevronRight size={16} className="text-[var(--text-muted)]" />
+                          </div>
+                        ))}
+                      {allTenants.filter(t =>
+                        tenantSearch === '' ||
+                        `${t.first_name_1} ${t.last_name_1}`.toLowerCase().includes(tenantSearch.toLowerCase()) ||
+                        t.email_1?.toLowerCase().includes(tenantSearch.toLowerCase()) ||
+                        t.phone_1?.toLowerCase().includes(tenantSearch.toLowerCase())
+                      ).length === 0 && (
+                        <EmptyState message={tenantSearch ? "No tenants match your search" : "No tenants available"} />
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Input
+                          label="First Name *"
+                          value={newTenantForm.first_name_1}
+                          onChange={(v: string) => setNewTenantForm(f => ({ ...f, first_name_1: v }))}
+                          placeholder="John"
+                        />
+                        <Input
+                          label="Last Name *"
+                          value={newTenantForm.last_name_1}
+                          onChange={(v: string) => setNewTenantForm(f => ({ ...f, last_name_1: v }))}
+                          placeholder="Doe"
+                        />
+                      </div>
+                      <Input
+                        label="Email *"
+                        value={newTenantForm.email_1}
+                        onChange={(v: string) => setNewTenantForm(f => ({ ...f, email_1: v }))}
+                        placeholder="john.doe@example.com"
+                        type="email"
+                      />
+                      <Input
+                        label="Phone *"
+                        value={newTenantForm.phone_1}
+                        onChange={(v: string) => setNewTenantForm(f => ({ ...f, phone_1: v }))}
+                        placeholder="07123 456789"
+                      />
+                    </div>
+                    <div className="flex gap-3 mt-4">
+                      <Button variant="ghost" onClick={() => setShowTenantModal(false)} className="flex-1">
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="gradient"
+                        onClick={handleCreateAndLinkTenant}
+                        disabled={!newTenantForm.first_name_1 || !newTenantForm.last_name_1}
+                        className="flex-1"
+                      >
+                        Create & Link
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
