@@ -185,10 +185,10 @@ app.get('/api/landlords', authMiddleware, async (req: AuthRequest, res) => {
 
 app.post('/api/landlords', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { name, email, phone, address, notes, company_number } = req.body;
+    const { name, email, phone, address, notes, company_number, landlord_type } = req.body;
     const id = await insert(
-      'INSERT INTO landlords (name, email, phone, address, notes, company_number) VALUES ($1, $2, $3, $4, $5, $6)',
-      [name, email || null, phone || null, address || null, notes || null, company_number || null]
+      'INSERT INTO landlords (name, email, phone, address, notes, company_number, landlord_type) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [name, email || null, phone || null, address || null, notes || null, company_number || null, landlord_type || 'external']
     );
     await logAudit(req.user?.id, req.user?.email, 'create', 'landlord', id);
     res.json({ id });
@@ -217,9 +217,9 @@ app.get('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
 app.put('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = req.params.id as string;
-    const { name, email, phone, address, notes, company_number } = req.body;
-    await run('UPDATE landlords SET name=$1, email=$2, phone=$3, address=$4, notes=$5, company_number=$6 WHERE id=$7',
-      [name, email, phone, address, notes, company_number || null, id]);
+    const { name, email, phone, address, notes, company_number, landlord_type } = req.body;
+    await run('UPDATE landlords SET name=$1, email=$2, phone=$3, address=$4, notes=$5, company_number=$6, landlord_type=$7 WHERE id=$8',
+      [name, email, phone, address, notes, company_number || null, landlord_type || 'external', id]);
     await logAudit(req.user?.id, req.user?.email, 'update', 'landlord', parseInt(id), req.body);
     res.json({ success: true });
   } catch (err) {

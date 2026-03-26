@@ -168,6 +168,7 @@ export default function LandlordsV3() {
         phone: form.phone,
         address: form.postcode ? `${form.address}, ${form.postcode}` : form.address,
         company_number: form.entity_type === 'company' ? form.company_number : null,
+        landlord_type: 'external', // Always external for client landlords
         notes: form.notes || null
       };
 

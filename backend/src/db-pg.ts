@@ -47,6 +47,8 @@ export async function initDb() {
         phone TEXT,
         address TEXT,
         notes TEXT,
+        company_number TEXT,
+        landlord_type TEXT DEFAULT 'external' CHECK(landlord_type IN ('internal', 'external')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -420,6 +422,17 @@ export async function initDb() {
       }
 
       console.log(`[Migration] Extracted company numbers from ${landlordsWithCompanyInNotes.rows.length} landlord notes.`);
+    }
+
+    // Add landlord_type column to landlords table if it doesn't exist
+    const landlordTypeCheck = await client.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'landlords' AND column_name = 'landlord_type'
+    `);
+    if (landlordTypeCheck.rows.length === 0) {
+      console.log('[Migration] Adding landlord_type column to landlords...');
+      await client.query(`ALTER TABLE landlords ADD COLUMN landlord_type TEXT DEFAULT 'external' CHECK(landlord_type IN ('internal', 'external'))`);
+      console.log('[Migration] landlord_type column added successfully.');
     }
 
     // Run inventory migration
