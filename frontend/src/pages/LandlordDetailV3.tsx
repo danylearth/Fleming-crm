@@ -380,7 +380,7 @@ export default function LandlordDetailV3() {
             </GlassCard>
 
             {/* Directors (Limited Company Only) */}
-            {(directors.length > 0 || archivedDirectors.length > 0) && (
+            {(landlord.company_number || directors.length > 0 || archivedDirectors.length > 0) && (
               <GlassCard className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <SectionHeader title="Company Directors" />
