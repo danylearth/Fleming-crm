@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Card, Button, SectionHeader, EmptyState, Select } from './index';
+import { Card, Button, SectionHeader, EmptyState, Select, Input } from './index';
 import { Upload, FileText, Trash2, Download, X, Plus } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -33,6 +33,7 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
   const [uploading, setUploading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [selectedType, setSelectedType] = useState('');
+  const [customTypeName, setCustomTypeName] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
@@ -54,11 +55,17 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
       alert('Please select a document type');
       return;
     }
+    if (selectedType === 'Other' && !customTypeName.trim()) {
+      alert('Please enter a name for the document type');
+      return;
+    }
     setUploading(true);
     try {
       const fd = new FormData();
       fd.append('file', file);
-      fd.append('doc_type', selectedType);
+      // Use custom name if "Other" is selected, otherwise use selectedType
+      const docType = selectedType === 'Other' ? customTypeName.trim() : selectedType;
+      fd.append('doc_type', docType);
       const res = await fetch(`${API_URL}/api/documents/${entityType}/${entityId}`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -75,6 +82,7 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
         setDocs(prev => [{ ...newDoc, uploaded_at: new Date().toISOString() }, ...prev]);
         setShowUpload(false);
         setSelectedType('');
+        setCustomTypeName('');
       }
     } catch (e) {
       console.error('Upload error:', e);
@@ -117,9 +125,20 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
           <Select
             label="Document Type"
             value={selectedType}
-            onChange={setSelectedType}
+            onChange={(v) => {
+              setSelectedType(v);
+              if (v !== 'Other') setCustomTypeName('');
+            }}
             options={docTypes.map(t => ({ value: t, label: t }))}
           />
+          {selectedType === 'Other' && (
+            <Input
+              label="Document Name *"
+              value={customTypeName}
+              onChange={setCustomTypeName}
+              placeholder="Enter document name"
+            />
+          )}
           <input
             ref={fileRef}
             type="file"
@@ -134,7 +153,7 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
             variant="gradient"
             size="sm"
             onClick={() => fileRef.current?.click()}
-            disabled={uploading}
+            disabled={uploading || (selectedType === 'Other' && !customTypeName.trim())}
           >
             <Upload size={14} className="mr-2" />
             {uploading ? 'Uploading...' : 'Choose File'}

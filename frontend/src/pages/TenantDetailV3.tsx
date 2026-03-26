@@ -4,6 +4,7 @@ import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, EmptyState, DatePicker } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import RentPayments from '../components/v3/RentPayments';
+import ActivityTimeline from '../components/v3/ActivityTimeline';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -36,11 +37,6 @@ interface Tenant {
   move_in_date: string; status: string; notes: string;
 }
 
-interface AuditEntry {
-  id: number; user_email: string; action: string; entity_type: string;
-  entity_id: number; changes: string; created_at: string;
-}
-
 interface TenantNote {
   id: string; text: string; author: string; created_at: string;
 }
@@ -65,24 +61,6 @@ function TimeAgo({ date }: { date: string }) {
   else if (mins > 0) label = `${mins}m ago`;
   else label = 'Just now';
   return <span className="text-[10px] text-[var(--text-muted)]">{label}</span>;
-}
-
-function actionColor(action: string) {
-  switch (action) {
-    case 'create': return 'bg-green-500/20 text-green-400';
-    case 'update': return 'bg-blue-500/20 text-blue-400';
-    case 'delete': return 'bg-red-500/20 text-red-400';
-    default: return 'bg-[var(--bg-hover)] text-[var(--text-muted)]';
-  }
-}
-
-function actionIcon(action: string) {
-  switch (action) {
-    case 'create': return <Plus size={12} />;
-    case 'update': return <Pencil size={12} />;
-    case 'delete': return <X size={12} />;
-    default: return <Clock size={12} />;
-  }
 }
 
 function statusLabel(s: string) {
@@ -164,10 +142,6 @@ export default function TenantDetailV3() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Record<string, any>>({});
 
-  // Timeline
-  const [timeline, setTimeline] = useState<AuditEntry[]>([]);
-  const [timelineLoading, setTimelineLoading] = useState(true);
-
   // Notes
   const [notes, setNotes] = useState<TenantNote[]>([]);
   const [newNote, setNewNote] = useState('');
@@ -189,18 +163,6 @@ export default function TenantDetailV3() {
     (async () => {
       await loadDetail();
       setLoading(false);
-    })();
-  }, [id]);
-
-  // Load timeline
-  useEffect(() => {
-    if (!id) return;
-    (async () => {
-      try {
-        const logs = await api.get(`/api/activity/tenant/${id}?limit=50`);
-        setTimeline(Array.isArray(logs) ? logs : []);
-      } catch { setTimeline([]); }
-      setTimelineLoading(false);
     })();
   }, [id]);
 
@@ -695,40 +657,7 @@ export default function TenantDetailV3() {
             {/* Activity Timeline */}
             <GlassCard className="p-6">
               <SectionHeader title="Activity Timeline" icon={<Clock size={16} />} />
-              {timelineLoading ? (
-                <p className="text-xs text-[var(--text-muted)]">Loading...</p>
-              ) : timeline.length === 0 ? (
-                <p className="text-xs text-[var(--text-muted)]">No activity recorded yet</p>
-              ) : (
-                <div className="relative space-y-0">
-                  <div className="absolute left-[13px] top-2 bottom-2 w-px bg-[var(--border-input)]" />
-                  {timeline.slice(0, 20).map(entry => {
-                    let changes: Record<string, unknown> = {};
-                    try { changes = JSON.parse(entry.changes || '{}'); } catch { }
-                    const changedKeys = Object.keys(changes).filter(k => k !== 'id');
-                    return (
-                      <div key={entry.id} className="relative flex items-start gap-3 py-2">
-                        <div className={`w-[26px] h-[26px] rounded-full flex items-center justify-center shrink-0 z-10 ${actionColor(entry.action)}`}>
-                          {actionIcon(entry.action)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium capitalize">{entry.action}</span>
-                            <span className="text-[10px] text-[var(--text-muted)]">{entry.entity_type}</span>
-                          </div>
-                          {changedKeys.length > 0 && (
-                            <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">Changed: {changedKeys.join(', ')}</p>
-                          )}
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] text-[var(--text-muted)]">{entry.user_email || 'System'}</span>
-                            <TimeAgo date={entry.created_at} />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <ActivityTimeline entityType="tenant" entityId={Number(id)} />
             </GlassCard>
           </div>
         </div>

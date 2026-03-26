@@ -26,8 +26,8 @@ const navItems = [
 
 const PORTFOLIO_OPTIONS = [
   { key: 'all' as const, label: 'All' },
-  { key: 'internal' as const, label: 'Fleming Owned' },
-  { key: 'external' as const, label: 'Lettings Clients' },
+  { key: 'internal' as const, label: 'My Portfolio' },
+  { key: 'external' as const, label: 'My Clients' },
 ];
 
 interface V3LayoutProps {
@@ -66,10 +66,19 @@ export default function V3Layout({ children, title, breadcrumb, hideTopBar }: V3
       `}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-[var(--border-subtle)]">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
-            F
-          </div>
-          {(!collapsed || mobileOpen) && <span className="font-semibold text-sm md:block">Fleming</span>}
+          {(!collapsed || mobileOpen) ? (
+            <img
+              src={theme === 'dark' ? '/logo-light.png' : '/logo-dark.png'}
+              alt="Fleming Lettings"
+              className="h-8 w-auto object-contain"
+            />
+          ) : (
+            <img
+              src={theme === 'dark' ? '/logo-icon-light.png' : '/logo-icon.png'}
+              alt="Fleming Lettings"
+              className="w-8 h-8 object-contain"
+            />
+          )}
           {/* Close on mobile */}
           <button onClick={() => setMobileOpen(false)} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-secondary)] md:hidden">
             <X size={18} />
@@ -140,25 +149,27 @@ export default function V3Layout({ children, title, breadcrumb, hideTopBar }: V3
               {title && <h1 className="text-xl md:text-2xl font-bold">{title}</h1>}
             </div>
             <div className="flex items-center gap-3">
-              {/* Portfolio toggle */}
-              <div className="flex items-center gap-0.5 bg-[var(--bg-input)] rounded-xl p-0.5 border border-[var(--border-input)]">
-                {PORTFOLIO_OPTIONS.map(opt => (
-                  <button
-                    key={opt.key}
-                    onClick={() => setPortfolioFilter(opt.key)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap ${portfolioFilter === opt.key
-                        ? opt.key === 'internal'
-                          ? 'bg-orange-500/20 text-orange-400 shadow-sm'
-                          : opt.key === 'external'
-                            ? 'bg-purple-500/20 text-purple-400 shadow-sm'
-                            : 'bg-[var(--bg-hover)] text-[var(--text-primary)] shadow-sm'
-                        : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                      }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+              {/* Portfolio toggle - Admin only */}
+              {user?.role === 'admin' && (
+                <div className="flex items-center gap-0.5 bg-[var(--bg-input)] rounded-xl p-0.5 border border-[var(--border-input)]">
+                  {PORTFOLIO_OPTIONS.map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setPortfolioFilter(opt.key)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap ${portfolioFilter === opt.key
+                          ? opt.key === 'internal'
+                            ? 'bg-orange-500/20 text-orange-400 shadow-sm'
+                            : opt.key === 'external'
+                              ? 'bg-purple-500/20 text-purple-400 shadow-sm'
+                              : 'bg-[var(--bg-hover)] text-[var(--text-primary)] shadow-sm'
+                          : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                        }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <button onClick={toggleTheme} className="p-2 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-elevated)] border border-[var(--border-color)] transition-colors text-[var(--text-primary)]">
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>

@@ -412,7 +412,21 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
   saving: boolean; onClose: () => void; onSubmit: () => void;
   lockedLandlord?: { id: number; name: string };
 }) {
+  const [portfolioType, setPortfolioType] = useState<'internal' | 'external'>('internal');
+
+  // Find Fleming verandas landlord (internal portfolio)
+  const flemingLandlord = landlords.find(l => l.name.toLowerCase().includes('fleming'));
+
+  // Auto-populate Fleming verandas when My Portfolio is selected
+  useEffect(() => {
+    if (portfolioType === 'internal' && flemingLandlord) {
+      setForm((f: any) => ({ ...f, landlord_id: String(flemingLandlord.id) }));
+    }
+  }, [portfolioType, flemingLandlord]);
+
   const selectedLl = lockedLandlord || landlords.find(l => l.id === Number(form.landlord_id));
+  const isMyPortfolio = portfolioType === 'internal';
+
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm" onClick={onClose}>
       <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-lg space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -421,12 +435,41 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
           <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
         </div>
 
+        {/* Portfolio Type Selector */}
+        <div>
+          <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Portfolio Type *</label>
+          <div className="flex items-center gap-0.5 bg-[var(--bg-input)] rounded-xl p-0.5 border border-[var(--border-input)]">
+            <button
+              type="button"
+              onClick={() => setPortfolioType('internal')}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                portfolioType === 'internal'
+                  ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+              }`}
+            >
+              My Portfolio
+            </button>
+            <button
+              type="button"
+              onClick={() => setPortfolioType('external')}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                portfolioType === 'external'
+                  ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+              }`}
+            >
+              My Client
+            </button>
+          </div>
+        </div>
+
         {/* Landlord selector */}
-        {lockedLandlord ? (
+        {lockedLandlord || isMyPortfolio ? (
           <div>
             <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Landlord</label>
             <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] opacity-70">
-              {lockedLandlord.name}
+              {lockedLandlord ? lockedLandlord.name : 'Fleming Lettings'}
             </div>
           </div>
         ) : (
@@ -476,18 +519,15 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
             placeholder="Start typing an address..."
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <PostcodeAutocomplete
-              label="Postcode"
-              value={form.postcode}
-              onChange={(v: string) => setForm((f: any) => ({ ...f, postcode: v }))}
-              onAddressSelect={(address: string) => setForm((f: any) => ({ ...f, address: address }))}
-              placeholder="e.g. SW1A 1AA"
-              showDropdownOnAddress={true}
-            />
-          </div>
-          <Input label="Rent (£/month)" value={form.rent_amount} onChange={(v: string) => setForm((f: any) => ({ ...f, rent_amount: v }))} placeholder="0" />
+        <div>
+          <PostcodeAutocomplete
+            label="Postcode"
+            value={form.postcode}
+            onChange={(v: string) => setForm((f: any) => ({ ...f, postcode: v }))}
+            onAddressSelect={(address: string) => setForm((f: any) => ({ ...f, address: address }))}
+            placeholder="e.g. SW1A 1AA"
+            showDropdownOnAddress={true}
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Select label="Type" value={form.property_type} onChange={(v: string) => setForm((f: any) => ({ ...f, property_type: v }))}
@@ -495,39 +535,18 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
           <Input label="Bedrooms" value={form.bedrooms} onChange={(v: string) => setForm((f: any) => ({ ...f, bedrooms: v }))} placeholder="1" />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Select label="Status" value={form.status} onChange={(v: string) => setForm((f: any) => ({ ...f, status: v }))}
-            options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }]} />
+          <Select label="Status *" value={form.status} onChange={(v: string) => setForm((f: any) => ({ ...f, status: v }))}
+            options={[{ value: 'tbc', label: 'TBC' }, { value: 'active', label: 'Active' }, { value: 'closed', label: 'Closed' }]} />
           <Select label="Service Type" value={form.service_type} onChange={(v: string) => setForm((f: any) => ({ ...f, service_type: v }))}
             options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Select label="Council Tax Band" value={form.council_tax_band} onChange={(v: string) => setForm((f: any) => ({ ...f, council_tax_band: v }))}
-            options={[{ value: '', label: 'Select...' }, ...['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
-          <div>
-            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Gas Supply</label>
-            <button type="button" onClick={() => setForm((f: any) => ({ ...f, has_gas: !f.has_gas }))}
-              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border transition-colors w-full ${form.has_gas
-                ? 'bg-[var(--accent-orange)]/10 border-[var(--accent-orange)]/30 text-[var(--accent-orange)]'
-                : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
-                }`}>
-              <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${form.has_gas ? 'bg-[var(--accent-orange)] border-[var(--accent-orange)]' : 'border-[var(--border-input)]'
-                }`}>
-                {form.has_gas && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5L4.5 7.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-              </div>
-              <span className="text-sm">Has Gas</span>
-            </button>
-          </div>
         </div>
 
         <div className="flex gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.address}>
+          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.address || !form.status}>
             {saving ? 'Creating...' : 'Create Property'}
           </Button>
         </div>
-        {!form.landlord_id && (
-          <p className="text-xs text-[var(--text-muted)] text-center">Optional: You can link a landlord later</p>
-        )}
       </div>
     </div>
   );

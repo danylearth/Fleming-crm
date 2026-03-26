@@ -137,6 +137,7 @@ export async function initDb() {
         gas_safety_expiry_date DATE,
         onboarded_date DATE,
         notes TEXT,
+        amenities TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );

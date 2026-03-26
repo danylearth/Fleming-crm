@@ -81,8 +81,14 @@ export function SearchDropdown({
                                 className={`w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-hover)] transition-colors ${value === o.id ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-secondary)]'
                                     }`}
                             >
-                                <p className="truncate">{o.label}</p>
-                                {o.subtitle && <p className="text-xs text-[var(--text-muted)]">{o.subtitle}</p>}
+                                {o.subtitle ? (
+                                    <>
+                                        <p className="truncate">{o.label}</p>
+                                        <p className="text-xs text-[var(--text-muted)] truncate">{o.subtitle}</p>
+                                    </>
+                                ) : (
+                                    <p className="truncate">{o.label}</p>
+                                )}
                             </button>
                         ))}
                     </div>

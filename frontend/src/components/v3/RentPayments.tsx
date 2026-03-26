@@ -43,7 +43,14 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   }, [propertyId, tenantId]);
 
   const handleAdd = async () => {
-    if (!form.due_date || !form.amount_due) return;
+    if (!form.due_date || !form.amount_due) {
+      alert('Please fill in both due date and amount');
+      return;
+    }
+    if (!propertyId && !tenantId) {
+      alert('Cannot add payment: No property or tenant associated');
+      return;
+    }
     try {
       const res = await api.post('/api/rent-payments', {
         property_id: propertyId,
@@ -51,7 +58,8 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
         due_date: form.due_date,
         amount_due: parseFloat(form.amount_due),
       });
-      if (res.id) {
+      console.log('Payment created:', res);
+      if (res && res.id) {
         setPayments(prev => [{
           id: res.id, property_id: propertyId || 0, tenant_id: tenantId || 0,
           due_date: form.due_date, amount_due: parseFloat(form.amount_due),
@@ -59,21 +67,30 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
         }, ...prev]);
         setForm({ due_date: '', amount_due: '' });
         setShowAdd(false);
+      } else {
+        alert('Failed to create payment: Invalid response from server');
       }
-    } catch (e) { console.error(e); }
+    } catch (e: any) {
+      console.error('Payment creation error:', e);
+      alert(`Failed to create payment: ${e.response?.data?.error || e.message || 'Unknown error'}`);
+    }
   };
 
   const handlePay = async (payment: Payment) => {
     try {
-      await api.put(`/api/rent-payments/${payment.id}/pay`, {
+      const response = await api.put(`/api/rent-payments/${payment.id}/pay`, {
         amount_paid: payment.amount_due,
         payment_date: new Date().toISOString().split('T')[0],
       });
+      console.log('Payment marked as paid:', response);
       setPayments(prev => prev.map(p =>
         p.id === payment.id ? { ...p, status: 'paid', amount_paid: p.amount_due, payment_date: new Date().toISOString().split('T')[0] } : p
       ));
       setPayingId(null);
-    } catch (e) { console.error(e); }
+    } catch (e: any) {
+      console.error('Failed to mark payment as paid:', e);
+      alert(`Failed to mark as paid: ${e.response?.data?.error || e.message || 'Unknown error'}`);
+    }
   };
 
   const statusIcon = (status: string) => {
