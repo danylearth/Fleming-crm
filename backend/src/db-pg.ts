@@ -154,6 +154,7 @@ export async function initDb() {
         onboarded_date DATE,
         notes TEXT,
         amenities TEXT,
+        image_url TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
