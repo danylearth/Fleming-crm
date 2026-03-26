@@ -50,6 +50,24 @@ export async function initDb() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- DIRECTORS (Company Directors/Contact Persons)
+      CREATE TABLE IF NOT EXISTS directors (
+        id SERIAL PRIMARY KEY,
+        landlord_id INTEGER NOT NULL REFERENCES landlords(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        email TEXT,
+        phone TEXT,
+        date_of_birth DATE,
+        role TEXT,
+        kyc_completed INTEGER DEFAULT 0,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_directors_landlord ON directors(landlord_id);
+      CREATE INDEX IF NOT EXISTS idx_directors_name ON directors(name);
+
       -- LANDLORDS BDM (Prospects)
       CREATE TABLE IF NOT EXISTS landlords_bdm (
         id SERIAL PRIMARY KEY,
@@ -133,9 +151,25 @@ export async function initDb() {
         status TEXT DEFAULT 'available' CHECK(status IN ('available', 'let', 'maintenance')),
         onboarded_date DATE,
         notes TEXT,
+        amenities TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      -- PROPERTY LANDLORDS (Many-to-Many Junction Table)
+      CREATE TABLE IF NOT EXISTS property_landlords (
+        id SERIAL PRIMARY KEY,
+        property_id INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+        landlord_id INTEGER NOT NULL REFERENCES landlords(id) ON DELETE CASCADE,
+        is_primary INTEGER DEFAULT 0,
+        ownership_percentage REAL,
+        ownership_entity_type TEXT DEFAULT 'individual' CHECK(ownership_entity_type IN ('individual', 'company')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(property_id, landlord_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_property_landlords_property ON property_landlords(property_id);
+      CREATE INDEX IF NOT EXISTS idx_property_landlords_landlord ON property_landlords(landlord_id);
 
       -- TENANTS
       CREATE TABLE IF NOT EXISTS tenants (
@@ -326,6 +360,67 @@ export async function initDb() {
     `);
 
     console.log('Database initialized');
+
+    // Migrate existing property landlord relationships
+    const migrateResult = await client.query(`
+      SELECT COUNT(*) as count FROM property_landlords
+    `);
+    if (parseInt(migrateResult.rows[0].count) === 0) {
+      console.log('[Migration] Migrating existing property landlord relationships...');
+      await client.query(`
+        INSERT INTO property_landlords (property_id, landlord_id, is_primary, ownership_entity_type)
+        SELECT id, landlord_id, 1, 'individual'
+        FROM properties
+        WHERE landlord_id IS NOT NULL
+        ON CONFLICT (property_id, landlord_id) DO NOTHING
+      `);
+      const countResult = await client.query(`SELECT COUNT(*) as count FROM property_landlords`);
+      console.log(`[Migration] Migrated ${countResult.rows[0].count} property-landlord relationships.`);
+    }
+
+    // Add ownership_entity_type column if it doesn't exist
+    const columnCheck = await client.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'property_landlords' AND column_name = 'ownership_entity_type'
+    `);
+    if (columnCheck.rows.length === 0) {
+      console.log('[Migration] Adding ownership_entity_type column to property_landlords...');
+      await client.query(`
+        ALTER TABLE property_landlords
+        ADD COLUMN ownership_entity_type TEXT DEFAULT 'individual'
+        CHECK(ownership_entity_type IN ('individual', 'company'))
+      `);
+      console.log('[Migration] ownership_entity_type column added successfully.');
+    }
+
+    // Add company_number column to landlords table if it doesn't exist
+    const companyNumberCheck = await client.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'landlords' AND column_name = 'company_number'
+    `);
+    if (companyNumberCheck.rows.length === 0) {
+      console.log('[Migration] Adding company_number column to landlords...');
+      await client.query(`ALTER TABLE landlords ADD COLUMN company_number TEXT`);
+
+      // Extract company numbers from notes
+      const landlordsWithCompanyInNotes = await client.query(`
+        SELECT id, notes FROM landlords WHERE notes LIKE '%Company Number:%'
+      `);
+
+      for (const landlord of landlordsWithCompanyInNotes.rows) {
+        const match = landlord.notes.match(/Company Number:\s*([^\n]+)/i);
+        if (match) {
+          const companyNumber = match[1].trim();
+          await client.query('UPDATE landlords SET company_number = $1 WHERE id = $2', [companyNumber, landlord.id]);
+
+          // Clean the company number from notes
+          const cleanedNotes = landlord.notes.replace(/Company Number:\s*[^\n]+\n?/i, '').trim();
+          await client.query('UPDATE landlords SET notes = $1 WHERE id = $2', [cleanedNotes || null, landlord.id]);
+        }
+      }
+
+      console.log(`[Migration] Extracted company numbers from ${landlordsWithCompanyInNotes.rows.length} landlord notes.`);
+    }
 
     // Run inventory migration
     await runInventoryMigration(pool);

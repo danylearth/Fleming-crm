@@ -34,6 +34,21 @@ function timeAgo(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+function formatDateTime(dateStr: string) {
+  const date = new Date(dateStr);
+  const dateFormatted = date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+  const timeFormatted = date.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  return `${dateFormatted} ${timeFormatted}`;
+}
+
 export default function ActivityTimeline({ entityType, entityId }: { entityType: string; entityId: number }) {
   const api = useApi();
   const [entries, setEntries] = useState<AuditEntry[]>([]);
@@ -80,7 +95,7 @@ export default function ActivityTimeline({ entityType, entityId }: { entityType:
                   </p>
                 )}
                 <p className="text-[10px] text-[var(--text-muted)]">
-                  {entry.user_email} · {timeAgo(entry.created_at)}
+                  {entry.user_email} · {formatDateTime(entry.created_at)} ({timeAgo(entry.created_at)})
                 </p>
               </div>
             </div>

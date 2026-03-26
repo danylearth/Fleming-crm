@@ -40,7 +40,7 @@ export function PortfolioBadge({ type }: { type?: string }) {
                 ? 'bg-orange-500/20 text-orange-400 border-orange-500/30'
                 : 'bg-purple-500/20 text-purple-400 border-purple-500/30'
             }`}>
-            {isInternal ? 'Fleming Owned' : 'Lettings Client'}
+            {isInternal ? 'My Portfolio' : 'My Client'}
         </span>
     );
 }

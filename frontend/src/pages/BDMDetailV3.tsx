@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
 import { GlassCard, Button, Input, Select, Avatar, SectionHeader, DatePicker } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
+import ActivityTimeline from '../components/v3/ActivityTimeline';
 import { useApi } from '../hooks/useApi';
 import {
   Pencil, Save, X, Mail, Phone, MapPin, Calendar, MessageSquare, Clock,
@@ -13,11 +14,6 @@ interface Prospect {
   id: number; name: string; email: string; phone: string; address: string;
   status: string; follow_up_date: string; source: string; notes: string;
   created_at: string; updated_at: string;
-}
-
-interface AuditEntry {
-  id: number; user_email: string; action: string; entity_type: string;
-  entity_id: number; changes: string; created_at: string;
 }
 
 interface ProspectNote {
@@ -62,23 +58,6 @@ function ReadField({ label, value }: { label: string; value?: string | null }) {
   return <div><p className="text-xs text-[var(--text-muted)]">{label}</p><p className="text-sm mt-0.5">{value || '—'}</p></div>;
 }
 
-function actionColor(action: string) {
-  switch (action) {
-    case 'create': return 'bg-green-500/20 text-green-400';
-    case 'update': return 'bg-blue-500/20 text-blue-400';
-    case 'view': return 'bg-[var(--bg-hover)] text-[var(--text-muted)]';
-    default: return 'bg-[var(--bg-hover)] text-[var(--text-muted)]';
-  }
-}
-
-function actionIcon(action: string) {
-  switch (action) {
-    case 'create': return <Plus size={12} />;
-    case 'update': return <Pencil size={12} />;
-    default: return <Clock size={12} />;
-  }
-}
-
 export default function BDMDetailV3() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -93,10 +72,6 @@ export default function BDMDetailV3() {
   const [notes, setNotes] = useState<ProspectNote[]>([]);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
-
-  // Timeline
-  const [timeline, setTimeline] = useState<AuditEntry[]>([]);
-  const [timelineLoading, setTimelineLoading] = useState(true);
 
   // Workflow
   const [showWorkflow, setShowWorkflow] = useState(false);
@@ -123,18 +98,6 @@ export default function BDMDetailV3() {
       if (prospect.notes.trim()) setNotes([{ id: '1', text: prospect.notes, author: 'System', created_at: prospect.created_at || new Date().toISOString() }]);
     }
   }, [prospect?.notes]);
-
-  // Timeline
-  useEffect(() => {
-    if (!id) return;
-    (async () => {
-      try {
-        const logs = await api.get(`/api/audit-log?entity_type=landlord_bdm&entity_id=${id}&limit=50`);
-        setTimeline(Array.isArray(logs) ? logs : []);
-      } catch { setTimeline([]); }
-      setTimelineLoading(false);
-    })();
-  }, [id]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -316,39 +279,7 @@ export default function BDMDetailV3() {
             {/* Activity Timeline */}
             <GlassCard className="p-6">
               <SectionHeader title="Activity Timeline" icon={<Clock size={16} />} />
-              {timelineLoading ? (
-                <p className="text-xs text-[var(--text-muted)]">Loading...</p>
-              ) : timeline.length === 0 ? (
-                <p className="text-xs text-[var(--text-muted)]">No activity recorded yet</p>
-              ) : (
-                <div className="relative space-y-0">
-                  <div className="absolute left-[13px] top-2 bottom-2 w-px bg-[var(--border-input)]" />
-                  {timeline.filter(e => e.action !== 'view').slice(0, 20).map(entry => {
-                    let changes: Record<string, unknown> = {};
-                    try { changes = JSON.parse(entry.changes || '{}'); } catch {}
-                    const changedKeys = Object.keys(changes).filter(k => k !== 'id');
-                    return (
-                      <div key={entry.id} className="relative flex items-start gap-3 py-2">
-                        <div className={`w-[26px] h-[26px] rounded-full flex items-center justify-center shrink-0 z-10 ${actionColor(entry.action)}`}>
-                          {actionIcon(entry.action)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium capitalize">{entry.action}</span>
-                          </div>
-                          {changedKeys.length > 0 && (
-                            <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">Changed: {changedKeys.join(', ')}</p>
-                          )}
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] text-[var(--text-muted)]">{entry.user_email || 'System'}</span>
-                            <TimeAgo date={entry.created_at} />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <ActivityTimeline entityType="landlord_bdm" entityId={Number(id)} />
             </GlassCard>
           </div>
         </div>

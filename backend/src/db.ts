@@ -59,6 +59,7 @@ db.exec(`
     alt_email TEXT,
     date_of_birth DATE,
     home_address TEXT,
+    company_number TEXT,
     -- Marketing preferences
     marketing_post INTEGER DEFAULT 0,
     marketing_email INTEGER DEFAULT 0,
@@ -75,9 +76,35 @@ db.exec(`
   );
 
   -- ============================================
+  -- DIRECTORS (Company Directors/Contact Persons)
+  -- ============================================
+
+  CREATE TABLE IF NOT EXISTS directors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    landlord_id INTEGER NOT NULL,
+    -- Personal info
+    name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    date_of_birth DATE,
+    -- Role
+    role TEXT, -- e.g., 'Director', 'Secretary', 'Shareholder', 'Contact Person'
+    -- KYC
+    kyc_completed INTEGER DEFAULT 0,
+    -- Notes
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (landlord_id) REFERENCES landlords(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_directors_landlord ON directors(landlord_id);
+  CREATE INDEX IF NOT EXISTS idx_directors_name ON directors(name);
+
+  -- ============================================
   -- LANDLORDS BDM (Business Development - Prospects)
   -- ============================================
-  
+
   CREATE TABLE IF NOT EXISTS landlords_bdm (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     -- Basic info
@@ -253,8 +280,9 @@ db.exec(`
     -- Status
     status TEXT DEFAULT 'available' CHECK(status IN ('available', 'let', 'maintenance')),
     onboarded_date DATE,
-    -- Notes
+    -- Notes & Amenities
     notes TEXT,
+    amenities TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (landlord_id) REFERENCES landlords(id)
@@ -267,6 +295,26 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_properties_gas ON properties(gas_safety_expiry_date);
   CREATE INDEX IF NOT EXISTS idx_properties_tenancy_end ON properties(tenancy_end_date);
   CREATE INDEX IF NOT EXISTS idx_properties_rent_review ON properties(rent_review_date);
+
+  -- ============================================
+  -- PROPERTY LANDLORDS (Many-to-Many Junction Table)
+  -- ============================================
+
+  CREATE TABLE IF NOT EXISTS property_landlords (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id INTEGER NOT NULL,
+    landlord_id INTEGER NOT NULL,
+    is_primary INTEGER DEFAULT 0, -- 1 for primary landlord, 0 for additional
+    ownership_percentage REAL, -- Optional: percentage of ownership
+    ownership_entity_type TEXT DEFAULT 'individual' CHECK(ownership_entity_type IN ('individual', 'company')), -- How this landlord owns this property
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
+    FOREIGN KEY (landlord_id) REFERENCES landlords(id) ON DELETE CASCADE,
+    UNIQUE(property_id, landlord_id) -- Prevent duplicate landlord assignments
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_property_landlords_property ON property_landlords(property_id);
+  CREATE INDEX IF NOT EXISTS idx_property_landlords_landlord ON property_landlords(landlord_id);
 
   -- ============================================
   -- TENANCIES (Historical record of tenancies)
@@ -460,6 +508,97 @@ db.exec(`
   );
 `);
 
+// ============================================
+// MIGRATION: Populate property_landlords junction table from existing landlord_id
+// ============================================
+const needsMigration = db.prepare(`
+  SELECT COUNT(*) as count FROM property_landlords
+`).get() as { count: number };
+
+if (needsMigration.count === 0) {
+  // Migrate existing property -> landlord relationships
+  console.log('[Migration] Migrating existing property landlord relationships...');
+
+  // Check if ownership_entity_type column exists
+  const hasOwnershipTypeCol = db.prepare(`
+    SELECT COUNT(*) as count FROM pragma_table_info('property_landlords')
+    WHERE name = 'ownership_entity_type'
+  `).get() as { count: number };
+
+  if (hasOwnershipTypeCol.count > 0) {
+    db.exec(`
+      INSERT OR IGNORE INTO property_landlords (property_id, landlord_id, is_primary, ownership_entity_type)
+      SELECT id, landlord_id, 1, 'individual'
+      FROM properties
+      WHERE landlord_id IS NOT NULL
+    `);
+  } else {
+    db.exec(`
+      INSERT OR IGNORE INTO property_landlords (property_id, landlord_id, is_primary)
+      SELECT id, landlord_id, 1
+      FROM properties
+      WHERE landlord_id IS NOT NULL
+    `);
+  }
+
+  const migratedCount = db.prepare(`SELECT COUNT(*) as count FROM property_landlords`).get() as { count: number };
+  console.log(`[Migration] Migrated ${migratedCount.count} property-landlord relationships.`);
+}
+
+// ============================================
+// MIGRATION: Add ownership_entity_type to existing property_landlords
+// ============================================
+const hasOwnershipType = db.prepare(`
+  SELECT COUNT(*) as count FROM pragma_table_info('property_landlords')
+  WHERE name = 'ownership_entity_type'
+`).get() as { count: number };
+
+if (hasOwnershipType.count === 0) {
+  console.log('[Migration] Adding ownership_entity_type column to property_landlords...');
+  db.exec(`
+    ALTER TABLE property_landlords ADD COLUMN ownership_entity_type TEXT DEFAULT 'individual' CHECK(ownership_entity_type IN ('individual', 'company'))
+  `);
+  console.log('[Migration] ownership_entity_type column added successfully.');
+}
+
+// ============================================
+// MIGRATION: Add company_number column to landlords
+// ============================================
+try {
+  const hasCompanyNumber = db.prepare(`
+    SELECT COUNT(*) as count FROM pragma_table_info('landlords')
+    WHERE name = 'company_number'
+  `).get() as { count: number };
+
+  if (hasCompanyNumber.count === 0) {
+    console.log('[Migration] Adding company_number column to landlords...');
+    db.exec(`ALTER TABLE landlords ADD COLUMN company_number TEXT`);
+
+    // Extract company number from notes for existing records
+    const landlordsWithCompanyInNotes = db.prepare(`
+      SELECT id, notes FROM landlords WHERE notes LIKE '%Company Number:%'
+    `).all() as Array<{ id: number; notes: string }>;
+
+    for (const landlord of landlordsWithCompanyInNotes) {
+      const match = landlord.notes.match(/Company Number:\s*([^\n]+)/i);
+      if (match) {
+        const companyNumber = match[1].trim();
+        db.prepare('UPDATE landlords SET company_number = ? WHERE id = ?').run(companyNumber, landlord.id);
+        // Remove "Company Number: XXX" from notes
+        const cleanedNotes = landlord.notes.replace(/Company Number:\s*[^\n]+\n?/i, '').trim();
+        db.prepare('UPDATE landlords SET notes = ? WHERE id = ?').run(cleanedNotes || null, landlord.id);
+      }
+    }
+
+    console.log(`[Migration] Extracted company numbers from ${landlordsWithCompanyInNotes.length} landlords.`);
+  }
+} catch (err: any) {
+  // Column already exists, skip migration
+  if (!err.message?.includes('duplicate column')) {
+    throw err;
+  }
+}
+
 // Migrate audit_log to remove restrictive CHECK constraint (allows note_added, etc.)
 const auditSchema = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='audit_log'`).get() as any;
 if (auditSchema && auditSchema.sql && auditSchema.sql.includes('CHECK')) {
@@ -484,6 +623,27 @@ if (auditSchema && auditSchema.sql && auditSchema.sql.includes('CHECK')) {
     CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_audit_date ON audit_log(created_at);
   `);
+}
+
+// ============================================
+// MIGRATION: Add archived column to directors
+// ============================================
+try {
+  const hasArchivedColumn = db.prepare(`
+    SELECT COUNT(*) as count FROM pragma_table_info('directors')
+    WHERE name = 'archived'
+  `).get() as { count: number };
+
+  if (hasArchivedColumn.count === 0) {
+    console.log('[Migration] Adding archived column to directors...');
+    db.exec(`ALTER TABLE directors ADD COLUMN archived INTEGER DEFAULT 0`);
+    console.log('[Migration] archived column added successfully.');
+  }
+} catch (err: any) {
+  // Column already exists, skip migration
+  if (!err.message?.includes('duplicate column')) {
+    throw err;
+  }
 }
 
 // Cleanup leftover migration tables from any previous failed run
