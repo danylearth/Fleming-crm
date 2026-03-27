@@ -1210,7 +1210,7 @@ app.get('/api/public/properties', async (req, res) => {
     const properties = await query(`
       SELECT p.id, p.address, p.postcode, p.property_type, p.bedrooms, p.rent_amount, p.status
       FROM properties p
-      WHERE p.status IN ('to_let', 'available')
+      WHERE p.status = 'to_let' OR p.status = 'available'
       ORDER BY p.address
     `);
     console.log(`[Public Properties] Found ${properties.length} properties with status filter`);
@@ -1269,7 +1269,8 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
     console.error('Property creation error:', err);
     res.status(500).json({
       error: 'Failed to create property',
-      details: err instanceof Error ? err.message : String(err)
+      details: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined
     });
   }
 });
