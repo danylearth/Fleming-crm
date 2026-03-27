@@ -1166,8 +1166,11 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
     await logAudit(req.user?.id, req.user?.email, 'create', 'property', id);
     res.json({ id });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create property' });
+    console.error('Property creation error:', err);
+    res.status(500).json({
+      error: 'Failed to create property',
+      details: err instanceof Error ? err.message : String(err)
+    });
   }
 });
 
