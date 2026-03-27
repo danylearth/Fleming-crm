@@ -808,34 +808,123 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
 // Public endpoint for external form submissions (no auth required)
 app.post('/api/public/tenant-enquiries', async (req, res) => {
   try {
-    const d = req.body;
-    const fields = [
-      'title_1', 'first_name_1', 'last_name_1', 'email_1', 'phone_1',
-      'date_of_birth_1', 'current_address_1', 'employment_status_1',
-      'employer_1', 'income_1', 'is_joint_application',
-      'title_2', 'first_name_2', 'last_name_2', 'email_2', 'phone_2',
-      'date_of_birth_2', 'current_address_2', 'employment_status_2',
-      'employer_2', 'income_2', 'linked_property_id', 'notes', 'status'
-    ];
+    const {
+      // Registration type
+      registration_type,
+      // Applicant 1
+      FirstName,
+      Surname,
+      address,
+      Postcode,
+      yearofaddress,
+      dob,
+      form_email,
+      contactNumber,
+      Nationality,
+      // Employment
+      EmploymentStatus,
+      job_title,
+      AnnualSalary,
+      // Applicant 2 (if joint)
+      FirstName2,
+      Surname2,
+      address2,
+      Postcode2,
+      yearofaddress2,
+      dob2,
+      form_email2,
+      contactNumber2,
+      Nationality2,
+      EmploymentStatus2,
+      job_title2,
+      AnnualSalary2,
+      // Property requirements
+      tenancylookingfor,
+      reasonforrenting,
+      typeofproperty,
+      noofbedrooms,
+      roadparking,
+      rent_min,
+      rent_max,
+      // Property selection
+      property_id
+    } = req.body;
+
+    // Validation
+    if (!FirstName || !Surname || !form_email || !contactNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: First Name, Surname, Email, and Contact Number are required'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form_email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email address'
+      });
+    }
+
+    // Determine if joint application
+    const is_joint = registration_type === 'Joint' ? 1 : 0;
+
+    // Get client IP for audit
+    const client_ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    // Map form fields to database columns
+    const data: any = {
+      first_name_1: FirstName,
+      last_name_1: Surname,
+      email_1: form_email,
+      phone_1: contactNumber,
+      current_address_1: address || null,
+      postcode_1: Postcode || null,
+      years_at_address_1: yearofaddress || null,
+      date_of_birth_1: dob || null,
+      nationality_1: Nationality || null,
+      employment_status_1: EmploymentStatus || null,
+      job_title_1: job_title || null,
+      annual_salary_1: AnnualSalary ? parseFloat(AnnualSalary) : null,
+      income_1: AnnualSalary ? parseFloat(AnnualSalary) : null,
+      is_joint_application: is_joint,
+      first_name_2: FirstName2 || null,
+      last_name_2: Surname2 || null,
+      email_2: form_email2 || null,
+      phone_2: contactNumber2 || null,
+      current_address_2: address2 || null,
+      postcode_2: Postcode2 || null,
+      years_at_address_2: yearofaddress2 || null,
+      date_of_birth_2: dob2 || null,
+      nationality_2: Nationality2 || null,
+      employment_status_2: EmploymentStatus2 || null,
+      job_title_2: job_title2 || null,
+      annual_salary_2: AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
+      income_2: AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
+      preferred_tenancy_type: tenancylookingfor || null,
+      reason_for_renting: reasonforrenting || null,
+      property_type: typeofproperty || null,
+      bedrooms: noofbedrooms ? parseInt(noofbedrooms) : null,
+      parking_required: roadparking || null,
+      monthly_rent_budget: rent_max ? parseFloat(rent_max) : null,
+      linked_property_id: property_id ? parseInt(property_id) : null,
+      form_submission_ip: client_ip as string,
+      form_version: 'v1',
+      status: 'new'
+    };
 
     const values: any[] = [];
     const placeholders: string[] = [];
     const cols: string[] = [];
 
     let idx = 1;
-    for (const field of fields) {
-      if (field in d && d[field] !== '' && d[field] !== null) {
-        cols.push(field);
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== null && value !== undefined && value !== '') {
+        cols.push(key);
         placeholders.push(`$${idx++}`);
-        values.push(d[field]);
+        values.push(value);
       }
-    }
-
-    // Ensure status is set
-    if (!cols.includes('status')) {
-      cols.push('status');
-      placeholders.push(`$${idx++}`);
-      values.push('new');
     }
 
     const id = await insert(
@@ -843,7 +932,12 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
       values
     );
 
-    res.json({ id, success: true, message: 'Enquiry submitted successfully' });
+    res.json({
+      enquiry_id: id,
+      reference: `ENQ-${id}`,
+      success: true,
+      message: 'Enquiry submitted successfully'
+    });
   } catch (err) {
     console.error('Public enquiry submission error:', err);
     res.status(500).json({ error: 'Failed to submit enquiry' });

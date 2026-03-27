@@ -905,8 +905,8 @@
 
             try {
                 const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                    ? 'http://localhost:3001/api/tenant-enquiries/public'
-                    : 'https://fleming-crm-api-production-7e58.up.railway.app/api/tenant-enquiries/public';
+                    ? 'http://localhost:3001/api/public/tenant-enquiries'
+                    : 'https://fleming-crm-api-production-7e58.up.railway.app/api/public/tenant-enquiries';
 
                 const response = await fetch(apiUrl, {
                     method: 'POST',
