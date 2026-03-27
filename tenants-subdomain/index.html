@@ -30,7 +30,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px 16px;
+            padding: 20px;
         }
 
         .container {
@@ -46,7 +46,7 @@
         /* Header */
         .header {
             background: white;
-            padding: 20px 24px;
+            padding: 20px 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -62,14 +62,13 @@
             background: transparent;
             border: 1px solid #DC006D;
             color: #DC006D;
-            padding: 10px 20px;
-            border-radius: 25px;
+            padding: 8px 20px;
+            border-radius: 20px;
             font-size: 14px;
             cursor: pointer;
             transition: all 0.3s;
             text-decoration: none;
             font-weight: 500;
-            white-space: nowrap;
         }
 
         .back-button:hover {
@@ -92,7 +91,7 @@
 
         /* Form Container */
         .form-wrapper {
-            padding: 40px 32px;
+            padding: 60px 40px;
             min-height: 500px;
         }
 
@@ -120,20 +119,20 @@
         .step h2 {
             color: #25073B;
             font-size: 28px;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             font-weight: 700;
         }
 
         .step p {
             color: #666;
             font-size: 16px;
-            margin-bottom: 24px;
+            margin-bottom: 30px;
             line-height: 1.6;
         }
 
         /* Input Styles */
         .input-group {
-            margin-bottom: 18px;
+            margin-bottom: 25px;
         }
 
         label {
@@ -169,7 +168,7 @@
         .radio-group {
             display: grid;
             gap: 12px;
-            margin-top: 8px;
+            margin-top: 15px;
         }
 
         .radio-option {
@@ -206,7 +205,7 @@
         .button-group {
             display: flex;
             gap: 15px;
-            margin-top: 32px;
+            margin-top: 40px;
         }
 
         .btn {
@@ -279,10 +278,6 @@
 
         /* Mobile Optimization */
         @media (max-width: 768px) {
-            body {
-                padding: 0;
-            }
-
             .two-col {
                 grid-template-columns: 1fr;
                 gap: 12px;
@@ -294,37 +289,33 @@
             }
 
             .form-wrapper {
-                padding: 32px 20px;
+                padding: 30px 20px;
                 min-height: auto;
             }
 
             .header {
-                padding: 16px 20px;
-                gap: 12px;
+                padding: 15px 20px;
+                flex-wrap: wrap;
+                gap: 10px;
             }
 
             .logo {
-                height: 42px;
+                height: 40px;
             }
 
             .back-button {
                 font-size: 13px;
-                padding: 8px 16px;
-                border-radius: 20px;
+                padding: 6px 16px;
             }
 
             .step h2 {
                 font-size: 22px;
-                margin-bottom: 8px;
+                margin-bottom: 15px;
             }
 
             .step p {
                 font-size: 14px;
                 margin-bottom: 20px;
-            }
-
-            .input-group {
-                margin-bottom: 16px;
             }
 
             .form-group label {
@@ -348,7 +339,6 @@
             .button-group {
                 flex-direction: column-reverse;
                 gap: 12px;
-                margin-top: 28px;
             }
 
             .button-group .btn {
@@ -444,7 +434,7 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <img src="https://fleminglettings.co.uk/wp-content/uploads/2024/03/Fleming-Lettings-Logo-Dark.png" alt="Fleming Lettings" class="logo" onerror="this.src='https://fleminglettings.co.uk/wp-content/uploads/2023/10/image-4-1.png'">
+            <img src="https://fleminglettings.co.uk/wp-content/uploads/2023/10/image-4-1.png" alt="Fleming Lettings" class="logo">
             <a href="https://fleminglettings.co.uk" class="back-button">← Back to Website</a>
         </div>
 
