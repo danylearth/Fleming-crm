@@ -1703,8 +1703,9 @@ registerInventoryRoutes(app, authMiddleware);
 async function start() {
   try {
     await initDb();
-    app.listen(PORT, () => {
-      console.log(`Fleming CRM (PostgreSQL) running on http://localhost:${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Fleming CRM (PostgreSQL) running on port ${PORT}`);
+      console.log(`Health check available at http://0.0.0.0:${PORT}/api/health`);
     });
   } catch (err) {
     console.error('Failed to start:', err);
