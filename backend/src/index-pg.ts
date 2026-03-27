@@ -1202,16 +1202,18 @@ app.post('/api/tenants/bulk-delete', authMiddleware, async (req: AuthRequest, re
 // Public endpoint to get available properties for enquiry form
 app.get('/api/public/properties', async (req, res) => {
   try {
+    console.log('[Public Properties] Fetching properties with status: to_let, available');
     const properties = await query(`
-      SELECT p.id, p.address, p.postcode, p.property_type, p.bedrooms, p.rent_amount
+      SELECT p.id, p.address, p.postcode, p.property_type, p.bedrooms, p.rent_amount, p.status
       FROM properties p
       WHERE p.status IN ('to_let', 'available')
       ORDER BY p.address
     `);
+    console.log(`[Public Properties] Found ${properties.length} properties`);
     res.json(properties);
   } catch (err) {
-    console.error('Public properties fetch error:', err);
-    res.status(500).json({ error: 'Failed to fetch properties' });
+    console.error('[Public Properties] Error:', err);
+    res.status(500).json({ error: 'Failed to fetch properties', details: err instanceof Error ? err.message : String(err) });
   }
 });
 
