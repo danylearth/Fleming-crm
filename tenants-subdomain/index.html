@@ -30,7 +30,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 20px 16px;
         }
 
         .container {
@@ -46,7 +46,7 @@
         /* Header */
         .header {
             background: white;
-            padding: 20px 30px;
+            padding: 20px 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -62,13 +62,14 @@
             background: transparent;
             border: 1px solid #DC006D;
             color: #DC006D;
-            padding: 8px 20px;
-            border-radius: 20px;
+            padding: 10px 20px;
+            border-radius: 25px;
             font-size: 14px;
             cursor: pointer;
             transition: all 0.3s;
             text-decoration: none;
             font-weight: 500;
+            white-space: nowrap;
         }
 
         .back-button:hover {
@@ -91,7 +92,7 @@
 
         /* Form Container */
         .form-wrapper {
-            padding: 60px 40px;
+            padding: 40px 32px;
             min-height: 500px;
         }
 
@@ -278,6 +279,10 @@
 
         /* Mobile Optimization */
         @media (max-width: 768px) {
+            body {
+                padding: 0;
+            }
+
             .two-col {
                 grid-template-columns: 1fr;
                 gap: 12px;
@@ -289,23 +294,23 @@
             }
 
             .form-wrapper {
-                padding: 30px 20px;
+                padding: 32px 20px;
                 min-height: auto;
             }
 
             .header {
-                padding: 15px 20px;
-                flex-wrap: wrap;
-                gap: 10px;
+                padding: 16px 20px;
+                gap: 12px;
             }
 
             .logo {
-                height: 40px;
+                height: 42px;
             }
 
             .back-button {
                 font-size: 13px;
-                padding: 6px 16px;
+                padding: 8px 16px;
+                border-radius: 20px;
             }
 
             .step h2 {
@@ -434,7 +439,7 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <img src="https://fleminglettings.co.uk/wp-content/uploads/2023/10/image-4-1.png" alt="Fleming Lettings" class="logo">
+            <img src="https://fleminglettings.co.uk/wp-content/uploads/2024/03/Fleming-Lettings-Logo-Dark.png" alt="Fleming Lettings" class="logo" onerror="this.src='https://fleminglettings.co.uk/wp-content/uploads/2023/10/image-4-1.png'">
             <a href="https://fleminglettings.co.uk" class="back-button">← Back to Website</a>
         </div>
 
