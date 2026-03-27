@@ -16,7 +16,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = parseInt(process.env.PORT || '3001', 10);
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '../uploads');
