@@ -148,10 +148,12 @@ export async function initDb() {
         epc_expiry_date DATE,
         has_gas INTEGER DEFAULT 0,
         gas_safety_expiry_date DATE,
-        status TEXT DEFAULT 'available' CHECK(status IN ('available', 'let', 'maintenance')),
+        status TEXT DEFAULT 'to_let' CHECK(status IN ('to_let', 'available', 'let', 'maintenance')),
         onboarded_date DATE,
         notes TEXT,
         amenities TEXT,
+        tenant_id INTEGER REFERENCES tenants(id),
+        image_url TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );

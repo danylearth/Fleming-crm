@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/index-pg.js",
     "start:sqlite": "tsx src/index.ts",
-    "seed:pg": "tsx seed-pg.ts"
+    "seed:pg": "tsx seed-pg.ts",
+    "migrate:fix-properties": "tsx fix-properties-schema.ts"
   },
   "keywords": [],
   "author": "",
