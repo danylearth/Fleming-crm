@@ -346,21 +346,6 @@ export async function initDb() {
       END $$;
     `);
 
-    // Update properties status constraint to new values
-    await client.query(`
-      DO $$ BEGIN
-        -- Update existing data to new status values
-        UPDATE properties SET status = 'to_let' WHERE status = 'available';
-        UPDATE properties SET status = 'full_management' WHERE status = 'maintenance';
-        UPDATE properties SET status = 'let_agreed' WHERE status = 'let';
-        -- Drop old constraint and add new one
-        ALTER TABLE properties DROP CONSTRAINT IF EXISTS properties_status_check;
-        ALTER TABLE properties ADD CONSTRAINT properties_status_check
-          CHECK(status IN ('to_let', 'let_agreed', 'full_management', 'rent_collection'));
-      EXCEPTION WHEN OTHERS THEN NULL;
-      END $$;
-    `);
-
     console.log('Database initialized');
 
     // Migrate existing property landlord relationships
