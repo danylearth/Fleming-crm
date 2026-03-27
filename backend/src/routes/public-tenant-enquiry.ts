@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { pool } from '../db-pg';
+import pool from '../db-pg';
 import { sendEmail } from '../email';
 
 const router = Router();
