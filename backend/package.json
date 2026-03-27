@@ -10,7 +10,8 @@
     "start": "node dist/index-pg.js",
     "start:sqlite": "tsx src/index.ts",
     "seed:pg": "tsx seed-pg.ts",
-    "migrate:fix-properties": "tsx fix-properties-schema.ts"
+    "migrate:fix-properties": "tsx fix-properties-schema.ts",
+    "migrate:production": "tsx run-production-migration.ts"
   },
   "keywords": [],
   "author": "",

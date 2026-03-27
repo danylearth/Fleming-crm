@@ -424,6 +424,42 @@ export async function initDb() {
       console.log(`[Migration] Extracted company numbers from ${landlordsWithCompanyInNotes.rows.length} landlord notes.`);
     }
 
+    // Add tenant_id and image_url columns to properties table
+    const tenantIdCheck = await client.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'properties' AND column_name = 'tenant_id'
+    `);
+    if (tenantIdCheck.rows.length === 0) {
+      console.log('[Migration] Adding tenant_id column to properties...');
+      await client.query(`ALTER TABLE properties ADD COLUMN tenant_id INTEGER REFERENCES tenants(id)`);
+      console.log('[Migration] tenant_id column added successfully.');
+    }
+
+    const imageUrlCheck = await client.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'properties' AND column_name = 'image_url'
+    `);
+    if (imageUrlCheck.rows.length === 0) {
+      console.log('[Migration] Adding image_url column to properties...');
+      await client.query(`ALTER TABLE properties ADD COLUMN image_url TEXT`);
+      console.log('[Migration] image_url column added successfully.');
+    }
+
+    // Fix properties status CHECK constraint to include 'to_let'
+    try {
+      console.log('[Migration] Updating properties status constraint to include "to_let"...');
+      await client.query(`ALTER TABLE properties DROP CONSTRAINT IF EXISTS properties_status_check`);
+      await client.query(`
+        ALTER TABLE properties
+        ADD CONSTRAINT properties_status_check
+        CHECK (status IN ('to_let', 'available', 'let', 'maintenance'))
+      `);
+      await client.query(`ALTER TABLE properties ALTER COLUMN status SET DEFAULT 'to_let'`);
+      console.log('[Migration] Properties status constraint updated successfully.');
+    } catch (err) {
+      console.log('[Migration] Status constraint may already be updated:', err);
+    }
+
     // Run inventory migration
     await runInventoryMigration(pool);
   } finally {

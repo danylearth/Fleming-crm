@@ -59,6 +59,19 @@ npm run render-build    # Production build for Render deployment
 npm run render-start    # Production start for Render deployment
 ```
 
+### Subdomain Forms Deployment
+```bash
+# Deploy tenant form to apply.fleminglettings.co.uk
+./deploy-tenant-subdomain.sh
+
+# Deploy landlord form to landlords.fleminglettings.co.uk
+./deploy-landlord-subdomain.sh
+
+# Or manually from subdomain directories
+cd tenants-subdomain && vercel --prod
+cd landlords-subdomain && vercel --prod
+```
+
 ## Architecture
 
 ### Backend Structure
@@ -98,6 +111,13 @@ Special routes:
 - `POST /api/tenant-enquiries/:id/convert` - Convert enquiry to tenant
 - `PUT /api/rent-payments/:id/pay` - Mark rent payment as paid
 - `GET /api/tenant-enquiries/check-duplicates` - Cross-check duplicates across tenants/landlords/enquiries
+- `GET /api/landlords/:id/properties` - Get all properties for a landlord (including via property_landlords)
+- `GET /api/properties/:id/landlords` - Get all landlords for a property (primary + secondary)
+- `POST /api/properties/:id/landlords` - Add secondary landlord to property
+- `DELETE /api/properties/:propertyId/landlords/:landlordId` - Remove secondary landlord
+- `GET /api/landlords/:id/directors` - Get directors for a company landlord
+- `POST /api/landlords/:id/directors` - Add director to company landlord
+- `DELETE /api/landlords/:landlordId/directors/:directorId` - Remove director from company
 
 ### Frontend Structure
 
@@ -175,11 +195,13 @@ The codebase includes a mobile app in the `/mobile` directory for on-the-go CRM 
 
 **Core Entities:**
 - `users` - Staff users with role-based access (admin/staff)
-- `landlords` - Onboarded landlords with full KYC
+- `landlords` - Onboarded landlords with full KYC (individual/company/trust types)
+- `landlord_directors` - Directors/officers for company landlords
 - `landlords_bdm` - Business development prospects (pipeline)
 - `tenant_enquiries` - Website enquiries (pre-tenant pipeline)
 - `tenants` - Onboarded tenants with KYC and tenancy details
 - `properties` - Rental properties with compliance tracking
+- `property_landlords` - Junction table for multi-landlord properties
 - `maintenance` - Maintenance requests
 - `tasks` - Manual and automated tasks
 - `rent_payments` - Rent payment tracking
@@ -187,8 +209,12 @@ The codebase includes a mobile app in the `/mobile` directory for on-the-go CRM 
 - `audit_log` - Full audit trail of all user actions
 
 **Key Relationships:**
-- Properties belong to landlords
-- Tenants can be linked to properties
+- Properties belong to landlords (primary relationship)
+- Properties support multiple landlords via `property_landlords` junction table
+  - One primary landlord (marked with `is_primary = 1`)
+  - Multiple secondary landlords (co-owners, trustees, companies with multiple directors)
+  - Tracks ownership entity type (individual/company/trust)
+- Tenants can be linked to properties (via `tenant_id` on properties table)
 - Maintenance requests link to properties
 - Tasks can link to any entity type (polymorphic via `entity_type` and `entity_id`)
 - Documents link to any entity type (polymorphic)
@@ -207,6 +233,14 @@ The codebase includes a mobile app in the `/mobile` directory for on-the-go CRM 
 **Landlord Pipeline:**
 1. `landlords_bdm` with status: new → contacted → follow_up → interested → onboarded/not_interested
 2. Convert BDM prospect creates record in `landlords` table
+
+**Landlord Types:**
+Landlords can be one of three types:
+- `individual` - Single person owner (default)
+- `company` - Limited company (requires `company_number`, can have multiple `landlord_directors`)
+- `trust` - Trust entity
+
+Company landlords require Companies House verification and director information.
 
 ### Government API Integrations
 
@@ -258,47 +292,51 @@ The system integrates with several UK government open data APIs to provide accur
 **Hook:**
 - `useGovernmentAPIs()` - Custom React hook providing methods for all government APIs
 
-### Public Tenant Enquiry Form
+### Public Forms and Subdomains
 
-**Standalone Form:**
-The `/public-form` directory contains a standalone HTML form for tenant enquiries that can be hosted separately from the main CRM.
+**Three Public Forms:**
+The codebase includes three standalone forms for public-facing data capture:
 
-**Purpose:**
-- Embeddable on external website (fleminglettings.co.uk)
-- No authentication required
-- Directly submits to CRM via public API endpoints
-- Matches CRM navy/gold theme
+1. **Tenant Enquiry Form** (`/tenants-subdomain/`)
+   - Production URL: `apply.fleminglettings.co.uk`
+   - Multi-step wizard (7 steps) with joint applicant support
+   - Full KYC data capture
+   - Mobile-optimized with touch-friendly targets
+   - Property selection from CRM database
+
+2. **Landlord Enquiry Form** (`/landlords-subdomain/`)
+   - Production URL: `landlords.fleminglettings.co.uk`
+   - Property owner enquiry form for onboarding new landlords
+   - Captures landlord details and property information
+   - Routes to BDM pipeline in CRM
+
+3. **Legacy Public Form** (`/public-form/`)
+   - Original tenant enquiry form (single file)
+   - Can be hosted on any static host
 
 **Public API Endpoints:**
-The backend provides public endpoints specifically for this form (no auth required):
+The backend provides public endpoints (no auth required):
 - `GET /api/public/properties` - List available properties
-- `POST /api/public/tenant-enquiries` - Submit new enquiry
+- `POST /api/public/tenant-enquiries` - Submit tenant enquiry
+- `POST /api/public/landlord-enquiries` - Submit landlord enquiry
 
-**Deployment:**
-- Single file: `tenant-enquiry.html`
-- Can be hosted on any static hosting (Vercel, Netlify, GitHub Pages, etc.)
-- Configure API URL on line 922 to point to backend
-- Supports subdomain deployment (e.g., `enquiry.fleminglettings.co.uk`)
+**Subdomain Deployment:**
+Each subdomain form can be deployed independently to Vercel/Netlify:
+```bash
+cd tenants-subdomain   # or landlords-subdomain
+vercel --prod          # Deploy to Vercel
+```
 
-**Features:**
-- Responsive design (mobile/tablet/desktop)
-- Property selection from CRM database
-- Joint tenant applications support
-- Full KYC data capture (personal details, employment, address history)
-- Terms/privacy consent checkboxes
-- Direct integration with CRM tenant enquiries pipeline
+Then configure DNS CNAME records:
+- `apply` → Vercel DNS (for tenant form)
+- `landlords` → Vercel DNS (for landlord form)
 
 **Data Flow:**
-1. User submits form on external site
-2. POST to `/api/public/tenant-enquiries`
-3. Record created in `tenant_enquiries` table with status "new"
-4. Enquiry appears in CRM Enquiries module for staff to manage
-5. Staff can progress through pipeline: new → viewing_booked → onboarding → converted
-
-**Customization:**
-- Change API URL: Edit line 922 in `tenant-enquiry.html`
-- Modify styling: CSS variables in `<style>` block (lines 7-439)
-- Add/remove fields: Ensure `name` attributes match database columns
+1. User submits form on subdomain
+2. POST to `/api/public/tenant-enquiries` or `/api/public/landlord-enquiries`
+3. Record created in `tenant_enquiries` or `landlords_bdm` table
+4. Enquiry appears in CRM for staff to manage
+5. Staff progress through pipeline and convert to tenant/landlord
 
 ### Environment Configuration
 
@@ -398,9 +436,11 @@ logAudit(userId, userEmail, 'create', 'landlord', entityId, changesObject);
 
 7. **Demo Data:** Production databases can auto-seed. Be careful with `FORCE_RESEED` as it wipes all data.
 
-8. **Public API Endpoints:** The `/api/public/*` routes are intentionally unauthenticated for the external enquiry form. These should remain public but consider implementing rate limiting to prevent abuse.
+8. **Public API Endpoints:** The `/api/public/*` routes are intentionally unauthenticated for the external enquiry forms (tenant and landlord). These should remain public but consider implementing rate limiting to prevent abuse.
 
 9. **Mobile Development:** When testing the mobile app on physical devices, use your local network IP address in the API configuration (found in `mobile/src/services/api.ts`), not `localhost` or `127.0.0.1`. The app needs to connect to your development machine over the local network.
+
+10. **Multi-Landlord Properties:** Properties can have multiple landlords. Always ensure one landlord is marked as primary (`is_primary = 1` in `property_landlords` table). The primary landlord ID is also stored on the `properties.landlord_id` field for backwards compatibility and simple queries.
 
 ## Deployment Troubleshooting
 
