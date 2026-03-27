@@ -1111,7 +1111,7 @@ app.get('/api/public/properties', async (req, res) => {
     const properties = await query(`
       SELECT p.id, p.address, p.postcode, p.property_type, p.bedrooms, p.rent_amount
       FROM properties p
-      WHERE p.status = 'available'
+      WHERE p.status IN ('to_let', 'available')
       ORDER BY p.address
     `);
     res.json(properties);
