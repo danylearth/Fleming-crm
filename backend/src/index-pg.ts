@@ -873,20 +873,44 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
     // Get client IP for audit
     const client_ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-    // Map form fields to database columns
+    // Build notes with additional fields
+    let notes = '=== PROPERTY REQUIREMENTS ===\n';
+    if (tenancylookingfor) notes += `Tenancy Type: ${tenancylookingfor}\n`;
+    if (typeofproperty) notes += `Property Type: ${typeofproperty}\n`;
+    if (noofbedrooms) notes += `Bedrooms: ${noofbedrooms}\n`;
+    if (roadparking) notes += `Parking: ${roadparking}\n`;
+    if (rent_max) notes += `Max Rent: £${rent_max}/month\n`;
+    if (reasonforrenting) notes += `Reason: ${reasonforrenting}\n`;
+    notes += '\n=== APPLICANT 1 DETAILS ===\n';
+    if (address) notes += `Address: ${address}\n`;
+    if (Postcode) notes += `Postcode: ${Postcode}\n`;
+    if (yearofaddress) notes += `Years at address: ${yearofaddress}\n`;
+    if (Nationality) notes += `Nationality: ${Nationality}\n`;
+    if (job_title) notes += `Job Title: ${job_title}\n`;
+    if (AnnualSalary) notes += `Annual Salary: £${AnnualSalary}\n`;
+    if (is_joint && FirstName2) {
+      notes += '\n=== APPLICANT 2 DETAILS ===\n';
+      if (address2) notes += `Address: ${address2}\n`;
+      if (Postcode2) notes += `Postcode: ${Postcode2}\n`;
+      if (yearofaddress2) notes += `Years at address: ${yearofaddress2}\n`;
+      if (Nationality2) notes += `Nationality: ${Nationality2}\n`;
+      if (job_title2) notes += `Job Title: ${job_title2}\n`;
+      if (AnnualSalary2) notes += `Annual Salary: £${AnnualSalary2}\n`;
+    }
+    notes += `\n=== FORM METADATA ===\n`;
+    notes += `Submitted from IP: ${client_ip}\n`;
+    notes += `Submission date: ${new Date().toISOString()}\n`;
+
+    // Map form fields to database columns (only columns that exist in schema)
     const data: any = {
       first_name_1: FirstName,
       last_name_1: Surname,
       email_1: form_email,
       phone_1: contactNumber,
       current_address_1: address || null,
-      postcode_1: Postcode || null,
-      years_at_address_1: yearofaddress || null,
       date_of_birth_1: dob || null,
-      nationality_1: Nationality || null,
       employment_status_1: EmploymentStatus || null,
-      job_title_1: job_title || null,
-      annual_salary_1: AnnualSalary ? parseFloat(AnnualSalary) : null,
+      employer_1: job_title || null,
       income_1: AnnualSalary ? parseFloat(AnnualSalary) : null,
       is_joint_application: is_joint,
       first_name_2: FirstName2 || null,
@@ -894,23 +918,12 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
       email_2: form_email2 || null,
       phone_2: contactNumber2 || null,
       current_address_2: address2 || null,
-      postcode_2: Postcode2 || null,
-      years_at_address_2: yearofaddress2 || null,
       date_of_birth_2: dob2 || null,
-      nationality_2: Nationality2 || null,
       employment_status_2: EmploymentStatus2 || null,
-      job_title_2: job_title2 || null,
-      annual_salary_2: AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
+      employer_2: job_title2 || null,
       income_2: AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
-      preferred_tenancy_type: tenancylookingfor || null,
-      reason_for_renting: reasonforrenting || null,
-      property_type: typeofproperty || null,
-      bedrooms: noofbedrooms ? parseInt(noofbedrooms) : null,
-      parking_required: roadparking || null,
-      monthly_rent_budget: rent_max ? parseFloat(rent_max) : null,
       linked_property_id: property_id ? parseInt(property_id) : null,
-      form_submission_ip: client_ip as string,
-      form_version: 'v1',
+      notes: notes,
       status: 'new'
     };
 
@@ -940,7 +953,10 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
     });
   } catch (err) {
     console.error('Public enquiry submission error:', err);
-    res.status(500).json({ error: 'Failed to submit enquiry' });
+    res.status(500).json({
+      error: 'Failed to submit enquiry',
+      details: err instanceof Error ? err.message : String(err)
+    });
   }
 });
 
