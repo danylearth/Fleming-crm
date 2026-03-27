@@ -1203,13 +1203,17 @@ app.post('/api/tenants/bulk-delete', authMiddleware, async (req: AuthRequest, re
 app.get('/api/public/properties', async (req, res) => {
   try {
     console.log('[Public Properties] Fetching properties with status: to_let, available');
+    // First get ALL properties to debug
+    const allProps = await query(`SELECT p.id, p.address, p.status FROM properties p`);
+    console.log(`[Public Properties] Total properties in DB: ${allProps.length}`, allProps);
+
     const properties = await query(`
       SELECT p.id, p.address, p.postcode, p.property_type, p.bedrooms, p.rent_amount, p.status
       FROM properties p
       WHERE p.status IN ('to_let', 'available')
       ORDER BY p.address
     `);
-    console.log(`[Public Properties] Found ${properties.length} properties`);
+    console.log(`[Public Properties] Found ${properties.length} properties with status filter`);
     res.json(properties);
   } catch (err) {
     console.error('[Public Properties] Error:', err);
