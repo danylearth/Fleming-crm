@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tenant Registration - Fleming Lettings</title>
-    
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+
     <style>
         @font-face {
             font-family: 'Switzer';
@@ -45,12 +46,11 @@
 
         /* Header */
         .header {
-            background: white;
+            background: linear-gradient(135deg, #25073B 0%, #DC006D 100%);
             padding: 20px 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #f0f0f0;
         }
 
         .logo {
@@ -59,9 +59,9 @@
         }
 
         .back-button {
-            background: transparent;
-            border: 1px solid #DC006D;
-            color: #DC006D;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: white;
             padding: 8px 20px;
             border-radius: 20px;
             font-size: 14px;
@@ -72,8 +72,7 @@
         }
 
         .back-button:hover {
-            background: #DC006D;
-            color: white;
+            background: rgba(255,255,255,0.3);
         }
 
         /* Progress Bar */
@@ -91,7 +90,7 @@
 
         /* Form Container */
         .form-wrapper {
-            padding: 60px 40px;
+            padding: 50px 40px;
             min-height: 500px;
         }
 
@@ -123,7 +122,7 @@
             font-weight: 700;
         }
 
-        .step p {
+        .step p.step-description {
             color: #666;
             font-size: 16px;
             margin-bottom: 30px;
@@ -145,9 +144,11 @@
 
         input[type="text"],
         input[type="email"],
+        input[type="tel"],
         input[type="date"],
         input[type="number"],
-        select {
+        select,
+        textarea {
             width: 100%;
             padding: 15px;
             border: 2px solid #e0e0e0;
@@ -155,13 +156,37 @@
             font-size: 16px;
             font-family: 'Switzer', sans-serif;
             transition: all 0.3s;
+            background: white;
+            color: #333;
+            -webkit-appearance: none;
+        }
+
+        /* Fix date input light mode visibility */
+        input[type="date"] {
+            color: #333;
+            color-scheme: light;
+        }
+
+        input[type="date"]::-webkit-datetime-edit {
+            color: #333;
+        }
+
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            opacity: 0.6;
+            cursor: pointer;
         }
 
         input:focus,
-        select:focus {
+        select:focus,
+        textarea:focus {
             outline: none;
             border-color: #DC006D;
             box-shadow: 0 0 0 3px rgba(220, 0, 109, 0.1);
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
         }
 
         /* Radio Button Groups */
@@ -199,6 +224,135 @@
 
         .radio-option label:hover {
             border-color: #DC006D;
+        }
+
+        /* Checkbox Styles */
+        .checkbox-group {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            margin-top: 2px;
+            cursor: pointer;
+            accent-color: #DC006D;
+            flex-shrink: 0;
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            font-size: 14px;
+            color: #555;
+            font-weight: 400;
+            line-height: 1.5;
+            cursor: pointer;
+        }
+
+        .checkbox-group label a {
+            color: #DC006D;
+            text-decoration: underline;
+        }
+
+        /* Marketing Preferences */
+        .marketing-prefs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .marketing-prefs .checkbox-group {
+            margin-bottom: 8px;
+        }
+
+        /* File Upload */
+        .file-upload-area {
+            border: 2px dashed #DC006D;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fdf2f7;
+        }
+
+        .file-upload-area:hover {
+            background: #fce8f1;
+        }
+
+        .file-upload-area p {
+            color: #DC006D;
+            font-weight: 500;
+            margin-bottom: 5px !important;
+        }
+
+        .file-upload-area .upload-hint {
+            color: #999;
+            font-size: 13px;
+        }
+
+        .file-upload-area input[type="file"] {
+            display: none;
+        }
+
+        .uploaded-files {
+            margin-top: 10px;
+        }
+
+        .uploaded-file {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .uploaded-file .remove-file {
+            color: #DC006D;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        /* Property Search */
+        .property-search-container {
+            position: relative;
+        }
+
+        .property-search-container input {
+            width: 100%;
+        }
+
+        .property-search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 10;
+            display: none;
+        }
+
+        .property-search-results .search-result {
+            padding: 12px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+        }
+
+        .property-search-results .search-result:hover {
+            background: #fdf2f7;
         }
 
         /* Buttons */
@@ -276,16 +430,33 @@
             gap: 15px;
         }
 
+        /* reCAPTCHA */
+        .recaptcha-container {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+        }
+
         /* Mobile Optimization */
         @media (max-width: 768px) {
+            body {
+                padding: 0;
+                align-items: flex-start;
+            }
+
             .two-col {
                 grid-template-columns: 1fr;
-                gap: 12px;
+                gap: 0;
+            }
+
+            .marketing-prefs {
+                grid-template-columns: 1fr;
             }
 
             .container {
                 border-radius: 0;
                 max-width: 100%;
+                min-height: 100vh;
             }
 
             .form-wrapper {
@@ -295,8 +466,6 @@
 
             .header {
                 padding: 15px 20px;
-                flex-wrap: wrap;
-                gap: 10px;
             }
 
             .logo {
@@ -309,77 +478,55 @@
             }
 
             .step h2 {
-                font-size: 22px;
-                margin-bottom: 15px;
+                font-size: 24px;
+                margin-bottom: 12px;
             }
 
-            .step p {
+            .step p.step-description {
                 font-size: 14px;
                 margin-bottom: 20px;
             }
 
-            .form-group label {
-                font-size: 14px;
-                margin-bottom: 6px;
-            }
-
-            .form-group input,
-            .form-group select,
-            .form-group textarea {
+            input[type="text"],
+            input[type="email"],
+            input[type="tel"],
+            input[type="date"],
+            input[type="number"],
+            select,
+            textarea {
                 font-size: 16px; /* Prevents zoom on iOS */
-                padding: 12px 14px;
+                padding: 14px;
             }
 
             .btn {
                 width: 100%;
-                padding: 14px 20px;
-                font-size: 15px;
+                padding: 16px 20px;
+                font-size: 16px;
             }
 
             .button-group {
                 flex-direction: column-reverse;
                 gap: 12px;
+                margin-top: 30px;
             }
 
-            .button-group .btn {
-                margin: 0;
-            }
-
-            /* Radio buttons on mobile */
-            .radio-group {
-                flex-direction: column;
-                gap: 12px;
-            }
-
-            .radio-group label {
+            .radio-option label {
+                padding: 16px 18px;
                 font-size: 15px;
             }
 
-            /* Select dropdowns */
+            .file-upload-area {
+                padding: 25px 15px;
+            }
+
             select {
                 background-position: right 10px center;
                 padding-right: 35px;
-            }
-
-            /* Checkbox groups */
-            .checkbox-group {
-                font-size: 14px;
-                line-height: 1.5;
-            }
-
-            /* Error messages */
-            .error-message {
-                font-size: 13px;
-                padding: 10px;
             }
         }
 
         /* Small mobile devices */
         @media (max-width: 480px) {
-            body {
-                padding: 0;
-            }
-
             .form-wrapper {
                 padding: 25px 15px;
             }
@@ -389,7 +536,7 @@
             }
 
             .step h2 {
-                font-size: 20px;
+                font-size: 22px;
             }
 
             .logo {
@@ -405,16 +552,29 @@
         /* Touch-friendly improvements */
         @media (hover: none) and (pointer: coarse) {
             .btn,
-            .back-button,
-            input[type="radio"],
-            input[type="checkbox"] {
-                min-height: 44px; /* Apple recommended touch target */
+            .back-button {
+                min-height: 48px;
             }
 
-            .form-group input,
-            .form-group select,
-            .form-group textarea {
-                min-height: 44px;
+            input[type="text"],
+            input[type="email"],
+            input[type="tel"],
+            input[type="date"],
+            input[type="number"],
+            select,
+            textarea {
+                min-height: 48px;
+            }
+
+            .radio-option label {
+                min-height: 48px;
+                display: flex;
+                align-items: center;
+            }
+
+            .checkbox-group input[type="checkbox"] {
+                width: 24px;
+                height: 24px;
             }
         }
 
@@ -427,6 +587,19 @@
             border-radius: 8px;
             margin-bottom: 20px;
             font-size: 14px;
+        }
+
+        /* Conditional field animation */
+        .conditional-fields {
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+        }
+
+        .conditional-fields.hidden {
+            max-height: 0;
+            opacity: 0;
+            margin: 0;
+            padding: 0;
         }
     </style>
 </head>
@@ -446,13 +619,13 @@
         <!-- Form -->
         <div class="form-wrapper">
             <div id="errorContainer"></div>
-            
+
             <form id="tenantForm">
                 <!-- Step 1: Registration Type -->
                 <div class="step active" data-step="1">
-                    <h2>Welcome! 👋</h2>
-                    <p>Let's get you registered. Are you applying alone or with someone else?</p>
-                    
+                    <h2>Welcome! &#x1F44B;</h2>
+                    <p class="step-description">Let's get you registered. Are you applying alone or with someone else?</p>
+
                     <div class="radio-group">
                         <div class="radio-option">
                             <input type="radio" name="registration_type" id="sole" value="Sole" checked>
@@ -472,7 +645,7 @@
                 <!-- Step 2: Personal Details -->
                 <div class="step" data-step="2">
                     <h2>Tell us about yourself</h2>
-                    <p>We need some basic information to get started.</p>
+                    <p class="step-description">We need some basic information to get started.</p>
 
                     <div class="two-col">
                         <div class="input-group">
@@ -492,12 +665,12 @@
 
                     <div class="input-group">
                         <label>Contact Number *</label>
-                        <input type="text" name="contactNumber" required>
+                        <input type="tel" name="contactNumber" required>
                     </div>
 
                     <div class="input-group">
-                        <label>Date of Birth *</label>
-                        <input type="date" name="dob" required>
+                        <label>Date of Birth * <span style="font-weight: 400; color: #999; font-size: 12px;">(DD/MM/YYYY)</span></label>
+                        <input type="date" name="dob" id="dob" required placeholder="DD/MM/YYYY">
                     </div>
 
                     <div class="button-group">
@@ -508,8 +681,7 @@
 
                 <!-- Step 3: Current Address -->
                 <div class="step" data-step="3">
-                    <h2>Where do you currently live?</h2>
-                    <p>This helps us understand your rental history.</p>
+                    <h2>Some more information about you</h2>
 
                     <div class="input-group">
                         <label>Current Address *</label>
@@ -529,28 +701,8 @@
 
                     <div class="input-group">
                         <label>Nationality *</label>
-                        <select name="Nationality" required>
+                        <select name="Nationality" id="nationalitySelect" required>
                             <option value="">Please select an option</option>
-                            <option value="English, Welsh, Scottish, Northern Irish or British">English, Welsh, Scottish, Northern Irish or British</option>
-                            <option value="Irish">Irish</option>
-                            <option value="Gypsy or Irish Traveller">Gypsy or Irish Traveller</option>
-                            <option value="Any other White background">Any other White background</option>
-                            <option value="White and Black Caribbean">White and Black Caribbean</option>
-                            <option value="White and Black African">White and Black African</option>
-                            <option value="White and Asian">White and Asian</option>
-                            <option value="Any other Mixed or multiple ethnic background">Any other Mixed or multiple ethnic background</option>
-                            <option value="Indian">Indian</option>
-                            <option value="Pakistani">Pakistani</option>
-                            <option value="Bangladeshi">Bangladeshi</option>
-                            <option value="Chinese">Chinese</option>
-                            <option value="Any other Asian background">Any other Asian background</option>
-                            <option value="African">African</option>
-                            <option value="Caribbean">Caribbean</option>
-                            <option value="Any other Black, Black British, or Caribbean background">Any other Black, Black British, or Caribbean background</option>
-                            <option value="Arab">Arab</option>
-                            <option value="Roma">Roma</option>
-                            <option value="Any other ethnic group">Any other ethnic group</option>
-                            <option value="Rather not say">Rather not say</option>
                         </select>
                     </div>
 
@@ -563,11 +715,11 @@
                 <!-- Step 4: Employment -->
                 <div class="step" data-step="4">
                     <h2>Employment details</h2>
-                    <p>Help us understand your financial situation.</p>
+                    <p class="step-description">Help us understand your financial situation.</p>
 
                     <div class="input-group">
                         <label>Employment Status *</label>
-                        <select name="EmploymentStatus" required>
+                        <select name="EmploymentStatus" id="employmentStatus" required>
                             <option value="">Please select</option>
                             <option value="Full-Time Employed">Full-Time Employed</option>
                             <option value="Part-Time Employed">Part-Time Employed</option>
@@ -577,14 +729,27 @@
                         </select>
                     </div>
 
-                    <div class="input-group">
-                        <label>Job Title</label>
-                        <input type="text" name="job_title" placeholder="e.g. Software Engineer">
-                    </div>
+                    <div id="employmentDetails" style="display: none;">
+                        <div class="input-group">
+                            <label>Job Title</label>
+                            <input type="text" name="job_title" placeholder="e.g. Software Engineer">
+                        </div>
 
-                    <div class="input-group">
-                        <label>Annual Salary (£)</label>
-                        <input type="text" name="AnnualSalary" placeholder="e.g. 30000">
+                        <div class="input-group">
+                            <label>Annual Salary (£)</label>
+                            <input type="text" name="AnnualSalary" placeholder="e.g. 30000">
+                        </div>
+
+                        <div class="input-group">
+                            <label>Is this a contract role or fixed term position?</label>
+                            <select name="contract_type">
+                                <option value="">Please select</option>
+                                <option value="Contract role position">Contract role position</option>
+                                <option value="Fixed term position">Fixed term position</option>
+                                <option value="Temporary or agency role">Temporary or agency role</option>
+                                <option value="Permanent position">Permanent position</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="button-group">
@@ -596,7 +761,7 @@
                 <!-- Step 5: Joint Applicant (conditional) -->
                 <div class="step" data-step="5" id="jointStep">
                     <h2>Second applicant details</h2>
-                    <p>Now tell us about the person you're applying with.</p>
+                    <p class="step-description">Now tell us about the person you're applying with.</p>
 
                     <div class="two-col">
                         <div class="input-group">
@@ -616,38 +781,18 @@
 
                     <div class="input-group">
                         <label>Contact Number</label>
-                        <input type="text" name="contactNumber2">
+                        <input type="tel" name="contactNumber2">
                     </div>
 
                     <div class="two-col">
                         <div class="input-group">
-                            <label>Date of Birth</label>
+                            <label>Date of Birth <span style="font-weight: 400; color: #999; font-size: 12px;">(DD/MM/YYYY)</span></label>
                             <input type="date" name="dob2">
                         </div>
                         <div class="input-group">
                             <label>Nationality</label>
-                            <select name="Nationality2">
+                            <select name="Nationality2" id="nationalitySelect2">
                                 <option value="">Please select an option</option>
-                                <option value="English, Welsh, Scottish, Northern Irish or British">English, Welsh, Scottish, Northern Irish or British</option>
-                                <option value="Irish">Irish</option>
-                                <option value="Gypsy or Irish Traveller">Gypsy or Irish Traveller</option>
-                                <option value="Any other White background">Any other White background</option>
-                                <option value="White and Black Caribbean">White and Black Caribbean</option>
-                                <option value="White and Black African">White and Black African</option>
-                                <option value="White and Asian">White and Asian</option>
-                                <option value="Any other Mixed or multiple ethnic background">Any other Mixed or multiple ethnic background</option>
-                                <option value="Indian">Indian</option>
-                                <option value="Pakistani">Pakistani</option>
-                                <option value="Bangladeshi">Bangladeshi</option>
-                                <option value="Chinese">Chinese</option>
-                                <option value="Any other Asian background">Any other Asian background</option>
-                                <option value="African">African</option>
-                                <option value="Caribbean">Caribbean</option>
-                                <option value="Any other Black, Black British, or Caribbean background">Any other Black, Black British, or Caribbean background</option>
-                                <option value="Arab">Arab</option>
-                                <option value="Roma">Roma</option>
-                                <option value="Any other ethnic group">Any other ethnic group</option>
-                                <option value="Rather not say">Rather not say</option>
                             </select>
                         </div>
                     </div>
@@ -665,23 +810,36 @@
 
                     <div class="input-group">
                         <label>Employment Status</label>
-                        <select name="EmploymentStatus2">
+                        <select name="EmploymentStatus2" id="employmentStatus2">
                             <option value="">Please select</option>
                             <option value="Full-Time Employed">Full-Time Employed</option>
                             <option value="Part-Time Employed">Part-Time Employed</option>
                             <option value="Self-Employed">Self-Employed</option>
+                            <option value="Student">Student</option>
                             <option value="Unemployed">Unemployed</option>
                         </select>
                     </div>
 
-                    <div class="two-col">
-                        <div class="input-group">
-                            <label>Job Title</label>
-                            <input type="text" name="job_title2">
+                    <div id="employmentDetails2" style="display: none;">
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>Job Title</label>
+                                <input type="text" name="job_title2">
+                            </div>
+                            <div class="input-group">
+                                <label>Annual Salary (£)</label>
+                                <input type="number" name="AnnualSalary2" min="0">
+                            </div>
                         </div>
                         <div class="input-group">
-                            <label>Annual Salary (£)</label>
-                            <input type="number" name="AnnualSalary2" min="0">
+                            <label>Is this a contract role or fixed term position?</label>
+                            <select name="contract_type2">
+                                <option value="">Please select</option>
+                                <option value="Contract role position">Contract role position</option>
+                                <option value="Fixed term position">Fixed term position</option>
+                                <option value="Temporary or agency role">Temporary or agency role</option>
+                                <option value="Permanent position">Permanent position</option>
+                            </select>
                         </div>
                     </div>
 
@@ -694,26 +852,26 @@
                 <!-- Step 6: Property Requirements -->
                 <div class="step" data-step="6">
                     <h2>What are you looking for?</h2>
-                    <p>Tell us about your ideal property.</p>
-
-                    <div class="input-group">
-                        <label>Interested in a specific property?</label>
-                        <select name="property_id" id="propertySelect">
-                            <option value="">I'm browsing / Not sure yet</option>
-                        </select>
-                        <p style="font-size: 12px; color: #999; margin-top: 5px;">Optional: Select a property you're interested in, or leave blank to browse</p>
-                    </div>
+                    <p class="step-description">Tell us about your renting requirements</p>
 
                     <div class="input-group">
                         <label>Tenancy Type *</label>
                         <div class="radio-group">
                             <div class="radio-option">
-                                <input type="radio" name="tenancylookingfor" id="longterm" value="Long-term rent" required>
-                                <label for="longterm">Long-term rent (12+ months)</label>
+                                <input type="radio" name="tenancylookingfor" id="shortterm" value="Short term" required>
+                                <label for="shortterm">Short term</label>
                             </div>
                             <div class="radio-option">
-                                <input type="radio" name="tenancylookingfor" id="shortterm" value="Short-term rent">
-                                <label for="shortterm">Short-term rent (3-11 months)</label>
+                                <input type="radio" name="tenancylookingfor" id="shortmidterm" value="Short-mid term">
+                                <label for="shortmidterm">Short-mid term</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" name="tenancylookingfor" id="midlongterm" value="Mid-long term">
+                                <label for="midlongterm">Mid-long term</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" name="tenancylookingfor" id="longterm" value="Long term">
+                                <label for="longterm">Long term</label>
                             </div>
                         </div>
                     </div>
@@ -726,12 +884,24 @@
                                 <label for="house">House</label>
                             </div>
                             <div class="radio-option">
-                                <input type="radio" name="typeofproperty" id="flat" value="Flat">
-                                <label for="flat">Flat/Apartment</label>
+                                <input type="radio" name="typeofproperty" id="flat" value="Apartment/Flat">
+                                <label for="flat">Apartment/Flat</label>
                             </div>
                             <div class="radio-option">
-                                <input type="radio" name="typeofproperty" id="studio" value="Studio apartment">
+                                <input type="radio" name="typeofproperty" id="bungalow" value="Bungalow">
+                                <label for="bungalow">Bungalow</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" name="typeofproperty" id="studio" value="Studio">
                                 <label for="studio">Studio</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" name="typeofproperty" id="bedsit" value="Bedsit">
+                                <label for="bedsit">Bedsit</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" name="typeofproperty" id="bedroom" value="Bedroom">
+                                <label for="bedroom">Bedroom</label>
                             </div>
                         </div>
                     </div>
@@ -745,7 +915,7 @@
                 <!-- Step 7: Budget & Bedrooms -->
                 <div class="step" data-step="7">
                     <h2>Almost there!</h2>
-                    <p>Just a couple more details about your budget and requirements.</p>
+                    <p class="step-description">Just a couple more details about your budget and requirements.</p>
 
                     <div class="two-col">
                         <div class="input-group">
@@ -785,19 +955,113 @@
 
                     <div class="button-group">
                         <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
+                    </div>
+                </div>
+
+                <!-- Step 8: Final Page - Notes, Upload, Property Interest, Marketing, T&Cs -->
+                <div class="step" data-step="8">
+                    <h2>Finally here! &#x1F973;</h2>
+                    <p class="step-description">Let's get ready to rent!</p>
+
+                    <!-- Property Interest (moved here from step 6) -->
+                    <div class="input-group">
+                        <label>Are you interested in a specific property?</label>
+                        <div class="radio-group" style="grid-template-columns: 1fr 1fr; margin-bottom: 15px;">
+                            <div class="radio-option">
+                                <input type="radio" name="has_property_interest" id="propYes" value="Yes" onclick="togglePropertySearch(true)">
+                                <label for="propYes">Yes</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" name="has_property_interest" id="propNo" value="No" checked onclick="togglePropertySearch(false)">
+                                <label for="propNo">No, just browsing</label>
+                            </div>
+                        </div>
+                        <div id="propertySearchSection" style="display: none;">
+                            <div class="property-search-container">
+                                <input type="text" id="propertySearchInput" placeholder="Start typing an address to search..." oninput="searchProperties(this.value)">
+                                <div class="property-search-results" id="propertySearchResults"></div>
+                            </div>
+                            <input type="hidden" name="property_id" id="selectedPropertyId">
+                            <div id="selectedPropertyDisplay" style="margin-top: 8px; font-size: 14px; color: #25073B; font-weight: 500;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="input-group">
+                        <label>Are there any notes that you would like to add to your application?</label>
+                        <textarea name="additional_notes" placeholder="Optional: Add any additional information here..."></textarea>
+                    </div>
+
+                    <!-- File Upload -->
+                    <div class="input-group">
+                        <label>Any supporting documentation that you would like to attach?</label>
+                        <div class="file-upload-area" id="fileUploadArea" onclick="document.getElementById('fileInput').click()">
+                            <p>Click to upload or drag files here</p>
+                            <span class="upload-hint">PDF, JPG, PNG, DOC up to 10MB each</span>
+                            <input type="file" id="fileInput" name="documents" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="handleFileUpload(this)">
+                        </div>
+                        <div class="uploaded-files" id="uploadedFiles"></div>
+                    </div>
+
+                    <!-- Marketing Preferences -->
+                    <div class="input-group">
+                        <label>Please select your marketing preferences:</label>
+                        <div class="marketing-prefs">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="marketEmail" name="marketing_email" checked>
+                                <label for="marketEmail">Email</label>
+                            </div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="marketSMS" name="marketing_sms" checked>
+                                <label for="marketSMS">SMS</label>
+                            </div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="marketPhone" name="marketing_phone" checked>
+                                <label for="marketPhone">Phone</label>
+                            </div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="marketPost" name="marketing_post" checked>
+                                <label for="marketPost">Post</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terms & Conditions -->
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="termsConsent" name="termsConsent" required>
+                        <label for="termsConsent">
+                            Please tick here to accept our <a href="https://fleminglettings.co.uk/terms-and-conditions/" target="_blank">terms and conditions</a>. *
+                        </label>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="marketingPolicyConsent" name="marketingPolicyConsent" required>
+                        <label for="marketingPolicyConsent">
+                            Please tick here to accept our marketing and communications policies. *
+                        </label>
+                    </div>
+
+                    <!-- reCAPTCHA -->
+                    <div class="recaptcha-container">
+                        <div class="g-recaptcha" data-sitekey="YOUR_RECAPTCHA_SITE_KEY"></div>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
                         <button type="button" class="btn btn-primary" id="submitBtn" onclick="submitForm()">Submit Application ✓</button>
                     </div>
                 </div>
 
                 <!-- Success Step -->
-                <div class="step" data-step="8">
+                <div class="step" data-step="9">
                     <div class="success-message">
                         <div class="success-icon">✓</div>
                         <h2>Thank you!</h2>
-                        <p>Your enquiry has been received successfully. We'll be in touch within 24 hours to discuss your requirements and help you find your perfect property.</p>
+                        <p class="step-description">Your enquiry has been received successfully. We'll be in touch within 24 hours to discuss your requirements and help you find your perfect property.</p>
                         <p style="margin-top: 20px; font-size: 14px; color: #999;">Reference: <strong id="refNumber"></strong></p>
                         <div class="button-group" style="justify-content: center; margin-top: 40px;">
-                            <a href="https://fleminglettings.co.uk" class="btn btn-primary" style="text-decoration: none;">Back to Fleming Lettings</a>
+                            <a href="https://fleminglettings.co.uk" class="btn btn-primary" style="text-decoration: none; text-align: center;">Back to Fleming Lettings</a>
                         </div>
                     </div>
                 </div>
@@ -807,8 +1071,64 @@
 
     <script>
         let currentStep = 1;
-        const totalSteps = 7; // Excluding success step
-        
+        const totalSteps = 8; // Excluding success step
+        let loadedProperties = [];
+        let uploadedFiles = [];
+
+        // Full list of world nationalities in alphabetical order
+        const nationalities = [
+            "Afghan","Albanian","Algerian","American","Andorran","Angolan","Antiguan","Argentine","Armenian","Australian",
+            "Austrian","Azerbaijani","Bahamian","Bahraini","Bangladeshi","Barbadian","Belarusian","Belgian","Belizean","Beninese",
+            "Bhutanese","Bolivian","Bosnian","Botswanan","Brazilian","British","Bruneian","Bulgarian","Burkinabe","Burmese",
+            "Burundian","Cambodian","Cameroonian","Canadian","Cape Verdean","Central African","Chadian","Chilean","Chinese","Colombian",
+            "Comorian","Congolese","Costa Rican","Croatian","Cuban","Cypriot","Czech","Danish","Djiboutian","Dominican",
+            "Dutch","East Timorese","Ecuadorean","Egyptian","Emirati","English","Equatorial Guinean","Eritrean","Estonian","Ethiopian",
+            "Fijian","Filipino","Finnish","French","Gabonese","Gambian","Georgian","German","Ghanaian","Greek",
+            "Grenadian","Guatemalan","Guinean","Guyanese","Haitian","Honduran","Hungarian","Icelandic","Indian","Indonesian",
+            "Iranian","Iraqi","Irish","Israeli","Italian","Ivorian","Jamaican","Japanese","Jordanian","Kazakh",
+            "Kenyan","Kiribati","Kuwaiti","Kyrgyz","Lao","Latvian","Lebanese","Liberian","Libyan","Liechtenstein",
+            "Lithuanian","Luxembourgish","Macedonian","Malagasy","Malawian","Malaysian","Maldivian","Malian","Maltese","Marshallese",
+            "Mauritanian","Mauritian","Mexican","Micronesian","Moldovan","Monacan","Mongolian","Montenegrin","Moroccan","Mozambican",
+            "Namibian","Nauruan","Nepalese","New Zealand","Nicaraguan","Nigerian","Nigerien","North Korean","Northern Irish","Norwegian",
+            "Omani","Pakistani","Palauan","Palestinian","Panamanian","Papua New Guinean","Paraguayan","Peruvian","Polish","Portuguese",
+            "Qatari","Romanian","Russian","Rwandan","Saint Lucian","Salvadorean","Samoan","Saudi Arabian","Scottish","Senegalese",
+            "Serbian","Seychellois","Sierra Leonean","Singaporean","Slovak","Slovenian","Solomon Islander","Somali","South African","South Korean",
+            "South Sudanese","Spanish","Sri Lankan","Sudanese","Surinamese","Swazi","Swedish","Swiss","Syrian","Taiwanese",
+            "Tajik","Tanzanian","Thai","Togolese","Tongan","Trinidadian","Tunisian","Turkish","Turkmen","Tuvaluan",
+            "Ugandan","Ukrainian","Uruguayan","Uzbek","Vanuatuan","Venezuelan","Vietnamese","Welsh","Yemeni","Zambian",
+            "Zimbabwean","Rather not say"
+        ];
+
+        // Populate nationality dropdowns
+        function populateNationalities() {
+            const selects = document.querySelectorAll('#nationalitySelect, #nationalitySelect2');
+            selects.forEach(select => {
+                nationalities.forEach(nat => {
+                    const option = document.createElement('option');
+                    option.value = nat;
+                    option.textContent = nat;
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        // Employment status conditional fields
+        function setupEmploymentToggle(selectId, detailsId) {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+            select.addEventListener('change', function() {
+                const details = document.getElementById(detailsId);
+                const employed = ['Full-Time Employed', 'Part-Time Employed', 'Self-Employed'].includes(this.value);
+                details.style.display = employed ? 'block' : 'none';
+                if (!employed) {
+                    // Clear employment detail fields when hidden
+                    details.querySelectorAll('input, select').forEach(input => {
+                        input.value = '';
+                    });
+                }
+            });
+        }
+
         function updateProgress() {
             const progress = (currentStep / totalSteps) * 100;
             document.getElementById('progressBar').style.width = progress + '%';
@@ -824,13 +1144,34 @@
             window.scrollTo(0, 0);
         }
 
+        function validateAge(dateValue) {
+            if (!dateValue) return false;
+            const dob = new Date(dateValue);
+            const today = new Date();
+            let age = today.getFullYear() - dob.getFullYear();
+            const monthDiff = today.getMonth() - dob.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+                age--;
+            }
+            return age >= 16;
+        }
+
         function nextStep() {
             const currentStepEl = document.querySelector(`[data-step="${currentStep}"]`);
             const inputs = currentStepEl.querySelectorAll('input[required], select[required]');
             let valid = true;
 
             inputs.forEach(input => {
-                if (!input.value) {
+                if (input.type === 'radio') {
+                    const radioGroup = currentStepEl.querySelectorAll(`input[name="${input.name}"]`);
+                    const checked = Array.from(radioGroup).some(r => r.checked);
+                    if (!checked) {
+                        valid = false;
+                        radioGroup.forEach(r => {
+                            r.closest('.radio-option').querySelector('label').style.borderColor = '#f44';
+                        });
+                    }
+                } else if (!input.value) {
                     valid = false;
                     input.style.borderColor = '#f44';
                 } else {
@@ -843,11 +1184,21 @@
                 return;
             }
 
+            // Age validation on step 2
+            if (currentStep === 2) {
+                const dobValue = document.getElementById('dob').value;
+                if (dobValue && !validateAge(dobValue)) {
+                    showError('You must be at least 16 years old to register.');
+                    document.getElementById('dob').style.borderColor = '#f44';
+                    return;
+                }
+            }
+
             hideError();
 
             // Check if joint application
             const isJoint = document.querySelector('input[name="registration_type"]:checked').value === 'Joint';
-            
+
             if (currentStep === 4 && isJoint) {
                 showStep(5); // Show joint applicant step
             } else if (currentStep === 4 && !isJoint) {
@@ -861,7 +1212,7 @@
 
         function prevStep() {
             const isJoint = document.querySelector('input[name="registration_type"]:checked').value === 'Joint';
-            
+
             if (currentStep === 6 && isJoint) {
                 showStep(5); // Go back to joint applicant
             } else if (currentStep === 6 && !isJoint) {
@@ -876,13 +1227,102 @@
         function showError(message) {
             const errorContainer = document.getElementById('errorContainer');
             errorContainer.innerHTML = `<div class="error-message">${message}</div>`;
+            errorContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         function hideError() {
             document.getElementById('errorContainer').innerHTML = '';
         }
 
+        // Property search
+        function togglePropertySearch(show) {
+            document.getElementById('propertySearchSection').style.display = show ? 'block' : 'none';
+            if (!show) {
+                document.getElementById('selectedPropertyId').value = '';
+                document.getElementById('propertySearchInput').value = '';
+                document.getElementById('selectedPropertyDisplay').innerHTML = '';
+            }
+        }
+
+        function searchProperties(query) {
+            const resultsEl = document.getElementById('propertySearchResults');
+            if (query.length < 2) {
+                resultsEl.style.display = 'none';
+                return;
+            }
+
+            const filtered = loadedProperties.filter(p => {
+                const searchStr = `${p.address} ${p.postcode}`.toLowerCase();
+                return searchStr.includes(query.toLowerCase());
+            });
+
+            if (filtered.length === 0) {
+                resultsEl.style.display = 'none';
+                return;
+            }
+
+            resultsEl.innerHTML = filtered.map(p =>
+                `<div class="search-result" onclick="selectProperty(${p.id}, '${p.address.replace(/'/g, "\\'")}${p.postcode ? ', ' + p.postcode : ''} - ${p.bedrooms} bed ${p.property_type}')">${p.address}${p.postcode ? ', ' + p.postcode : ''} - ${p.bedrooms} bed ${p.property_type} - £${p.rent_amount}/month</div>`
+            ).join('');
+            resultsEl.style.display = 'block';
+        }
+
+        function selectProperty(id, display) {
+            document.getElementById('selectedPropertyId').value = id;
+            document.getElementById('propertySearchInput').value = '';
+            document.getElementById('selectedPropertyDisplay').innerHTML = '✓ ' + display;
+            document.getElementById('propertySearchResults').style.display = 'none';
+        }
+
+        // Close search results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.property-search-container')) {
+                const results = document.getElementById('propertySearchResults');
+                if (results) results.style.display = 'none';
+            }
+        });
+
+        // File upload handling
+        function handleFileUpload(input) {
+            const files = Array.from(input.files);
+            files.forEach(file => {
+                if (file.size > 10 * 1024 * 1024) {
+                    showError(`File "${file.name}" exceeds 10MB limit.`);
+                    return;
+                }
+                uploadedFiles.push(file);
+            });
+            renderUploadedFiles();
+            input.value = ''; // Reset so same file can be re-selected
+        }
+
+        function removeFile(index) {
+            uploadedFiles.splice(index, 1);
+            renderUploadedFiles();
+        }
+
+        function renderUploadedFiles() {
+            const container = document.getElementById('uploadedFiles');
+            if (uploadedFiles.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = uploadedFiles.map((file, i) =>
+                `<div class="uploaded-file"><span>${file.name} (${(file.size / 1024).toFixed(0)}KB)</span><span class="remove-file" onclick="removeFile(${i})">✕</span></div>`
+            ).join('');
+        }
+
         async function submitForm() {
+            // Validate terms
+            if (!document.getElementById('termsConsent').checked) {
+                showError('Please accept the terms and conditions to continue.');
+                return;
+            }
+            if (!document.getElementById('marketingPolicyConsent').checked) {
+                showError('Please accept the marketing and communications policies to continue.');
+                return;
+            }
+
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Submitting...';
@@ -890,13 +1330,23 @@
             const formData = new FormData(document.getElementById('tenantForm'));
             const data = {};
             formData.forEach((value, key) => {
-                data[key] = value;
+                if (key !== 'documents') {
+                    data[key] = value;
+                }
             });
+
+            // Add marketing preferences as object
+            data.marketing_preferences = {
+                email: document.getElementById('marketEmail').checked,
+                sms: document.getElementById('marketSMS').checked,
+                phone: document.getElementById('marketPhone').checked,
+                post: document.getElementById('marketPost').checked
+            };
 
             try {
                 const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
                     ? 'http://localhost:3001/api/public/tenant-enquiries'
-                    : 'https://fleming-crm-api-production-7e58.up.railway.app/api/public/tenant-enquiries';
+                    : 'https://platform.fleminglettings.co.uk/api/public/tenant-enquiries';
 
                 const response = await fetch(apiUrl, {
                     method: 'POST',
@@ -909,8 +1359,26 @@
                 const result = await response.json();
 
                 if (response.ok) {
+                    // Upload files if any
+                    if (uploadedFiles.length > 0 && result.enquiry_id) {
+                        const fileFormData = new FormData();
+                        uploadedFiles.forEach(file => {
+                            fileFormData.append('documents', file);
+                        });
+
+                        const uploadUrl = apiUrl.replace('/tenant-enquiries', `/tenant-enquiries/${result.enquiry_id}/documents`);
+                        try {
+                            await fetch(uploadUrl, {
+                                method: 'POST',
+                                body: fileFormData
+                            });
+                        } catch (e) {
+                            console.error('File upload failed:', e);
+                        }
+                    }
+
                     document.getElementById('refNumber').textContent = result.reference || 'ENQ-' + result.enquiry_id;
-                    showStep(8); // Show success step
+                    showStep(9); // Show success step
                 } else {
                     throw new Error(result.error || 'Submission failed');
                 }
@@ -926,24 +1394,19 @@
             try {
                 const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
                     ? 'http://localhost:3001/api/public/properties'
-                    : 'https://fleming-crm-api-production-7e58.up.railway.app/api/public/properties';
+                    : 'https://platform.fleminglettings.co.uk/api/public/properties';
 
                 const response = await fetch(apiUrl);
-                const properties = await response.json();
-
-                const select = document.getElementById('propertySelect');
-                properties.forEach(prop => {
-                    const option = document.createElement('option');
-                    option.value = prop.id;
-                    option.textContent = `${prop.address}${prop.postcode ? ', ' + prop.postcode : ''} - ${prop.bedrooms} bed ${prop.property_type} - £${prop.rent_amount}/month`;
-                    select.appendChild(option);
-                });
+                loadedProperties = await response.json();
             } catch (error) {
                 console.error('Failed to load properties:', error);
             }
         }
 
         // Initialize
+        populateNationalities();
+        setupEmploymentToggle('employmentStatus', 'employmentDetails');
+        setupEmploymentToggle('employmentStatus2', 'employmentDetails2');
         updateProgress();
         loadProperties();
     </script>

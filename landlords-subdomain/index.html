@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Landlord Registration - Fleming Lettings</title>
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 
     <style>
         @font-face {
@@ -35,7 +36,7 @@
 
         .container {
             width: 100%;
-            max-width: 900px;
+            max-width: 700px;
             background: white;
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
@@ -45,12 +46,11 @@
 
         /* Header */
         .header {
-            background: white;
+            background: linear-gradient(135deg, #25073B 0%, #DC006D 100%);
             padding: 20px 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #f0f0f0;
         }
 
         .logo {
@@ -59,12 +59,12 @@
         }
 
         .back-button {
-            background: transparent;
-            border: 1px solid #DC006D;
-            color: #DC006D;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: white;
             padding: 8px 20px;
             border-radius: 20px;
-            font-size: 13px;
+            font-size: 14px;
             cursor: pointer;
             transition: all 0.3s;
             text-decoration: none;
@@ -72,8 +72,7 @@
         }
 
         .back-button:hover {
-            background: #DC006D;
-            color: white;
+            background: rgba(255,255,255,0.3);
         }
 
         /* Progress Bar */
@@ -91,14 +90,14 @@
 
         /* Form Container */
         .form-wrapper {
-            padding: 35px 40px;
-            min-height: 350px;
+            padding: 50px 40px;
+            min-height: 500px;
         }
 
         /* Steps */
         .step {
             display: none;
-            animation: fadeIn 0.4s ease-in;
+            animation: fadeIn 0.5s ease;
         }
 
         .step.active {
@@ -110,67 +109,132 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Form Elements */
-        .form-group {
-            margin-bottom: 18px;
+        .step h2 {
+            color: #25073B;
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 700;
         }
 
-        .form-group label {
+        .step p.step-description {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        /* Input Styles */
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        label {
             display: block;
-            color: #25073B;
+            color: #333;
+            font-size: 14px;
             font-weight: 600;
             margin-bottom: 8px;
-            font-size: 13px;
         }
 
-        .form-group label .required {
-            color: #DC006D;
-        }
+        .required { color: #DC006D; }
 
-        .form-group input[type="text"],
-        .form-group input[type="email"],
-        .form-group input[type="tel"],
-        .form-group input[type="date"],
-        .form-group input[type="number"],
-        .form-group select,
-        .form-group textarea {
+        input[type="text"],
+        input[type="email"],
+        input[type="tel"],
+        input[type="date"],
+        input[type="number"],
+        select,
+        textarea {
             width: 100%;
-            padding: 11px 16px;
-            border: 2px solid #e5e5e5;
-            border-radius: 8px;
-            font-size: 13px;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
             font-family: 'Switzer', sans-serif;
             transition: all 0.3s;
             background: white;
+            color: #333;
+            -webkit-appearance: none;
         }
 
-        .form-group input:focus,
-        .form-group select:focus,
-        .form-group textarea:focus {
+        input[type="date"] {
+            color: #333;
+            color-scheme: light;
+        }
+
+        input[type="date"]::-webkit-datetime-edit {
+            color: #333;
+        }
+
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            opacity: 0.6;
+            cursor: pointer;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
             outline: none;
             border-color: #DC006D;
             box-shadow: 0 0 0 3px rgba(220, 0, 109, 0.1);
         }
 
-        .form-group textarea {
-            min-height: 75px;
+        textarea {
+            min-height: 100px;
             resize: vertical;
         }
 
-        /* Radio Buttons */
+        /* Radio Button Groups - Card Style */
         .radio-group {
+            display: grid;
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .radio-option {
+            position: relative;
+        }
+
+        .radio-option input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+        }
+
+        .radio-option label {
+            display: block;
+            padding: 18px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .radio-option input[type="radio"]:checked + label {
+            background: linear-gradient(135deg, #DC006D 0%, #25073B 100%);
+            color: white;
+            border-color: #DC006D;
+        }
+
+        .radio-option label:hover {
+            border-color: #DC006D;
+        }
+
+        /* Inline radio (Yes/No style) */
+        .radio-group-inline {
             display: flex;
             gap: 15px;
             flex-wrap: wrap;
         }
 
-        .radio-option {
+        .radio-inline {
             display: flex;
             align-items: center;
             cursor: pointer;
         }
 
-        .radio-option input[type="radio"] {
+        .radio-inline input[type="radio"] {
             width: 20px;
             height: 20px;
             margin-right: 8px;
@@ -178,24 +242,24 @@
             accent-color: #DC006D;
         }
 
-        .radio-option label {
+        .radio-inline label {
             margin: 0;
             cursor: pointer;
             font-weight: 500;
             color: #333;
         }
 
-        /* Checkbox */
+        /* Checkbox Styles */
         .checkbox-group {
             display: flex;
             align-items: flex-start;
-            margin: 15px 0;
+            margin-bottom: 15px;
         }
 
         .checkbox-group input[type="checkbox"] {
             width: 20px;
             height: 20px;
-            margin-right: 10px;
+            margin-right: 12px;
             margin-top: 2px;
             cursor: pointer;
             accent-color: #DC006D;
@@ -204,7 +268,7 @@
 
         .checkbox-group label {
             margin: 0;
-            font-size: 13px;
+            font-size: 14px;
             color: #555;
             font-weight: 400;
             line-height: 1.5;
@@ -216,33 +280,37 @@
             text-decoration: underline;
         }
 
-        /* Grid Layout */
-        .form-row {
+        /* Marketing Preferences */
+        .marketing-prefs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .marketing-prefs .checkbox-group {
+            margin-bottom: 8px;
+        }
+
+        /* Two Column Layout */
+        .two-col {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 15px;
-            margin-bottom: 18px;
-        }
-
-        @media (max-width: 768px) {
-            .form-row {
-                grid-template-columns: 1fr;
-            }
         }
 
         /* Buttons */
         .button-group {
             display: flex;
-            justify-content: space-between;
-            margin-top: 28px;
             gap: 15px;
+            margin-top: 40px;
         }
 
         .btn {
-            padding: 11px 26px;
+            padding: 15px 40px;
             border: none;
-            border-radius: 25px;
-            font-size: 15px;
+            border-radius: 10px;
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
@@ -260,61 +328,143 @@
             box-shadow: 0 10px 25px rgba(220, 0, 109, 0.3);
         }
 
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         .btn-secondary {
             background: white;
-            color: #DC006D;
-            border: 2px solid #DC006D;
-            flex: 0 0 auto;
+            color: #666;
+            border: 2px solid #e0e0e0;
+            padding: 15px 30px;
         }
 
         .btn-secondary:hover {
-            background: #DC006D;
-            color: white;
+            border-color: #DC006D;
+            color: #DC006D;
         }
 
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        /* Success Screen */
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #DC006D 0%, #25073B 100%);
+            border-radius: 50%;
+            margin: 0 auto 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
         }
 
-        /* Step Indicator */
-        .step-indicator {
+        .success-message {
+            text-align: center;
+        }
+
+        .success-message h2 {
+            margin-bottom: 15px;
+        }
+
+        /* Joint Section */
+        .joint-section {
+            background: #f9f9f9;
+            padding: 25px;
+            border-radius: 12px;
+            margin-top: 30px;
+            border: 2px dashed #DC006D;
+        }
+
+        .joint-section h3 {
+            color: #25073B;
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+
+        /* Company Section */
+        .company-section {
+            background: #f9f9f9;
+            padding: 25px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+
+        .company-section h3 {
+            color: #25073B;
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+
+        /* Companies House Search */
+        .company-search-container {
+            position: relative;
+        }
+
+        .company-search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 10;
+            display: none;
+        }
+
+        .company-search-results .search-result {
+            padding: 12px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+        }
+
+        .company-search-results .search-result:hover {
+            background: #fdf2f7;
+        }
+
+        .company-search-results .search-result .company-number {
+            font-size: 12px;
+            color: #999;
+        }
+
+        /* Property Section */
+        .property-section {
+            background: #f5f5f5;
+            padding: 25px;
+            border-radius: 12px;
+            margin-top: 25px;
+        }
+
+        .property-section h3 {
+            color: #25073B;
+            font-size: 18px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        /* reCAPTCHA */
+        .recaptcha-container {
+            margin: 20px 0;
             display: flex;
             justify-content: center;
-            align-items: center;
-            margin-bottom: 28px;
-            gap: 15px;
         }
 
-        .step-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #e5e5e5;
-            transition: all 0.3s;
+        /* Error Message */
+        .error-message {
+            background: #fee;
+            border: 1px solid #fcc;
+            color: #c33;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
         }
 
-        .step-dot.active {
-            background: #DC006D;
-            width: 40px;
-            border-radius: 6px;
-        }
-
-        /* Headings */
-        h2 {
-            color: #25073B;
-            font-size: 24px;
-            margin-bottom: 8px;
-            font-weight: 700;
-        }
-
-        .step-subtitle {
-            color: #666;
-            font-size: 15px;
-            margin-bottom: 22px;
-        }
-
-        /* Success/Error Messages */
         .message {
             padding: 16px 20px;
             border-radius: 8px;
@@ -322,21 +472,9 @@
             display: none;
         }
 
-        .message.show {
-            display: block;
-        }
-
-        .message.success {
-            background: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
-        }
-
-        .message.error {
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
-        }
+        .message.show { display: block; }
+        .message.success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .message.error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
 
         /* Loading Spinner */
         .spinner {
@@ -356,64 +494,31 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* Joint Application Section */
-        .joint-section {
-            background: #f9f9f9;
-            padding: 20px;
-            border-radius: 12px;
-            margin-top: 30px;
-            border: 2px dashed #DC006D;
-        }
+        /* Mobile Optimization */
+        @media (max-width: 768px) {
+            body {
+                padding: 0;
+                align-items: flex-start;
+            }
 
-        .joint-section h3 {
-            color: #25073B;
-            font-size: 18px;
-            margin-bottom: 12px;
-        }
+            .two-col {
+                grid-template-columns: 1fr;
+                gap: 0;
+            }
 
-        /* Property Section */
-        .property-section {
-            background: #f5f5f5;
-            padding: 18px;
-            border-radius: 12px;
-            margin-top: 25px;
-        }
+            .marketing-prefs {
+                grid-template-columns: 1fr;
+            }
 
-        .property-section h3 {
-            color: #25073B;
-            font-size: 18px;
-            margin-bottom: 12px;
-            font-weight: 600;
-        }
-
-        /* Add Property Button */
-        .add-property-btn {
-            background: #f0f0f0;
-            border: 2px dashed #DC006D;
-            color: #DC006D;
-            padding: 12px 24px;
-            border-radius: 20px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 15px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .add-property-btn:hover {
-            background: #DC006D;
-            color: white;
-        }
-
-        /* Responsive */
-        @media (max-width: 640px) {
             .container {
                 border-radius: 0;
+                max-width: 100%;
+                min-height: 100vh;
             }
 
             .form-wrapper {
-                padding: 40px 25px;
+                padding: 30px 20px;
+                min-height: auto;
             }
 
             .header {
@@ -424,16 +529,104 @@
                 height: 40px;
             }
 
-            h2 {
-                font-size: 24px;
+            .back-button {
+                font-size: 13px;
+                padding: 6px 16px;
             }
 
-            .button-group {
-                flex-direction: column-reverse;
+            .step h2 {
+                font-size: 24px;
+                margin-bottom: 12px;
+            }
+
+            .step p.step-description {
+                font-size: 14px;
+                margin-bottom: 20px;
+            }
+
+            input[type="text"],
+            input[type="email"],
+            input[type="tel"],
+            input[type="date"],
+            input[type="number"],
+            select,
+            textarea {
+                font-size: 16px;
+                padding: 14px;
             }
 
             .btn {
                 width: 100%;
+                padding: 16px 20px;
+                font-size: 16px;
+            }
+
+            .button-group {
+                flex-direction: column-reverse;
+                gap: 12px;
+                margin-top: 30px;
+            }
+
+            .radio-option label {
+                padding: 16px 18px;
+                font-size: 15px;
+            }
+
+            select {
+                background-position: right 10px center;
+                padding-right: 35px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .form-wrapper {
+                padding: 25px 15px;
+            }
+
+            .header {
+                padding: 12px 15px;
+            }
+
+            .step h2 {
+                font-size: 22px;
+            }
+
+            .logo {
+                height: 35px;
+            }
+
+            .back-button {
+                font-size: 12px;
+                padding: 5px 12px;
+            }
+        }
+
+        /* Touch-friendly improvements */
+        @media (hover: none) and (pointer: coarse) {
+            .btn,
+            .back-button {
+                min-height: 48px;
+            }
+
+            input[type="text"],
+            input[type="email"],
+            input[type="tel"],
+            input[type="date"],
+            input[type="number"],
+            select,
+            textarea {
+                min-height: 48px;
+            }
+
+            .radio-option label {
+                min-height: 48px;
+                display: flex;
+                align-items: center;
+            }
+
+            .checkbox-group input[type="checkbox"] {
+                width: 24px;
+                height: 24px;
             }
         }
     </style>
@@ -443,7 +636,7 @@
         <!-- Header -->
         <div class="header">
             <img src="https://fleminglettings.co.uk/wp-content/uploads/2023/10/image-4-1.png" alt="Fleming Lettings" class="logo">
-            <a href="https://fleminglettings.co.uk" class="back-button">← Back to Main Site</a>
+            <a href="https://fleminglettings.co.uk" class="back-button">← Back to Website</a>
         </div>
 
         <!-- Progress Bar -->
@@ -453,101 +646,116 @@
 
         <!-- Form Wrapper -->
         <div class="form-wrapper">
+            <div id="errorContainer"></div>
+
             <form id="landlordForm">
-                <!-- Step 1: Registration Type & Personal Details -->
+                <!-- Step 1: Welcome & Registration Type -->
                 <div class="step active" data-step="1">
-                    <div class="step-indicator">
-                        <div class="step-dot active"></div>
-                        <div class="step-dot"></div>
-                        <div class="step-dot"></div>
-                        <div class="step-dot"></div>
+                    <h2>Welcome! &#x1F44B;</h2>
+                    <p class="step-description">Let's get you registered. Are you registering as an individual, joint owner or as a limited company?</p>
+
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" name="registration_type" id="sole" value="Sole" checked>
+                            <label for="sole">Sole ownership</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" name="registration_type" id="joint" value="Joint">
+                            <label for="joint">Joint ownership</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" name="registration_type" id="company" value="Limited Company">
+                            <label for="company">Limited company</label>
+                        </div>
                     </div>
 
-                    <h2>Landlord Registration</h2>
-                    <p class="step-subtitle">Let's start with your personal details</p>
+                    <div class="button-group">
+                        <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
+                    </div>
+                </div>
 
-                    <div class="form-group">
-                        <label>Is this a sole or joint registration? <span class="required">*</span></label>
-                        <div class="radio-group">
-                            <div class="radio-option">
-                                <input type="radio" id="sole" name="registration_type" value="Sole" checked>
-                                <label for="sole">Sole</label>
+                <!-- Step 2: Company Details (conditional - only for Limited Company) -->
+                <div class="step" data-step="2" id="companyStep">
+                    <h2>Company Details</h2>
+                    <p class="step-description">Tell us about your limited company.</p>
+
+                    <div class="company-section">
+                        <div class="input-group">
+                            <label>Name of your Company *</label>
+                            <div class="company-search-container">
+                                <input type="text" name="company_name" id="companyNameInput" placeholder="Start typing to search Companies House..." oninput="searchCompaniesHouse(this.value)" required>
+                                <div class="company-search-results" id="companySearchResults"></div>
                             </div>
-                            <div class="radio-option">
-                                <input type="radio" id="joint" name="registration_type" value="Joint">
-                                <label for="joint">Joint</label>
-                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Company Registration Number *</label>
+                            <input type="text" name="company_number" id="companyNumber" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Registered Office Address *</label>
+                            <input type="text" name="company_address" id="companyAddress" required>
                         </div>
                     </div>
 
-                    <h3 style="margin-top: 30px; margin-bottom: 20px; color: #25073B;">Primary Applicant Details</h3>
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
+                    </div>
+                </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="firstName">First Name <span class="required">*</span></label>
-                            <input type="text" id="firstName" name="firstName" required>
+                <!-- Step 3: Personal Details -->
+                <div class="step" data-step="3">
+                    <h2>Tell us about yourself</h2>
+                    <p class="step-description">We need some basic information to get started.</p>
+
+                    <div class="two-col">
+                        <div class="input-group">
+                            <label>First Name <span class="required">*</span></label>
+                            <input type="text" name="firstName" required>
                         </div>
-                        <div class="form-group">
-                            <label for="surname">Surname <span class="required">*</span></label>
-                            <input type="text" id="surname" name="surname" required>
+                        <div class="input-group">
+                            <label>Surname <span class="required">*</span></label>
+                            <input type="text" name="surname" required>
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="address">Home Address <span class="required">*</span></label>
-                        <input type="text" id="address" name="address" required>
+                    <div class="input-group">
+                        <label>Email Address <span class="required">*</span></label>
+                        <input type="email" name="email" required>
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="postcode">Postcode <span class="required">*</span></label>
-                            <input type="text" id="postcode" name="postcode" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="yearsAtAddress">Years at Address <span class="required">*</span></label>
-                            <input type="number" id="yearsAtAddress" name="yearsAtAddress" min="0" required>
-                        </div>
+                    <div class="input-group">
+                        <label>Contact Number <span class="required">*</span></label>
+                        <input type="tel" name="phone" required>
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="dob">Date of Birth <span class="required">*</span></label>
-                            <input type="date" id="dob" name="dob" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="nationality">Nationality <span class="required">*</span></label>
-                            <select id="nationality" name="nationality" required>
-                                <option value="">Please select an option</option>
-                                <option value="English, Welsh, Scottish, Northern Irish or British">English, Welsh, Scottish, Northern Irish or British</option>
-                                <option value="Irish">Irish</option>
-                                <option value="Indian">Indian</option>
-                                <option value="Pakistani">Pakistani</option>
-                                <option value="Bangladeshi">Bangladeshi</option>
-                                <option value="Chinese">Chinese</option>
-                                <option value="African">African</option>
-                                <option value="Caribbean">Caribbean</option>
-                                <option value="Arab">Arab</option>
-                                <option value="White and Black Caribbean">White and Black Caribbean</option>
-                                <option value="White and Black African">White and Black African</option>
-                                <option value="White and Asian">White and Asian</option>
-                                <option value="Any other Mixed or multiple ethnic background">Any other Mixed or multiple ethnic background</option>
-                                <option value="Any other Asian background">Any other Asian background</option>
-                                <option value="Any other White background">Any other White background</option>
-                                <option value="Any other Black, Black British, or Caribbean background">Any other Black, Black British, or Caribbean background</option>
-                                <option value="Any other ethnic group">Any other ethnic group</option>
-                                <option value="Rather not say">Rather not say</option>
-                            </select>
-                        </div>
+                    <div class="input-group">
+                        <label>Date of Birth <span class="required">*</span> <span style="font-weight: 400; color: #999; font-size: 12px;">(DD/MM/YYYY)</span></label>
+                        <input type="date" name="dob" id="dob" required>
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="email">Email Address <span class="required">*</span></label>
-                            <input type="email" id="email" name="email" required>
+                    <div class="input-group">
+                        <label>Nationality <span class="required">*</span></label>
+                        <select name="nationality" id="nationalitySelect" required>
+                            <option value="">Please select an option</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Home Address <span class="required">*</span></label>
+                        <input type="text" name="address" required>
+                    </div>
+
+                    <div class="two-col">
+                        <div class="input-group">
+                            <label>Postcode <span class="required">*</span></label>
+                            <input type="text" name="postcode" required>
                         </div>
-                        <div class="form-group">
-                            <label for="phone">Contact Number <span class="required">*</span></label>
-                            <input type="tel" id="phone" name="phone" required>
+                        <div class="input-group">
+                            <label>Years at Address <span class="required">*</span></label>
+                            <input type="number" name="yearsAtAddress" min="0" required>
                         </div>
                     </div>
 
@@ -555,327 +763,245 @@
                     <div id="jointSection" class="joint-section" style="display: none;">
                         <h3>Joint Applicant Details</h3>
 
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="firstName2">First Name <span class="required">*</span></label>
-                                <input type="text" id="firstName2" name="firstName2">
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>First Name <span class="required">*</span></label>
+                                <input type="text" name="firstName2" disabled>
                             </div>
-                            <div class="form-group">
-                                <label for="surname2">Surname <span class="required">*</span></label>
-                                <input type="text" id="surname2" name="surname2">
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="address2">Home Address <span class="required">*</span></label>
-                            <input type="text" id="address2" name="address2">
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="postcode2">Postcode <span class="required">*</span></label>
-                                <input type="text" id="postcode2" name="postcode2">
-                            </div>
-                            <div class="form-group">
-                                <label for="yearsAtAddress2">Years at Address <span class="required">*</span></label>
-                                <input type="number" id="yearsAtAddress2" name="yearsAtAddress2" min="0">
+                            <div class="input-group">
+                                <label>Surname <span class="required">*</span></label>
+                                <input type="text" name="surname2" disabled>
                             </div>
                         </div>
 
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="dob2">Date of Birth <span class="required">*</span></label>
-                                <input type="date" id="dob2" name="dob2">
+                        <div class="input-group">
+                            <label>Email Address <span class="required">*</span></label>
+                            <input type="email" name="email2" disabled>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Contact Number <span class="required">*</span></label>
+                            <input type="tel" name="phone2" disabled>
+                        </div>
+
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>Date of Birth <span class="required">*</span> <span style="font-weight: 400; color: #999; font-size: 12px;">(DD/MM/YYYY)</span></label>
+                                <input type="date" name="dob2" disabled>
                             </div>
-                            <div class="form-group">
-                                <label for="nationality2">Nationality <span class="required">*</span></label>
-                                <select id="nationality2" name="nationality2">
+                            <div class="input-group">
+                                <label>Nationality <span class="required">*</span></label>
+                                <select name="nationality2" id="nationalitySelect2" disabled>
                                     <option value="">Please select an option</option>
-                                    <option value="English, Welsh, Scottish, Northern Irish or British">English, Welsh, Scottish, Northern Irish or British</option>
-                                    <option value="Irish">Irish</option>
-                                    <option value="Indian">Indian</option>
-                                    <option value="Pakistani">Pakistani</option>
-                                    <option value="Bangladeshi">Bangladeshi</option>
-                                    <option value="Chinese">Chinese</option>
-                                    <option value="African">African</option>
-                                    <option value="Caribbean">Caribbean</option>
-                                    <option value="Arab">Arab</option>
-                                    <option value="White and Black Caribbean">White and Black Caribbean</option>
-                                    <option value="White and Black African">White and Black African</option>
-                                    <option value="White and Asian">White and Asian</option>
-                                    <option value="Any other Mixed or multiple ethnic background">Any other Mixed or multiple ethnic background</option>
-                                    <option value="Any other Asian background">Any other Asian background</option>
-                                    <option value="Any other White background">Any other White background</option>
-                                    <option value="Any other Black, Black British, or Caribbean background">Any other Black, Black British, or Caribbean background</option>
-                                    <option value="Any other ethnic group">Any other ethnic group</option>
-                                    <option value="Rather not say">Rather not say</option>
                                 </select>
                             </div>
                         </div>
 
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="email2">Email Address <span class="required">*</span></label>
-                                <input type="email" id="email2" name="email2">
-                            </div>
-                            <div class="form-group">
-                                <label for="phone2">Contact Number <span class="required">*</span></label>
-                                <input type="tel" id="phone2" name="phone2">
-                            </div>
+                        <div class="input-group">
+                            <label>Home Address <span class="required">*</span></label>
+                            <input type="text" name="address2" disabled>
                         </div>
-                    </div>
 
-                    <div class="button-group">
-                        <button type="button" class="btn btn-primary" onclick="nextStep()">Next Step →</button>
-                    </div>
-                </div>
-
-                <!-- Step 2: Property Details -->
-                <div class="step" data-step="2">
-                    <div class="step-indicator">
-                        <div class="step-dot"></div>
-                        <div class="step-dot active"></div>
-                        <div class="step-dot"></div>
-                        <div class="step-dot"></div>
-                    </div>
-
-                    <h2>Property Details</h2>
-                    <p class="step-subtitle">Tell us about your rental property</p>
-
-                    <div id="propertiesContainer">
-                        <!-- Property 1 -->
-                        <div class="property-section" data-property="1">
-                            <h3>Property 1</h3>
-
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="propertyAddress">Rental Property Address <span class="required">*</span></label>
-                                    <input type="text" id="propertyAddress" name="propertyAddress" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="propertyPostcode">Property Postcode <span class="required">*</span></label>
-                                    <input type="text" id="propertyPostcode" name="propertyPostcode" required>
-                                </div>
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>Postcode <span class="required">*</span></label>
+                                <input type="text" name="postcode2" disabled>
                             </div>
-
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="bedrooms">Number of Bedrooms <span class="required">*</span></label>
-                                    <select id="bedrooms" name="bedrooms" required>
-                                        <option value="">Please select</option>
-                                        <option value="1">1</option>
-                                        <option value="2">2</option>
-                                        <option value="3">3</option>
-                                        <option value="4">4</option>
-                                        <option value="5">5</option>
-                                        <option value="6+">6+</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label>Is there offroad parking?</label>
-                                    <div class="radio-group">
-                                        <div class="radio-option">
-                                            <input type="radio" id="parkingYes" name="offroadParking" value="Yes" checked>
-                                            <label for="parkingYes">Yes</label>
-                                        </div>
-                                        <div class="radio-option">
-                                            <input type="radio" id="parkingNo" name="offroadParking" value="No">
-                                            <label for="parkingNo">No</label>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Is this property already let? <span class="required">*</span></label>
-                                    <div class="radio-group">
-                                        <div class="radio-option">
-                                            <input type="radio" id="alreadyLetYes" name="alreadyLet" value="Yes" onchange="toggleAlreadyLetSection()">
-                                            <label for="alreadyLetYes">Yes</label>
-                                        </div>
-                                        <div class="radio-option">
-                                            <input type="radio" id="alreadyLetNo" name="alreadyLet" value="No" checked onchange="toggleAlreadyLetSection()">
-                                            <label for="alreadyLetNo">No</label>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label>Is there a mortgage attached? <span class="required">*</span></label>
-                                    <div class="radio-group">
-                                        <div class="radio-option">
-                                            <input type="radio" id="mortgageYes" name="mortgageAttached" value="Yes">
-                                            <label for="mortgageYes">Yes</label>
-                                        </div>
-                                        <div class="radio-option">
-                                            <input type="radio" id="mortgageNo" name="mortgageAttached" value="No" checked>
-                                            <label for="mortgageNo">No</label>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Already Let Section -->
-                            <div id="alreadyLetSection" style="display: none; margin-top: 20px; padding: 20px; background: white; border-radius: 8px;">
-                                <h4 style="color: #25073B; margin-bottom: 15px;">Current Tenancy Details</h4>
-
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="tenancyType">Type of Tenancy <span class="required">*</span></label>
-                                        <select id="tenancyType" name="tenancyType">
-                                            <option value="">Please select</option>
-                                            <option value="Ad-hoc">Ad-hoc</option>
-                                            <option value="Contractual">Contractual</option>
-                                            <option value="Fixed Term">Fixed Term</option>
-                                            <option value="Monthly Rolling">Monthly Rolling</option>
-                                            <option value="No Contract">No Contract</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="currentManagement">Current Management <span class="required">*</span></label>
-                                        <select id="currentManagement" name="currentManagement">
-                                            <option value="">Please select</option>
-                                            <option value="Independently">Independently</option>
-                                            <option value="Estate Agent">Estate Agent</option>
-                                            <option value="Letting Agency">Letting Agency</option>
-                                            <option value="Housing Association">Housing Association</option>
-                                            <option value="Unsure">Unsure</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="lengthOfLet">Length of Current Let (months) <span class="required">*</span></label>
-                                        <input type="number" id="lengthOfLet" name="lengthOfLet" min="0">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="monthlyRentalIncome">Monthly Rental Income (£) <span class="required">*</span></label>
-                                        <input type="number" id="monthlyRentalIncome" name="monthlyRentalIncome" min="0" step="0.01">
-                                    </div>
-                                </div>
-
-                                <div class="form-group">
-                                    <label>Are you considering increasing the rent?</label>
-                                    <div class="radio-group">
-                                        <div class="radio-option">
-                                            <input type="radio" id="rentIncreaseYes" name="consideringRentIncrease" value="Yes" onchange="toggleRentIncreaseField()">
-                                            <label for="rentIncreaseYes">Yes</label>
-                                        </div>
-                                        <div class="radio-option">
-                                            <input type="radio" id="rentIncreaseNo" name="consideringRentIncrease" value="No" checked onchange="toggleRentIncreaseField()">
-                                            <label for="rentIncreaseNo">No</label>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div id="rentIncreaseField" style="display: none;">
-                                    <div class="form-group">
-                                        <label for="newRentAmount">New Rent Amount (£)</label>
-                                        <input type="number" id="newRentAmount" name="newRentAmount" min="0" step="0.01">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="form-row" style="margin-top: 20px;">
-                                <div class="form-group">
-                                    <label for="ownershipStructure">Ownership Structure <span class="required">*</span></label>
-                                    <select id="ownershipStructure" name="ownershipStructure" required>
-                                        <option value="">Please select</option>
-                                        <option value="Owned outright">Owned outright</option>
-                                        <option value="Mortgaged">Mortgaged</option>
-                                        <option value="Commercial investment">Commercial investment</option>
-                                        <option value="Sub-let">Sub-let</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="propertyCondition">Property Condition <span class="required">*</span></label>
-                                    <select id="propertyCondition" name="propertyCondition" required>
-                                        <option value="">Please select</option>
-                                        <option value="Newly refurbished">Newly refurbished</option>
-                                        <option value="Very good">Very good</option>
-                                        <option value="Good">Good</option>
-                                        <option value="Average">Average</option>
-                                        <option value="Poor">Poor</option>
-                                        <option value="Needs improvement">Needs improvement</option>
-                                        <option value="Unsure">Unsure</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Are you looking to source a new tenant?</label>
-                                <div class="radio-group">
-                                    <div class="radio-option">
-                                        <input type="radio" id="newTenantYes" name="lookingForNewTenant" value="Yes" onchange="toggleNewTenantReason()">
-                                        <label for="newTenantYes">Yes</label>
-                                    </div>
-                                    <div class="radio-option">
-                                        <input type="radio" id="newTenantNo" name="lookingForNewTenant" value="No" checked onchange="toggleNewTenantReason()">
-                                        <label for="newTenantNo">No</label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div id="newTenantReasonField" style="display: none;">
-                                <div class="form-group">
-                                    <label for="newTenantReason">Reason for sourcing a new tenant <span class="required">*</span></label>
-                                    <textarea id="newTenantReason" name="newTenantReason" rows="3"></textarea>
-                                </div>
+                            <div class="input-group">
+                                <label>Years at Address <span class="required">*</span></label>
+                                <input type="number" name="yearsAtAddress2" min="0" disabled>
                             </div>
                         </div>
                     </div>
 
                     <div class="button-group">
                         <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
-                        <button type="button" class="btn btn-primary" onclick="nextStep()">Next Step →</button>
+                        <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
 
-                <!-- Step 3: Compliance -->
-                <div class="step" data-step="3">
-                    <div class="step-indicator">
-                        <div class="step-dot"></div>
-                        <div class="step-dot"></div>
-                        <div class="step-dot active"></div>
-                        <div class="step-dot"></div>
+                <!-- Step 4: Property Details -->
+                <div class="step" data-step="4">
+                    <h2>Property Details</h2>
+                    <p class="step-description">Tell us about your rental property.</p>
+
+                    <div class="property-section">
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>Rental Property Address <span class="required">*</span></label>
+                                <input type="text" name="propertyAddress" required>
+                            </div>
+                            <div class="input-group">
+                                <label>Property Postcode <span class="required">*</span></label>
+                                <input type="text" name="propertyPostcode" required>
+                            </div>
+                        </div>
+
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>Number of Bedrooms <span class="required">*</span></label>
+                                <select name="bedrooms" required>
+                                    <option value="">Please select</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6+">6+</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Is there offroad parking?</label>
+                                <div class="radio-group-inline" style="margin-top: 10px;">
+                                    <div class="radio-inline">
+                                        <input type="radio" id="parkingYes" name="offroadParking" value="Yes" checked>
+                                        <label for="parkingYes">Yes</label>
+                                    </div>
+                                    <div class="radio-inline">
+                                        <input type="radio" id="parkingNo" name="offroadParking" value="No">
+                                        <label for="parkingNo">No</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>Is this property already let? <span class="required">*</span></label>
+                                <div class="radio-group-inline" style="margin-top: 10px;">
+                                    <div class="radio-inline">
+                                        <input type="radio" id="alreadyLetYes" name="alreadyLet" value="Yes" onchange="toggleAlreadyLetSection()">
+                                        <label for="alreadyLetYes">Yes</label>
+                                    </div>
+                                    <div class="radio-inline">
+                                        <input type="radio" id="alreadyLetNo" name="alreadyLet" value="No" checked onchange="toggleAlreadyLetSection()">
+                                        <label for="alreadyLetNo">No</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label>Is there a mortgage attached? <span class="required">*</span></label>
+                                <div class="radio-group-inline" style="margin-top: 10px;">
+                                    <div class="radio-inline">
+                                        <input type="radio" id="mortgageYes" name="mortgageAttached" value="Yes">
+                                        <label for="mortgageYes">Yes</label>
+                                    </div>
+                                    <div class="radio-inline">
+                                        <input type="radio" id="mortgageNo" name="mortgageAttached" value="No" checked>
+                                        <label for="mortgageNo">No</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Already Let Section -->
+                        <div id="alreadyLetSection" style="display: none; margin-top: 20px; padding: 20px; background: white; border-radius: 8px;">
+                            <h4 style="color: #25073B; margin-bottom: 15px;">Current Tenancy Details</h4>
+                            <div class="two-col">
+                                <div class="input-group">
+                                    <label>Type of Tenancy</label>
+                                    <select name="tenancyType">
+                                        <option value="">Please select</option>
+                                        <option value="Ad-hoc">Ad-hoc</option>
+                                        <option value="Contractual">Contractual</option>
+                                        <option value="Fixed Term">Fixed Term</option>
+                                        <option value="Monthly Rolling">Monthly Rolling</option>
+                                        <option value="No Contract">No Contract</option>
+                                    </select>
+                                </div>
+                                <div class="input-group">
+                                    <label>Current Management</label>
+                                    <select name="currentManagement">
+                                        <option value="">Please select</option>
+                                        <option value="Independently">Independently</option>
+                                        <option value="Estate Agent">Estate Agent</option>
+                                        <option value="Letting Agency">Letting Agency</option>
+                                        <option value="Housing Association">Housing Association</option>
+                                        <option value="Unsure">Unsure</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="two-col">
+                                <div class="input-group">
+                                    <label>Length of Current Let (months)</label>
+                                    <input type="number" name="lengthOfLet" min="0">
+                                </div>
+                                <div class="input-group">
+                                    <label>Monthly Rental Income (£)</label>
+                                    <input type="number" name="monthlyRentalIncome" min="0" step="0.01">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="two-col" style="margin-top: 20px;">
+                            <div class="input-group">
+                                <label>Ownership Structure <span class="required">*</span></label>
+                                <select name="ownershipStructure" required>
+                                    <option value="">Please select</option>
+                                    <option value="Owned outright">Owned outright</option>
+                                    <option value="Mortgaged">Mortgaged</option>
+                                    <option value="Commercial investment">Commercial investment</option>
+                                    <option value="Sub-let">Sub-let</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Property Condition <span class="required">*</span></label>
+                                <select name="propertyCondition" required>
+                                    <option value="">Please select</option>
+                                    <option value="Newly refurbished">Newly refurbished</option>
+                                    <option value="Very good">Very good</option>
+                                    <option value="Good">Good</option>
+                                    <option value="Average">Average</option>
+                                    <option value="Poor">Poor</option>
+                                    <option value="Needs improvement">Needs improvement</option>
+                                    <option value="Unsure">Unsure</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
-                    <h2>Compliance Certificates</h2>
-                    <p class="step-subtitle">Please provide information about compliance certificates</p>
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
+                    </div>
+                </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
+                <!-- Step 5: Compliance -->
+                <div class="step" data-step="5">
+                    <h2>Compliance Certificates</h2>
+                    <p class="step-description">Please provide information about compliance certificates.</p>
+
+                    <div class="two-col">
+                        <div class="input-group">
                             <label>Valid EPC Certificate? <span class="required">*</span></label>
-                            <div class="radio-group">
-                                <div class="radio-option">
+                            <div class="radio-group-inline" style="margin-top: 10px;">
+                                <div class="radio-inline">
                                     <input type="radio" id="epcYes" name="epcCertificate" value="Yes">
                                     <label for="epcYes">Yes</label>
                                 </div>
-                                <div class="radio-option">
+                                <div class="radio-inline">
                                     <input type="radio" id="epcNo" name="epcCertificate" value="No">
                                     <label for="epcNo">No</label>
                                 </div>
-                                <div class="radio-option">
+                                <div class="radio-inline">
                                     <input type="radio" id="epcUnsure" name="epcCertificate" value="Unsure" checked>
                                     <label for="epcUnsure">Unsure</label>
                                 </div>
                             </div>
                         </div>
-
-                        <div class="form-group">
+                        <div class="input-group">
                             <label>Valid EICR Certificate? <span class="required">*</span></label>
-                            <div class="radio-group">
-                                <div class="radio-option">
+                            <div class="radio-group-inline" style="margin-top: 10px;">
+                                <div class="radio-inline">
                                     <input type="radio" id="eicrYes" name="eicrCertificate" value="Yes">
                                     <label for="eicrYes">Yes</label>
                                 </div>
-                                <div class="radio-option">
+                                <div class="radio-inline">
                                     <input type="radio" id="eicrNo" name="eicrCertificate" value="No">
                                     <label for="eicrNo">No</label>
                                 </div>
-                                <div class="radio-option">
+                                <div class="radio-inline">
                                     <input type="radio" id="eicrUnsure" name="eicrCertificate" value="Unsure" checked>
                                     <label for="eicrUnsure">Unsure</label>
                                 </div>
@@ -883,77 +1009,108 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
+                    <div class="input-group">
                         <label>Valid Gas Safety Certificate? <span class="required">*</span></label>
-                        <div class="radio-group">
-                            <div class="radio-option">
+                        <div class="radio-group-inline" style="margin-top: 10px;">
+                            <div class="radio-inline">
                                 <input type="radio" id="gasYes" name="gasCertificate" value="Yes">
                                 <label for="gasYes">Yes</label>
                             </div>
-                            <div class="radio-option">
+                            <div class="radio-inline">
                                 <input type="radio" id="gasNo" name="gasCertificate" value="No">
                                 <label for="gasNo">No</label>
                             </div>
-                            <div class="radio-option">
+                            <div class="radio-inline">
                                 <input type="radio" id="gasUnsure" name="gasCertificate" value="Unsure" checked>
                                 <label for="gasUnsure">Unsure</label>
                             </div>
-                            <div class="radio-option">
+                            <div class="radio-inline">
                                 <input type="radio" id="gasNA" name="gasCertificate" value="N/A (No Gas)">
                                 <label for="gasNA">N/A (No Gas)</label>
                             </div>
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="additionalNotes">Additional Notes or Questions</label>
-                        <textarea id="additionalNotes" name="additionalNotes" rows="4" placeholder="Please share any additional information or questions you may have..."></textarea>
+                    <div class="input-group">
+                        <label>Additional Notes or Questions</label>
+                        <textarea name="additionalNotes" placeholder="Please share any additional information or questions you may have..."></textarea>
                     </div>
 
                     <div class="button-group">
                         <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
-                        <button type="button" class="btn btn-primary" onclick="nextStep()">Next Step →</button>
+                        <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
 
-                <!-- Step 4: Review & Submit -->
-                <div class="step" data-step="4">
-                    <div class="step-indicator">
-                        <div class="step-dot"></div>
-                        <div class="step-dot"></div>
-                        <div class="step-dot"></div>
-                        <div class="step-dot active"></div>
+                <!-- Step 6: Final Page - Marketing, T&Cs, Submit -->
+                <div class="step" data-step="6">
+                    <h2>Finally here! &#x1F973;</h2>
+                    <p class="step-description">Let's get ready to rent!</p>
+
+                    <!-- Review Content -->
+                    <div id="reviewContent" style="background: #f9f9f9; padding: 20px; border-radius: 12px; margin-bottom: 25px;">
                     </div>
 
-                    <h2>Review & Submit</h2>
-                    <p class="step-subtitle">Please review your information and accept our terms</p>
-
-                    <div id="reviewContent" style="background: #f9f9f9; padding: 18px; border-radius: 12px; margin-bottom: 18px;">
-                        <!-- Review content will be populated by JavaScript -->
+                    <!-- Marketing Preferences -->
+                    <div class="input-group">
+                        <label>Please select your marketing preferences:</label>
+                        <div class="marketing-prefs">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="marketEmail" name="marketing_email" checked>
+                                <label for="marketEmail">Email</label>
+                            </div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="marketSMS" name="marketing_sms" checked>
+                                <label for="marketSMS">SMS</label>
+                            </div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="marketPhone" name="marketing_phone" checked>
+                                <label for="marketPhone">Phone</label>
+                            </div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="marketPost" name="marketing_post" checked>
+                                <label for="marketPost">Post</label>
+                            </div>
+                        </div>
                     </div>
 
+                    <!-- Terms & Conditions -->
                     <div class="checkbox-group">
                         <input type="checkbox" id="termsConsent" name="termsConsent" required>
                         <label for="termsConsent">
-                            I confirm that the information provided is accurate and I have read and agree to
-                            <a href="https://fleminglettings.co.uk/terms-and-conditions/" target="_blank">Fleming Lettings Terms & Conditions</a>
-                            and
-                            <a href="https://fleminglettings.co.uk/privacy-policy/" target="_blank">Privacy Policy</a>. <span class="required">*</span>
+                            Please tick here to accept our <a href="https://fleminglettings.co.uk/terms-and-conditions/" target="_blank">terms and conditions</a>. *
                         </label>
                     </div>
 
                     <div class="checkbox-group">
-                        <input type="checkbox" id="marketingConsent" name="marketingConsent">
-                        <label for="marketingConsent">
-                            I would like to receive updates, property news, and special offers from Fleming Lettings via email and SMS.
+                        <input type="checkbox" id="marketingPolicyConsent" name="marketingPolicyConsent" required>
+                        <label for="marketingPolicyConsent">
+                            Please tick here to accept our marketing and communications policies. *
                         </label>
+                    </div>
+
+                    <!-- reCAPTCHA -->
+                    <div class="recaptcha-container">
+                        <div class="g-recaptcha" data-sitekey="YOUR_RECAPTCHA_SITE_KEY"></div>
                     </div>
 
                     <div id="messageContainer"></div>
 
                     <div class="button-group">
                         <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
-                        <button type="submit" class="btn btn-primary" id="submitBtn">Submit Application</button>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">Submit Application ✓</button>
+                    </div>
+                </div>
+
+                <!-- Success Step -->
+                <div class="step" data-step="7">
+                    <div class="success-message">
+                        <div class="success-icon">✓</div>
+                        <h2>Thank you!</h2>
+                        <p class="step-description">Your application has been submitted successfully. We'll be in touch shortly to discuss your property and how we can help.</p>
+                        <div class="button-group" style="justify-content: center; margin-top: 40px;">
+                            <a href="https://fleminglettings.co.uk" class="btn btn-primary" style="text-decoration: none; text-align: center;">Back to Fleming Lettings</a>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -962,23 +1119,145 @@
 
     <script>
         let currentStep = 1;
-        const totalSteps = 4;
+        const totalSteps = 6; // Excluding success step
+        let companySearchTimeout = null;
 
-        // Toggle joint applicant section
+        // Full list of world nationalities in alphabetical order
+        const nationalities = [
+            "Afghan","Albanian","Algerian","American","Andorran","Angolan","Antiguan","Argentine","Armenian","Australian",
+            "Austrian","Azerbaijani","Bahamian","Bahraini","Bangladeshi","Barbadian","Belarusian","Belgian","Belizean","Beninese",
+            "Bhutanese","Bolivian","Bosnian","Botswanan","Brazilian","British","Bruneian","Bulgarian","Burkinabe","Burmese",
+            "Burundian","Cambodian","Cameroonian","Canadian","Cape Verdean","Central African","Chadian","Chilean","Chinese","Colombian",
+            "Comorian","Congolese","Costa Rican","Croatian","Cuban","Cypriot","Czech","Danish","Djiboutian","Dominican",
+            "Dutch","East Timorese","Ecuadorean","Egyptian","Emirati","English","Equatorial Guinean","Eritrean","Estonian","Ethiopian",
+            "Fijian","Filipino","Finnish","French","Gabonese","Gambian","Georgian","German","Ghanaian","Greek",
+            "Grenadian","Guatemalan","Guinean","Guyanese","Haitian","Honduran","Hungarian","Icelandic","Indian","Indonesian",
+            "Iranian","Iraqi","Irish","Israeli","Italian","Ivorian","Jamaican","Japanese","Jordanian","Kazakh",
+            "Kenyan","Kiribati","Kuwaiti","Kyrgyz","Lao","Latvian","Lebanese","Liberian","Libyan","Liechtenstein",
+            "Lithuanian","Luxembourgish","Macedonian","Malagasy","Malawian","Malaysian","Maldivian","Malian","Maltese","Marshallese",
+            "Mauritanian","Mauritian","Mexican","Micronesian","Moldovan","Monacan","Mongolian","Montenegrin","Moroccan","Mozambican",
+            "Namibian","Nauruan","Nepalese","New Zealand","Nicaraguan","Nigerian","Nigerien","North Korean","Northern Irish","Norwegian",
+            "Omani","Pakistani","Palauan","Palestinian","Panamanian","Papua New Guinean","Paraguayan","Peruvian","Polish","Portuguese",
+            "Qatari","Romanian","Russian","Rwandan","Saint Lucian","Salvadorean","Samoan","Saudi Arabian","Scottish","Senegalese",
+            "Serbian","Seychellois","Sierra Leonean","Singaporean","Slovak","Slovenian","Solomon Islander","Somali","South African","South Korean",
+            "South Sudanese","Spanish","Sri Lankan","Sudanese","Surinamese","Swazi","Swedish","Swiss","Syrian","Taiwanese",
+            "Tajik","Tanzanian","Thai","Togolese","Tongan","Trinidadian","Tunisian","Turkish","Turkmen","Tuvaluan",
+            "Ugandan","Ukrainian","Uruguayan","Uzbek","Vanuatuan","Venezuelan","Vietnamese","Welsh","Yemeni","Zambian",
+            "Zimbabwean","Rather not say"
+        ];
+
+        function populateNationalities() {
+            const selects = document.querySelectorAll('#nationalitySelect, #nationalitySelect2');
+            selects.forEach(select => {
+                nationalities.forEach(nat => {
+                    const option = document.createElement('option');
+                    option.value = nat;
+                    option.textContent = nat;
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        function getRegistrationType() {
+            return document.querySelector('input[name="registration_type"]:checked').value;
+        }
+
+        // Step navigation with conditional company step
+        function getStepSequence() {
+            const regType = getRegistrationType();
+            if (regType === 'Limited Company') {
+                return [1, 2, 3, 4, 5, 6]; // Include company step
+            } else {
+                return [1, 3, 4, 5, 6]; // Skip company step
+            }
+        }
+
+        function updateProgressBar() {
+            const sequence = getStepSequence();
+            const currentIndex = sequence.indexOf(currentStep);
+            const progress = ((currentIndex + 1) / sequence.length) * 100;
+            document.getElementById('progressBar').style.width = progress + '%';
+        }
+
+        function nextStep() {
+            // Validate current step
+            const currentStepEl = document.querySelector(`.step[data-step="${currentStep}"]`);
+            const inputs = currentStepEl.querySelectorAll('input[required]:not([disabled]), select[required]:not([disabled]), textarea[required]:not([disabled])');
+
+            let valid = true;
+            inputs.forEach(input => {
+                if (!input.value) {
+                    valid = false;
+                    input.style.borderColor = '#f44';
+                } else {
+                    input.style.borderColor = '#e0e0e0';
+                }
+            });
+
+            if (!valid) {
+                showError('Please fill in all required fields');
+                return;
+            }
+
+            hideError();
+
+            // Generate review content before final step
+            if (currentStep === 5) {
+                generateReviewContent();
+            }
+
+            const sequence = getStepSequence();
+            const currentIndex = sequence.indexOf(currentStep);
+            if (currentIndex < sequence.length - 1) {
+                const nextStepNum = sequence[currentIndex + 1];
+                showStep(nextStepNum);
+            }
+        }
+
+        function prevStep() {
+            const sequence = getStepSequence();
+            const currentIndex = sequence.indexOf(currentStep);
+            if (currentIndex > 0) {
+                const prevStepNum = sequence[currentIndex - 1];
+                showStep(prevStepNum);
+            }
+        }
+
+        function showStep(stepNumber) {
+            document.querySelectorAll('.step').forEach(step => step.classList.remove('active'));
+            document.querySelector(`.step[data-step="${stepNumber}"]`).classList.add('active');
+            currentStep = stepNumber;
+            updateProgressBar();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Toggle joint/company sections based on registration type
         document.querySelectorAll('input[name="registration_type"]').forEach(radio => {
             radio.addEventListener('change', function() {
                 const jointSection = document.getElementById('jointSection');
+                const companyStep = document.getElementById('companyStep');
+
                 if (this.value === 'Joint') {
                     jointSection.style.display = 'block';
-                    // Make joint fields required
-                    document.querySelectorAll('#jointSection input[required], #jointSection select[required]').forEach(input => {
-                        input.removeAttribute('disabled');
+                    jointSection.querySelectorAll('input, select').forEach(input => input.removeAttribute('disabled'));
+                    // Disable company fields
+                    companyStep.querySelectorAll('input').forEach(input => {
+                        input.removeAttribute('required');
+                        input.value = '';
+                    });
+                } else if (this.value === 'Limited Company') {
+                    jointSection.style.display = 'none';
+                    jointSection.querySelectorAll('input, select').forEach(input => input.setAttribute('disabled', 'disabled'));
+                    // Enable company fields
+                    companyStep.querySelectorAll('input[name="company_name"], input[name="company_number"], input[name="company_address"]').forEach(input => {
+                        input.setAttribute('required', 'required');
                     });
                 } else {
                     jointSection.style.display = 'none';
-                    // Make joint fields not required
-                    document.querySelectorAll('#jointSection input, #jointSection select').forEach(input => {
-                        input.setAttribute('disabled', 'disabled');
+                    jointSection.querySelectorAll('input, select').forEach(input => input.setAttribute('disabled', 'disabled'));
+                    companyStep.querySelectorAll('input').forEach(input => {
+                        input.removeAttribute('required');
+                        input.value = '';
                     });
                 }
             });
@@ -986,126 +1265,123 @@
 
         function toggleAlreadyLetSection() {
             const alreadyLet = document.querySelector('input[name="alreadyLet"]:checked').value;
-            const section = document.getElementById('alreadyLetSection');
-            if (alreadyLet === 'Yes') {
-                section.style.display = 'block';
-            } else {
-                section.style.display = 'none';
-            }
+            document.getElementById('alreadyLetSection').style.display = alreadyLet === 'Yes' ? 'block' : 'none';
         }
 
-        function toggleRentIncreaseField() {
-            const consideringIncrease = document.querySelector('input[name="consideringRentIncrease"]:checked')?.value;
-            const field = document.getElementById('rentIncreaseField');
-            if (consideringIncrease === 'Yes') {
-                field.style.display = 'block';
-            } else {
-                field.style.display = 'none';
-            }
-        }
+        // Companies House API Search
+        async function searchCompaniesHouse(query) {
+            if (companySearchTimeout) clearTimeout(companySearchTimeout);
+            const resultsEl = document.getElementById('companySearchResults');
 
-        function toggleNewTenantReason() {
-            const lookingForNew = document.querySelector('input[name="lookingForNewTenant"]:checked').value;
-            const field = document.getElementById('newTenantReasonField');
-            if (lookingForNew === 'Yes') {
-                field.style.display = 'block';
-            } else {
-                field.style.display = 'none';
-            }
-        }
-
-        function updateProgressBar() {
-            const progress = (currentStep / totalSteps) * 100;
-            document.getElementById('progressBar').style.width = progress + '%';
-        }
-
-        function nextStep() {
-            // Validate current step before proceeding
-            const currentStepEl = document.querySelector(`.step[data-step="${currentStep}"]`);
-            const inputs = currentStepEl.querySelectorAll('input[required]:not([disabled]), select[required]:not([disabled]), textarea[required]');
-
-            let valid = true;
-            inputs.forEach(input => {
-                if (!input.value || (input.type === 'radio' && !document.querySelector(`input[name="${input.name}"]:checked`))) {
-                    valid = false;
-                    input.style.borderColor = '#DC006D';
-                } else {
-                    input.style.borderColor = '#e5e5e5';
-                }
-            });
-
-            if (!valid) {
-                showMessage('Please fill in all required fields', 'error');
+            if (query.length < 3) {
+                resultsEl.style.display = 'none';
                 return;
             }
 
-            if (currentStep === 3) {
-                // Generate review content before showing step 4
-                generateReviewContent();
-            }
+            companySearchTimeout = setTimeout(async () => {
+                try {
+                    const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                        ? 'http://localhost:3001'
+                        : 'https://platform.fleminglettings.co.uk';
 
-            if (currentStep < totalSteps) {
-                document.querySelector(`.step[data-step="${currentStep}"]`).classList.remove('active');
-                currentStep++;
-                document.querySelector(`.step[data-step="${currentStep}"]`).classList.add('active');
-                updateProgressBar();
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            }
+                    const response = await fetch(`${apiUrl}/api/companies-house/search?query=${encodeURIComponent(query)}`);
+                    const data = await response.json();
+
+                    if (data.items && data.items.length > 0) {
+                        resultsEl.innerHTML = data.items.map(company =>
+                            `<div class="search-result" onclick="selectCompany('${company.title.replace(/'/g, "\\'")}', '${company.company_number}', '${(company.address_snippet || '').replace(/'/g, "\\'")}')">
+                                <div>${company.title}</div>
+                                <div class="company-number">${company.company_number} - ${company.company_status || 'Unknown status'}</div>
+                            </div>`
+                        ).join('');
+                        resultsEl.style.display = 'block';
+                    } else {
+                        resultsEl.innerHTML = '<div class="search-result" style="color: #999;">No companies found</div>';
+                        resultsEl.style.display = 'block';
+                    }
+                } catch (error) {
+                    console.error('Companies House search failed:', error);
+                    resultsEl.style.display = 'none';
+                }
+            }, 300);
         }
 
-        function prevStep() {
-            if (currentStep > 1) {
-                document.querySelector(`.step[data-step="${currentStep}"]`).classList.remove('active');
-                currentStep--;
-                document.querySelector(`.step[data-step="${currentStep}"]`).classList.add('active');
-                updateProgressBar();
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            }
+        function selectCompany(name, number, address) {
+            document.getElementById('companyNameInput').value = name;
+            document.getElementById('companyNumber').value = number;
+            document.getElementById('companyAddress').value = address;
+            document.getElementById('companySearchResults').style.display = 'none';
         }
+
+        // Close search results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.company-search-container')) {
+                const results = document.getElementById('companySearchResults');
+                if (results) results.style.display = 'none';
+            }
+        });
 
         function generateReviewContent() {
             const form = document.getElementById('landlordForm');
             const formData = new FormData(form);
-            const registrationType = formData.get('registration_type');
+            const regType = getRegistrationType();
 
-            let html = '<h3 style="color: #25073B; margin-bottom: 15px;">Personal Details</h3>';
-            html += `<p><strong>Registration Type:</strong> ${registrationType}</p>`;
-            html += `<p><strong>Name:</strong> ${formData.get('firstName')} ${formData.get('surname')}</p>`;
-            html += `<p><strong>Email:</strong> ${formData.get('email')}</p>`;
-            html += `<p><strong>Phone:</strong> ${formData.get('phone')}</p>`;
-            html += `<p><strong>Address:</strong> ${formData.get('address')}, ${formData.get('postcode')}</p>`;
+            let html = '<h3 style="color: #25073B; margin-bottom: 15px; font-size: 16px;">Personal Details</h3>';
+            html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Registration Type:</strong> ${regType}</p>`;
+            html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Name:</strong> ${formData.get('firstName')} ${formData.get('surname')}</p>`;
+            html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Email:</strong> ${formData.get('email')}</p>`;
+            html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Phone:</strong> ${formData.get('phone')}</p>`;
+            html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Address:</strong> ${formData.get('address')}, ${formData.get('postcode')}</p>`;
 
-            if (registrationType === 'Joint') {
-                html += '<h3 style="color: #25073B; margin-top: 20px; margin-bottom: 15px;">Joint Applicant</h3>';
-                html += `<p><strong>Name:</strong> ${formData.get('firstName2')} ${formData.get('surname2')}</p>`;
-                html += `<p><strong>Email:</strong> ${formData.get('email2')}</p>`;
-                html += `<p><strong>Phone:</strong> ${formData.get('phone2')}</p>`;
+            if (regType === 'Limited Company') {
+                html += '<h3 style="color: #25073B; margin-top: 15px; margin-bottom: 10px; font-size: 16px;">Company Details</h3>';
+                html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Company:</strong> ${formData.get('company_name')}</p>`;
+                html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Registration No:</strong> ${formData.get('company_number')}</p>`;
+                html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Registered Address:</strong> ${formData.get('company_address')}</p>`;
             }
 
-            html += '<h3 style="color: #25073B; margin-top: 20px; margin-bottom: 15px;">Property Details</h3>';
-            html += `<p><strong>Address:</strong> ${formData.get('propertyAddress')}, ${formData.get('propertyPostcode')}</p>`;
-            html += `<p><strong>Bedrooms:</strong> ${formData.get('bedrooms')}</p>`;
-            html += `<p><strong>Already Let:</strong> ${formData.get('alreadyLet')}</p>`;
-            html += `<p><strong>Ownership:</strong> ${formData.get('ownershipStructure')}</p>`;
+            if (regType === 'Joint') {
+                html += '<h3 style="color: #25073B; margin-top: 15px; margin-bottom: 10px; font-size: 16px;">Joint Applicant</h3>';
+                html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Name:</strong> ${formData.get('firstName2')} ${formData.get('surname2')}</p>`;
+                html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Email:</strong> ${formData.get('email2')}</p>`;
+                html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Phone:</strong> ${formData.get('phone2')}</p>`;
+            }
+
+            html += '<h3 style="color: #25073B; margin-top: 15px; margin-bottom: 10px; font-size: 16px;">Property Details</h3>';
+            html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Address:</strong> ${formData.get('propertyAddress')}, ${formData.get('propertyPostcode')}</p>`;
+            html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Bedrooms:</strong> ${formData.get('bedrooms')}</p>`;
+            html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Already Let:</strong> ${formData.get('alreadyLet')}</p>`;
+            html += `<p style="margin-bottom: 5px; font-size: 14px;"><strong>Ownership:</strong> ${formData.get('ownershipStructure')}</p>`;
 
             document.getElementById('reviewContent').innerHTML = html;
+        }
+
+        function showError(message) {
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = `<div class="error-message">${message}</div>`;
+            errorContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function hideError() {
+            document.getElementById('errorContainer').innerHTML = '';
         }
 
         function showMessage(message, type) {
             const container = document.getElementById('messageContainer');
             container.innerHTML = `<div class="message ${type} show">${message}</div>`;
-            setTimeout(() => {
-                container.innerHTML = '';
-            }, 5000);
+            setTimeout(() => { container.innerHTML = ''; }, 5000);
         }
 
         // Form submission
         document.getElementById('landlordForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
-            const termsConsent = document.getElementById('termsConsent');
-            if (!termsConsent.checked) {
-                showMessage('Please accept the Terms & Conditions to continue', 'error');
+            if (!document.getElementById('termsConsent').checked) {
+                showError('Please accept the terms and conditions to continue.');
+                return;
+            }
+            if (!document.getElementById('marketingPolicyConsent').checked) {
+                showError('Please accept the marketing and communications policies to continue.');
                 return;
             }
 
@@ -1116,34 +1392,29 @@
             const formData = new FormData(this);
             const data = Object.fromEntries(formData.entries());
 
-            // Determine API URL - change this to your backend URL
+            // Add marketing preferences
+            data.marketing_preferences = {
+                email: document.getElementById('marketEmail').checked,
+                sms: document.getElementById('marketSMS').checked,
+                phone: document.getElementById('marketPhone').checked,
+                post: document.getElementById('marketPost').checked
+            };
+
             const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
                 ? 'http://localhost:3001'
-                : 'https://fleming-crm-api-production-7e58.up.railway.app';
+                : 'https://platform.fleminglettings.co.uk';
 
             try {
                 const response = await fetch(`${API_URL}/api/public/landlord-enquiries`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
 
                 const result = await response.json();
 
                 if (response.ok) {
-                    showMessage('Thank you! Your application has been submitted successfully. We will contact you shortly.', 'success');
-
-                    // Reset form and return to step 1 after 3 seconds
-                    setTimeout(() => {
-                        this.reset();
-                        currentStep = 1;
-                        document.querySelectorAll('.step').forEach(step => step.classList.remove('active'));
-                        document.querySelector('.step[data-step="1"]').classList.add('active');
-                        updateProgressBar();
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }, 3000);
+                    showStep(7); // Success step
                 } else {
                     showMessage(result.error || 'An error occurred. Please try again.', 'error');
                 }
@@ -1152,11 +1423,12 @@
                 showMessage('An error occurred. Please try again or contact us directly.', 'error');
             } finally {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = 'Submit Application';
+                submitBtn.innerHTML = 'Submit Application ✓';
             }
         });
 
         // Initialize
+        populateNationalities();
         updateProgressBar();
     </script>
 </body>
