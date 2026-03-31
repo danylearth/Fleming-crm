@@ -1,14 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import V3Layout from '../components/V3Layout';
-import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker } from '../components/v3';
-import { useApi } from '../hooks/useApi';
-import { useAuth } from '../context/AuthContext';
-import { Save, Pencil, X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle, Calendar, ExternalLink, Upload, FileText, CheckCircle, Clock } from 'lucide-react';
+import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker, StatusDot, SectionHeader } from '../components/v3';
+import DocumentUpload from '../components/v3/DocumentUpload';
 import ActivityTimeline from '../components/v3/ActivityTimeline';
 import AddressAutocomplete from '../components/v3/AddressAutocomplete';
+import { useApi } from '../hooks/useApi';
+import { useAuth } from '../context/AuthContext';
+import {
+  Save, Pencil, X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle,
+  Calendar, ExternalLink, CheckCircle, Clock, Mail, Phone, ChevronRight,
+  ChevronDown, MessageSquare, Plus, ShieldCheck, AlertTriangle
+} from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
 
+// ==================== CONSTANTS ====================
 const STATUS_COLORS: Record<string, string> = {
   new: 'bg-blue-500/20 text-blue-400',
   viewing_booked: 'bg-purple-500/20 text-purple-400',
@@ -28,65 +34,98 @@ const RENTING_REQUIREMENT_OPTIONS = [
   'Disabled Access', 'Bills Included', 'No Stairs',
 ];
 
-const NATIONALITY_OPTIONS = [
-  { value: '', label: '-' }, { value: 'British', label: 'British' }, { value: 'Irish', label: 'Irish' },
-  { value: 'Polish', label: 'Polish' }, { value: 'Romanian', label: 'Romanian' }, { value: 'Other', label: 'Other' },
-];
 const EMPLOYMENT_OPTIONS = [
   { value: '', label: '-' }, { value: 'Employed', label: 'Employed' }, { value: 'Self-Employed', label: 'Self-Employed' },
   { value: 'Unemployed', label: 'Unemployed' }, { value: 'Student', label: 'Student' }, { value: 'Retired', label: 'Retired' },
 ];
-const INDUSTRY_OPTIONS = [
-  { value: '', label: '-' }, { value: 'IT & Technology', label: 'IT & Technology' },
-  { value: 'Healthcare', label: 'Healthcare' }, { value: 'Construction', label: 'Construction' },
-  { value: 'Education', label: 'Education' }, { value: 'Retail', label: 'Retail' }, { value: 'Other', label: 'Other' },
-];
 
-function ReadField({ label, value }: { label: string; value?: string | number | null }) {
+// ==================== HELPERS ====================
+function formatDateDMY(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+}
+
+function TimeAgo({ date }: { date: string }) {
+  const now = new Date();
+  const then = new Date(date);
+  const diff = now.getTime() - then.getTime();
+  const mins = Math.floor(diff / 60000);
+  const hrs = Math.floor(mins / 60);
+  const days = Math.floor(hrs / 24);
+  let label = '';
+  if (days > 30) label = formatDateDMY(date);
+  else if (days > 0) label = `${days}d ago`;
+  else if (hrs > 0) label = `${hrs}h ago`;
+  else if (mins > 0) label = `${mins}m ago`;
+  else label = 'Just now';
+  return <span className="text-[10px] text-[var(--text-muted)]">{label}</span>;
+}
+
+function ReadField({ label, value }: { label: string; value?: string | number | React.ReactNode | null }) {
   return (
     <div>
-      <p className="text-[11px] text-[var(--text-muted)] font-medium mb-1">{label}</p>
-      <p className="text-sm text-[var(--text-primary)]">{value || '—'}</p>
+      <p className="text-xs text-[var(--text-muted)]">{label}</p>
+      <p className="text-sm mt-0.5">{value || '—'}</p>
     </div>
   );
 }
 
-function SectionDivider({ icon, title, color = 'text-orange-400', children }: {
-  icon: React.ReactNode; title: string; color?: string; children?: React.ReactNode;
-}) {
+function YesNo({ value, onChange, disabled }: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <div className="flex items-center gap-3 mb-4 mt-2">
-      <span className={color}>{icon}</span>
-      <h4 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">{title}</h4>
-      <div className="flex-1 h-px bg-[var(--border-subtle)]" />
-      {children}
+    <div className="flex gap-1">
+      <button disabled={disabled} onClick={() => onChange(true)}
+        className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${value ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-[var(--bg-hover)] text-[var(--text-muted)] border border-transparent'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+        Yes
+      </button>
+      <button disabled={disabled} onClick={() => onChange(false)}
+        className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${!value ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-[var(--bg-hover)] text-[var(--text-muted)] border border-transparent'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+        No
+      </button>
     </div>
   );
 }
 
-function RadioGroup({ label, value, onChange, options }: {
-  label: string; value: string; onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
+function CompletionRing({ percent, size = 48 }: { percent: number; size?: number }) {
+  const r = (size - 6) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c - (percent / 100) * c;
+  const color = percent === 100 ? '#22c55e' : percent >= 60 ? '#f59e0b' : '#ef4444';
   return (
-    <div>
-      <label className="block text-xs text-[var(--text-secondary)] mb-2 font-medium">{label}</label>
-      <div className="flex flex-wrap gap-2">
-        {options.map(o => (
-          <button key={o.value} type="button" onClick={() => onChange(o.value)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-              value === o.value
-                ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
-                : 'bg-[var(--bg-input)] border-[var(--border-input)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
-            }`}>
-            {o.label}
-          </button>
-        ))}
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--bg-hover)" strokeWidth={4} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={4}
+          strokeLinecap="round" strokeDasharray={c} strokeDashoffset={offset} className="transition-all duration-500" />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-xs font-bold" style={{ color }}>
+        {percent}%
+      </span>
+    </div>
+  );
+}
+
+function SectionEditButton({ editing, onEdit, onSave, onCancel, saving }: {
+  editing: boolean; onEdit: () => void; onSave: () => void; onCancel: () => void; saving?: boolean;
+}) {
+  if (editing) {
+    return (
+      <div className="flex gap-2">
+        <button onClick={onCancel} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--bg-hover)]">Cancel</button>
+        <button onClick={onSave} disabled={saving} className="text-xs text-[var(--accent-orange)] hover:text-[var(--accent-orange)] font-medium transition-colors px-2 py-1 rounded-lg hover:bg-[var(--accent-orange)]/10">
+          {saving ? 'Saving...' : 'Save'}
+        </button>
       </div>
-    </div>
+    );
+  }
+  return (
+    <button onClick={onEdit} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--bg-hover)]">
+      <Pencil size={12} />
+    </button>
   );
 }
 
+// ==================== COMPONENT ====================
 export default function EnquiryDetailV3() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -97,11 +136,13 @@ export default function EnquiryDetailV3() {
   const [properties, setProperties] = useState<{ id: number; address: string; postcode?: string; rent_amount?: number }[]>([]);
   const [users, setUsers] = useState<{ id: number; name: string; email: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
+  const [editingSection, setEditingSection] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<'applicant' | 'activity' | 'notes'>('applicant');
-  const [jointApp, setJointApp] = useState(false);
-  const [noteDraft, setNoteDraft] = useState('');
+
+  // Notes
+  const [notes, setNotes] = useState<{ id: string; text: string; author: string; created_at: string }[]>([]);
+  const [newNote, setNewNote] = useState('');
+  const [addingNote, setAddingNote] = useState(false);
 
   // Workflow
   const [showWorkflow, setShowWorkflow] = useState(false);
@@ -123,9 +164,18 @@ export default function EnquiryDetailV3() {
       ]);
       setData(d);
       setForm({ ...d });
-      if (d.is_joint_application || d.first_name_2 || d.last_name_2) setJointApp(true);
       setProperties(Array.isArray(props) ? props : []);
       setUsers(Array.isArray(usersList) ? usersList : []);
+      // Parse notes
+      if (d.notes) {
+        try {
+          const parsed = JSON.parse(d.notes);
+          if (Array.isArray(parsed)) { setNotes(parsed); return; }
+        } catch {}
+        if (d.notes.trim()) setNotes([{ id: '1', text: d.notes, author: 'System', created_at: new Date().toISOString() }]);
+      } else {
+        setNotes([]);
+      }
     } catch {}
     setLoading(false);
   }, [id, api]);
@@ -133,14 +183,28 @@ export default function EnquiryDetailV3() {
   useEffect(() => { loadDetail(); }, [loadDetail]);
 
   const setField = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
+  const isEditing = (section: string) => editingSection === section;
 
-  const save = async (extra?: Record<string, any>) => {
+  const saveSection = async (extra?: Record<string, any>) => {
     setSaving(true);
     try {
-      await api.put(`/api/tenant-enquiries/${id}`, { ...form, is_joint_application: jointApp, ...extra });
+      await api.put(`/api/tenant-enquiries/${id}`, {
+        ...form,
+        is_joint_application: form.is_joint_application ? 1 : 0,
+        kyc_completed_1: form.kyc_completed_1 ? 1 : 0,
+        kyc_completed_2: form.kyc_completed_2 ? 1 : 0,
+        is_permanent_address: form.is_permanent_address ? 1 : 0,
+        ...extra,
+      });
       await loadDetail();
+      setEditingSection(null);
     } catch {}
     setSaving(false);
+  };
+
+  const cancelSection = () => {
+    setEditingSection(null);
+    if (data) setForm({ ...data });
   };
 
   const handleWorkflow = async () => {
@@ -156,17 +220,17 @@ export default function EnquiryDetailV3() {
               viewer_phone: form.phone_1 || '', viewing_date: wfDate, viewing_time: wfTime,
               assigned_to: wfAssignedTo || null,
             });
-            await save({ status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate, viewing_with: wfViewingWith || null });
+            await saveSection({ status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate, viewing_with: wfViewingWith || null });
           }
           break;
         case 'follow_up':
-          if (wfDate) await save({ status: 'awaiting_response', follow_up_date: wfDate });
+          if (wfDate) await saveSection({ status: 'awaiting_response', follow_up_date: wfDate });
           break;
         case 'onboarding':
-          await save({ status: 'onboarding', follow_up_date: wfDate || null });
+          await saveSection({ status: 'onboarding', follow_up_date: wfDate || null });
           break;
         case 'reject':
-          await save({ status: 'rejected', rejection_reason: wfReason });
+          await saveSection({ status: 'rejected', rejection_reason: wfReason });
           break;
         case 'convert':
           await api.post(`/api/tenant-enquiries/${id}/convert`, {
@@ -181,25 +245,39 @@ export default function EnquiryDetailV3() {
     setWfLoading(false);
   };
 
-  const parseNotes = (raw: string): { id: string; text: string; author: string; created_at: string }[] => {
-    if (!raw) return [];
-    try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; } catch { return []; }
+  const addNote = async () => {
+    if (!newNote.trim()) return;
+    setAddingNote(true);
+    const noteText = newNote.trim();
+    const note = { id: Date.now().toString(), text: noteText, author: user?.email || 'Unknown', created_at: new Date().toISOString() };
+    const updated = [...notes, note];
+    setNewNote('');
+    try {
+      await api.put(`/api/tenant-enquiries/${id}`, { ...form, notes: JSON.stringify(updated) });
+      api.post('/api/activity', { action: 'note_added', entity_type: 'tenant_enquiry', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
+      await loadDetail();
+    } catch {}
+    setAddingNote(false);
   };
 
-  const saveNote = async () => {
-    if (!noteDraft.trim()) return;
-    const existing = parseNotes(form.notes);
-    const noteText = noteDraft.trim();
-    const newNote = { id: Date.now().toString(), text: noteText, author: user?.email || 'Unknown', created_at: new Date().toISOString() };
-    const updated = [...existing, newNote];
-    const newNotes = JSON.stringify(updated);
-    setField('notes', newNotes);
-    await save({ notes: newNotes });
-    api.post('/api/activity', { action: 'note_added', entity_type: 'tenant_enquiry', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
-    setNoteDraft('');
-    // Reload the data to show the new note
-    await loadDetail();
-  };
+  // Checklist items
+  function getChecklistItems() {
+    const items: { label: string; done: boolean }[] = [
+      { label: 'KYC — Applicant 1', done: !!form.kyc_completed_1 },
+    ];
+    if (form.is_joint_application) {
+      items.push({ label: 'KYC — Applicant 2', done: !!form.kyc_completed_2 });
+    }
+    items.push({ label: 'Employment Verified', done: !!(form.employment_status_1 && form.employer_1) });
+    items.push({ label: 'Income Provided', done: !!form.income_1 });
+    items.push({ label: 'Address Provided', done: !!form.current_address_1 });
+    items.push({ label: 'Property Linked', done: !!form.linked_property_id });
+    return items;
+  }
+
+  const checklistItems = getChecklistItems();
+  const completedCount = checklistItems.filter(i => i.done).length;
+  const completionPercent = checklistItems.length ? Math.round((completedCount / checklistItems.length) * 100) : 0;
 
   if (loading) {
     return (
@@ -220,280 +298,362 @@ export default function EnquiryDetailV3() {
   }
 
   const name = [data.first_name_1, data.last_name_1].filter(Boolean).join(' ') || 'Unknown';
-  const propertyLinked = !!form.linked_property_id;
   const canConvert = form.status === 'onboarding' && form.linked_property_id && form.first_name_1 && form.last_name_1 && form.email_1;
   const selectedProp = properties.find(p => p.id === Number(form.linked_property_id));
+  const jointApp = !!form.is_joint_application || !!form.first_name_2 || !!form.last_name_2;
+
+  // Renting requirements
+  let rentingReqs: string[] = [];
+  try { rentingReqs = form.renting_requirements ? JSON.parse(form.renting_requirements) : []; } catch {}
 
   return (
     <V3Layout
       title=""
       breadcrumb={[{ label: 'Tenant Enquiries', to: '/v3/enquiries' }, { label: name }]}
     >
-      <div className="p-4 md:p-6 max-w-6xl">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <Avatar name={name} size="lg" />
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold">{name}</h1>
-            <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${STATUS_COLORS[form.status] || ''}`}>
-              {STATUS_LABELS[form.status] || form.status}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            {!['converted', 'rejected'].includes(form.status) && (
-              <Button variant="gradient" size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); }}>
-                <ArrowRight size={14} className="mr-1.5" /> Progress / Reject
-              </Button>
-            )}
-            {editing ? (
-              <>
-                <Button variant="ghost" size="sm" onClick={() => setEditing(false)}><X size={14} className="mr-1" />Cancel</Button>
-                <Button variant="gradient" size="sm" onClick={() => { save(); setEditing(false); }} disabled={saving}>
-                  <Save size={14} className="mr-1.5" />{saving ? 'Saving...' : 'Save'}
-                </Button>
-              </>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-                <Pencil size={14} className="mr-1.5" />Edit
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Linked Property */}
-        <GlassCard className="p-4 mb-6">
-          <div className="flex items-center gap-3">
-            <h4 className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Linked Property</h4>
-            <div className="flex-1" />
-            {editing ? (
-              <Select
-                value={String(form.linked_property_id || '')}
-                onChange={v => setField('linked_property_id', v ? Number(v) : null)}
-                options={[
-                  { value: '', label: 'No property linked' },
-                  ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` })),
-                ]}
-              />
-            ) : selectedProp ? (
-              <div onClick={() => navigate(`/v3/properties/${selectedProp.id}`)}
-                className="flex items-center gap-3 p-2 rounded-lg bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                <Building2 size={14} className="text-[var(--text-muted)]" />
-                <span className="text-sm font-medium">{selectedProp.address}{selectedProp.postcode ? `, ${selectedProp.postcode}` : ''}</span>
-                <ExternalLink size={12} className="text-[var(--text-muted)]" />
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+        {/* ==================== HEADER ==================== */}
+        <GlassCard className="p-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+            <Avatar name={name} size="xl" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-2xl font-bold">{name}</h1>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${STATUS_COLORS[form.status] || ''}`}>
+                  {STATUS_LABELS[form.status] || form.status}
+                </span>
+                {form.status === 'converted' && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg px-2 py-0.5">
+                    <ShieldCheck size={12} /> Converted
+                  </span>
+                )}
               </div>
-            ) : (
-              <p className="text-sm text-[var(--text-muted)]">No property linked</p>
-            )}
+              {selectedProp ? (
+                <button onClick={() => navigate(`/v3/properties/${selectedProp.id}`)}
+                  className="flex items-center gap-2 mt-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group">
+                  <div className="w-7 h-7 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center group-hover:bg-[var(--accent-orange)]/20 transition-colors">
+                    <Building2 size={14} className="text-[var(--text-muted)] group-hover:text-[var(--accent-orange)] transition-colors" />
+                  </div>
+                  <span>{selectedProp.address}{selectedProp.postcode ? `, ${selectedProp.postcode}` : ''}</span>
+                  <ChevronRight size={14} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              ) : (
+                <p className="text-xs text-[var(--text-muted)] mt-2">No property linked</p>
+              )}
+              {form.follow_up_date && form.status === 'awaiting_response' && (
+                <div className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 w-fit">
+                  <AlertTriangle size={14} className="text-amber-400" />
+                  <span className="text-xs text-amber-400 font-medium">Follow-up: {formatDateDMY(form.follow_up_date)}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <CompletionRing percent={completionPercent} />
+              {!['converted', 'rejected'].includes(form.status) && (
+                <Button variant="gradient" size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); }}>
+                  <ArrowRight size={14} className="mr-1.5" /> Progress
+                </Button>
+              )}
+            </div>
           </div>
         </GlassCard>
 
-        <div className="space-y-6">
-            {/* Tabs */}
-            <div className="flex border-b border-[var(--border-subtle)]">
-              {(['applicant', 'activity', 'notes'] as const).map(t => (
-                <button key={t} onClick={() => setTab(t)}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                    tab === t ? 'border-orange-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                  }`}>
-                  {t === 'applicant' ? 'Applicant Info' : t === 'activity' ? 'Activity' : 'Notes'}
-                </button>
-              ))}
-            </div>
-
-            {tab === 'applicant' && (
-              <div className="space-y-6">
-                {/* Applicant 1 */}
-                <div>
-                  <SectionDivider icon={<User size={16} />} title="Applicant 1" />
-                  {editing ? (
-                    <>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
-                        <Input label="First Name" value={form.first_name_1 || ''} onChange={v => setField('first_name_1', v)} />
-                        <Input label="Surname" value={form.last_name_1 || ''} onChange={v => setField('last_name_1', v)} />
-                        <DatePicker label="Date of Birth" value={form.date_of_birth_1 || ''} onChange={v => setField('date_of_birth_1', v)} />
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <Input label="Email" value={form.email_1 || ''} onChange={v => setField('email_1', v)} type="email" />
-                        <Input label="Phone" value={form.phone_1 || ''} onChange={v => setField('phone_1', v)} />
-                        <AddressAutocomplete label="Address" value={form.current_address_1 || ''} onChange={v => setField('current_address_1', v)} />
-                      </div>
-                    </>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <ReadField label="First Name" value={form.first_name_1} />
-                      <ReadField label="Surname" value={form.last_name_1} />
-                      <ReadField label="Date of Birth" value={form.date_of_birth_1 ? new Date(form.date_of_birth_1).toLocaleDateString('en-GB') : null} />
-                      <ReadField label="Email" value={form.email_1} />
-                      <ReadField label="Phone" value={form.phone_1} />
-                      <ReadField label="Address" value={form.current_address_1} />
-                    </div>
-                  )}
-                </div>
-
-                {/* Employment */}
-                <div>
-                  <SectionDivider icon={<Briefcase size={16} />} title="Employment" />
-                  {editing ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      <Select label="Status" value={form.employment_status_1 || ''} onChange={v => setField('employment_status_1', v)} options={EMPLOYMENT_OPTIONS} />
-                      <Input label="Employer" value={form.employer_1 || ''} onChange={v => setField('employer_1', v)} />
-                      <Input label="Annual Salary £" value={form.income_1?.toString() || ''} onChange={v => setField('income_1', v ? Number(v) : null)} type="number" />
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <ReadField label="Employment Status" value={form.employment_status_1} />
-                      <ReadField label="Employer" value={form.employer_1} />
-                      <ReadField label="Annual Salary" value={form.income_1 ? `£${Number(form.income_1).toLocaleString()}` : null} />
-                    </div>
-                  )}
-                </div>
-
-                {/* Address & Permanent Flag */}
-                <div>
-                  <SectionDivider icon={<Home size={16} />} title="Address" />
-                  {editing ? (
-                    <div className="space-y-3">
-                      <AddressAutocomplete label="Current Address" value={form.current_address_1 || ''} onChange={v => setField('current_address_1', v)} />
-                      <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] w-fit">
-                        <input type="checkbox" checked={!!form.is_permanent_address} onChange={e => setField('is_permanent_address', e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
-                        <span className="text-sm text-[var(--text-primary)] font-medium">This is a permanent address</span>
-                      </label>
-                      {!form.is_permanent_address && (
-                        <AddressAutocomplete label="Secondary / Previous Address" value={form.current_address_2 || ''} onChange={v => setField('current_address_2', v)} placeholder="Required if not permanent" />
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <ReadField label="Current Address" value={form.current_address_1} />
-                      {form.is_permanent_address ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">
-                          <CheckCircle size={12} /> Permanent Address
-                        </span>
-                      ) : (
-                        <ReadField label="Secondary / Previous Address" value={form.current_address_2} />
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Renting Requirements */}
-                <div>
-                  <SectionDivider icon={<Home size={16} />} title="Renting Requirements" />
-                  {(() => {
-                    const selected: string[] = form.renting_requirements ? JSON.parse(form.renting_requirements) : [];
-                    if (editing) {
-                      return (
-                        <div className="flex flex-wrap gap-2">
-                          {RENTING_REQUIREMENT_OPTIONS.map(opt => {
-                            const isActive = selected.includes(opt);
-                            return (
-                              <button key={opt} type="button"
-                                onClick={() => {
-                                  const next = isActive ? selected.filter(s => s !== opt) : [...selected, opt];
-                                  setField('renting_requirements', JSON.stringify(next));
-                                }}
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
-                                  isActive
-                                    ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
-                                    : 'bg-[var(--bg-input)] border-[var(--border-input)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
-                                }`}>
-                                {isActive && <span className="mr-1">✓</span>}{opt}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      );
-                    }
-                    return selected.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {selected.map(s => (
-                          <span key={s} className="px-3 py-1.5 rounded-full text-xs font-medium bg-orange-500/15 text-orange-400 border border-orange-500/30">
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-[var(--text-muted)]">No requirements specified</p>
-                    );
-                  })()}
-                </div>
-
-                {/* Joint toggle */}
-                {editing && (
-                  <label className="flex items-center gap-3 cursor-pointer py-3 px-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] w-fit">
-                    <input type="checkbox" checked={jointApp} onChange={e => { setJointApp(e.target.checked); setField('is_joint_application', e.target.checked); }} className="w-4 h-4 rounded accent-orange-500" />
-                    <Users size={16} className="text-pink-400" />
-                    <span className="text-sm text-[var(--text-primary)] font-medium">Joint Application</span>
-                  </label>
-                )}
-                {!editing && jointApp && (
-                  <div className="flex items-center gap-2 py-2">
-                    <Users size={16} className="text-pink-400" />
-                    <span className="text-sm font-medium">Joint Application</span>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* ==================== LEFT COLUMN ==================== */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Personal Information */}
+            <GlassCard className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader title="Personal Information" icon={<User size={16} />} />
+                <SectionEditButton editing={isEditing('personal')} onEdit={() => setEditingSection('personal')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
+              </div>
+              {isEditing('personal') ? (
+                <div className="space-y-4">
+                  <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Applicant 1</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Input label="First Name" value={form.first_name_1 || ''} onChange={v => setField('first_name_1', v)} />
+                    <Input label="Surname" value={form.last_name_1 || ''} onChange={v => setField('last_name_1', v)} />
+                    <DatePicker label="Date of Birth" value={form.date_of_birth_1 || ''} onChange={v => setField('date_of_birth_1', v)} />
                   </div>
-                )}
-
-                {/* Applicant 2 */}
-                {jointApp && (
-                  <div>
-                    <SectionDivider icon={<User size={16} />} title="Applicant 2" color="text-pink-400" />
-                    {editing ? (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Input label="Email" value={form.email_1 || ''} onChange={v => setField('email_1', v)} type="email" />
+                    <Input label="Phone" value={form.phone_1 || ''} onChange={v => setField('phone_1', v)} />
+                    <AddressAutocomplete label="Address" value={form.current_address_1 || ''} onChange={v => setField('current_address_1', v)} />
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <label className="text-xs text-[var(--text-muted)]">Joint Application?</label>
+                    <YesNo value={!!form.is_joint_application} onChange={v => setField('is_joint_application', v)} />
+                  </div>
+                  {form.is_joint_application && (
+                    <>
+                      <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4">Applicant 2</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <Input label="First Name" value={form.first_name_2 || ''} onChange={v => setField('first_name_2', v)} />
                         <Input label="Surname" value={form.last_name_2 || ''} onChange={v => setField('last_name_2', v)} />
+                        <DatePicker label="Date of Birth" value={form.date_of_birth_2 || ''} onChange={v => setField('date_of_birth_2', v)} />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <Input label="Email" value={form.email_2 || ''} onChange={v => setField('email_2', v)} type="email" />
                         <Input label="Phone" value={form.phone_2 || ''} onChange={v => setField('phone_2', v)} />
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <ReadField label="First Name" value={form.first_name_2} />
-                        <ReadField label="Surname" value={form.last_name_2} />
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                      { icon: Mail, label: 'Email', value: data.email_1 },
+                      { icon: Phone, label: 'Phone', value: data.phone_1 },
+                      { icon: Calendar, label: 'Date of Birth', value: data.date_of_birth_1 ? formatDateDMY(data.date_of_birth_1) : null },
+                      { icon: Home, label: 'Address', value: data.current_address_1 },
+                    ].map(({ icon: Icon, label, value }) => (
+                      <div key={label} className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
+                          <Icon size={16} className="text-[var(--text-muted)]" />
+                        </div>
+                        <div><p className="text-xs text-[var(--text-muted)]">{label}</p><p className="text-sm">{value || '—'}</p></div>
+                      </div>
+                    ))}
+                  </div>
+                  {jointApp && (
+                    <>
+                      <div className="h-px bg-[var(--border-subtle)] my-2" />
+                      <div className="flex items-center gap-2 mb-2">
+                        <Users size={14} className="text-pink-400" />
+                        <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Applicant 2</p>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <ReadField label="Name" value={[form.first_name_2, form.last_name_2].filter(Boolean).join(' ') || null} />
                         <ReadField label="Email" value={form.email_2} />
                         <ReadField label="Phone" value={form.phone_2} />
+                        <ReadField label="Date of Birth" value={form.date_of_birth_2 ? formatDateDMY(form.date_of_birth_2) : null} />
                       </div>
-                    )}
+                    </>
+                  )}
+                </div>
+              )}
+            </GlassCard>
+
+            {/* Employment & Address */}
+            <GlassCard className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader title="Employment & Address" icon={<Briefcase size={16} />} />
+                <SectionEditButton editing={isEditing('employment')} onEdit={() => setEditingSection('employment')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
+              </div>
+              {isEditing('employment') ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Select label="Employment Status" value={form.employment_status_1 || ''} onChange={v => setField('employment_status_1', v)} options={EMPLOYMENT_OPTIONS} />
+                    <Input label="Employer" value={form.employer_1 || ''} onChange={v => setField('employer_1', v)} />
+                    <Input label="Annual Salary (£)" value={form.income_1?.toString() || ''} onChange={v => setField('income_1', v ? Number(v) : null)} type="number" />
                   </div>
-                )}
-              </div>
-            )}
-
-            {tab === 'activity' && (
-              <div className="space-y-4">
-                <h4 className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Timeline</h4>
-                <ActivityTimeline entityType="tenant_enquiry" entityId={Number(id)} />
-              </div>
-            )}
-
-            {tab === 'notes' && (
-              <div className="space-y-4">
-                {(() => {
-                  const notesList = parseNotes(form.notes);
-                  return notesList.length > 0 ? (
-                    <div className="space-y-3">
-                      {notesList.map(n => (
-                        <div key={n.id} className="bg-[var(--bg-subtle)] rounded-xl p-4">
-                          <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{n.text}</p>
-                          <p className="text-[10px] text-[var(--text-muted)] mt-2">{n.author} · {new Date(n.created_at).toLocaleString('en-GB')}</p>
-                        </div>
-                      ))}
-                    </div>
+                  <div className="h-px bg-[var(--border-subtle)]" />
+                  <AddressAutocomplete label="Current Address" value={form.current_address_1 || ''} onChange={v => setField('current_address_1', v)} />
+                  <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] w-fit">
+                    <input type="checkbox" checked={!!form.is_permanent_address} onChange={e => setField('is_permanent_address', e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
+                    <span className="text-sm text-[var(--text-primary)] font-medium">This is a permanent address</span>
+                  </label>
+                  {!form.is_permanent_address && (
+                    <AddressAutocomplete label="Secondary / Previous Address" value={form.current_address_2 || ''} onChange={v => setField('current_address_2', v)} placeholder="Required if not permanent" />
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <ReadField label="Employment Status" value={form.employment_status_1} />
+                    <ReadField label="Employer" value={form.employer_1} />
+                    <ReadField label="Annual Salary" value={form.income_1 ? `£${Number(form.income_1).toLocaleString()}` : null} />
+                  </div>
+                  <div className="h-px bg-[var(--border-subtle)]" />
+                  <ReadField label="Current Address" value={form.current_address_1} />
+                  {form.is_permanent_address ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                      <CheckCircle size={12} /> Permanent Address
+                    </span>
                   ) : (
-                    <p className="text-sm text-[var(--text-muted)]">No notes yet.</p>
-                  );
-                })()}
-                <div>
-                  <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} placeholder="Add a note..." rows={3}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none" />
-                  <Button variant="gradient" size="sm" onClick={saveNote} disabled={!noteDraft.trim()} className="mt-2">
-                    <Save size={14} className="mr-1.5" /> Add Note
-                  </Button>
+                    <ReadField label="Secondary / Previous Address" value={form.current_address_2} />
+                  )}
+                </div>
+              )}
+            </GlassCard>
+
+            {/* Renting Requirements */}
+            <GlassCard className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader title="Renting Requirements" icon={<Home size={16} />} />
+                <SectionEditButton editing={isEditing('requirements')} onEdit={() => setEditingSection('requirements')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
+              </div>
+              {isEditing('requirements') ? (
+                <div className="flex flex-wrap gap-2">
+                  {RENTING_REQUIREMENT_OPTIONS.map(opt => {
+                    const isActive = rentingReqs.includes(opt);
+                    return (
+                      <button key={opt} type="button"
+                        onClick={() => {
+                          const next = isActive ? rentingReqs.filter(s => s !== opt) : [...rentingReqs, opt];
+                          setField('renting_requirements', JSON.stringify(next));
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                          isActive
+                            ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
+                            : 'bg-[var(--bg-input)] border-[var(--border-input)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
+                        }`}>
+                        {isActive && <span className="mr-1">✓</span>}{opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : rentingReqs.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {rentingReqs.map(s => (
+                    <span key={s} className="px-3 py-1.5 rounded-full text-xs font-medium bg-orange-500/15 text-orange-400 border border-orange-500/30">
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--text-muted)]">No requirements specified</p>
+              )}
+            </GlassCard>
+
+            {/* Documents */}
+            <DocumentUpload entityType="tenant_enquiry" entityId={Number(id)} />
+          </div>
+
+          {/* ==================== RIGHT COLUMN ==================== */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Linked Property */}
+            <GlassCard className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader title="Linked Property" icon={<Building2 size={16} />} />
+                <SectionEditButton editing={isEditing('property')} onEdit={() => setEditingSection('property')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
+              </div>
+              {isEditing('property') ? (
+                <Select
+                  value={String(form.linked_property_id || '')}
+                  onChange={v => setField('linked_property_id', v ? Number(v) : null)}
+                  options={[
+                    { value: '', label: 'No property linked' },
+                    ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` })),
+                  ]}
+                />
+              ) : selectedProp ? (
+                <div onClick={() => navigate(`/v3/properties/${selectedProp.id}`)}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
+                  <Building2 size={14} className="text-[var(--text-muted)]" />
+                  <span className="text-sm font-medium flex-1">{selectedProp.address}{selectedProp.postcode ? `, ${selectedProp.postcode}` : ''}</span>
+                  <ExternalLink size={12} className="text-[var(--text-muted)]" />
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--text-muted)]">No property linked</p>
+              )}
+              {form.viewing_date && (
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <ReadField label="Viewing Date" value={formatDateDMY(form.viewing_date)} />
+                  {form.viewing_with && <ReadField label="Viewing Notes" value={form.viewing_with} />}
+                </div>
+              )}
+            </GlassCard>
+
+            {/* Onboarding Checklist */}
+            <GlassCard className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader title="Onboarding Checklist" icon={<CheckCircle size={16} />} />
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[var(--text-muted)]">{completedCount}/{checklistItems.length}</span>
+                  <CompletionRing percent={completionPercent} size={36} />
+                  <SectionEditButton editing={isEditing('checklist')} onEdit={() => setEditingSection('checklist')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
                 </div>
               </div>
-            )}
+
+              <div className="space-y-2">
+                {/* KYC — Applicant 1 */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">KYC — {form.first_name_1 || 'Applicant 1'}</span>
+                  <YesNo value={!!form.kyc_completed_1} onChange={v => setField('kyc_completed_1', v)} disabled={!isEditing('checklist')} />
+                </div>
+
+                {/* KYC — Applicant 2 */}
+                {jointApp && (
+                  <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                    <span className="text-xs">KYC — {form.first_name_2 || 'Applicant 2'}</span>
+                    <YesNo value={!!form.kyc_completed_2} onChange={v => setField('kyc_completed_2', v)} disabled={!isEditing('checklist')} />
+                  </div>
+                )}
+
+                {/* Employment Verified */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Employment Verified</span>
+                  <span className={`text-[10px] font-medium ${form.employment_status_1 && form.employer_1 ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {form.employment_status_1 && form.employer_1 ? 'Yes' : 'No'}
+                  </span>
+                </div>
+
+                {/* Income Provided */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs">Income Provided</span>
+                    <span className={`text-[10px] font-medium ${form.income_1 ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                      {form.income_1 ? `£${Number(form.income_1).toLocaleString()}` : '—'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Address Provided */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Address Provided</span>
+                  <span className={`text-[10px] font-medium ${form.current_address_1 ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {form.current_address_1 ? 'Yes' : 'No'}
+                  </span>
+                </div>
+
+                {/* Property Linked */}
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Property Linked</span>
+                  <span className={`text-[10px] font-medium ${form.linked_property_id ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {form.linked_property_id ? 'Yes' : 'No'}
+                  </span>
+                </div>
+              </div>
+            </GlassCard>
+
+            {/* Notes */}
+            <GlassCard className="p-6">
+              <SectionHeader title="Notes" icon={<MessageSquare size={16} />} />
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                {notes.length === 0 && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
+                {notes.map(note => (
+                  <div key={note.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
+                    <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-[10px] text-[var(--text-muted)]">{note.author}</span>
+                      <TimeAgo date={note.created_at} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2 mt-3">
+                <input value={newNote} onChange={e => setNewNote(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addNote()}
+                  placeholder="Add a note..."
+                  className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
+                <Button variant="gradient" onClick={addNote} disabled={addingNote || !newNote.trim()}>
+                  <Plus size={14} />
+                </Button>
+              </div>
+            </GlassCard>
+
+            {/* Activity Timeline */}
+            <GlassCard className="p-6">
+              <SectionHeader title="Activity Timeline" icon={<Clock size={16} />} />
+              <ActivityTimeline entityType="tenant_enquiry" entityId={Number(id)} />
+            </GlassCard>
           </div>
+        </div>
       </div>
 
-      {/* Workflow Modal */}
+      {/* ==================== WORKFLOW MODAL ==================== */}
       {showWorkflow && (
         <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowWorkflow(false)}>
           <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-md p-6" onClick={e => e.stopPropagation()}>

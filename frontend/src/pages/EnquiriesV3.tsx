@@ -249,7 +249,7 @@ export default function EnquiriesV3() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('active');
   const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '', property_id: '' });
   const [saving, setSaving] = useState(false);
