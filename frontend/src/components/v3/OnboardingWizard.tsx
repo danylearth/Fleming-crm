@@ -142,15 +142,18 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const confirmDepositReceived = async () => {
     setSaving(true);
     try {
+      const receivedDate = hdReceivedDate || new Date().toISOString().split('T')[0];
+      const receivedAmount = Number(hdReceivedAmount) || enquiry.holding_deposit_amount;
       await api.put(`/api/tenant-enquiries/${enquiryId}`, {
-        ...enquiry, holding_deposit_received: 1,
-        holding_deposit_received_date: hdReceivedDate || new Date().toISOString().split('T')[0],
-        holding_deposit_received_amount: Number(hdReceivedAmount) || enquiry.holding_deposit_amount,
+        first_name_1: enquiry.first_name_1, last_name_1: enquiry.last_name_1,
+        email_1: enquiry.email_1, status: enquiry.status,
+        holding_deposit_received: 1,
+        holding_deposit_received_date: receivedDate,
+        holding_deposit_received_amount: receivedAmount,
       });
-      // Log to activity
       api.post('/api/activity', {
         action: 'update', entity_type: 'tenant_enquiry', entity_id: enquiryId,
-        changes: { action: 'holding_deposit_received', amount: hdReceivedAmount, date: hdReceivedDate },
+        changes: { action: 'holding_deposit_received', amount: receivedAmount, date: receivedDate },
       }).catch(() => {});
       onUpdate();
     } catch (err) { console.error(err); }
@@ -160,7 +163,11 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const updateField = async (fields: Record<string, any>) => {
     setSaving(true);
     try {
-      await api.put(`/api/tenant-enquiries/${enquiryId}`, { ...enquiry, ...fields });
+      await api.put(`/api/tenant-enquiries/${enquiryId}`, {
+        first_name_1: enquiry.first_name_1, last_name_1: enquiry.last_name_1,
+        email_1: enquiry.email_1, status: enquiry.status,
+        ...fields,
+      });
       onUpdate();
     } catch (err) { console.error(err); }
     setSaving(false);

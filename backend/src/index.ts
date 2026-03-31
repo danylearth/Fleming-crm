@@ -1439,28 +1439,19 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
     const currentEnquiry = db.prepare('SELECT status, first_name_1, last_name_1 FROM tenant_enquiries WHERE id = ?').get(enquiryId) as any;
     const statusChanged = currentEnquiry && currentEnquiry.status !== data.status;
 
-    db.prepare(`
-      UPDATE tenant_enquiries SET
-        title_1=?, first_name_1=?, last_name_1=?, email_1=?, phone_1=?, date_of_birth_1=?,
-        current_address_1=?, employment_status_1=?, employer_1=?, income_1=?,
-        is_joint_application=?, title_2=?, first_name_2=?, last_name_2=?, email_2=?, phone_2=?,
-        date_of_birth_2=?, current_address_2=?, employment_status_2=?, employer_2=?, income_2=?,
-        kyc_completed_1=?, kyc_completed_2=?, status=?, follow_up_date=?, viewing_date=?,
-        linked_property_id=?, notes=?, rejection_reason=?,
-        viewing_with=?, renting_requirements=?, is_permanent_address=?,
-        updated_at=CURRENT_TIMESTAMP
-      WHERE id=?
-    `).run(
-      data.title_1 || null, data.first_name_1, data.last_name_1, data.email_1, data.phone_1 || null,
-      data.date_of_birth_1 || null, data.current_address_1 || null, data.employment_status_1 || null, data.employer_1 || null, data.income_1 || null,
-      data.is_joint_application ? 1 : 0, data.title_2 || null, data.first_name_2 || null, data.last_name_2 || null,
-      data.email_2 || null, data.phone_2 || null, data.date_of_birth_2 || null, data.current_address_2 || null,
-      data.employment_status_2 || null, data.employer_2 || null, data.income_2 || null,
-      data.kyc_completed_1 ? 1 : 0, data.kyc_completed_2 ? 1 : 0, data.status || 'new', data.follow_up_date || null,
-      data.viewing_date || null, data.linked_property_id || null, data.notes || null, data.rejection_reason || null,
-      data.viewing_with || null, data.renting_requirements || null, data.is_permanent_address ? 1 : 0,
-      enquiryId
-    );
+    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','employment_status_1','employer_1','income_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason','renting_requirements','is_permanent_address','holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_token','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step'];
+    const setClauses: string[] = [];
+    const values: any[] = [];
+    for (const key of allowed) {
+      if (key in data) {
+        setClauses.push(`${key}=?`);
+        values.push(data[key] ?? null);
+      }
+    }
+    if (setClauses.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    setClauses.push('updated_at=CURRENT_TIMESTAMP');
+    values.push(enquiryId);
+    db.prepare(`UPDATE tenant_enquiries SET ${setClauses.join(', ')} WHERE id=?`).run(...values);
 
     // Create tasks based on status change
     if (statusChanged) {
