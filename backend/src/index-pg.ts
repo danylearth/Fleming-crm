@@ -1380,6 +1380,48 @@ app.post('/api/tenants/bulk-delete', authMiddleware, async (req: AuthRequest, re
 // ============ PROPERTIES ============
 
 // Public endpoint to get available properties for enquiry form
+// Public duplicate check for enquiry forms
+app.get('/api/public/check-duplicates', async (req, res) => {
+  try {
+    const { email, phone } = req.query;
+    if (!email && !phone) {
+      return res.json({ duplicates: [] });
+    }
+
+    const duplicates: any[] = [];
+
+    // Check tenant enquiries
+    if (email) {
+      const emailMatches = await query(
+        `SELECT id, first_name_1, last_name_1, 'tenant_enquiry' as source, 'email' as match_type FROM tenant_enquiries WHERE email_1 = $1`,
+        [email]
+      );
+      duplicates.push(...emailMatches);
+    }
+    if (phone) {
+      const phoneMatches = await query(
+        `SELECT id, first_name_1, last_name_1, 'tenant_enquiry' as source, 'phone' as match_type FROM tenant_enquiries WHERE phone_1 = $1`,
+        [phone]
+      );
+      duplicates.push(...phoneMatches);
+    }
+
+    // Check tenants
+    if (email) {
+      const tenantEmail = await query(
+        `SELECT id, name, 'tenant' as source, 'email' as match_type FROM tenants WHERE email = $1`,
+        [email]
+      );
+      duplicates.push(...tenantEmail);
+    }
+
+    res.json({ duplicates });
+  } catch (err) {
+    console.error('Public duplicate check error:', err);
+    res.json({ duplicates: [] }); // Fail open - don't block submissions
+  }
+});
+
 app.get('/api/public/properties', async (req, res) => {
   try {
     console.log('[Public Properties] Fetching properties with status: to_let, available');
@@ -1390,7 +1432,7 @@ app.get('/api/public/properties', async (req, res) => {
     const properties = await query(`
       SELECT p.id, p.address, p.postcode, p.property_type, p.bedrooms, p.rent_amount, p.status
       FROM properties p
-      WHERE p.status = 'to_let' OR p.status = 'available'
+      WHERE LOWER(REPLACE(p.status, ' ', '_')) IN ('to_let', 'available') OR LOWER(p.status) IN ('to let', 'to_let', 'available')
       ORDER BY p.address
     `);
     console.log(`[Public Properties] Found ${properties.length} properties with status filter`);
@@ -2091,11 +2133,11 @@ app.get('/api/property-viewings', authMiddleware, async (req: AuthRequest, res) 
 
 app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to } = req.body;
+    const { property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to, send_sms, sms_message } = req.body;
     const viewingId = await insert(`
-      INSERT INTO property_viewings (property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    `, [property_id, enquiry_id || null, viewer_name, viewer_email || null, viewer_phone || null, viewing_date, viewing_time || null, notes || null]);
+      INSERT INTO property_viewings (property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [property_id, enquiry_id || null, viewer_name, viewer_email || null, viewer_phone || null, viewing_date, viewing_time || null, notes || null, assigned_to || null]);
 
     if (enquiry_id) {
       await run("UPDATE tenant_enquiries SET status = 'viewing_booked', viewing_date = $1 WHERE id = $2", [viewing_date, enquiry_id]);
@@ -2109,6 +2151,22 @@ app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res)
       INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, task_type, due_date, assigned_to)
       VALUES ($1, $2, 'pending', 'high', 'tenant_enquiry', $3, 'viewing', $4, $5)
     `, [taskTitle, taskDescription, enquiry_id || null, viewing_date, assigned_to || req.user?.name || null]);
+
+    // Send SMS if requested
+    if (send_sms && viewer_phone && sms_message) {
+      const { sendSms, normalizeUkPhone } = require('./sms');
+      const normalizedPhone = normalizeUkPhone(viewer_phone);
+      const smsResult = await sendSms({ to: normalizedPhone, body: sms_message });
+      await insert(`
+        INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `, [
+        enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
+        sms_message, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
+        smsResult.error || null, req.user?.id || null, req.user?.email || null
+      ]);
+      await logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id || 0, { to_phone: normalizedPhone, message: sms_message.substring(0, 100) });
+    }
 
     await logAudit(req.user?.id, req.user?.email, 'create', 'property_viewing', viewingId, { viewer_name, viewing_date, property_id });
     res.json({ id: viewingId });
@@ -2127,6 +2185,42 @@ app.put('/api/property-viewings/:id', authMiddleware, async (req: AuthRequest, r
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update viewing' });
+  }
+});
+
+// ============ SMS ============
+
+app.post('/api/sms/send', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { enquiry_id, to_phone, message_body } = req.body;
+    if (!to_phone || !message_body) return res.status(400).json({ error: 'to_phone and message_body required' });
+    const { sendSms, normalizeUkPhone } = require('./sms');
+    const normalizedPhone = normalizeUkPhone(to_phone);
+    const smsResult = await sendSms({ to: normalizedPhone, body: message_body });
+    const smsId = await insert(`
+      INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
+      message_body, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
+      smsResult.error || null, req.user?.id || null, req.user?.email || null
+    ]);
+    if (enquiry_id) {
+      await logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id, { to_phone: normalizedPhone, message: message_body.substring(0, 100) });
+    }
+    res.json({ id: smsId, success: smsResult.success, twilio_sid: smsResult.sid });
+  } catch (err) {
+    console.error('Error sending SMS:', err);
+    res.status(500).json({ error: 'Failed to send SMS' });
+  }
+});
+
+app.get('/api/sms/enquiry/:enquiryId', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const messages = await query('SELECT * FROM sms_messages WHERE enquiry_id = $1 ORDER BY created_at DESC', [req.params.enquiryId]);
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch SMS history' });
   }
 });
 

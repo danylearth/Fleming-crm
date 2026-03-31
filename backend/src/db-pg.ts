@@ -360,6 +360,22 @@ export async function initDb() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- SMS MESSAGES
+      CREATE TABLE IF NOT EXISTS sms_messages (
+        id SERIAL PRIMARY KEY,
+        enquiry_id INTEGER REFERENCES tenant_enquiries(id),
+        to_phone TEXT NOT NULL,
+        from_phone TEXT,
+        message_body TEXT NOT NULL,
+        direction TEXT DEFAULT 'outbound',
+        status TEXT DEFAULT 'queued',
+        twilio_sid TEXT,
+        error_message TEXT,
+        sent_by INTEGER REFERENCES users(id),
+        sent_by_email TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Create indexes
       CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
       CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
@@ -380,6 +396,14 @@ export async function initDb() {
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS deposit_scheme TEXT;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS authority_to_contact INTEGER DEFAULT 0;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS proof_of_income INTEGER DEFAULT 0;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Sprint 4: Add assigned_to to property_viewings
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE property_viewings ADD COLUMN IF NOT EXISTS assigned_to TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `);

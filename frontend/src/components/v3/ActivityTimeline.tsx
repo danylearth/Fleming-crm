@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApi } from '../../hooks/useApi';
-import { Clock, Eye, Plus, Pencil, Trash2, LogIn, Upload, StickyNote } from 'lucide-react';
+import { Clock, Eye, Plus, Pencil, Trash2, LogIn, Upload, StickyNote, MessageSquare } from 'lucide-react';
 
 interface AuditEntry {
   id: number;
@@ -20,6 +20,7 @@ const ACTION_CONFIG: Record<string, { icon: typeof Clock; color: string; label: 
   login: { icon: LogIn, color: 'text-purple-400 bg-purple-500/20', label: 'Logged in' },
   export: { icon: Upload, color: 'text-cyan-400 bg-cyan-500/20', label: 'Exported' },
   note_added: { icon: StickyNote, color: 'text-pink-400 bg-pink-500/20', label: 'Note added' },
+  sms_sent: { icon: MessageSquare, color: 'text-teal-400 bg-teal-500/20', label: 'SMS sent' },
 };
 
 function timeAgo(dateStr: string) {
@@ -92,6 +93,11 @@ export default function ActivityTimeline({ entityType, entityId }: { entityType:
                 {entry.action === 'note_added' && entry.changes && (
                   <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-2">
                     {(() => { try { const c = JSON.parse(entry.changes); return c.text || ''; } catch { return ''; } })()}
+                  </p>
+                )}
+                {entry.action === 'sms_sent' && entry.changes && (
+                  <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-2">
+                    {(() => { try { const c = JSON.parse(entry.changes); return `To: ${c.to_phone || ''}${c.message ? ' — ' + c.message : ''}`; } catch { return ''; } })()}
                   </p>
                 )}
                 <p className="text-[10px] text-[var(--text-muted)]">

@@ -155,6 +155,13 @@ export default function EnquiryDetailV3() {
   const [wfAssignedTo, setWfAssignedTo] = useState('');
   const [wfLoading, setWfLoading] = useState(false);
 
+  // SMS
+  const [smsEnabled, setSmsEnabled] = useState(false);
+  const [smsBody, setSmsBody] = useState('');
+  const [smsHistory, setSmsHistory] = useState<any[]>([]);
+  const [smsCompose, setSmsCompose] = useState('');
+  const [smsSending, setSmsSending] = useState(false);
+
   const loadDetail = useCallback(async () => {
     try {
       const [d, props, usersList] = await Promise.all([
@@ -181,6 +188,27 @@ export default function EnquiryDetailV3() {
   }, [id, api]);
 
   useEffect(() => { loadDetail(); }, [loadDetail]);
+
+  // Load SMS history
+  const loadSmsHistory = useCallback(async () => {
+    try {
+      const msgs = await api.get(`/api/sms/enquiry/${id}`);
+      setSmsHistory(Array.isArray(msgs) ? msgs : []);
+    } catch {}
+  }, [id, api]);
+  useEffect(() => { loadSmsHistory(); }, [loadSmsHistory]);
+
+  const sendStandaloneSms = async () => {
+    if (!smsCompose.trim() || !data?.phone_1) return;
+    setSmsSending(true);
+    try {
+      await api.post('/api/sms/send', { enquiry_id: Number(id), to_phone: data.phone_1, message_body: smsCompose.trim() });
+      setSmsCompose('');
+      await loadSmsHistory();
+      await loadDetail();
+    } catch {}
+    setSmsSending(false);
+  };
 
   const setField = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
   const isEditing = (section: string) => editingSection === section;
@@ -219,8 +247,10 @@ export default function EnquiryDetailV3() {
               viewer_name: name, viewer_email: form.email_1 || '',
               viewer_phone: form.phone_1 || '', viewing_date: wfDate, viewing_time: wfTime,
               assigned_to: wfAssignedTo || null,
+              send_sms: smsEnabled, sms_message: smsBody || null,
             });
             await saveSection({ status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate, viewing_with: wfViewingWith || null });
+            if (smsEnabled) await loadSmsHistory();
           }
           break;
         case 'follow_up':
@@ -350,7 +380,7 @@ export default function EnquiryDetailV3() {
             <div className="flex items-center gap-3">
               <CompletionRing percent={completionPercent} />
               {!['converted', 'rejected'].includes(form.status) && (
-                <Button variant="gradient" size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); }}>
+                <Button variant="gradient" size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); setSmsEnabled(!!form.phone_1); setSmsBody(''); }}>
                   <ArrowRight size={14} className="mr-1.5" /> Progress
                 </Button>
               )}
@@ -644,6 +674,42 @@ export default function EnquiryDetailV3() {
               </div>
             </GlassCard>
 
+            {/* SMS History */}
+            <GlassCard className="p-6">
+              <SectionHeader title="SMS History" icon={<Phone size={16} />} />
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                {smsHistory.length === 0 && <p className="text-xs text-[var(--text-muted)]">No messages sent yet</p>}
+                {smsHistory.map((sms: any) => (
+                  <div key={sms.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${sms.status === 'sent' ? 'bg-green-500/20 text-green-400' : sms.status === 'failed' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                        {sms.status}
+                      </span>
+                      <span className="text-[10px] text-[var(--text-muted)]">{sms.to_phone}</span>
+                    </div>
+                    <p className="text-xs text-[var(--text-primary)] whitespace-pre-wrap">{sms.message_body}</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-[10px] text-[var(--text-muted)]">{sms.sent_by_email || 'System'}</span>
+                      <span className="text-[10px] text-[var(--text-muted)]">{new Date(sms.created_at).toLocaleString('en-GB')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {data?.phone_1 && (
+                <div className="mt-3">
+                  <div className="flex gap-2">
+                    <input value={smsCompose} onChange={e => setSmsCompose(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendStandaloneSms()}
+                      placeholder={`Send SMS to ${data.phone_1}...`}
+                      className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
+                    <Button variant="gradient" onClick={sendStandaloneSms} disabled={smsSending || !smsCompose.trim()}>
+                      <Phone size={14} />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </GlassCard>
+
             {/* Activity Timeline */}
             <GlassCard className="p-6">
               <SectionHeader title="Activity Timeline" icon={<Clock size={16} />} />
@@ -708,13 +774,48 @@ export default function EnquiryDetailV3() {
                 <button onClick={() => setWorkflowMode('choose')} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">← Back</button>
                 {workflowMode === 'viewing' && (
                   <>
-                    <Select label="Property *" value={wfPropId} onChange={setWfPropId}
+                    <Select label="Property *" value={wfPropId} onChange={(v) => {
+                      setWfPropId(v);
+                      const prop = properties.find(p => p.id === Number(v));
+                      if (prop && wfDate) setSmsBody(`Hi ${[form.first_name_1, form.last_name_1].filter(Boolean).join(' ')}, your property viewing at ${prop.address} has been confirmed for ${wfDate}${wfTime ? ' at ' + wfTime : ''}. Please arrive on time. If you need to reschedule, please call us. - Fleming Lettings`);
+                    }}
                       options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: p.address }))]} />
-                    <DatePicker label="Date *" value={wfDate} onChange={setWfDate} />
-                    <Input label="Time" value={wfTime} onChange={setWfTime} type="time" />
-                    <Select label="Assign To" value={wfAssignedTo} onChange={setWfAssignedTo}
+                    <DatePicker label="Viewing Date *" value={wfDate} onChange={(v) => {
+                      setWfDate(v);
+                      const prop = properties.find(p => p.id === Number(wfPropId));
+                      if (prop && v) setSmsBody(`Hi ${[form.first_name_1, form.last_name_1].filter(Boolean).join(' ')}, your property viewing at ${prop.address} has been confirmed for ${v}${wfTime ? ' at ' + wfTime : ''}. Please arrive on time. If you need to reschedule, please call us. - Fleming Lettings`);
+                    }} />
+                    <Input label="Viewing Time" value={wfTime} onChange={setWfTime} type="time" />
+                    <Select label="Assign To (Agent)" value={wfAssignedTo} onChange={setWfAssignedTo}
                       options={[{ value: '', label: 'Unassigned' }, ...users.map(u => ({ value: u.name, label: u.name }))]} />
                     <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Special instructions" />
+
+                    {/* SMS Confirmation */}
+                    <div className="h-px bg-[var(--border-subtle)] my-1" />
+                    {form.phone_1 ? (
+                      <div className="space-y-3">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input type="checkbox" checked={smsEnabled} onChange={e => setSmsEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-[var(--text-primary)]">Send SMS confirmation</span>
+                            <span className="text-xs text-[var(--text-muted)] ml-2">{form.phone_1}</span>
+                          </div>
+                          <Phone size={14} className="text-[var(--text-muted)]" />
+                        </label>
+                        {smsEnabled && (
+                          <div>
+                            <label className="block text-xs text-[var(--text-secondary)] mb-1.5">Message Preview</label>
+                            <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={3}
+                              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none" />
+                            <p className="text-[10px] text-[var(--text-muted)] mt-1">{smsBody.length}/160 characters</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                        <p className="text-xs text-amber-400">No phone number on record — SMS cannot be sent</p>
+                      </div>
+                    )}
                   </>
                 )}
                 {workflowMode === 'follow_up' && <DatePicker label="Follow-up Date" value={wfDate} onChange={setWfDate} />}

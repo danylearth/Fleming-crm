@@ -1484,7 +1484,7 @@
                             </div>
                         </div>
                         <div id="propertySearchSection" style="display: none;">
-                            <select name="property_id" id="propertySelect">
+                            <select name="property_id" id="propertySelect" data-deferred="true">
                                 <option value="">Select a property</option>
                             </select>
                         </div>
@@ -2000,23 +2000,34 @@
         }
 
         // Property interest toggle
-        function togglePropertySearch(show) {
+        async function togglePropertySearch(show) {
             const section = document.getElementById('propertySearchSection');
             section.style.display = show ? 'block' : 'none';
             if (!show) {
                 document.getElementById('propertySelect').value = '';
+                return;
             }
-            // Re-init custom selects if showing (to style the property dropdown)
-            if (show) {
-                const existing = section.querySelector('.custom-select');
-                if (!existing) {
-                    const sel = section.querySelector('select');
-                    if (sel) {
-                        sel.classList.remove('custom-replaced');
-                        initCustomSelects();
-                    }
-                }
+
+            // Make sure properties are loaded
+            if (loadedProperties.length === 0) {
+                await loadProperties();
             }
+
+            // Remove any existing custom select wrapper
+            const existingWrapper = section.querySelector('.custom-select');
+            if (existingWrapper) existingWrapper.remove();
+
+            const sel = document.getElementById('propertySelect');
+            sel.classList.remove('custom-replaced');
+            sel.style.display = '';
+            delete sel.dataset.deferred;
+
+            // Show how many properties are available
+            if (loadedProperties.length === 0) {
+                sel.innerHTML = '<option value="">No properties available</option>';
+            }
+
+            setTimeout(() => initCustomSelects(), 100);
         }
 
         // File upload handling
@@ -2062,7 +2073,7 @@
 
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
-            submitBtn.textContent = 'Submitting...';
+            submitBtn.textContent = 'Checking...';
 
             const formData = new FormData(document.getElementById('tenantForm'));
             const data = {};
@@ -2091,9 +2102,30 @@
             data.marketing_preferences = marketingPrefs.join(', ');
 
             try {
-                const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                    ? 'http://localhost:3001/api/public/tenant-enquiries'
-                    : 'https://platform.fleminglettings.co.uk/api/public/tenant-enquiries';
+                const baseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                    ? 'http://localhost:3001'
+                    : 'https://fleming-crm-api-production-7e58.up.railway.app';
+
+                // Check for duplicates first (fail open if endpoint errors)
+                try {
+                    submitBtn.textContent = 'Checking...';
+                    const dupParams = new URLSearchParams({ email: data.form_email, phone: data.contactNumber });
+                    const dupCheck = await fetch(`${baseUrl}/api/public/check-duplicates?${dupParams}`);
+                    if (dupCheck.ok) {
+                        const dupResult = await dupCheck.json();
+                        if (dupResult.duplicates && dupResult.duplicates.length > 0) {
+                            showError('It looks like you may have already submitted an application with this email or phone number. If this is a new enquiry, please contact us directly.');
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = 'Submit Application ✓';
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.log('Duplicate check skipped:', e);
+                }
+
+                submitBtn.textContent = 'Submitting...';
+                const apiUrl = `${baseUrl}/api/public/tenant-enquiries`;
 
                 const response = await fetch(apiUrl, {
                     method: 'POST',
@@ -2124,7 +2156,6 @@
                         }
                     }
 
-                    document.getElementById('refNumber').textContent = result.reference || 'ENQ-' + result.enquiry_id;
                     showStep(9); // Show success step
                 } else {
                     throw new Error(result.error || 'Submission failed');
@@ -2141,10 +2172,21 @@
             try {
                 const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
                     ? 'http://localhost:3001/api/public/properties'
-                    : 'https://platform.fleminglettings.co.uk/api/public/properties';
+                    : 'https://fleming-crm-api-production-7e58.up.railway.app/api/public/properties';
 
                 const response = await fetch(apiUrl);
                 loadedProperties = await response.json();
+
+                // Populate the property select dropdown
+                const select = document.getElementById('propertySelect');
+                if (select) {
+                    loadedProperties.forEach(p => {
+                        const option = document.createElement('option');
+                        option.value = p.id;
+                        option.textContent = `${p.address}${p.postcode ? ', ' + p.postcode : ''} - ${p.bedrooms} bed ${p.property_type} - £${p.rent_amount}/mo`;
+                        select.appendChild(option);
+                    });
+                }
             } catch (error) {
                 console.error('Failed to load properties:', error);
             }
@@ -2153,6 +2195,8 @@
         // ===== CUSTOM SELECT DROPDOWNS =====
         function initCustomSelects() {
             document.querySelectorAll('select:not(.custom-replaced)').forEach(nativeSelect => {
+                // Skip selects marked as deferred (initialized later on demand)
+                if (nativeSelect.dataset.deferred) return;
                 nativeSelect.classList.add('custom-replaced');
 
                 const options = Array.from(nativeSelect.options);

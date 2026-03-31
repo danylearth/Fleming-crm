@@ -1562,7 +1562,7 @@
                 try {
                     const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
                         ? 'http://localhost:3001'
-                        : 'https://platform.fleminglettings.co.uk';
+                        : 'https://fleming-crm-api-production-7e58.up.railway.app';
 
                     const response = await fetch(`${apiUrl}/api/companies-house/search?query=${encodeURIComponent(query)}`);
                     const data = await response.json();
@@ -1691,7 +1691,7 @@
 
             const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
                 ? 'http://localhost:3001'
-                : 'https://platform.fleminglettings.co.uk';
+                : 'https://fleming-crm-api-production-7e58.up.railway.app';
 
             try {
                 const response = await fetch(`${API_URL}/api/public/landlord-enquiries`, {

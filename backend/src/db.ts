@@ -760,6 +760,29 @@ try { db.exec(`ALTER TABLE landlords ADD COLUMN referral_source TEXT`); } catch 
 try { db.exec(`ALTER TABLE users ADD COLUMN department TEXT`); } catch (e) {}
 try { db.exec(`ALTER TABLE users ADD COLUMN last_password_change DATETIME`); } catch (e) {}
 
+// Sprint 4: Add assigned_to to property_viewings
+try { db.exec(`ALTER TABLE property_viewings ADD COLUMN assigned_to TEXT`); } catch (e) {}
+
+// Sprint 4: SMS messages table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sms_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    enquiry_id INTEGER,
+    to_phone TEXT NOT NULL,
+    from_phone TEXT,
+    message_body TEXT NOT NULL,
+    direction TEXT DEFAULT 'outbound',
+    status TEXT DEFAULT 'queued',
+    twilio_sid TEXT,
+    error_message TEXT,
+    sent_by INTEGER,
+    sent_by_email TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (enquiry_id) REFERENCES tenant_enquiries(id),
+    FOREIGN KEY (sent_by) REFERENCES users(id)
+  );
+`);
+
 // Sprint 3: Property expenses table
 db.exec(`
   CREATE TABLE IF NOT EXISTS property_expenses (

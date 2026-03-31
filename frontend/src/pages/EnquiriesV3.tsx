@@ -264,6 +264,11 @@ export default function EnquiriesV3() {
   const [wfPropId, setWfPropId] = useState('');
   const [wfReason, setWfReason] = useState('');
   const [wfLoading, setWfLoading] = useState(false);
+  const [wfAssignedTo, setWfAssignedTo] = useState('');
+  const [wfViewingWith, setWfViewingWith] = useState('');
+  const [smsEnabled, setSmsEnabled] = useState(false);
+  const [smsBody, setSmsBody] = useState('');
+  const [allUsers, setAllUsers] = useState<{ id: number; name: string; email: string }[]>([]);
   // Bulk actions state
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -271,10 +276,12 @@ export default function EnquiriesV3() {
 
   const load = async () => {
     try {
-      const [data, props] = await Promise.all([
+      const [data, props, usersList] = await Promise.all([
         api.get('/api/tenant-enquiries'),
         api.get('/api/properties').catch(() => []),
+        api.get('/api/users').catch(() => []),
       ]);
+      setAllUsers(Array.isArray(usersList) ? usersList : []);
       const raw = Array.isArray(data) ? data : data.enquiries || [];
       setRawEnquiries(raw);
       setEnquiries(raw.map(mapEnquiry));
@@ -331,6 +338,7 @@ export default function EnquiriesV3() {
     setWorkflowEnquiry(e);
     setWorkflowMode('choose');
     setWfDate(''); setWfTime('10:00'); setWfPropId(''); setWfReason('');
+    setWfAssignedTo(''); setWfViewingWith(''); setSmsEnabled(!!e.phone); setSmsBody('');
   };
 
   const doWorkflowAction = async () => {
@@ -348,9 +356,11 @@ export default function EnquiriesV3() {
               property_id: Number(wfPropId), enquiry_id: workflowEnquiry.id,
               viewer_name: name, viewer_email: workflowEnquiry.email,
               viewer_phone: workflowEnquiry.phone, viewing_date: wfDate, viewing_time: wfTime,
+              assigned_to: wfAssignedTo || null,
+              send_sms: smsEnabled, sms_message: smsBody || null,
             });
             await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`, {
-              ...raw, status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate,
+              ...raw, status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate, viewing_with: wfViewingWith || null,
             });
           }
           break;
@@ -474,13 +484,13 @@ export default function EnquiriesV3() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="flex-1"><SearchBar value={search} onChange={setSearch} placeholder="Search enquiries..." /></div>
           <div className="flex items-center gap-1 bg-[var(--bg-input)] rounded-xl p-1 border border-[var(--border-input)]">
-            <button onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
-              <List size={16} />
-            </button>
             <button onClick={() => setViewMode('kanban')}
               className={`p-2 rounded-lg transition-colors ${viewMode === 'kanban' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
               <LayoutGrid size={16} />
+            </button>
+            <button onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+              <List size={16} />
             </button>
           </div>
           <Button
@@ -794,10 +804,52 @@ export default function EnquiriesV3() {
                 <button onClick={() => setWorkflowMode('choose')} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">← Back</button>
                 {workflowMode === 'viewing' && (
                   <>
-                    <Select label="Link to Property" value={wfPropId} onChange={setWfPropId}
+                    <Select label="Property *" value={wfPropId} onChange={(v) => {
+                      setWfPropId(v);
+                      if (workflowEnquiry && v && wfDate) {
+                        const prop = properties.find(p => p.id === Number(v));
+                        if (prop) setSmsBody(`Hi ${workflowEnquiry.name}, your property viewing at ${prop.address} has been confirmed for ${wfDate}${wfTime ? ' at ' + wfTime : ''}. Please arrive on time. If you need to reschedule, please call us. - Fleming Lettings`);
+                      }
+                    }}
                       options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
-                    <DatePicker label="Viewing Date" value={wfDate} onChange={setWfDate} />
+                    <DatePicker label="Viewing Date *" value={wfDate} onChange={(v) => {
+                      setWfDate(v);
+                      if (workflowEnquiry && wfPropId && v) {
+                        const prop = properties.find(p => p.id === Number(wfPropId));
+                        if (prop) setSmsBody(`Hi ${workflowEnquiry.name}, your property viewing at ${prop.address} has been confirmed for ${v}${wfTime ? ' at ' + wfTime : ''}. Please arrive on time. If you need to reschedule, please call us. - Fleming Lettings`);
+                      }
+                    }} />
                     <Input label="Viewing Time" value={wfTime} onChange={setWfTime} type="time" />
+                    <Select label="Assign To (Agent)" value={wfAssignedTo} onChange={setWfAssignedTo}
+                      options={[{ value: '', label: 'Unassigned' }, ...allUsers.map(u => ({ value: u.name, label: u.name }))]} />
+                    <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Special instructions" />
+
+                    {/* SMS Confirmation */}
+                    <div className="h-px bg-[var(--border-subtle)] my-1" />
+                    {workflowEnquiry?.phone ? (
+                      <div className="space-y-3">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input type="checkbox" checked={smsEnabled} onChange={e => setSmsEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-[var(--text-primary)]">Send SMS confirmation</span>
+                            <span className="text-xs text-[var(--text-muted)] ml-2">{workflowEnquiry.phone}</span>
+                          </div>
+                          <Phone size={14} className="text-[var(--text-muted)]" />
+                        </label>
+                        {smsEnabled && (
+                          <div>
+                            <label className="block text-xs text-[var(--text-secondary)] mb-1.5">Message Preview</label>
+                            <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={3}
+                              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none" />
+                            <p className="text-[10px] text-[var(--text-muted)] mt-1">{smsBody.length}/160 characters</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                        <p className="text-xs text-amber-400">No phone number on record — SMS cannot be sent</p>
+                      </div>
+                    )}
                   </>
                 )}
                 {workflowMode === 'follow_up' && (

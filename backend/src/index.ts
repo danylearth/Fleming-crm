@@ -2233,14 +2233,14 @@ app.get('/api/property-viewings', authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
-app.post('/api/property-viewings', authMiddleware, (req: AuthRequest, res) => {
+app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to } = req.body;
+    const { property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to, send_sms, sms_message } = req.body;
     const stmt = db.prepare(`
-      INSERT INTO property_viewings (property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO property_viewings (property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes);
+    const result = stmt.run(property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to || null);
 
     // If linked to enquiry, update enquiry status
     if (enquiry_id) {
@@ -2257,6 +2257,22 @@ app.post('/api/property-viewings', authMiddleware, (req: AuthRequest, res) => {
       INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, task_type, due_date, assigned_to)
       VALUES (?, ?, 'pending', 'high', 'tenant_enquiry', ?, 'viewing', ?, ?)
     `).run(taskTitle, taskDescription, enquiry_id || null, viewing_date, assigned_to || req.user?.name || null);
+
+    // Send SMS if requested
+    if (send_sms && viewer_phone && sms_message) {
+      const { sendSms, normalizeUkPhone } = require('./sms');
+      const normalizedPhone = normalizeUkPhone(viewer_phone);
+      const smsResult = await sendSms({ to: normalizedPhone, body: sms_message });
+      db.prepare(`
+        INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
+        sms_message, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
+        smsResult.error || null, req.user?.id || null, req.user?.email || null
+      );
+      logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id || 0, { to_phone: normalizedPhone, message: sms_message.substring(0, 100) });
+    }
 
     logAudit(req.user?.id, req.user?.email, 'create', 'property_viewing', Number(result.lastInsertRowid), { viewer_name, viewing_date, property_id });
 
@@ -2276,6 +2292,43 @@ app.put('/api/property-viewings/:id', authMiddleware, (req: AuthRequest, res) =>
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update viewing' });
+  }
+});
+
+// ============ SMS ============
+
+app.post('/api/sms/send', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { enquiry_id, to_phone, message_body } = req.body;
+    if (!to_phone || !message_body) return res.status(400).json({ error: 'to_phone and message_body required' });
+    const { sendSms, normalizeUkPhone } = require('./sms');
+    const normalizedPhone = normalizeUkPhone(to_phone);
+    const smsResult = await sendSms({ to: normalizedPhone, body: message_body });
+    const stmt = db.prepare(`
+      INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
+      message_body, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
+      smsResult.error || null, req.user?.id || null, req.user?.email || null
+    );
+    if (enquiry_id) {
+      logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id, { to_phone: normalizedPhone, message: message_body.substring(0, 100) });
+    }
+    res.json({ id: result.lastInsertRowid, success: smsResult.success, twilio_sid: smsResult.sid });
+  } catch (err) {
+    console.error('Error sending SMS:', err);
+    res.status(500).json({ error: 'Failed to send SMS' });
+  }
+});
+
+app.get('/api/sms/enquiry/:enquiryId', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const messages = db.prepare('SELECT * FROM sms_messages WHERE enquiry_id = ? ORDER BY created_at DESC').all(req.params.enquiryId);
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch SMS history' });
   }
 });
 
