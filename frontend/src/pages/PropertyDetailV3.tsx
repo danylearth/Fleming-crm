@@ -20,6 +20,7 @@ interface PropertyDetail {
   status: string; landlord_name: string; landlord_id?: number;
   landlord_phone?: string; landlord_email?: string;
   current_tenant: string | null; current_tenant_id?: number; tenant_id?: number;
+  current_tenant_email?: string | null; current_tenant_phone?: string | null;
   bedrooms: number; property_type: string;
   // Management
   service_type: string | null; charge_percentage: number | null; total_charge: number | null;
@@ -492,6 +493,45 @@ export default function PropertyDetailV3() {
             ) : (
               <Button variant="ghost" size="sm" onClick={() => setEditing(true)} className="bg-black/40 backdrop-blur-sm text-white text-xs sm:text-sm">
                 <Pencil size={14} className="mr-0 sm:mr-1" /> <span className="hidden sm:inline">Edit</span>
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Tenant Banner — always visible */}
+        <div className={`rounded-xl sm:rounded-2xl border p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 ${
+          property.current_tenant
+            ? 'bg-gradient-to-r from-[var(--accent-orange)]/10 to-transparent border-[var(--accent-orange)]/30'
+            : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)]'
+        }`}>
+          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 ${
+            property.current_tenant ? 'bg-[var(--accent-orange)]/20 text-[var(--accent-orange)]' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'
+          }`}>
+            <User size={20} />
+          </div>
+          {property.current_tenant ? (
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-[var(--text-muted)] mb-0.5">Current Tenant</p>
+              <p className="text-base sm:text-lg font-semibold truncate">{property.current_tenant}</p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 text-xs text-[var(--text-secondary)]">
+                {property.current_tenant_email && <span>{property.current_tenant_email}</span>}
+                {property.current_tenant_phone && <span>{property.current_tenant_phone}</span>}
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-[var(--text-muted)] mb-0.5">Tenant</p>
+              <p className="text-sm text-[var(--text-secondary)]">No tenant assigned to this property</p>
+            </div>
+          )}
+          <div className="shrink-0 flex gap-2">
+            {property.current_tenant ? (
+              <Button variant="outline" size="sm" onClick={() => (property.current_tenant_id || property.tenant_id) && navigate(`/v3/tenants/${property.current_tenant_id || property.tenant_id}`)}>
+                View Tenant <ChevronRight size={14} className="ml-1" />
+              </Button>
+            ) : (
+              <Button variant="gradient" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('select'); }}>
+                <Plus size={14} className="mr-1" /> Assign Tenant
               </Button>
             )}
           </div>

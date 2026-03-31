@@ -1864,7 +1864,9 @@ app.get('/api/properties/:id', authMiddleware, (req: AuthRequest, res) => {
     const property = db.prepare(`
       SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email, l.landlord_type,
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant,
-        (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id
+        (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id,
+        (SELECT t.email FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_email,
+        (SELECT t.phone FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_phone
       FROM properties p
       LEFT JOIN landlords l ON l.id = p.landlord_id
       WHERE p.id = ?
@@ -2029,6 +2031,7 @@ app.get('/api/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
       ORDER BY uploaded_at DESC
     `).all(task.id);
 
+    logAudit(req.user?.id, req.user?.email, 'view', 'task', parseInt(req.params.id));
     res.json({ ...task, relatedEntity, documents });
   } catch (err) {
     console.error('Failed to fetch task:', err);

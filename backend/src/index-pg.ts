@@ -1160,6 +1160,7 @@ app.get('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
       LEFT JOIN properties p ON p.id = te.linked_property_id WHERE te.id = $1
     `, [req.params.id as string]);
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
+    await logAudit(req.user?.id, req.user?.email, 'view', 'tenant_enquiry', parseInt(req.params.id as string));
     res.json(enquiry);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch enquiry' });
@@ -1278,6 +1279,7 @@ app.get('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
       LEFT JOIN properties p ON p.id = t.property_id WHERE t.id = $1
     `, [req.params.id as string]);
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+    await logAudit(req.user?.id, req.user?.email, 'view', 'tenant', parseInt(req.params.id as string));
     res.json(tenant);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch tenant' });
@@ -1577,10 +1579,13 @@ app.get('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
     const property = await queryOne(`
       SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email,
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant,
-        (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id
+        (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id,
+        (SELECT t.email FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_email,
+        (SELECT t.phone FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_phone
       FROM properties p JOIN landlords l ON l.id = p.landlord_id WHERE p.id = $1
     `, [req.params.id as string]);
     if (!property) return res.status(404).json({ error: 'Property not found' });
+    await logAudit(req.user?.id, req.user?.email, 'view', 'property', parseInt(req.params.id as string));
     res.json(property);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch property' });
@@ -1718,6 +1723,7 @@ app.get('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
     if (result.length === 0) {
       return res.status(404).json({ error: 'Task not found' });
     }
+    await logAudit(req.user?.id, req.user?.email, 'view', 'task', parseInt(req.params.id as string));
     res.json(result[0]);
   } catch (err) {
     console.error(err);
@@ -1780,6 +1786,7 @@ app.get('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) =>
     if (result.length === 0) {
       return res.status(404).json({ error: 'Maintenance request not found' });
     }
+    await logAudit(req.user?.id, req.user?.email, 'view', 'maintenance', parseInt(req.params.id as string));
     res.json(result[0]);
   } catch (err) {
     console.error(err);
