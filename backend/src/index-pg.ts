@@ -908,7 +908,13 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
       rent_min,
       rent_max,
       // Property selection
-      property_id
+      property_id,
+      // New fields from updated form
+      contract_type,
+      contract_type2,
+      additional_notes,
+      marketing_preferences,
+      has_property_interest
     } = req.body;
 
     // Validation
@@ -949,6 +955,7 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
     if (Nationality) notes += `Nationality: ${Nationality}\n`;
     if (job_title) notes += `Job Title: ${job_title}\n`;
     if (AnnualSalary) notes += `Annual Salary: £${AnnualSalary}\n`;
+    if (contract_type) notes += `Contract Type: ${contract_type}\n`;
     if (is_joint && FirstName2) {
       notes += '\n=== APPLICANT 2 DETAILS ===\n';
       if (address2) notes += `Address: ${address2}\n`;
@@ -957,6 +964,13 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
       if (Nationality2) notes += `Nationality: ${Nationality2}\n`;
       if (job_title2) notes += `Job Title: ${job_title2}\n`;
       if (AnnualSalary2) notes += `Annual Salary: £${AnnualSalary2}\n`;
+      if (contract_type2) notes += `Contract Type: ${contract_type2}\n`;
+    }
+    if (additional_notes) {
+      notes += `\n=== APPLICANT NOTES ===\n${additional_notes}\n`;
+    }
+    if (marketing_preferences) {
+      notes += `\n=== MARKETING PREFERENCES ===\n${marketing_preferences}\n`;
     }
     notes += `\n=== FORM METADATA ===\n`;
     notes += `Submitted from IP: ${client_ip}\n`;
