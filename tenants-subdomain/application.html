@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant Application - Fleming Lettings</title>
+    <style>
+        @font-face { font-family: 'Lufga'; font-weight: 400; src: url('fonts/Lufga-Regular.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 500; src: url('fonts/Lufga-Medium.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 600; src: url('fonts/Lufga-SemiBold.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 700; src: url('fonts/Lufga-Bold.otf') format('opentype'); }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Lufga', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #25073B 0%, #DC006D 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+        }
+
+        .logo-bar {
+            text-align: center;
+            padding: 24px 0;
+        }
+        .logo-bar img { height: 48px; }
+
+        .card {
+            background: #fff;
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+        }
+
+        .card-dark {
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+        h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #DC006D; }
+        h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #555; }
+        p { font-size: 14px; line-height: 1.6; color: #666; margin-bottom: 12px; }
+        .card-dark p { color: #ccc; }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin: 20px 0;
+        }
+        .summary-item {
+            background: rgba(220,0,109,0.08);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+        .summary-item .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #999; margin-bottom: 4px; }
+        .summary-item .value { font-size: 20px; font-weight: 700; color: #DC006D; }
+
+        .property-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(220,0,109,0.08);
+            border-radius: 12px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #DC006D;
+            margin-bottom: 16px;
+        }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+        .form-full { grid-column: 1 / -1; }
+
+        label { display: block; font-size: 12px; font-weight: 500; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        input, select, textarea {
+            width: 100%;
+            border: 1.5px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+            background: #fafafa;
+            color: #333;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #DC006D;
+            background: #fff;
+        }
+        textarea { resize: vertical; min-height: 80px; }
+
+        .section-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 28px 0 20px;
+        }
+        .section-divider .dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #DC006D;
+        }
+        .section-divider .line { flex: 1; height: 1px; background: #eee; }
+
+        .terms-box {
+            background: #f8f8f8;
+            border-radius: 12px;
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 13px;
+            line-height: 1.7;
+            color: #555;
+            margin-bottom: 20px;
+            border: 1px solid #eee;
+        }
+        .terms-box h4 { font-size: 14px; font-weight: 600; color: #333; margin: 16px 0 8px; }
+        .terms-box ul { padding-left: 20px; margin: 8px 0; }
+        .terms-box li { margin-bottom: 6px; }
+
+        .signature-area {
+            border: 2px dashed #ddd;
+            border-radius: 12px;
+            background: #fafafa;
+            position: relative;
+            height: 150px;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        .signature-area.signed { border-color: #DC006D; border-style: solid; }
+        .signature-hint {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            color: #ccc;
+            pointer-events: none;
+        }
+        .signature-area.signed .signature-hint { display: none; }
+        .clear-sig {
+            position: absolute;
+            top: 8px; right: 8px;
+            background: #ff4444;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 0;
+        }
+        .checkbox-row input[type="checkbox"] {
+            width: 20px; height: 20px;
+            margin-top: 2px;
+            accent-color: #DC006D;
+            flex-shrink: 0;
+        }
+        .checkbox-row span { font-size: 14px; color: #555; line-height: 1.5; }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 32px;
+            border: none;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #DC006D 0%, #a5004f 100%);
+            color: #fff;
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(220,0,109,0.3); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #DC006D;
+            color: #DC006D;
+        }
+
+        .step-indicator {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+        .step-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            transition: all 0.3s;
+        }
+        .step-dot.active { background: #fff; width: 28px; border-radius: 5px; }
+        .step-dot.done { background: #22c55e; }
+
+        .success-card {
+            text-align: center;
+            padding: 48px 32px;
+        }
+        .success-icon {
+            width: 64px; height: 64px;
+            background: #22c55e;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 28px;
+            color: #fff;
+        }
+
+        .error-text { color: #ef4444; font-size: 13px; margin-top: 4px; }
+        .loading { opacity: 0.6; pointer-events: none; }
+        .pre-filled { background: #f0f0f0; color: #888; }
+
+        @media (max-width: 600px) {
+            .form-grid, .form-grid.three, .summary-grid { grid-template-columns: 1fr; }
+            .card { padding: 20px; }
+            h1 { font-size: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="app">
+        <div class="logo-bar">
+            <img src="logo-white.png" alt="Fleming Lettings" />
+        </div>
+
+        <!-- Loading -->
+        <div id="loading-state" class="card" style="text-align:center; padding:48px;">
+            <p style="color:#DC006D; font-weight:600;">Loading your application...</p>
+        </div>
+
+        <!-- Error -->
+        <div id="error-state" class="card" style="display:none; text-align:center; padding:48px;">
+            <h2 style="color:#ef4444;">Unable to load form</h2>
+            <p id="error-message">This link may have expired or already been used.</p>
+        </div>
+
+        <!-- Already Submitted -->
+        <div id="completed-state" class="card success-card" style="display:none;">
+            <div class="success-icon">&#10003;</div>
+            <h1>Already Submitted</h1>
+            <p style="color:#666;">This application has already been completed. Thank you!</p>
+        </div>
+
+        <!-- Form -->
+        <form id="application-form" style="display:none;" onsubmit="return false;">
+            <div class="step-indicator">
+                <div class="step-dot active" id="dot-1"></div>
+                <div class="step-dot" id="dot-2"></div>
+                <div class="step-dot" id="dot-3"></div>
+            </div>
+
+            <!-- STEP 1: Holding Deposit Terms -->
+            <div id="step-1">
+                <div class="card">
+                    <h1>Tenant Application</h1>
+                    <p>Please review the information below and complete all sections.</p>
+
+                    <div class="property-badge" id="property-badge">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        <span id="property-display">Loading...</span>
+                    </div>
+
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <div class="label">Monthly Rent</div>
+                            <div class="value" id="rent-display">-</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="label">Holding Deposit</div>
+                            <div class="value" id="holding-display">-</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="label">Security Deposit</div>
+                            <div class="value" id="security-display">-</div>
+                        </div>
+                    </div>
+
+                    <h3>Holding Deposit Terms</h3>
+                    <div class="terms-box">
+                        <h4>Advisory Notice Regarding Initial Holding Deposit and Reservation Terms</h4>
+                        <p>We are writing to provide you with important information regarding the reservation of a rental property and the payment of an initial holding deposit. This letter is for advisory purposes only and is intended to ensure that you understand your rights and obligations before proceeding.</p>
+                        <p>By paying an initial holding deposit, you are requesting that the property be reserved for you while pre-tenancy checks are carried out. The amount requested must not exceed one week's rent (calculated as 1/52 of the annual rent total).</p>
+                        <p>Please be aware that this payment is not a tenancy deposit and does not create a tenancy. Its purpose is to secure the property temporarily while referencing and administrative processes take place. It is not protected under a Tenancy Deposit Protection Scheme.</p>
+
+                        <h4>The Initial Holding Deposit may be retained if:</h4>
+                        <ul>
+                            <li>Any prospective tenant provides false or misleading information which affects the landlord's decision to let the property.</li>
+                            <li>A tenant fails a Right to Rent check and is not legally entitled to rent property in England.</li>
+                            <li>The tenant withdraws from the application.</li>
+                            <li>The tenant fails to take reasonable steps to enter into the tenancy agreement by the agreed deadline.</li>
+                        </ul>
+
+                        <h4>Full refunds will be issued if:</h4>
+                        <ul>
+                            <li>The landlord or agent withdraws the property from the market.</li>
+                            <li>The landlord does not proceed for reasons unrelated to the tenant(s).</li>
+                            <li>All parties take reasonable steps, but a tenancy agreement is not signed by the deadline.</li>
+                            <li>The tenant(s) provide accurate information, but the landlord declines to proceed.</li>
+                        </ul>
+
+                        <p>The deadline for all parties to sign the tenancy agreement is <strong>15 days</strong> from the date the Initial Holding Deposit is received, unless a different date is mutually agreed in writing.</p>
+
+                        <h4>Important Notes:</h4>
+                        <ul>
+                            <li>Either party may cancel the reservation at any time and in writing.</li>
+                            <li>If one proposed tenant cancels, this will be treated as cancellation on behalf of all proposed tenants.</li>
+                            <li>Entering into this agreement does <strong>not oblige</strong> either party to proceed with a tenancy.</li>
+                        </ul>
+                    </div>
+
+                    <button type="button" class="btn btn-primary" onclick="goToStep(2)">
+                        I've Read the Terms &mdash; Continue
+                    </button>
+                </div>
+            </div>
+
+            <!-- STEP 2: Application Details -->
+            <div id="step-2" style="display:none;">
+                <div class="card">
+                    <h2>Your Details</h2>
+
+                    <div class="form-grid">
+                        <div>
+                            <label>First Name</label>
+                            <input type="text" id="f_first_name" class="pre-filled" readonly />
+                        </div>
+                        <div>
+                            <label>Last Name</label>
+                            <input type="text" id="f_last_name" class="pre-filled" readonly />
+                        </div>
+                        <div>
+                            <label>Email</label>
+                            <input type="email" id="f_email" class="pre-filled" readonly />
+                        </div>
+                        <div>
+                            <label>Phone</label>
+                            <input type="tel" id="f_phone" class="pre-filled" readonly />
+                        </div>
+                        <div>
+                            <label>Date of Birth *</label>
+                            <input type="date" id="f_dob" required />
+                        </div>
+                        <div>
+                            <label>National Insurance Number *</label>
+                            <input type="text" id="f_ni" placeholder="e.g. QQ 12 34 56 C" required />
+                        </div>
+                    </div>
+
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">ADDRESS HISTORY</span><div class="line"></div></div>
+
+                    <div class="form-grid">
+                        <div class="form-full">
+                            <label>Current Address *</label>
+                            <input type="text" id="f_address" required />
+                        </div>
+                        <div>
+                            <label>Years at Current Address *</label>
+                            <input type="number" id="f_years_current" min="0" max="50" required />
+                        </div>
+                        <div>
+                            <label>Previous Address</label>
+                            <input type="text" id="f_prev_address_1" placeholder="If less than 3 years at current" />
+                        </div>
+                    </div>
+
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">EMPLOYMENT</span><div class="line"></div></div>
+
+                    <div class="form-grid">
+                        <div>
+                            <label>Employment Status *</label>
+                            <select id="f_employment_status" required>
+                                <option value="">Select...</option>
+                                <option value="Employed">Employed</option>
+                                <option value="Self-Employed">Self-Employed</option>
+                                <option value="Student">Student</option>
+                                <option value="Retired">Retired</option>
+                                <option value="Unemployed">Unemployed</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Employer Name</label>
+                            <input type="text" id="f_employer" />
+                        </div>
+                        <div>
+                            <label>Annual Income (&#163;)</label>
+                            <input type="number" id="f_income" min="0" step="100" />
+                        </div>
+                    </div>
+
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">REFERENCES</span><div class="line"></div></div>
+
+                    <h3>Employer Reference</h3>
+                    <div class="form-grid three">
+                        <div><label>Name</label><input type="text" id="f_emp_ref_name" /></div>
+                        <div><label>Phone</label><input type="tel" id="f_emp_ref_phone" /></div>
+                        <div><label>Email</label><input type="email" id="f_emp_ref_email" /></div>
+                    </div>
+
+                    <h3 style="margin-top:16px;">Previous Landlord Reference</h3>
+                    <div class="form-grid three">
+                        <div><label>Name</label><input type="text" id="f_ll_ref_name" /></div>
+                        <div><label>Phone</label><input type="tel" id="f_ll_ref_phone" /></div>
+                        <div><label>Email</label><input type="email" id="f_ll_ref_email" /></div>
+                    </div>
+
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">BANK DETAILS</span><div class="line"></div></div>
+
+                    <div class="form-grid three">
+                        <div><label>Bank Name *</label><input type="text" id="f_bank_name" required /></div>
+                        <div><label>Sort Code *</label><input type="text" id="f_bank_sort" placeholder="00-00-00" required /></div>
+                        <div><label>Account Number *</label><input type="text" id="f_bank_account" placeholder="00000000" required /></div>
+                    </div>
+
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">NEXT OF KIN</span><div class="line"></div></div>
+
+                    <div class="form-grid three">
+                        <div><label>Full Name *</label><input type="text" id="f_nok_name" required /></div>
+                        <div><label>Phone *</label><input type="tel" id="f_nok_phone" required /></div>
+                        <div><label>Relationship *</label><input type="text" id="f_nok_rel" placeholder="e.g. Parent, Partner" required /></div>
+                    </div>
+
+                    <div style="display:flex; gap:12px; margin-top:24px;">
+                        <button type="button" class="btn btn-outline" onclick="goToStep(1)" style="flex:1;">Back</button>
+                        <button type="button" class="btn btn-primary" onclick="goToStep(3)" style="flex:2;">Continue to Signature</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 3: Signature & Declaration -->
+            <div id="step-3" style="display:none;">
+                <div class="card">
+                    <h2>Declaration & Signature</h2>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="f_agree_terms" required />
+                        <span>I have read and agree to the <strong>Holding Deposit Terms and Conditions</strong> as outlined above. I understand that the holding deposit may be retained in accordance with the Tenant Fees Act 2019.</span>
+                    </div>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="f_agree_info" required />
+                        <span>I confirm that all information provided in this application is <strong>true, complete, and accurate</strong> to the best of my knowledge. I understand that providing false or misleading information may result in the forfeiture of my holding deposit.</span>
+                    </div>
+
+                    <div style="margin: 24px 0 8px;">
+                        <label>Your Signature *</label>
+                        <p style="font-size:12px; color:#999; margin-bottom:8px;">Draw your signature below using your mouse or finger</p>
+                    </div>
+                    <div class="signature-area" id="sig-pad">
+                        <canvas id="sig-canvas"></canvas>
+                        <span class="signature-hint">Sign here</span>
+                        <button type="button" class="clear-sig" onclick="clearSignature()" style="display:none;" id="clear-btn">Clear</button>
+                    </div>
+
+                    <div style="margin-top: 16px;">
+                        <label>Typed Full Name *</label>
+                        <input type="text" id="f_typed_name" placeholder="Type your full legal name" required />
+                    </div>
+
+                    <div style="margin-top: 8px;">
+                        <label>Date</label>
+                        <input type="text" id="f_date" readonly class="pre-filled" />
+                    </div>
+
+                    <p id="submit-error" class="error-text" style="display:none;"></p>
+
+                    <div style="display:flex; gap:12px; margin-top:24px;">
+                        <button type="button" class="btn btn-outline" onclick="goToStep(2)" style="flex:1;">Back</button>
+                        <button type="button" class="btn btn-primary" onclick="submitForm()" id="submit-btn" style="flex:2;">
+                            Submit Application
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Success -->
+            <div id="step-success" style="display:none;">
+                <div class="card success-card">
+                    <div class="success-icon">&#10003;</div>
+                    <h1>Application Submitted</h1>
+                    <p style="color:#666; max-width:400px; margin:12px auto;">Thank you! Your application has been received. Our team will review it and be in touch shortly.</p>
+                    <p style="color:#999; font-size:13px; margin-top:16px;">You can close this window now.</p>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const API_URL = 'https://valiant-alignment-production.up.railway.app';
+        let formData = null;
+        let hasSigned = false;
+        let sigCtx = null;
+        let isDrawing = false;
+
+        // Extract token from URL
+        const pathParts = window.location.pathname.split('/');
+        const token = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
+
+        // Load form data
+        async function loadForm() {
+            try {
+                const res = await fetch(`${API_URL}/api/public/application-form/${token}`);
+                if (res.status === 410) {
+                    document.getElementById('loading-state').style.display = 'none';
+                    document.getElementById('completed-state').style.display = 'block';
+                    return;
+                }
+                if (!res.ok) throw new Error('Not found');
+                formData = await res.json();
+                populateForm();
+                document.getElementById('loading-state').style.display = 'none';
+                document.getElementById('application-form').style.display = 'block';
+            } catch (err) {
+                document.getElementById('loading-state').style.display = 'none';
+                document.getElementById('error-state').style.display = 'block';
+            }
+        }
+
+        function populateForm() {
+            document.getElementById('f_first_name').value = formData.first_name_1 || '';
+            document.getElementById('f_last_name').value = formData.last_name_1 || '';
+            document.getElementById('f_email').value = formData.email_1 || '';
+            document.getElementById('f_phone').value = formData.phone_1 || '';
+            document.getElementById('f_dob').value = formData.date_of_birth_1 || '';
+            document.getElementById('f_address').value = formData.current_address_1 || '';
+
+            const addr = [formData.property_address, formData.property_postcode].filter(Boolean).join(', ');
+            document.getElementById('property-display').textContent = addr || 'Property details pending';
+            document.getElementById('property-badge').style.display = addr ? 'inline-flex' : 'none';
+
+            const rent = formData.monthly_rent_agreed;
+            const holding = formData.holding_deposit_amount;
+            const security = formData.security_deposit_amount;
+            document.getElementById('rent-display').textContent = rent ? `\u00A3${Number(rent).toLocaleString()}` : '-';
+            document.getElementById('holding-display').textContent = holding ? `\u00A3${Number(holding).toLocaleString()}` : '-';
+            document.getElementById('security-display').textContent = security ? `\u00A3${Number(security).toLocaleString()}` : '-';
+
+            // Today's date
+            const today = new Date();
+            document.getElementById('f_date').value = today.toLocaleDateString('en-GB');
+        }
+
+        function goToStep(n) {
+            [1, 2, 3].forEach(s => {
+                document.getElementById(`step-${s}`).style.display = s === n ? 'block' : 'none';
+                const dot = document.getElementById(`dot-${s}`);
+                dot.className = s < n ? 'step-dot done' : s === n ? 'step-dot active' : 'step-dot';
+            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (n === 3) initSignature();
+        }
+
+        // Signature pad
+        function initSignature() {
+            const canvas = document.getElementById('sig-canvas');
+            const pad = document.getElementById('sig-pad');
+            canvas.width = pad.offsetWidth;
+            canvas.height = pad.offsetHeight;
+            sigCtx = canvas.getContext('2d');
+            sigCtx.strokeStyle = '#1a1a2e';
+            sigCtx.lineWidth = 2.5;
+            sigCtx.lineCap = 'round';
+            sigCtx.lineJoin = 'round';
+
+            const getPos = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const t = e.touches ? e.touches[0] : e;
+                return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+            };
+
+            const start = (e) => { isDrawing = true; const p = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); e.preventDefault(); };
+            const move = (e) => { if (!isDrawing) return; const p = getPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); hasSigned = true; pad.classList.add('signed'); document.getElementById('clear-btn').style.display = 'block'; e.preventDefault(); };
+            const end = () => { isDrawing = false; };
+
+            canvas.addEventListener('mousedown', start);
+            canvas.addEventListener('mousemove', move);
+            canvas.addEventListener('mouseup', end);
+            canvas.addEventListener('mouseleave', end);
+            canvas.addEventListener('touchstart', start, { passive: false });
+            canvas.addEventListener('touchmove', move, { passive: false });
+            canvas.addEventListener('touchend', end);
+        }
+
+        function clearSignature() {
+            const canvas = document.getElementById('sig-canvas');
+            sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+            hasSigned = false;
+            document.getElementById('sig-pad').classList.remove('signed');
+            document.getElementById('clear-btn').style.display = 'none';
+        }
+
+        async function submitForm() {
+            const errEl = document.getElementById('submit-error');
+            errEl.style.display = 'none';
+
+            // Validate
+            if (!document.getElementById('f_agree_terms').checked || !document.getElementById('f_agree_info').checked) {
+                errEl.textContent = 'Please agree to both declarations.';
+                errEl.style.display = 'block';
+                return;
+            }
+            if (!hasSigned) {
+                errEl.textContent = 'Please provide your signature.';
+                errEl.style.display = 'block';
+                return;
+            }
+            if (!document.getElementById('f_typed_name').value.trim()) {
+                errEl.textContent = 'Please type your full name.';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            const canvas = document.getElementById('sig-canvas');
+            const sigData = canvas.toDataURL('image/png');
+
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Submitting...';
+
+            try {
+                const payload = {
+                    current_address_1: document.getElementById('f_address').value,
+                    date_of_birth_1: document.getElementById('f_dob').value,
+                    employment_status_1: document.getElementById('f_employment_status').value,
+                    employer_1: document.getElementById('f_employer').value,
+                    income_1: document.getElementById('f_income').value ? Number(document.getElementById('f_income').value) : null,
+                    app_ni_number: document.getElementById('f_ni').value,
+                    app_previous_address_1: document.getElementById('f_prev_address_1').value,
+                    app_years_at_current: document.getElementById('f_years_current').value ? Number(document.getElementById('f_years_current').value) : null,
+                    app_employer_ref_name: document.getElementById('f_emp_ref_name').value,
+                    app_employer_ref_phone: document.getElementById('f_emp_ref_phone').value,
+                    app_employer_ref_email: document.getElementById('f_emp_ref_email').value,
+                    app_landlord_ref_name: document.getElementById('f_ll_ref_name').value,
+                    app_landlord_ref_phone: document.getElementById('f_ll_ref_phone').value,
+                    app_landlord_ref_email: document.getElementById('f_ll_ref_email').value,
+                    app_bank_name: document.getElementById('f_bank_name').value,
+                    app_bank_sort_code: document.getElementById('f_bank_sort').value,
+                    app_bank_account_number: document.getElementById('f_bank_account').value,
+                    app_next_of_kin_name: document.getElementById('f_nok_name').value,
+                    app_next_of_kin_phone: document.getElementById('f_nok_phone').value,
+                    app_next_of_kin_relationship: document.getElementById('f_nok_rel').value,
+                    app_signature: sigData,
+                    app_declaration_agreed: true,
+                };
+
+                const res = await fetch(`${API_URL}/api/public/application-form/${token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Submission failed');
+                }
+
+                // Show success
+                [1, 2, 3].forEach(s => document.getElementById(`step-${s}`).style.display = 'none');
+                document.querySelector('.step-indicator').style.display = 'none';
+                document.getElementById('step-success').style.display = 'block';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (err) {
+                errEl.textContent = err.message || 'Something went wrong. Please try again.';
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Submit Application';
+            }
+        }
+
+        // Init
+        if (token && token !== 'onboarding') {
+            loadForm();
+        } else {
+            document.getElementById('loading-state').style.display = 'none';
+            document.getElementById('error-state').style.display = 'block';
+            document.getElementById('error-message').textContent = 'Invalid link. Please use the link from your email.';
+        }
+    </script>
+</body>
+</html>

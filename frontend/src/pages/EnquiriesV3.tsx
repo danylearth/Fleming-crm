@@ -333,12 +333,24 @@ export default function EnquiriesV3() {
     setSaving(false);
   };
 
+  const generateViewingSms = (firstName: string, propId: string, date: string, time: string) => {
+    const prop = properties.find(p => p.id === Number(propId));
+    const addr = prop?.address || '[property address]';
+    let d = '[date]';
+    if (date) { const parts = date.split('-'); if (parts.length === 3) d = `${parts[2]}/${parts[1]}/${parts[0]}`; }
+    const t = time ? ' at ' + time : '';
+    return `Hi ${firstName || '[name]'}, your appointment has been booked to view ${addr} on ${d}${t}. If you are running late or need to reschedule then please call our offices on 01902 212 415. See you soon!`;
+  };
+
   const openWorkflow = (e: Enquiry, ev: React.MouseEvent) => {
     ev.stopPropagation();
     setWorkflowEnquiry(e);
     setWorkflowMode('choose');
-    setWfDate(''); setWfTime('10:00'); setWfPropId(''); setWfReason('');
-    setWfAssignedTo(''); setWfViewingWith(''); setSmsEnabled(!!e.phone); setSmsBody('');
+    const propId = e.linked_property_id ? String(e.linked_property_id) : '';
+    setWfDate(''); setWfTime('10:00'); setWfPropId(propId); setWfReason('');
+    setWfAssignedTo(''); setWfViewingWith(''); setSmsEnabled(!!e.phone);
+    const fn = e.name?.split(' ')[0] || '';
+    setSmsBody(generateViewingSms(fn, propId, '', '10:00'));
   };
 
   const doWorkflowAction = async () => {
@@ -369,6 +381,20 @@ export default function EnquiriesV3() {
             await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`, {
               ...raw, status: 'awaiting_response', follow_up_date: wfDate,
             });
+            // Create follow-up task on agent's calendar
+            await api.post('/api/tasks', {
+              title: `Follow up: ${workflowEnquiry.name}`,
+              description: wfViewingWith || `Follow up with ${workflowEnquiry.name} (${workflowEnquiry.phone || workflowEnquiry.email})`,
+              priority: 'medium', status: 'pending', entity_type: 'tenant_enquiry',
+              entity_id: workflowEnquiry.id, task_type: 'follow_up', due_date: wfDate,
+              assigned_to: wfAssignedTo || null,
+            }).catch(() => {});
+            // Send SMS if enabled
+            if (smsEnabled && workflowEnquiry.phone && smsBody) {
+              await api.post('/api/sms/send', {
+                enquiry_id: workflowEnquiry.id, to_phone: workflowEnquiry.phone, message_body: smsBody,
+              }).catch(() => {});
+            }
           }
           break;
         case 'onboarding':
@@ -772,13 +798,13 @@ export default function EnquiriesV3() {
             {workflowMode === 'choose' ? (
               <>
                 <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Progress</p>
-                <button onClick={() => setWorkflowMode('viewing')}
+                <button onClick={() => { setWorkflowMode('viewing'); if (workflowEnquiry) { const fn = workflowEnquiry.name?.split(' ')[0] || ''; setSmsBody(generateViewingSms(fn, wfPropId, wfDate, wfTime)); } }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><BookingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p><p className="text-xs text-[var(--text-muted)]">Select date, time & property</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <button onClick={() => setWorkflowMode('follow_up')}
+                <button onClick={() => { setWorkflowMode('follow_up'); setWfViewingWith(''); const fn = workflowEnquiry?.name?.split(' ')[0] || ''; setSmsBody(`Hi ${fn}, just following up on your property enquiry with Fleming Lettings. Please give us a call on 01902 212 415 if you have any questions. Thank you!`); }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><AwaitingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p><p className="text-xs text-[var(--text-muted)]">Schedule a follow-up date</p></div>
@@ -802,59 +828,102 @@ export default function EnquiriesV3() {
             ) : (
               <div className="space-y-4">
                 <button onClick={() => setWorkflowMode('choose')} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">← Back</button>
-                {workflowMode === 'viewing' && (
-                  <>
-                    <Select label="Property *" value={wfPropId} onChange={(v) => {
-                      setWfPropId(v);
-                      if (workflowEnquiry && v && wfDate) {
-                        const prop = properties.find(p => p.id === Number(v));
-                        if (prop) setSmsBody(`Hi ${workflowEnquiry.name}, your property viewing at ${prop.address} has been confirmed for ${wfDate}${wfTime ? ' at ' + wfTime : ''}. Please arrive on time. If you need to reschedule, please call us. - Fleming Lettings`);
-                      }
-                    }}
-                      options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
-                    <DatePicker label="Viewing Date *" value={wfDate} onChange={(v) => {
-                      setWfDate(v);
-                      if (workflowEnquiry && wfPropId && v) {
-                        const prop = properties.find(p => p.id === Number(wfPropId));
-                        if (prop) setSmsBody(`Hi ${workflowEnquiry.name}, your property viewing at ${prop.address} has been confirmed for ${v}${wfTime ? ' at ' + wfTime : ''}. Please arrive on time. If you need to reschedule, please call us. - Fleming Lettings`);
-                      }
-                    }} />
-                    <Input label="Viewing Time" value={wfTime} onChange={setWfTime} type="time" />
-                    <Select label="Assign To (Agent)" value={wfAssignedTo} onChange={setWfAssignedTo}
-                      options={[{ value: '', label: 'Unassigned' }, ...allUsers.map(u => ({ value: u.name, label: u.name }))]} />
-                    <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Special instructions" />
+                {workflowMode === 'viewing' && (() => {
+                  const firstName = workflowEnquiry?.name?.split(' ')[0] || '';
+                  return (
+                    <>
+                      <Select label="Assign To (Agent)" value={wfAssignedTo} onChange={setWfAssignedTo} searchable
+                        options={[{ value: '', label: 'Unassigned' }, ...allUsers.map(u => ({ value: u.name, label: u.name }))]} />
+                      <Select label="Property *" searchable value={wfPropId} onChange={(v) => {
+                        setWfPropId(v);
+                        setSmsBody(generateViewingSms(firstName, v, wfDate, wfTime));
+                      }}
+                        options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
+                      <div className="grid grid-cols-2 gap-3">
+                        <DatePicker label="Viewing Date *" value={wfDate} onChange={(v) => {
+                          setWfDate(v);
+                          setSmsBody(generateViewingSms(firstName, wfPropId, v, wfTime));
+                        }} />
+                        <div>
+                          <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Viewing Time</label>
+                          <input type="time" value={wfTime} onChange={e => { setWfTime(e.target.value); setSmsBody(generateViewingSms(firstName, wfPropId, wfDate, e.target.value)); }}
+                            className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-input)] transition-colors [&::-webkit-calendar-picker-indicator]:invert" />
+                        </div>
+                      </div>
+                      <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Key collection instructions" />
 
-                    {/* SMS Confirmation */}
-                    <div className="h-px bg-[var(--border-subtle)] my-1" />
-                    {workflowEnquiry?.phone ? (
-                      <div className="space-y-3">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <input type="checkbox" checked={smsEnabled} onChange={e => setSmsEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
-                          <div className="flex-1">
-                            <span className="text-sm font-medium text-[var(--text-primary)]">Send SMS confirmation</span>
-                            <span className="text-xs text-[var(--text-muted)] ml-2">{workflowEnquiry.phone}</span>
-                          </div>
-                          <Phone size={14} className="text-[var(--text-muted)]" />
-                        </label>
-                        {smsEnabled && (
-                          <div>
-                            <label className="block text-xs text-[var(--text-secondary)] mb-1.5">Message Preview</label>
-                            <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={3}
-                              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none" />
-                            <p className="text-[10px] text-[var(--text-muted)] mt-1">{smsBody.length}/160 characters</p>
-                          </div>
-                        )}
+                      {/* SMS Confirmation */}
+                      <div className="h-px bg-[var(--border-subtle)] my-1" />
+                      {workflowEnquiry?.phone ? (
+                        <div className="space-y-3">
+                          <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                            <input type="checkbox" checked={smsEnabled} onChange={e => setSmsEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
+                            <Phone size={14} className="text-teal-400" />
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-[var(--text-primary)]">Send SMS confirmation</span>
+                              <p className="text-[10px] text-[var(--text-muted)]">{workflowEnquiry.phone}</p>
+                            </div>
+                          </label>
+                          {smsEnabled && (
+                            <div>
+                              <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Message Preview</label>
+                              <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={4}
+                                className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-none transition-colors" />
+                              <p className="text-[10px] text-[var(--text-muted)] mt-1">{smsBody.length} characters</p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                          <p className="text-xs text-amber-400">No phone number on record — SMS cannot be sent</p>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+                {workflowMode === 'follow_up' && (() => {
+                  const firstName = workflowEnquiry?.name?.split(' ')[0] || '';
+                  return (
+                    <>
+                      <Select label="Assign To (Agent)" value={wfAssignedTo} onChange={setWfAssignedTo} searchable
+                        options={[{ value: '', label: 'Unassigned' }, ...allUsers.map(u => ({ value: u.name, label: u.name }))]} />
+                      <div>
+                        <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Notes</label>
+                        <textarea value={wfViewingWith} onChange={e => setWfViewingWith(e.target.value)} rows={3}
+                          placeholder="Why are we following up? Any context for the agent..."
+                          className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-none transition-colors" />
                       </div>
-                    ) : (
-                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                        <p className="text-xs text-amber-400">No phone number on record — SMS cannot be sent</p>
-                      </div>
-                    )}
-                  </>
-                )}
-                {workflowMode === 'follow_up' && (
-                  <DatePicker label="Follow-up Date" value={wfDate} onChange={setWfDate} />
-                )}
+                      <DatePicker label="Follow-up Date *" value={wfDate} onChange={setWfDate} />
+
+                      {/* SMS */}
+                      <div className="h-px bg-[var(--border-subtle)] my-1" />
+                      {workflowEnquiry?.phone ? (
+                        <div className="space-y-3">
+                          <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                            <input type="checkbox" checked={smsEnabled} onChange={e => setSmsEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
+                            <Phone size={14} className="text-teal-400" />
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-[var(--text-primary)]">Send SMS</span>
+                              <p className="text-[10px] text-[var(--text-muted)]">{workflowEnquiry.phone}</p>
+                            </div>
+                          </label>
+                          {smsEnabled && (
+                            <div>
+                              <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Message Preview</label>
+                              <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={3}
+                                className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-none transition-colors" />
+                              <p className="text-[10px] text-[var(--text-muted)] mt-1">{smsBody.length} characters</p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                          <p className="text-xs text-amber-400">No phone number on record — SMS cannot be sent</p>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 {workflowMode === 'onboarding' && (
                   <div className="space-y-3">
                     <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">

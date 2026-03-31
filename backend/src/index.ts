@@ -916,6 +916,77 @@ app.get('/api/public/properties', (req, res) => {
   }
 });
 
+// ============ PUBLIC APPLICATION FORM (DocuSign-lite) ============
+
+app.get('/api/public/application-form/:token', (req, res) => {
+  try {
+    const enquiry = db.prepare(`
+      SELECT te.*, p.address as property_address, p.postcode as property_postcode, p.rent_amount
+      FROM tenant_enquiries te
+      LEFT JOIN properties p ON p.id = te.linked_property_id
+      WHERE te.application_form_token = ?
+    `).get(req.params.token) as any;
+    if (!enquiry) return res.status(404).json({ error: 'Form not found or link expired' });
+    if (enquiry.application_form_completed) return res.status(410).json({ error: 'This form has already been submitted', completed: true });
+    res.json({
+      first_name_1: enquiry.first_name_1, last_name_1: enquiry.last_name_1,
+      email_1: enquiry.email_1, phone_1: enquiry.phone_1, date_of_birth_1: enquiry.date_of_birth_1,
+      current_address_1: enquiry.current_address_1,
+      is_joint_application: enquiry.is_joint_application,
+      first_name_2: enquiry.first_name_2, last_name_2: enquiry.last_name_2,
+      email_2: enquiry.email_2, phone_2: enquiry.phone_2,
+      property_address: enquiry.property_address, property_postcode: enquiry.property_postcode,
+      monthly_rent_agreed: enquiry.monthly_rent_agreed, holding_deposit_amount: enquiry.holding_deposit_amount,
+      security_deposit_amount: enquiry.security_deposit_amount,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load form' });
+  }
+});
+
+app.post('/api/public/application-form/:token', (req, res) => {
+  try {
+    const enquiry = db.prepare('SELECT id, application_form_completed FROM tenant_enquiries WHERE application_form_token = ?').get(req.params.token) as any;
+    if (!enquiry) return res.status(404).json({ error: 'Form not found' });
+    if (enquiry.application_form_completed) return res.status(410).json({ error: 'Already submitted' });
+
+    const d = req.body;
+    db.prepare(`
+      UPDATE tenant_enquiries SET
+        app_ni_number=?, app_previous_address_1=?, app_previous_address_2=?,
+        app_years_at_current=?, app_years_at_previous=?,
+        app_landlord_ref_name=?, app_landlord_ref_phone=?, app_landlord_ref_email=?,
+        app_employer_ref_name=?, app_employer_ref_phone=?, app_employer_ref_email=?,
+        app_bank_name=?, app_bank_sort_code=?, app_bank_account_number=?,
+        app_next_of_kin_name=?, app_next_of_kin_phone=?, app_next_of_kin_relationship=?,
+        app_signature=?, app_signed_at=CURRENT_TIMESTAMP, app_declaration_agreed=?,
+        application_form_completed=1,
+        current_address_1=COALESCE(?, current_address_1),
+        date_of_birth_1=COALESCE(?, date_of_birth_1),
+        employer_1=COALESCE(?, employer_1),
+        income_1=COALESCE(?, income_1),
+        employment_status_1=COALESCE(?, employment_status_1)
+      WHERE application_form_token=?
+    `).run(
+      d.app_ni_number || null, d.app_previous_address_1 || null, d.app_previous_address_2 || null,
+      d.app_years_at_current || null, d.app_years_at_previous || null,
+      d.app_landlord_ref_name || null, d.app_landlord_ref_phone || null, d.app_landlord_ref_email || null,
+      d.app_employer_ref_name || null, d.app_employer_ref_phone || null, d.app_employer_ref_email || null,
+      d.app_bank_name || null, d.app_bank_sort_code || null, d.app_bank_account_number || null,
+      d.app_next_of_kin_name || null, d.app_next_of_kin_phone || null, d.app_next_of_kin_relationship || null,
+      d.app_signature || null, d.app_declaration_agreed ? 1 : 0,
+      d.current_address_1 || null, d.date_of_birth_1 || null, d.employer_1 || null,
+      d.income_1 || null, d.employment_status_1 || null, req.params.token,
+    );
+
+    logAudit(null, 'tenant-self-service', 'update', 'tenant_enquiry', enquiry.id, { action: 'application_form_completed' });
+    res.json({ success: true, message: 'Application submitted successfully' });
+  } catch (err) {
+    console.error('Error submitting application form:', err);
+    res.status(500).json({ error: 'Failed to submit form' });
+  }
+});
+
 // PUBLIC ENDPOINT - No authentication required
 // This endpoint receives submissions from the Fleming Lettings public landlord enquiry form
 app.post('/api/public/landlord-enquiries', async (req, res) => {
@@ -2292,6 +2363,67 @@ app.put('/api/property-viewings/:id', authMiddleware, (req: AuthRequest, res) =>
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update viewing' });
+  }
+});
+
+// ============ HOLDING DEPOSIT / ONBOARDING ============
+
+app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { monthly_rent, security_deposit, holding_deposit, follow_up_date } = req.body;
+    const enquiryId = Number(req.params.id);
+
+    const token = require('crypto').randomBytes(24).toString('hex');
+    const applicationFormUrl = `https://apply.fleminglettings.co.uk/onboarding/${token}`;
+
+    db.prepare(`
+      UPDATE tenant_enquiries SET
+        monthly_rent_agreed=?, security_deposit_amount=?, holding_deposit_amount=?,
+        application_form_token=?, application_form_sent=1, holding_deposit_requested=1,
+        onboarding_email_sent_at=CURRENT_TIMESTAMP, status='onboarding'
+      WHERE id=?
+    `).run(monthly_rent, security_deposit, holding_deposit, token, enquiryId);
+
+    const enquiry = db.prepare(`
+      SELECT te.*, p.address as property_address, p.postcode as property_postcode
+      FROM tenant_enquiries te
+      LEFT JOIN properties p ON p.id = te.linked_property_id
+      WHERE te.id = ?
+    `).get(enquiryId) as any;
+
+    if (enquiry) {
+      const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
+      const address = [enquiry.property_address, enquiry.property_postcode].filter(Boolean).join(', ');
+
+      const { sendEmail, holdingDepositRequestEmail } = require('./email');
+      const emailContent = holdingDepositRequestEmail(name, address, monthly_rent, security_deposit, holding_deposit, applicationFormUrl);
+      await sendEmail({
+        to: enquiry.email_1,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        from: 'Fleming Lettings Accounts <accounts@fleminglettings.co.uk>',
+      });
+
+      if (follow_up_date) {
+        db.prepare(`
+          INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, task_type, due_date, assigned_to)
+          VALUES (?, ?, 'pending', 'high', 'tenant_enquiry', ?, 'follow_up', ?, ?)
+        `).run(
+          `Holding deposit follow-up: ${name}`,
+          `Check if holding deposit of £${holding_deposit} has been received for ${address}`,
+          enquiryId, follow_up_date, req.user?.name || null,
+        );
+      }
+
+      logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, {
+        action: 'holding_deposit_requested', monthly_rent, security_deposit, holding_deposit, email_sent_to: enquiry.email_1,
+      });
+    }
+
+    res.json({ success: true, token, applicationFormUrl });
+  } catch (err) {
+    console.error('Error requesting holding deposit:', err);
+    res.status(500).json({ error: 'Failed to send holding deposit request' });
   }
 });
 

@@ -162,6 +162,14 @@ export default function EnquiryDetailV3() {
   const [smsCompose, setSmsCompose] = useState('');
   const [smsSending, setSmsSending] = useState(false);
 
+  // Holding Deposit modal
+  const [showHoldingDeposit, setShowHoldingDeposit] = useState(false);
+  const [hdMonthlyRent, setHdMonthlyRent] = useState('');
+  const [hdSecurityDeposit, setHdSecurityDeposit] = useState('');
+  const [hdHoldingDeposit, setHdHoldingDeposit] = useState('');
+  const [hdFollowUpDate, setHdFollowUpDate] = useState('');
+  const [hdSending, setHdSending] = useState(false);
+
   const loadDetail = useCallback(async () => {
     try {
       const [d, props, usersList] = await Promise.all([
@@ -302,6 +310,10 @@ export default function EnquiryDetailV3() {
     items.push({ label: 'Income Provided', done: !!form.income_1 });
     items.push({ label: 'Address Provided', done: !!form.current_address_1 });
     items.push({ label: 'Property Linked', done: !!form.linked_property_id });
+    items.push({ label: 'Holding Deposit Requested', done: !!form.holding_deposit_requested });
+    items.push({ label: 'Application Form Sent', done: !!form.application_form_sent });
+    items.push({ label: 'Application Form Completed', done: !!form.application_form_completed });
+    items.push({ label: 'Holding Deposit Received', done: !!form.holding_deposit_received });
     return items;
   }
 
@@ -554,7 +566,7 @@ export default function EnquiryDetailV3() {
           {/* ==================== RIGHT COLUMN ==================== */}
           <div className="lg:col-span-2 space-y-6">
             {/* Linked Property */}
-            <GlassCard className="p-6">
+            <GlassCard className="p-6 overflow-visible relative z-10">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader title="Linked Property" icon={<Building2 size={16} />} />
                 <SectionEditButton editing={isEditing('property')} onEdit={() => setEditingSection('property')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
@@ -645,6 +657,51 @@ export default function EnquiryDetailV3() {
                     {form.linked_property_id ? 'Yes' : 'No'}
                   </span>
                 </div>
+
+                {/* Onboarding items */}
+                <div className="h-px bg-[var(--border-subtle)] my-2" />
+                <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider px-1 mb-2">Onboarding</p>
+
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Holding Deposit Requested</span>
+                  <span className={`text-[10px] font-medium ${form.holding_deposit_requested ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {form.holding_deposit_requested ? `Yes${form.holding_deposit_amount ? ` (£${Number(form.holding_deposit_amount).toLocaleString()})` : ''}` : 'No'}
+                  </span>
+                </div>
+
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Application Form Sent</span>
+                  <span className={`text-[10px] font-medium ${form.application_form_sent ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {form.application_form_sent ? 'Yes' : 'No'}
+                  </span>
+                </div>
+
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Application Form Completed</span>
+                  <span className={`text-[10px] font-medium ${form.application_form_completed ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {form.application_form_completed ? 'Yes' : 'No'}
+                  </span>
+                </div>
+
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs">Holding Deposit Received</span>
+                  <YesNo value={!!form.holding_deposit_received} onChange={v => setField('holding_deposit_received', v)} disabled={!isEditing('checklist')} />
+                </div>
+
+                {/* Request Holding Deposit button */}
+                {!form.holding_deposit_requested && form.linked_property_id && (
+                  <button onClick={() => {
+                    const prop = properties.find(p => p.id === Number(form.linked_property_id));
+                    const rent = prop?.rent_amount || 0;
+                    setHdMonthlyRent(String(rent));
+                    setHdSecurityDeposit(String(Math.round(rent * 5 / 4.33)));
+                    setHdHoldingDeposit(String(Math.round(rent * 12 / 52)));
+                    setHdFollowUpDate('');
+                    setShowHoldingDeposit(true);
+                  }} className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#DC006D] to-[#a5004f] text-white text-xs font-semibold hover:opacity-90 transition-opacity">
+                    <Mail size={14} /> Request Holding Deposit
+                  </button>
+                )}
               </div>
             </GlassCard>
 
@@ -737,7 +794,7 @@ export default function EnquiryDetailV3() {
             {workflowMode === 'choose' ? (
               <div className="space-y-2">
                 <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Progress</p>
-                <button onClick={() => setWorkflowMode('viewing')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                <button onClick={() => { setWorkflowMode('viewing'); const fn = form.first_name_1 || ''; const prop = properties.find(p => p.id === Number(wfPropId)); if (prop && wfDate) setSmsBody(`Hi ${fn}, your appointment has been booked to view ${prop.address} on ${wfDate}${wfTime ? ' at ' + wfTime : ''}. If you are running late or need to reschedule then please call our offices on 01902 212 415. See you soon!`); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><BookingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
@@ -772,52 +829,67 @@ export default function EnquiryDetailV3() {
             ) : (
               <div className="space-y-4">
                 <button onClick={() => setWorkflowMode('choose')} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">← Back</button>
-                {workflowMode === 'viewing' && (
-                  <>
-                    <Select label="Property *" value={wfPropId} onChange={(v) => {
-                      setWfPropId(v);
-                      const prop = properties.find(p => p.id === Number(v));
-                      if (prop && wfDate) setSmsBody(`Hi ${[form.first_name_1, form.last_name_1].filter(Boolean).join(' ')}, your property viewing at ${prop.address} has been confirmed for ${wfDate}${wfTime ? ' at ' + wfTime : ''}. Please arrive on time. If you need to reschedule, please call us. - Fleming Lettings`);
-                    }}
-                      options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: p.address }))]} />
-                    <DatePicker label="Viewing Date *" value={wfDate} onChange={(v) => {
-                      setWfDate(v);
-                      const prop = properties.find(p => p.id === Number(wfPropId));
-                      if (prop && v) setSmsBody(`Hi ${[form.first_name_1, form.last_name_1].filter(Boolean).join(' ')}, your property viewing at ${prop.address} has been confirmed for ${v}${wfTime ? ' at ' + wfTime : ''}. Please arrive on time. If you need to reschedule, please call us. - Fleming Lettings`);
-                    }} />
-                    <Input label="Viewing Time" value={wfTime} onChange={setWfTime} type="time" />
-                    <Select label="Assign To (Agent)" value={wfAssignedTo} onChange={setWfAssignedTo}
-                      options={[{ value: '', label: 'Unassigned' }, ...users.map(u => ({ value: u.name, label: u.name }))]} />
-                    <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Special instructions" />
+                {workflowMode === 'viewing' && (() => {
+                  const firstName = form.first_name_1 || '';
+                  const genSms = (propId: string, date: string, time: string) => {
+                    const prop = properties.find(p => p.id === Number(propId));
+                    const addr = prop?.address || '[property address]';
+                    let d = '[date]';
+                    if (date) { const parts = date.split('-'); if (parts.length === 3) d = `${parts[2]}/${parts[1]}/${parts[0]}`; }
+                    const t = time ? ' at ' + time : '';
+                    return `Hi ${firstName || '[name]'}, your appointment has been booked to view ${addr} on ${d}${t}. If you are running late or need to reschedule then please call our offices on 01902 212 415. See you soon!`;
+                  };
+                  return (
+                    <>
+                      <Select label="Assign To (Agent)" value={wfAssignedTo} onChange={setWfAssignedTo} searchable
+                        options={[{ value: '', label: 'Unassigned' }, ...users.map(u => ({ value: u.name, label: u.name }))]} />
+                      <Select label="Property *" searchable value={wfPropId} onChange={(v) => {
+                        setWfPropId(v);
+                        setSmsBody(genSms(v, wfDate, wfTime));
+                      }}
+                        options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
+                      <div className="grid grid-cols-2 gap-3">
+                        <DatePicker label="Viewing Date *" value={wfDate} onChange={(v) => {
+                          setWfDate(v);
+                          setSmsBody(genSms(wfPropId, v, wfTime));
+                        }} />
+                        <div>
+                          <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Viewing Time</label>
+                          <input type="time" value={wfTime} onChange={e => { setWfTime(e.target.value); setSmsBody(genSms(wfPropId, wfDate, e.target.value)); }}
+                            className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-input)] transition-colors [&::-webkit-calendar-picker-indicator]:invert" />
+                        </div>
+                      </div>
+                      <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Key collection instructions" />
 
-                    {/* SMS Confirmation */}
-                    <div className="h-px bg-[var(--border-subtle)] my-1" />
-                    {form.phone_1 ? (
-                      <div className="space-y-3">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <input type="checkbox" checked={smsEnabled} onChange={e => setSmsEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
-                          <div className="flex-1">
-                            <span className="text-sm font-medium text-[var(--text-primary)]">Send SMS confirmation</span>
-                            <span className="text-xs text-[var(--text-muted)] ml-2">{form.phone_1}</span>
-                          </div>
-                          <Phone size={14} className="text-[var(--text-muted)]" />
-                        </label>
-                        {smsEnabled && (
-                          <div>
-                            <label className="block text-xs text-[var(--text-secondary)] mb-1.5">Message Preview</label>
-                            <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={3}
-                              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none" />
-                            <p className="text-[10px] text-[var(--text-muted)] mt-1">{smsBody.length}/160 characters</p>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                        <p className="text-xs text-amber-400">No phone number on record — SMS cannot be sent</p>
-                      </div>
-                    )}
-                  </>
-                )}
+                      {/* SMS Confirmation */}
+                      <div className="h-px bg-[var(--border-subtle)] my-1" />
+                      {form.phone_1 ? (
+                        <div className="space-y-3">
+                          <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                            <input type="checkbox" checked={smsEnabled} onChange={e => setSmsEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
+                            <Phone size={14} className="text-teal-400" />
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-[var(--text-primary)]">Send SMS confirmation</span>
+                              <p className="text-[10px] text-[var(--text-muted)]">{form.phone_1}</p>
+                            </div>
+                          </label>
+                          {smsEnabled && (
+                            <div>
+                              <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Message Preview</label>
+                              <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={4}
+                                className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-none transition-colors" />
+                              <p className="text-[10px] text-[var(--text-muted)] mt-1">{smsBody.length} characters</p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                          <p className="text-xs text-amber-400">No phone number on record — SMS cannot be sent</p>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 {workflowMode === 'follow_up' && <DatePicker label="Follow-up Date" value={wfDate} onChange={setWfDate} />}
                 {workflowMode === 'onboarding' && (
                   <div className="space-y-3">
@@ -845,6 +917,97 @@ export default function EnquiryDetailV3() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ==================== HOLDING DEPOSIT MODAL ==================== */}
+      {showHoldingDeposit && (
+        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowHoldingDeposit(false)}>
+          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-lg font-bold">Request Holding Deposit</h3>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Send email to {data?.email_1} from accounts@fleminglettings.co.uk
+                </p>
+              </div>
+              <button onClick={() => setShowHoldingDeposit(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Monthly Rent (£) *</label>
+                  <input type="number" value={hdMonthlyRent} onChange={e => {
+                    setHdMonthlyRent(e.target.value);
+                    const r = Number(e.target.value);
+                    if (r > 0) {
+                      setHdHoldingDeposit(String(Math.round(r * 12 / 52)));
+                      setHdSecurityDeposit(String(Math.round(r * 5 / 4.33)));
+                    }
+                  }}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Security Deposit (£)</label>
+                  <input type="number" value={hdSecurityDeposit} onChange={e => setHdSecurityDeposit(e.target.value)}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Holding Deposit (£) *</label>
+                  <input type="number" value={hdHoldingDeposit} onChange={e => setHdHoldingDeposit(e.target.value)}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
+                  <p className="text-[10px] text-[var(--text-muted)] mt-1">1 week's rent (annual / 52)</p>
+                </div>
+              </div>
+
+              <DatePicker label="Follow-up Date" value={hdFollowUpDate} onChange={setHdFollowUpDate} />
+
+              {/* Email Preview */}
+              <div>
+                <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Email Preview</label>
+                <div className="bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl p-4 text-xs text-[var(--text-secondary)] space-y-2">
+                  <p><strong>To:</strong> {data?.email_1}</p>
+                  <p><strong>From:</strong> accounts@fleminglettings.co.uk</p>
+                  <p><strong>Subject:</strong> Holding Deposit Request - {selectedProp?.address || 'Property'}</p>
+                  <div className="h-px bg-[var(--border-subtle)] my-2" />
+                  <p>Dear {[data?.first_name_1, data?.last_name_1].filter(Boolean).join(' ')},</p>
+                  <p>Thank you for your interest in <strong>{selectedProp?.address || 'the property'}</strong>. We are pleased to confirm that we would like to proceed with your application.</p>
+                  <p>Financial Summary:</p>
+                  <div className="bg-[var(--bg-hover)] rounded-lg p-3 space-y-1">
+                    <div className="flex justify-between"><span>Monthly Rent:</span><strong>£{Number(hdMonthlyRent || 0).toLocaleString()}</strong></div>
+                    <div className="flex justify-between"><span>Security Deposit:</span><strong>£{Number(hdSecurityDeposit || 0).toLocaleString()}</strong></div>
+                    <div className="flex justify-between text-[var(--accent-orange)]"><span>Holding Deposit (due now):</span><strong>£{Number(hdHoldingDeposit || 0).toLocaleString()}</strong></div>
+                  </div>
+                  <p>A link to complete your application and review the holding deposit terms will be included.</p>
+                  <p className="text-[var(--text-muted)]">+ Holding Deposit Information Sheet (PDF attached)</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button variant="ghost" onClick={() => setShowHoldingDeposit(false)}>Cancel</Button>
+                <Button variant="gradient" onClick={async () => {
+                  if (!hdMonthlyRent || !hdHoldingDeposit) return;
+                  setHdSending(true);
+                  try {
+                    await api.post(`/api/tenant-enquiries/${id}/request-holding-deposit`, {
+                      monthly_rent: Number(hdMonthlyRent),
+                      security_deposit: Number(hdSecurityDeposit),
+                      holding_deposit: Number(hdHoldingDeposit),
+                      follow_up_date: hdFollowUpDate || null,
+                    });
+                    setShowHoldingDeposit(false);
+                    await loadDetail();
+                  } catch (err) {
+                    console.error('Failed to send holding deposit request:', err);
+                  }
+                  setHdSending(false);
+                }} disabled={hdSending || !hdMonthlyRent || !hdHoldingDeposit}>
+                  {hdSending ? 'Sending...' : 'Send Email & Create Form Link'}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

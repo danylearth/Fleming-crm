@@ -77,22 +77,30 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
 }
 
 // ─── Select ───
-export function Select({ label, value, onChange, options, className = '' }: {
+export function Select({ label, value, onChange, options, className = '', searchable }: {
   label?: string; value: string; onChange: (v: string) => void;
-  options: { value: string; label: string }[]; className?: string;
+  options: { value: string; label: string }[]; className?: string; searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const selected = options.find(o => o.value === value);
+  const showSearch = searchable === true || (searchable !== false && options.length > 5);
+  const filtered = search ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase())) : options;
 
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setSearch(''); }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
+
+  useEffect(() => {
+    if (open && showSearch && searchRef.current) searchRef.current.focus();
+  }, [open, showSearch]);
 
   return (
     <div className={`relative ${className}`} ref={ref}>
@@ -109,12 +117,18 @@ export function Select({ label, value, onChange, options, className = '' }: {
       </button>
       {open && (
         <div className="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-xl z-50 overflow-hidden">
+          {showSearch && (
+            <div className="p-2 border-b border-[var(--border-subtle)]">
+              <input ref={searchRef} type="text" value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search..." className="w-full bg-[var(--bg-hover)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none" />
+            </div>
+          )}
           <div className="max-h-56 overflow-y-auto py-1">
-            {options.map(o => (
+            {filtered.map(o => (
               <button
                 key={o.value}
                 type="button"
-                onClick={() => { onChange(o.value); setOpen(false); }}
+                onClick={() => { onChange(o.value); setOpen(false); setSearch(''); }}
                 className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-[var(--bg-hover)] ${
                   value === o.value ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-secondary)]'
                 }`}
@@ -122,6 +136,7 @@ export function Select({ label, value, onChange, options, className = '' }: {
                 {o.label}
               </button>
             ))}
+            {filtered.length === 0 && <p className="px-4 py-2 text-xs text-[var(--text-muted)]">No results</p>}
           </div>
         </div>
       )}

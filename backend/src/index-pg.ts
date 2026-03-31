@@ -940,41 +940,14 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
     // Get client IP for audit
     const client_ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-    // Build notes with additional fields
-    let notes = '=== PROPERTY REQUIREMENTS ===\n';
-    if (tenancylookingfor) notes += `Tenancy Type: ${tenancylookingfor}\n`;
-    if (typeofproperty) notes += `Property Type: ${typeofproperty}\n`;
-    if (noofbedrooms) notes += `Bedrooms: ${noofbedrooms}\n`;
-    if (roadparking) notes += `Parking: ${roadparking}\n`;
-    if (rent_max) notes += `Max Rent: £${rent_max}/month\n`;
-    if (reasonforrenting) notes += `Reason: ${reasonforrenting}\n`;
-    notes += '\n=== APPLICANT 1 DETAILS ===\n';
-    if (address) notes += `Address: ${address}\n`;
-    if (Postcode) notes += `Postcode: ${Postcode}\n`;
-    if (yearofaddress) notes += `Years at address: ${yearofaddress}\n`;
-    if (Nationality) notes += `Nationality: ${Nationality}\n`;
-    if (job_title) notes += `Job Title: ${job_title}\n`;
-    if (AnnualSalary) notes += `Annual Salary: £${AnnualSalary}\n`;
-    if (contract_type) notes += `Contract Type: ${contract_type}\n`;
-    if (is_joint && FirstName2) {
-      notes += '\n=== APPLICANT 2 DETAILS ===\n';
-      if (address2) notes += `Address: ${address2}\n`;
-      if (Postcode2) notes += `Postcode: ${Postcode2}\n`;
-      if (yearofaddress2) notes += `Years at address: ${yearofaddress2}\n`;
-      if (Nationality2) notes += `Nationality: ${Nationality2}\n`;
-      if (job_title2) notes += `Job Title: ${job_title2}\n`;
-      if (AnnualSalary2) notes += `Annual Salary: £${AnnualSalary2}\n`;
-      if (contract_type2) notes += `Contract Type: ${contract_type2}\n`;
-    }
+    // Only store user's additional notes - structured data goes into proper columns
+    let notes = '';
     if (additional_notes) {
-      notes += `\n=== APPLICANT NOTES ===\n${additional_notes}\n`;
+      notes = additional_notes;
     }
     if (marketing_preferences) {
-      notes += `\n=== MARKETING PREFERENCES ===\n${marketing_preferences}\n`;
+      notes += (notes ? '\n\n' : '') + `Marketing preferences: ${marketing_preferences}`;
     }
-    notes += `\n=== FORM METADATA ===\n`;
-    notes += `Submitted from IP: ${client_ip}\n`;
-    notes += `Submission date: ${new Date().toISOString()}\n`;
 
     // Map form fields to database columns (only columns that exist in schema)
     const data: any = {
@@ -983,10 +956,14 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
       email_1: form_email,
       phone_1: contactNumber,
       current_address_1: address || null,
+      postcode_1: Postcode || null,
+      years_at_address_1: yearofaddress || null,
+      nationality_1: Nationality || null,
       date_of_birth_1: dob || null,
       employment_status_1: EmploymentStatus || null,
       employer_1: job_title || null,
       income_1: AnnualSalary ? parseFloat(AnnualSalary) : null,
+      contract_type_1: contract_type || null,
       is_joint_application: is_joint,
       first_name_2: FirstName2 || null,
       last_name_2: Surname2 || null,
@@ -994,11 +971,19 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
       phone_2: contactNumber2 || null,
       current_address_2: address2 || null,
       date_of_birth_2: dob2 || null,
+      nationality_2: Nationality2 || null,
       employment_status_2: EmploymentStatus2 || null,
       employer_2: job_title2 || null,
       income_2: AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
+      contract_type_2: contract_type2 || null,
+      preferred_tenancy_type: tenancylookingfor || null,
+      preferred_property_type: typeofproperty || null,
+      preferred_bedrooms: noofbedrooms || null,
+      preferred_parking: roadparking || null,
+      max_rent: rent_max ? parseFloat(rent_max) : null,
+      marketing_preferences: marketing_preferences || null,
       linked_property_id: property_id ? parseInt(property_id) : null,
-      notes: notes,
+      notes: notes || null,
       status: 'new'
     };
 
@@ -1440,6 +1425,96 @@ app.get('/api/public/properties', async (req, res) => {
   } catch (err) {
     console.error('[Public Properties] Error:', err);
     res.status(500).json({ error: 'Failed to fetch properties', details: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// ============ PUBLIC APPLICATION FORM (DocuSign-lite) ============
+
+// GET form data by token (public - no auth)
+app.get('/api/public/application-form/:token', async (req, res) => {
+  try {
+    const enquiry = await queryOne(`
+      SELECT te.*, p.address as property_address, p.postcode as property_postcode, p.rent_amount
+      FROM tenant_enquiries te
+      LEFT JOIN properties p ON p.id = te.linked_property_id
+      WHERE te.application_form_token = $1
+    `, [req.params.token]);
+    if (!enquiry) return res.status(404).json({ error: 'Form not found or link expired' });
+    if (enquiry.application_form_completed) return res.status(410).json({ error: 'This form has already been submitted', completed: true });
+    res.json({
+      first_name_1: enquiry.first_name_1, last_name_1: enquiry.last_name_1,
+      email_1: enquiry.email_1, phone_1: enquiry.phone_1, date_of_birth_1: enquiry.date_of_birth_1,
+      current_address_1: enquiry.current_address_1,
+      is_joint_application: enquiry.is_joint_application,
+      first_name_2: enquiry.first_name_2, last_name_2: enquiry.last_name_2,
+      email_2: enquiry.email_2, phone_2: enquiry.phone_2,
+      property_address: enquiry.property_address, property_postcode: enquiry.property_postcode,
+      monthly_rent_agreed: enquiry.monthly_rent_agreed, holding_deposit_amount: enquiry.holding_deposit_amount,
+      security_deposit_amount: enquiry.security_deposit_amount,
+    });
+  } catch (err) {
+    console.error('Error fetching application form:', err);
+    res.status(500).json({ error: 'Failed to load form' });
+  }
+});
+
+// POST submit completed form (public - no auth)
+app.post('/api/public/application-form/:token', async (req, res) => {
+  try {
+    const enquiry = await queryOne('SELECT id, application_form_completed FROM tenant_enquiries WHERE application_form_token = $1', [req.params.token]);
+    if (!enquiry) return res.status(404).json({ error: 'Form not found' });
+    if (enquiry.application_form_completed) return res.status(410).json({ error: 'Already submitted' });
+
+    const {
+      app_ni_number, app_previous_address_1, app_previous_address_2,
+      app_years_at_current, app_years_at_previous,
+      app_landlord_ref_name, app_landlord_ref_phone, app_landlord_ref_email,
+      app_employer_ref_name, app_employer_ref_phone, app_employer_ref_email,
+      app_bank_name, app_bank_sort_code, app_bank_account_number,
+      app_next_of_kin_name, app_next_of_kin_phone, app_next_of_kin_relationship,
+      app_signature, app_declaration_agreed,
+      // Also allow updating basic info
+      current_address_1, date_of_birth_1, employer_1, income_1, employment_status_1,
+    } = req.body;
+
+    await run(`
+      UPDATE tenant_enquiries SET
+        app_ni_number=$1, app_previous_address_1=$2, app_previous_address_2=$3,
+        app_years_at_current=$4, app_years_at_previous=$5,
+        app_landlord_ref_name=$6, app_landlord_ref_phone=$7, app_landlord_ref_email=$8,
+        app_employer_ref_name=$9, app_employer_ref_phone=$10, app_employer_ref_email=$11,
+        app_bank_name=$12, app_bank_sort_code=$13, app_bank_account_number=$14,
+        app_next_of_kin_name=$15, app_next_of_kin_phone=$16, app_next_of_kin_relationship=$17,
+        app_signature=$18, app_signed_at=NOW(), app_declaration_agreed=$19,
+        application_form_completed=1,
+        current_address_1=COALESCE($20, current_address_1),
+        date_of_birth_1=COALESCE($21, date_of_birth_1),
+        employer_1=COALESCE($22, employer_1),
+        income_1=COALESCE($23, income_1),
+        employment_status_1=COALESCE($24, employment_status_1)
+      WHERE application_form_token=$25
+    `, [
+      app_ni_number || null, app_previous_address_1 || null, app_previous_address_2 || null,
+      app_years_at_current || null, app_years_at_previous || null,
+      app_landlord_ref_name || null, app_landlord_ref_phone || null, app_landlord_ref_email || null,
+      app_employer_ref_name || null, app_employer_ref_phone || null, app_employer_ref_email || null,
+      app_bank_name || null, app_bank_sort_code || null, app_bank_account_number || null,
+      app_next_of_kin_name || null, app_next_of_kin_phone || null, app_next_of_kin_relationship || null,
+      app_signature || null, app_declaration_agreed ? 1 : 0,
+      current_address_1 || null, date_of_birth_1 || null, employer_1 || null,
+      income_1 || null, employment_status_1 || null, req.params.token,
+    ]);
+
+    // Log activity
+    await run(`
+      INSERT INTO audit_log (user_email, action, entity_type, entity_id, changes)
+      VALUES ($1, $2, $3, $4, $5)
+    `, ['tenant-self-service', 'update', 'tenant_enquiry', enquiry.id, JSON.stringify({ action: 'application_form_completed' })]);
+
+    res.json({ success: true, message: 'Application submitted successfully' });
+  } catch (err) {
+    console.error('Error submitting application form:', err);
+    res.status(500).json({ error: 'Failed to submit form' });
   }
 });
 
@@ -2185,6 +2260,73 @@ app.put('/api/property-viewings/:id', authMiddleware, async (req: AuthRequest, r
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update viewing' });
+  }
+});
+
+// ============ HOLDING DEPOSIT / ONBOARDING ============
+
+app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { monthly_rent, security_deposit, holding_deposit, follow_up_date } = req.body;
+    const enquiryId = Number(req.params.id);
+
+    // Generate unique token for application form
+    const token = require('crypto').randomBytes(24).toString('hex');
+    const applicationFormUrl = `https://apply.fleminglettings.co.uk/onboarding/${token}`;
+
+    // Update enquiry with financial details and token
+    await run(`
+      UPDATE tenant_enquiries SET
+        monthly_rent_agreed=$1, security_deposit_amount=$2, holding_deposit_amount=$3,
+        application_form_token=$4, application_form_sent=1, holding_deposit_requested=1,
+        onboarding_email_sent_at=NOW(), status='onboarding'
+      WHERE id=$5
+    `, [monthly_rent, security_deposit, holding_deposit, token, enquiryId]);
+
+    // Get enquiry + property details for email
+    const enquiry = await queryOne(`
+      SELECT te.*, p.address as property_address, p.postcode as property_postcode
+      FROM tenant_enquiries te
+      LEFT JOIN properties p ON p.id = te.linked_property_id
+      WHERE te.id = $1
+    `, [enquiryId]);
+
+    if (enquiry) {
+      const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
+      const address = [enquiry.property_address, enquiry.property_postcode].filter(Boolean).join(', ');
+
+      // Send email
+      const { sendEmail } = require('./email');
+      const { holdingDepositRequestEmail } = require('./email');
+      const emailContent = holdingDepositRequestEmail(name, address, monthly_rent, security_deposit, holding_deposit, applicationFormUrl);
+      await sendEmail({
+        to: enquiry.email_1,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        from: 'Fleming Lettings Accounts <accounts@fleminglettings.co.uk>',
+      });
+
+      // Create follow-up task
+      if (follow_up_date) {
+        await insert(`
+          INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, task_type, due_date, assigned_to)
+          VALUES ($1, $2, 'pending', 'high', 'tenant_enquiry', $3, 'follow_up', $4, $5)
+        `, [
+          `Holding deposit follow-up: ${name}`,
+          `Check if holding deposit of £${holding_deposit} has been received for ${address}`,
+          enquiryId, follow_up_date, req.user?.name || null,
+        ]);
+      }
+
+      await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, {
+        action: 'holding_deposit_requested', monthly_rent, security_deposit, holding_deposit, email_sent_to: enquiry.email_1,
+      });
+    }
+
+    res.json({ success: true, token, applicationFormUrl });
+  } catch (err) {
+    console.error('Error requesting holding deposit:', err);
+    res.status(500).json({ error: 'Failed to send holding deposit request' });
   }
 });
 

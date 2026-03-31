@@ -117,6 +117,69 @@ export function statusUpdateEmail(name: string, address: string, status: string)
   };
 }
 
+export function holdingDepositRequestEmail(
+  name: string, address: string, monthlyRent: number, securityDeposit: number,
+  holdingDeposit: number, applicationFormUrl: string
+): { subject: string; html: string } {
+  return {
+    subject: `Holding Deposit Request - ${address}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
+          <h1 style="color: #fff; margin: 0; font-size: 22px;">Fleming Lettings</h1>
+          <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px;">Holding Deposit Request</p>
+        </div>
+        <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
+          <p style="font-size: 15px; color: #333;">Dear ${name},</p>
+          <p style="font-size: 14px; color: #555; line-height: 1.6;">
+            Thank you for your interest in <strong>${address}</strong>. We are pleased to confirm that we would like to proceed with your application.
+          </p>
+          <p style="font-size: 14px; color: #555; line-height: 1.6;">
+            To secure this property, we require an initial holding deposit. Please see the financial summary below:
+          </p>
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #f8f8f8;">
+              <td style="padding: 12px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Monthly Rent</td>
+              <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">&pound;${monthlyRent.toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Security Deposit</td>
+              <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">&pound;${securityDeposit.toLocaleString()}</td>
+            </tr>
+            <tr style="background: #f0f8ff;">
+              <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #DC006D; border-bottom: 2px solid #DC006D;">Holding Deposit (due now)</td>
+              <td style="padding: 12px 16px; font-size: 16px; font-weight: 700; color: #DC006D; text-align: right; border-bottom: 2px solid #DC006D;">&pound;${holdingDeposit.toLocaleString()}</td>
+            </tr>
+          </table>
+          <p style="font-size: 14px; color: #555; line-height: 1.6;">
+            Please complete your application and review the holding deposit terms by clicking the button below:
+          </p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${applicationFormUrl}" style="display: inline-block; background: linear-gradient(135deg, #DC006D, #a5004f); color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;">
+              Complete Application &amp; Review Terms
+            </a>
+          </div>
+          <p style="font-size: 13px; color: #888; line-height: 1.6;">
+            The Holding Deposit Information Sheet is attached to this email for your records. Please read it carefully before making any payment.
+          </p>
+          <p style="font-size: 14px; color: #555; line-height: 1.6;">
+            If you have any questions, please don't hesitate to contact our accounts team.
+          </p>
+          <p style="font-size: 14px; color: #555;">
+            Kind regards,<br/><strong>Fleming Lettings</strong><br/>
+            <span style="font-size: 12px; color: #888;">01902 212 415 | accounts@fleminglettings.co.uk</span>
+          </p>
+        </div>
+        <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
+          <p style="font-size: 11px; color: #999; margin: 0;">
+            Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG
+          </p>
+        </div>
+      </div>
+    `,
+  };
+}
+
 export function genericEmail(name: string, topic: string): { subject: string; html: string } {
   return {
     subject: topic,

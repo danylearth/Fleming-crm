@@ -783,6 +783,43 @@ db.exec(`
   );
 `);
 
+// Sprint 5: Onboarding & application form fields
+const onboardingCols = [
+  'holding_deposit_requested INTEGER DEFAULT 0',
+  'holding_deposit_received INTEGER DEFAULT 0',
+  'holding_deposit_amount REAL',
+  'security_deposit_amount REAL',
+  'monthly_rent_agreed REAL',
+  'application_form_token TEXT',
+  'application_form_sent INTEGER DEFAULT 0',
+  'application_form_completed INTEGER DEFAULT 0',
+  'onboarding_email_sent_at DATETIME',
+  // Application form data
+  'app_ni_number TEXT',
+  'app_previous_address_1 TEXT',
+  'app_previous_address_2 TEXT',
+  'app_years_at_current INTEGER',
+  'app_years_at_previous INTEGER',
+  'app_landlord_ref_name TEXT',
+  'app_landlord_ref_phone TEXT',
+  'app_landlord_ref_email TEXT',
+  'app_employer_ref_name TEXT',
+  'app_employer_ref_phone TEXT',
+  'app_employer_ref_email TEXT',
+  'app_bank_name TEXT',
+  'app_bank_sort_code TEXT',
+  'app_bank_account_number TEXT',
+  'app_next_of_kin_name TEXT',
+  'app_next_of_kin_phone TEXT',
+  'app_next_of_kin_relationship TEXT',
+  'app_signature TEXT',
+  'app_signed_at DATETIME',
+  'app_declaration_agreed INTEGER DEFAULT 0',
+];
+for (const col of onboardingCols) {
+  try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN ${col}`); } catch (e) {}
+}
+
 // Sprint 3: Property expenses table
 db.exec(`
   CREATE TABLE IF NOT EXISTS property_expenses (

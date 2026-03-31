@@ -400,6 +400,42 @@ export async function initDb() {
       END $$;
     `);
 
+    // Sprint 5: Onboarding & application form fields
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS holding_deposit_requested INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS holding_deposit_received INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS holding_deposit_amount REAL;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS security_deposit_amount REAL;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS monthly_rent_agreed REAL;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_token TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_sent INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_completed INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS onboarding_email_sent_at TIMESTAMP;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_ni_number TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_previous_address_1 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_previous_address_2 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_years_at_current INTEGER;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_years_at_previous INTEGER;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_landlord_ref_name TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_landlord_ref_phone TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_landlord_ref_email TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_employer_ref_name TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_employer_ref_phone TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_employer_ref_email TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_bank_name TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_bank_sort_code TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_bank_account_number TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_name TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_phone TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_relationship TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_signature TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_signed_at TIMESTAMP;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_declaration_agreed INTEGER DEFAULT 0;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
     // Sprint 4: Add assigned_to to property_viewings
     await client.query(`
       DO $$ BEGIN
@@ -530,6 +566,25 @@ export async function initDb() {
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS viewing_with TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Add new form fields to tenant_enquiries
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS nationality_1 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS postcode_1 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS years_at_address_1 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS contract_type_1 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS nationality_2 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS contract_type_2 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS preferred_tenancy_type TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS preferred_property_type TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS preferred_bedrooms TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS preferred_parking TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS max_rent REAL;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS marketing_preferences TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `);
