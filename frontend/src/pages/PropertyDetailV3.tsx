@@ -63,6 +63,12 @@ interface PropertyLandlord {
   id: number; name: string; email: string; phone: string;
   link_id: number; is_primary: number; ownership_percentage: number | null;
   ownership_entity_type: 'individual' | 'company';
+  company_number?: string;
+}
+
+interface Director {
+  id: number; name: string; email: string; phone: string;
+  role: string; kyc_completed: number;
 }
 
 interface Landlord {
@@ -141,6 +147,16 @@ export default function PropertyDetailV3() {
     task_type: 'manual'
   });
 
+  // Task detail modal state
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [taskDetailLoading, setTaskDetailLoading] = useState(false);
+
+  // Maintenance creation state
+  const [showAddMaintenance, setShowAddMaintenance] = useState(false);
+  const [maintenanceForm, setMaintenanceForm] = useState({
+    title: '', description: '', category: 'other', priority: 'medium'
+  });
+
   // Landlords state
   const [propertyLandlords, setPropertyLandlords] = useState<PropertyLandlord[]>([]);
   const [allLandlords, setAllLandlords] = useState<Landlord[]>([]);
@@ -150,6 +166,9 @@ export default function PropertyDetailV3() {
   const [landlordSearch, setLandlordSearch] = useState('');
   const [selectedLandlordId, setSelectedLandlordId] = useState<number | null>(null);
   const [ownershipEntityType, setOwnershipEntityType] = useState<'individual' | 'company'>('individual');
+
+  // Directors state (for company landlords)
+  const [landlordDirectors, setLandlordDirectors] = useState<Record<number, Director[]>>({});
 
   // Notes state
   const [notes, setNotes] = useState<{ id: string; text: string; author: string; created_at: string }[]>([]);
@@ -208,6 +227,21 @@ export default function PropertyDetailV3() {
       setPropertyLandlords(propLandlords);
       setAllLandlords(landlords);
       setAllTenants(Array.isArray(tenants) ? tenants : []);
+
+      // Fetch directors for company landlords
+      const companyLandlords = (Array.isArray(propLandlords) ? propLandlords : []).filter(
+        (l: PropertyLandlord) => l.ownership_entity_type === 'company'
+      );
+      if (companyLandlords.length > 0) {
+        const directorsMap: Record<number, Director[]> = {};
+        await Promise.all(companyLandlords.map(async (l: PropertyLandlord) => {
+          try {
+            const dirs = await api.get(`/api/landlords/${l.id}/directors`);
+            directorsMap[l.id] = Array.isArray(dirs) ? dirs : [];
+          } catch { directorsMap[l.id] = []; }
+        }));
+        setLandlordDirectors(directorsMap);
+      }
       setTasks(Array.isArray(tks) ? tks : []);
       setMaintenance(Array.isArray(maint) ? maint.filter((m: MaintenanceRecord) => m.property_id === Number(id)) : []);
       setExpenses(Array.isArray(exps) ? exps : []);
@@ -235,12 +269,29 @@ export default function PropertyDetailV3() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Clean up form data: convert types, empty strings to null for dates
+      const cleanDate = (v: string) => v && v.trim() ? v.trim() : null;
       await api.put(`/api/properties/${id}`, {
         ...form,
         rent_amount: parseFloat(form.rent_amount) || 0,
         bedrooms: parseInt(form.bedrooms) || 0,
         charge_percentage: form.charge_percentage ? parseFloat(form.charge_percentage) : null,
         total_charge: form.total_charge ? parseFloat(form.total_charge) : null,
+        // Dates: send null not empty string
+        rent_review_date: cleanDate(form.rent_review_date),
+        onboarded_date: cleanDate(form.onboarded_date),
+        leasehold_start_date: cleanDate(form.leasehold_start_date),
+        leasehold_end_date: cleanDate(form.leasehold_end_date),
+        tenancy_start_date: cleanDate(form.tenancy_start_date),
+        tenancy_end_date: cleanDate(form.tenancy_end_date),
+        eicr_expiry_date: cleanDate(form.eicr_expiry_date),
+        epc_expiry_date: cleanDate(form.epc_expiry_date),
+        gas_safety_expiry_date: cleanDate(form.gas_safety_expiry_date),
+        // Strings: send null not empty string for optional fields
+        council_tax_band: form.council_tax_band || null,
+        epc_grade: form.epc_grade || null,
+        service_type: form.service_type || null,
+        leaseholder_info: form.leaseholder_info || null,
       });
       const updated = await api.get(`/api/properties/${id}`);
       setProperty(updated);
@@ -311,6 +362,47 @@ export default function PropertyDetailV3() {
       console.error('Failed to create task:', err);
       console.error('Error response:', err.response?.data);
       alert(`Failed to create task: ${err.response?.data?.error || err.message || 'Unknown error'}`);
+    }
+  };
+
+  const openTaskDetail = async (taskId: number) => {
+    setTaskDetailLoading(true);
+    try {
+      const detail = await api.get(`/api/tasks/${taskId}`);
+      setSelectedTask(detail);
+    } catch {
+      alert('Failed to load task details');
+    } finally {
+      setTaskDetailLoading(false);
+    }
+  };
+
+  const updateTaskStatus = async (taskId: number, newStatus: string) => {
+    try {
+      await api.put(`/api/tasks/${taskId}`, { status: newStatus });
+      setSelectedTask((prev: any) => prev ? { ...prev, status: newStatus } : prev);
+      await loadDetail();
+    } catch {
+      alert('Failed to update task status');
+    }
+  };
+
+  const addMaintenance = async () => {
+    if (!maintenanceForm.title || !maintenanceForm.description) return;
+    try {
+      const primaryLandlord = propertyLandlords.find(l => l.is_primary === 1);
+      await api.post('/api/maintenance', {
+        ...maintenanceForm,
+        property_id: property?.id,
+        landlord_id: primaryLandlord?.id || property?.landlord_id,
+        reporter_type: 'agent',
+        reporter_name: user?.name || user?.email,
+      });
+      await loadDetail();
+      setMaintenanceForm({ title: '', description: '', category: 'other', priority: 'medium' });
+      setShowAddMaintenance(false);
+    } catch (err: any) {
+      alert(`Failed to report issue: ${err.response?.data?.error || err.message || 'Unknown error'}`);
     }
   };
 
@@ -827,7 +919,7 @@ export default function PropertyDetailV3() {
               {propertyTasks.length ? (
                 <div className="space-y-2">
                   {propertyTasks.map(task => (
-                    <div key={task.id} onClick={() => navigate(`/v3/tasks/${task.id}`)}
+                    <div key={task.id} onClick={() => openTaskDetail(task.id)}
                       className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
                         task.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'
@@ -848,7 +940,7 @@ export default function PropertyDetailV3() {
 
             {/* Maintenance */}
             <Card className="p-4 sm:p-6">
-              <SectionHeader title="Maintenance" />
+              <SectionHeader title="Maintenance" action={() => setShowAddMaintenance(true)} actionLabel="Report Issue" />
               {maintenance.length ? (
                 <div className="space-y-2">
                   {maintenance.slice(0, 5).map(m => (
@@ -993,54 +1085,82 @@ export default function PropertyDetailV3() {
               ) : (
                 <div className="space-y-2">
                   {propertyLandlords.map(landlord => (
-                    <div key={landlord.link_id}
-                      className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors group">
-                      <div
-                        onClick={() => navigate(`/v3/landlords/${landlord.id}`)}
-                        className="flex items-center gap-3 flex-1 cursor-pointer">
-                        <Avatar name={landlord.name} size="md" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-medium truncate">{landlord.name}</p>
-                            {landlord.is_primary === 1 && (
-                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 whitespace-nowrap">
-                                Primary
+                    <div key={landlord.link_id}>
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors group">
+                        <div
+                          onClick={() => navigate(`/v3/landlords/${landlord.id}`)}
+                          className="flex items-center gap-3 flex-1 cursor-pointer">
+                          <Avatar name={landlord.name} size="md" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-medium truncate">{landlord.name}</p>
+                              {landlord.is_primary === 1 && (
+                                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 whitespace-nowrap">
+                                  Primary
+                                </span>
+                              )}
+                              <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap ${
+                                landlord.ownership_entity_type === 'company'
+                                  ? 'bg-blue-500/20 text-blue-400'
+                                  : 'bg-green-500/20 text-green-400'
+                              }`}>
+                                {landlord.ownership_entity_type === 'company' ? 'Limited Company' : 'Individual'}
                               </span>
-                            )}
-                            <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap ${
-                              landlord.ownership_entity_type === 'company'
-                                ? 'bg-blue-500/20 text-blue-400'
-                                : 'bg-green-500/20 text-green-400'
-                            }`}>
-                              {landlord.ownership_entity_type === 'company' ? 'Limited Company' : 'Individual'}
-                            </span>
+                            </div>
+                            <p className="text-xs text-[var(--text-muted)]">
+                              {landlord.company_number && <span className="mr-2">Co. #{landlord.company_number}</span>}
+                              {landlord.email || landlord.phone || 'Landlord'}
+                            </p>
                           </div>
-                          <p className="text-xs text-[var(--text-muted)]">
-                            {landlord.company_number && <span className="mr-2">Co. #{landlord.company_number}</span>}
-                            {landlord.email || landlord.phone || 'Landlord'}
-                          </p>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {landlord.is_primary !== 1 && (
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {landlord.is_primary !== 1 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleSetPrimary(landlord.link_id, landlord.name)}
+                              className="text-xs"
+                            >
+                              Set Primary
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleSetPrimary(landlord.link_id, landlord.name)}
-                            className="text-xs"
+                            onClick={() => handleRemoveLandlord(landlord.link_id, landlord.name)}
+                            className="text-red-400 hover:text-red-300"
                           >
-                            Set Primary
+                            <Trash2 size={14} />
                           </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveLandlord(landlord.link_id, landlord.name)}
-                          className="text-red-400 hover:text-red-300"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
+                        </div>
                       </div>
+                      {/* Directors for company landlords */}
+                      {landlord.ownership_entity_type === 'company' && landlordDirectors[landlord.id]?.length > 0 && (
+                        <div className="ml-6 mt-1 mb-1 space-y-1">
+                          <p className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wider pl-3 pt-1">Directors / Officers</p>
+                          {landlordDirectors[landlord.id].map(dir => (
+                            <div key={dir.id} className="flex items-center gap-2.5 p-2 pl-3 rounded-lg bg-[var(--bg-hover)]/50 text-sm">
+                              <div className="w-6 h-6 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+                                <User size={12} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-xs truncate">{dir.name}</span>
+                                  {dir.role && <span className="text-[9px] text-[var(--text-muted)]">{dir.role}</span>}
+                                  {dir.kyc_completed ? (
+                                    <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400">KYC</span>
+                                  ) : (
+                                    <span className="text-[9px] px-1 py-0.5 rounded bg-red-500/20 text-red-400">No KYC</span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-[var(--text-muted)] truncate">
+                                  {[dir.email, dir.phone].filter(Boolean).join(' · ') || 'No contact info'}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1170,6 +1290,142 @@ export default function PropertyDetailV3() {
                   <Button variant="ghost" onClick={() => setShowAddTask(false)}>Cancel</Button>
                   <Button variant="gradient" onClick={addTask} disabled={!taskForm.title}>Add Task</Button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Maintenance Modal */}
+        {showAddMaintenance && (
+          <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setShowAddMaintenance(false)}>
+            <div className="bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl border border-[var(--border-input)] w-full sm:max-w-[480px] max-h-[90vh] overflow-y-auto p-4 sm:p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4 sm:mb-5">
+                <h3 className="text-base sm:text-lg font-bold line-clamp-1 pr-2">Report Maintenance Issue</h3>
+                <button onClick={() => setShowAddMaintenance(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0"><X size={18} /></button>
+              </div>
+              <div className="space-y-3 sm:space-y-4">
+                <Input label="Title" value={maintenanceForm.title} onChange={v => setMaintenanceForm(p => ({...p, title: v}))} placeholder="Brief description of the issue" />
+                <div>
+                  <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Description</label>
+                  <textarea
+                    value={maintenanceForm.description}
+                    onChange={e => setMaintenanceForm(p => ({...p, description: e.target.value}))}
+                    placeholder="Detailed description..."
+                    rows={3}
+                    className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-orange)]/50"
+                  />
+                </div>
+                <Select
+                  label="Category"
+                  value={maintenanceForm.category}
+                  onChange={v => setMaintenanceForm(p => ({...p, category: v}))}
+                  options={[
+                    { value: 'plumbing', label: 'Plumbing' },
+                    { value: 'electrical', label: 'Electrical' },
+                    { value: 'heating', label: 'Heating' },
+                    { value: 'structural', label: 'Structural' },
+                    { value: 'appliance', label: 'Appliance' },
+                    { value: 'pest', label: 'Pest Control' },
+                    { value: 'garden', label: 'Garden' },
+                    { value: 'other', label: 'Other' },
+                  ]}
+                />
+                <div>
+                  <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Priority</label>
+                  <div className="flex gap-1.5">
+                    {[['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['urgent', 'Urgent']].map(([k, v]) => (
+                      <button key={k} onClick={() => setMaintenanceForm(p => ({...p, priority: k}))}
+                        className={`flex-1 text-xs py-2 rounded-lg border font-medium transition-colors ${
+                          maintenanceForm.priority === k
+                            ? k === 'urgent' ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                              : k === 'high' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
+                              : k === 'medium' ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400'
+                              : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                            : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
+                        }`}>{v}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <Button variant="ghost" onClick={() => setShowAddMaintenance(false)}>Cancel</Button>
+                  <Button variant="gradient" onClick={addMaintenance} disabled={!maintenanceForm.title || !maintenanceForm.description}>Report Issue</Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Task Detail Modal */}
+        {selectedTask && (
+          <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setSelectedTask(null)}>
+            <div className="bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl border border-[var(--border-input)] w-full sm:max-w-[520px] max-h-[90vh] overflow-y-auto p-4 sm:p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base sm:text-lg font-bold line-clamp-1 pr-2">{selectedTask.title}</h3>
+                <button onClick={() => setSelectedTask(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0"><X size={18} /></button>
+              </div>
+
+              {/* Status buttons */}
+              <div className="flex gap-2 mb-4">
+                {['pending', 'in_progress', 'completed'].map(s => (
+                  <button
+                    key={s}
+                    onClick={() => updateTaskStatus(selectedTask.id, s)}
+                    className={`flex-1 text-xs py-2 rounded-lg border font-medium transition-colors ${
+                      selectedTask.status === s
+                        ? s === 'completed' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                          : s === 'in_progress' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
+                          : 'bg-[var(--bg-hover)] border-[var(--border-input)] text-[var(--text-primary)]'
+                        : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]'
+                    }`}
+                  >
+                    {s === 'pending' ? 'Pending' : s === 'in_progress' ? 'In Progress' : 'Completed'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Task details */}
+              <div className="space-y-3">
+                {selectedTask.description && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">Description</p>
+                    <p className="text-sm text-[var(--text-secondary)]">{selectedTask.description}</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">Priority</p>
+                    <Tag>{selectedTask.priority}</Tag>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">Type</p>
+                    <p className="text-sm">{(selectedTask.task_type || 'manual').replace('_', ' ')}</p>
+                  </div>
+                  {selectedTask.assigned_to && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">Assigned To</p>
+                      <p className="text-sm">{selectedTask.assigned_to_name || selectedTask.assigned_to}</p>
+                    </div>
+                  )}
+                  {selectedTask.due_date && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">Due Date</p>
+                      <p className="text-sm">{new Date(selectedTask.due_date).toLocaleDateString()}</p>
+                    </div>
+                  )}
+                </div>
+                {selectedTask.notes && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">Notes</p>
+                    <p className="text-sm text-[var(--text-secondary)]">{selectedTask.notes}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-4 mt-4 border-t border-[var(--border-subtle)]">
+                <Button variant="ghost" onClick={() => setSelectedTask(null)}>Close</Button>
+                <Button variant="outline" size="sm" onClick={() => { setSelectedTask(null); navigate(`/v3/tasks/${selectedTask.id}`); }}>
+                  Open Full Page <ChevronRight size={14} className="ml-1" />
+                </Button>
               </div>
             </div>
           </div>
