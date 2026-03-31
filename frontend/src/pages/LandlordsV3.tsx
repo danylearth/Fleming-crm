@@ -89,7 +89,7 @@ export default function LandlordsV3() {
   const portfolioFiltered = filterByPortfolio(landlords, portfolioFilter);
   const filtered = portfolioFiltered.filter(l => {
     // Check if search matches landlord details
-    const matchesLandlord = !search || [l.name, l.email, l.phone, l.address]
+    const matchesLandlord = !search || [l.name, l.email, l.phone, l.address, l.company_number]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
 
     // Check if search matches any directors for this landlord

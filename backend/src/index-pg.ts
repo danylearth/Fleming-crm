@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import pool, { initDb, query, queryOne, insert, run } from './db-pg';
-import { generateToken, authMiddleware, AuthRequest } from './auth';
+import { generateToken, authMiddleware, AuthRequest, requireRole } from './auth';
 import { registerInventoryRoutes } from './inventory-routes';
 
 // Validate required environment variables
@@ -185,10 +185,25 @@ app.get('/api/landlords', authMiddleware, async (req: AuthRequest, res) => {
 
 app.post('/api/landlords', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { name, email, phone, address, notes, company_number } = req.body;
+    const d = req.body;
+    if (!d.name) return res.status(400).json({ error: 'Name is required' });
+    const cols = ['name','email','phone','alt_email','date_of_birth','home_address','address',
+      'company_number','entity_type','marketing_post','marketing_email','marketing_phone',
+      'marketing_sms','kyc_completed','landlord_type','referral_source','notes'];
+    const insertCols: string[] = [];
+    const insertVals: any[] = [];
+    const placeholders: string[] = [];
+    let pIdx = 1;
+    for (const key of cols) {
+      if (key in d && d[key] !== undefined) {
+        insertCols.push(key);
+        placeholders.push(`$${pIdx++}`);
+        insertVals.push(d[key] ?? null);
+      }
+    }
     const id = await insert(
-      'INSERT INTO landlords (name, email, phone, address, notes, company_number) VALUES ($1, $2, $3, $4, $5, $6)',
-      [name, email || null, phone || null, address || null, notes || null, company_number || null]
+      `INSERT INTO landlords (${insertCols.join(',')}) VALUES (${placeholders.join(',')})`,
+      insertVals
     );
     await logAudit(req.user?.id, req.user?.email, 'create', 'landlord', id);
     res.json({ id });
@@ -217,12 +232,30 @@ app.get('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
 app.put('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = req.params.id as string;
-    const { name, email, phone, address, notes, company_number } = req.body;
-    await run('UPDATE landlords SET name=$1, email=$2, phone=$3, address=$4, notes=$5, company_number=$6 WHERE id=$7',
-      [name, email, phone, address, notes, company_number || null, id]);
+    const d = req.body;
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    const allowed = [
+      'name','email','phone','alt_email','date_of_birth','home_address','address',
+      'company_number','entity_type','marketing_post','marketing_email','marketing_phone',
+      'marketing_sms','kyc_completed','landlord_type','referral_source','notes'
+    ];
+    for (const key of allowed) {
+      if (key in d) {
+        fields.push(`${key}=$${idx++}`);
+        values.push(d[key]);
+      }
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    fields.push(`updated_at=CURRENT_TIMESTAMP`);
+    values.push(id);
+    await run(`UPDATE landlords SET ${fields.join(', ')} WHERE id=$${idx}`, values);
     await logAudit(req.user?.id, req.user?.email, 'update', 'landlord', parseInt(id), req.body);
-    res.json({ success: true });
+    const updated = await queryOne('SELECT * FROM landlords WHERE id = $1', [id]);
+    res.json(updated);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to update landlord' });
   }
 });
@@ -478,6 +511,34 @@ app.post('/api/properties/:propertyId/landlords', authMiddleware, async (req: Au
 });
 
 // Update property landlord link (e.g., change primary status)
+// Create property-landlord link (alternative to POST /api/properties/:propertyId/landlords)
+app.post('/api/property-landlords', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { property_id, landlord_id, is_primary, ownership_percentage, ownership_entity_type } = req.body;
+    if (is_primary) {
+      await run('UPDATE property_landlords SET is_primary = 0 WHERE property_id = $1', [property_id]);
+    }
+    const result = await queryOne(`
+      INSERT INTO property_landlords (property_id, landlord_id, is_primary, ownership_percentage, ownership_entity_type)
+      VALUES ($1, $2, $3, $4, $5) RETURNING id
+    `, [property_id, landlord_id, is_primary ? 1 : 0, ownership_percentage || null, ownership_entity_type || 'individual']);
+
+    // Also update properties.landlord_id if setting as primary
+    if (is_primary) {
+      await run('UPDATE properties SET landlord_id = $1 WHERE id = $2', [landlord_id, property_id]);
+    }
+
+    await logAudit(req.user?.id, req.user?.email, 'create', 'property_landlord', result.id, { property_id, landlord_id });
+    res.json({ id: result.id, success: true });
+  } catch (err: any) {
+    if (err.message?.includes('unique') || err.message?.includes('duplicate')) {
+      return res.status(400).json({ error: 'This landlord is already linked to this property' });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to link property to landlord' });
+  }
+});
+
 app.put('/api/property-landlords/:linkId', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { is_primary, ownership_percentage, ownership_entity_type } = req.body;
@@ -1015,6 +1076,84 @@ app.post('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) 
   }
 });
 
+app.get('/api/tenant-enquiries/check-duplicates', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { email, phone, exclude_id } = req.query;
+    const results: any[] = [];
+
+    if (email) {
+      const tenantByEmail = await query('SELECT id, name, email, phone, property_id FROM tenants WHERE email = $1 OR email_2 = $1', [email]);
+      tenantByEmail.forEach((t: any) => results.push({ ...t, source: 'tenant', match: 'email' }));
+
+      const landlordByEmail = await query('SELECT id, name, email, phone FROM landlords WHERE email = $1', [email]);
+      landlordByEmail.forEach((l: any) => results.push({ ...l, source: 'landlord', match: 'email' }));
+
+      const enqByEmail = await query(
+        'SELECT id, first_name_1, last_name_1, email_1, phone_1, status FROM tenant_enquiries WHERE (email_1 = $1 OR email_2 = $1) AND id != $2',
+        [email, exclude_id || 0]
+      );
+      enqByEmail.forEach((e: any) => results.push({ ...e, name: `${e.first_name_1} ${e.last_name_1}`, source: 'enquiry', match: 'email' }));
+    }
+
+    if (phone) {
+      const tenantByPhone = await query('SELECT id, name, email, phone, property_id FROM tenants WHERE phone = $1 OR phone_2 = $1', [phone]);
+      tenantByPhone.forEach((t: any) => {
+        if (!results.find(r => r.source === 'tenant' && r.id === t.id)) results.push({ ...t, source: 'tenant', match: 'phone' });
+      });
+
+      const landlordByPhone = await query('SELECT id, name, email, phone FROM landlords WHERE phone = $1', [phone]);
+      landlordByPhone.forEach((l: any) => {
+        if (!results.find(r => r.source === 'landlord' && r.id === l.id)) results.push({ ...l, source: 'landlord', match: 'phone' });
+      });
+
+      const enqByPhone = await query(
+        'SELECT id, first_name_1, last_name_1, email_1, phone_1, status FROM tenant_enquiries WHERE (phone_1 = $1 OR phone_2 = $1) AND id != $2',
+        [phone, exclude_id || 0]
+      );
+      enqByPhone.forEach((e: any) => {
+        if (!results.find(r => r.source === 'enquiry' && r.id === e.id)) {
+          results.push({ ...e, name: `${e.first_name_1} ${e.last_name_1}`, source: 'enquiry', match: 'phone' });
+        }
+      });
+    }
+
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Duplicate check failed' });
+  }
+});
+
+app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const enquiry = await queryOne('SELECT * FROM tenant_enquiries WHERE id = $1', [req.params.id]);
+    if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
+
+    const { property_id, tenancy_start_date, tenancy_type, monthly_rent } = req.body;
+    const name = `${enquiry.first_name_1} ${enquiry.last_name_1}`;
+
+    const tenantId = await insert(`
+      INSERT INTO tenants (
+        title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
+        is_joint_tenancy, title_2, first_name_2, last_name_2, email_2, phone_2, date_of_birth_2,
+        kyc_completed_1, kyc_completed_2, property_id, tenancy_start_date, tenancy_type, monthly_rent
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+    `, [
+      enquiry.title_1, enquiry.first_name_1, enquiry.last_name_1, name, enquiry.email_1, enquiry.phone_1,
+      enquiry.date_of_birth_1, enquiry.is_joint_application, enquiry.title_2, enquiry.first_name_2,
+      enquiry.last_name_2, enquiry.email_2, enquiry.phone_2, enquiry.date_of_birth_2,
+      enquiry.kyc_completed_1, enquiry.kyc_completed_2, property_id, tenancy_start_date, tenancy_type, monthly_rent
+    ]);
+
+    await run("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id]);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', parseInt(req.params.id as string), { converted_to_tenant: tenantId });
+    res.json({ tenant_id: tenantId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to convert enquiry' });
+  }
+});
+
 app.get('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const enquiry = await queryOne(`
@@ -1034,7 +1173,7 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
-    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','employment_status_1','employer_1','income_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','linked_property_id','notes','rejection_reason'];
+    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','employment_status_1','employer_1','income_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason'];
     for (const key of allowed) {
       if (key in d) {
         fields.push(`${key}=$${idx++}`);
@@ -1177,6 +1316,17 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
     fields.push(`updated_at=CURRENT_TIMESTAMP`);
     values.push(req.params.id);
     await run(`UPDATE tenants SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+
+    // Sync property.tenant_id when tenant changes property
+    if ('property_id' in d) {
+      // Remove tenant_id from old property
+      await run('UPDATE properties SET tenant_id = NULL WHERE tenant_id = $1', [req.params.id]);
+      // Set tenant_id on new property
+      if (d.property_id) {
+        await run('UPDATE properties SET tenant_id = $1 WHERE id = $2', [req.params.id, d.property_id]);
+      }
+    }
+
     await logAudit(req.user?.id, req.user?.email, 'update', 'tenant', parseInt(req.params.id as string), req.body);
     const updated = await queryOne(`
       SELECT t.*, p.address as property_address FROM tenants t
@@ -1334,6 +1484,17 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
     fields.push(`updated_at=CURRENT_TIMESTAMP`);
     values.push(req.params.id);
     await run(`UPDATE properties SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+
+    // Sync tenant.property_id when tenant_id changes on a property
+    if ('tenant_id' in d) {
+      // Unlink any tenant previously linked to this property
+      await run('UPDATE tenants SET property_id = NULL WHERE property_id = $1', [req.params.id]);
+      // Link the new tenant to this property
+      if (d.tenant_id) {
+        await run('UPDATE tenants SET property_id = $1 WHERE id = $2', [req.params.id, d.tenant_id]);
+      }
+    }
+
     await logAudit(req.user?.id, req.user?.email, 'update', 'property', parseInt(req.params.id as string), req.body);
     const updated = await queryOne(`
       SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email,
@@ -1670,34 +1831,679 @@ app.put('/api/rent-payments/:id/pay', authMiddleware, async (req: AuthRequest, r
 
 app.get('/api/users', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const users = await query('SELECT id, email, name, role, is_active, created_at, last_login FROM users');
+    const users = await query('SELECT id, email, name, role, department, is_active, created_at, last_login FROM users ORDER BY created_at DESC');
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
-app.post('/api/users', authMiddleware, async (req: AuthRequest, res) => {
+app.post('/api/users', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
-    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const { email, password, name, role } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const id = await insert('INSERT INTO users (email, password, name, role) VALUES ($1, $2, $3, $4)',
-      [email, hashedPassword, name, role || 'staff']);
+    const { email, name, role, department } = req.body;
+    if (!email || !name || !role) {
+      return res.status(400).json({ error: 'Email, name, and role are required' });
+    }
+    const tempPassword = Math.random().toString(36).slice(-10);
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    const id = await insert(
+      'INSERT INTO users (email, password, name, role, department, last_password_change) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)',
+      [email, hashedPassword, name, role, department || null]
+    );
+    await logAudit(req.user?.id, req.user?.email, 'create', 'user', id, { email, name, role, department });
+    res.json({ id, email, name, role, department, tempPassword });
+  } catch (err: any) {
+    if (err.message?.includes('unique') || err.message?.includes('duplicate')) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+app.put('/api/users/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const userId = parseInt(req.params.id as string);
+    const { name, email, role, department, is_active } = req.body;
+    const isSelf = req.user?.id === userId;
+    const isAdmin = req.user?.role === 'admin';
+
+    if (!isSelf && !isAdmin) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    if ((role || is_active !== undefined) && !isAdmin) {
+      return res.status(403).json({ error: 'Only admins can change role or active status' });
+    }
+
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIdx = 1;
+
+    if (name) { updates.push(`name = $${paramIdx++}`); params.push(name); }
+    if (email && isAdmin) { updates.push(`email = $${paramIdx++}`); params.push(email); }
+    if (role && isAdmin) { updates.push(`role = $${paramIdx++}`); params.push(role); }
+    if (department !== undefined) { updates.push(`department = $${paramIdx++}`); params.push(department); }
+    if (is_active !== undefined && isAdmin) { updates.push(`is_active = $${paramIdx++}`); params.push(is_active); }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    params.push(userId);
+    await run(`UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIdx}`, params);
+
+    await logAudit(req.user?.id, req.user?.email, 'update', 'user', userId, { name, email, role, department, is_active });
+    const updated = await queryOne('SELECT id, email, name, role, department, is_active, created_at, last_login FROM users WHERE id = $1', [userId]);
+    res.json(updated);
+  } catch (err: any) {
+    if (err.message?.includes('unique') || err.message?.includes('duplicate')) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+app.put('/api/users/:id/reset-password', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
+  try {
+    const userId = parseInt(req.params.id as string);
+    const tempPassword = Math.random().toString(36).slice(-10);
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    await run('UPDATE users SET password = $1, last_password_change = CURRENT_TIMESTAMP WHERE id = $2', [hashedPassword, userId]);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'user', userId, { action: 'password_reset' });
+    res.json({ tempPassword });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+app.delete('/api/users/:id', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
+  try {
+    const userId = parseInt(req.params.id as string);
+    if (req.user?.id === userId) {
+      return res.status(400).json({ error: 'Cannot deactivate your own account' });
+    }
+    await run('UPDATE users SET is_active = 0 WHERE id = $1', [userId]);
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'user', userId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to deactivate user' });
+  }
+});
+
+app.put('/api/auth/password', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ error: 'Old password and new password required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    const user = await queryOne('SELECT * FROM users WHERE id = $1', [req.user!.id]);
+    if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await run('UPDATE users SET password = $1, last_password_change = CURRENT_TIMESTAMP WHERE id = $2', [hashedPassword, req.user!.id]);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'user', req.user!.id, { action: 'password_change' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// ============ DELETE ENDPOINTS ============
+
+app.delete('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    await run('DELETE FROM tenants WHERE id = $1', [req.params.id]);
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'tenant', parseInt(req.params.id as string));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete tenant' });
+  }
+});
+
+app.delete('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['property', req.params.id]);
+    for (const doc of documents) {
+      const filePath = path.join(uploadsDir, doc.filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+    await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['property', req.params.id]);
+    await run('DELETE FROM tasks WHERE entity_type = $1 AND entity_id = $2', ['property', req.params.id]);
+    await run('DELETE FROM rent_payments WHERE property_id = $1', [req.params.id]);
+    await run('UPDATE tenants SET property_id = NULL WHERE property_id = $1', [req.params.id]);
+    await run('DELETE FROM property_landlords WHERE property_id = $1', [req.params.id]);
+    await run('DELETE FROM properties WHERE id = $1', [req.params.id]);
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'property', parseInt(req.params.id as string));
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to delete property:', err);
+    res.status(500).json({ error: 'Failed to delete property' });
+  }
+});
+
+// ============ DIRECTOR REINSTATEMENT ============
+
+app.post('/api/directors/:id/reinstate', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    await run('UPDATE directors SET archived = 0, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [req.params.id]);
+    await logAudit(req.user?.id, req.user?.email, 'reinstate', 'director', parseInt(req.params.id as string));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reinstate director' });
+  }
+});
+
+// ============ LANDLORD PROPERTIES ============
+
+app.get('/api/landlords/:landlordId/properties', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const properties = await query(`
+      SELECT p.*, pl.is_primary, pl.ownership_percentage, pl.ownership_entity_type
+      FROM properties p
+      INNER JOIN property_landlords pl ON p.id = pl.property_id
+      WHERE pl.landlord_id = $1
+      ORDER BY pl.is_primary DESC, p.address ASC
+    `, [req.params.landlordId]);
+    res.json(properties);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch properties' });
+  }
+});
+
+// ============ TENANT NOTES ============
+
+app.patch('/api/tenants/:id/notes', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { notes } = req.body;
+    await run('UPDATE tenants SET notes = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [notes, req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update notes' });
+  }
+});
+
+// ============ PROPERTY EXPENSES ============
+
+app.get('/api/property-expenses/:propertyId', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const expenses = await query('SELECT * FROM property_expenses WHERE property_id = $1 ORDER BY expense_date DESC, created_at DESC', [req.params.propertyId]);
+    res.json(expenses);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch expenses' });
+  }
+});
+
+app.post('/api/property-expenses', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { property_id, description, amount, category, expense_date } = req.body;
+    const id = await insert(
+      'INSERT INTO property_expenses (property_id, description, amount, category, expense_date) VALUES ($1, $2, $3, $4, $5)',
+      [property_id, description, amount, category || 'other', expense_date || null]
+    );
     res.json({ id });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create user' });
+    res.status(500).json({ error: 'Failed to create expense' });
+  }
+});
+
+app.delete('/api/property-expenses/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    await run('DELETE FROM property_expenses WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete expense' });
+  }
+});
+
+// ============ PROPERTY VIEWINGS ============
+
+app.get('/api/property-viewings', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const viewings = await query(`
+      SELECT v.*, p.address FROM property_viewings v
+      JOIN properties p ON p.id = v.property_id
+      ORDER BY v.viewing_date DESC
+    `);
+    res.json(viewings);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch viewings' });
+  }
+});
+
+app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to } = req.body;
+    const viewingId = await insert(`
+      INSERT INTO property_viewings (property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [property_id, enquiry_id || null, viewer_name, viewer_email || null, viewer_phone || null, viewing_date, viewing_time || null, notes || null]);
+
+    if (enquiry_id) {
+      await run("UPDATE tenant_enquiries SET status = 'viewing_booked', viewing_date = $1 WHERE id = $2", [viewing_date, enquiry_id]);
+    }
+
+    const property = await queryOne('SELECT address FROM properties WHERE id = $1', [property_id]);
+    const taskTitle = `Property Viewing: ${viewer_name}`;
+    const taskDescription = `Conduct property viewing at ${property?.address || 'Unknown Property'}\nTime: ${viewing_time || 'Not specified'}\nContact: ${viewer_phone || viewer_email}`;
+
+    await insert(`
+      INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, task_type, due_date, assigned_to)
+      VALUES ($1, $2, 'pending', 'high', 'tenant_enquiry', $3, 'viewing', $4, $5)
+    `, [taskTitle, taskDescription, enquiry_id || null, viewing_date, assigned_to || req.user?.name || null]);
+
+    await logAudit(req.user?.id, req.user?.email, 'create', 'property_viewing', viewingId, { viewer_name, viewing_date, property_id });
+    res.json({ id: viewingId });
+  } catch (err) {
+    console.error('Error creating viewing:', err);
+    res.status(500).json({ error: 'Failed to create viewing' });
+  }
+});
+
+app.put('/api/property-viewings/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { status, feedback, interested, notes } = req.body;
+    await run(`
+      UPDATE property_viewings SET status=$1, feedback=$2, interested=$3, notes=$4 WHERE id=$5
+    `, [status, feedback, interested ? 1 : 0, notes, req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update viewing' });
+  }
+});
+
+// ============ AUDIT LOG ============
+
+app.get('/api/audit-log', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { entity_type, entity_id, user_id, limit: limitParam = '100' } = req.query;
+    let sql = 'SELECT * FROM audit_log WHERE 1=1';
+    const params: any[] = [];
+    let paramIdx = 1;
+
+    if (entity_type) { sql += ` AND entity_type = $${paramIdx++}`; params.push(entity_type); }
+    if (entity_id) { sql += ` AND entity_id = $${paramIdx++}`; params.push(entity_id); }
+    if (user_id) { sql += ` AND user_id = $${paramIdx++}`; params.push(user_id); }
+
+    sql += ` ORDER BY created_at DESC LIMIT $${paramIdx}`;
+    params.push(limitParam);
+
+    const logs = await query(sql, params);
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch audit log' });
+  }
+});
+
+app.get('/api/activity/:entityType/:entityId', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { entityType, entityId } = req.params;
+    const limit = Number(req.query.limit) || 50;
+    const logs = await query(
+      'SELECT * FROM audit_log WHERE entity_type = $1 AND entity_id = $2 ORDER BY created_at DESC LIMIT $3',
+      [entityType, entityId, limit]
+    );
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch activity' });
+  }
+});
+
+app.post('/api/activity', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { action, entity_type, entity_id, changes } = req.body;
+    await logAudit(req.user?.id, req.user?.email, action, entity_type, entity_id, changes);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to log activity' });
+  }
+});
+
+// ============ TRANSACTIONS ============
+
+app.get('/api/transactions', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const transactions = await query('SELECT * FROM transactions ORDER BY date DESC, created_at DESC');
+    res.json(transactions);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch transactions' });
+  }
+});
+
+app.post('/api/transactions', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { tenancy_id, type, amount, description, date } = req.body;
+    const id = await insert(
+      'INSERT INTO transactions (tenancy_id, type, amount, description, date, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
+      [tenancy_id, type, amount, description || null, date, req.user?.id || null]
+    );
+    res.json({ id });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create transaction' });
+  }
+});
+
+// ============ DATA EXPORT ============
+
+app.get('/api/export/:entityType', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { entityType } = req.params;
+    let data;
+
+    switch (entityType) {
+      case 'landlords':
+        data = await query('SELECT name, email, phone, address FROM landlords');
+        break;
+      case 'landlords_bdm':
+        data = await query('SELECT name, email, phone, address, status FROM landlords_bdm');
+        break;
+      case 'tenants':
+        data = await query('SELECT name, email, phone FROM tenants');
+        break;
+      case 'properties':
+        data = await query('SELECT address, postcode, rent_amount, status FROM properties');
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid entity type' });
+    }
+
+    await logAudit(req.user?.id, req.user?.email, 'export', entityType);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to export data' });
+  }
+});
+
+// ============ EPC LOOKUP ============
+
+app.get('/api/epc-lookup', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const postcode = (req.query.postcode as string || '').trim();
+    if (!postcode) return res.status(400).json({ error: 'Postcode required' });
+
+    const apiEmail = process.env.EPC_API_EMAIL;
+    const apiKey = process.env.EPC_API_KEY;
+    if (!apiKey || !apiEmail) {
+      return res.status(501).json({ error: 'EPC API credentials not configured' });
+    }
+
+    const url = `https://epc.opendatacommunities.org/api/v1/domestic/search?postcode=${encodeURIComponent(postcode)}&size=10`;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${apiEmail}:${apiKey}`).toString('base64')}`,
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.error('EPC API error:', response.status);
+      return res.status(response.status).json({ error: 'EPC API error' });
+    }
+
+    const text = await response.text();
+    if (!text || text.length === 0) return res.json([]);
+
+    const data = JSON.parse(text);
+    const results = (data.rows || []).map((r: any) => ({
+      address: r.address,
+      postcode: r.postcode,
+      current_rating: r['current-energy-rating'],
+      potential_rating: r['potential-energy-rating'],
+      current_efficiency: r['current-energy-efficiency'],
+      property_type: r['property-type'],
+      inspection_date: r['inspection-date'],
+      certificate_number: r['lmk-key'],
+    }));
+
+    await logAudit(req.user?.id, req.user?.email, 'view', 'epc_lookup');
+    res.json(results);
+  } catch (err) {
+    console.error('EPC API error:', err);
+    res.status(500).json({ error: 'Failed to fetch EPC data' });
+  }
+});
+
+// ============ COUNCIL TAX LOOKUP ============
+
+app.get('/api/council-tax-lookup', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const postcode = (req.query.postcode as string || '').trim();
+    if (!postcode) return res.status(400).json({ error: 'Postcode required' });
+
+    const apiKey = process.env.COUNCIL_TAX_API_KEY;
+    if (!apiKey) return res.status(501).json({ error: 'Council Tax API key not configured' });
+
+    const url = `https://www.counciltaxfinder.com/api/?postcode=${encodeURIComponent(postcode)}&key=${apiKey}`;
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' }
+    });
+
+    if (!response.ok) return res.status(response.status).json({ error: 'Council Tax API error' });
+
+    const data: any = await response.json();
+    const results = Array.isArray(data) ? data.map((r: any) => ({
+      address: r.address,
+      band: r.band,
+      council: r.council,
+      annualTax: r.annual_tax,
+      monthlyTax: r.monthly_tax,
+    })) : [];
+
+    res.json(results);
+  } catch (err) {
+    console.error('Council tax lookup error:', err);
+    res.status(500).json({ error: 'Failed to fetch council tax data' });
+  }
+});
+
+// ============ LAND REGISTRY PRICE PAID ============
+
+app.get('/api/land-registry/price-paid', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const postcode = (req.query.postcode as string || '').trim();
+    if (!postcode) return res.status(400).json({ error: 'Postcode required' });
+
+    const cleanPostcode = postcode.replace(/\s/g, '').toUpperCase();
+    const url = `http://landregistry.data.gov.uk/data/ppi/transaction-record.json?_pageSize=20&propertyAddress.postcode=${encodeURIComponent(cleanPostcode)}`;
+
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' }
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Land Registry API error' });
+    }
+
+    const data: any = await response.json();
+    const results = (data.result?.items || []).map((item: any) => ({
+      address: item.propertyAddress?.saon
+        ? `${item.propertyAddress.saon} ${item.propertyAddress.paon} ${item.propertyAddress.street}`
+        : `${item.propertyAddress?.paon || ''} ${item.propertyAddress?.street || ''}`.trim(),
+      postcode: item.propertyAddress?.postcode,
+      price: item.pricePaid,
+      date: item.transactionDate,
+      property_type: item.propertyType?.label,
+      estate_type: item.estateType?.label,
+      transaction_id: item.transactionId
+    }));
+
+    await logAudit(req.user?.id, req.user?.email, 'view', 'land_registry_lookup');
+    res.json(results);
+  } catch (err) {
+    console.error('Land Registry error:', err);
+    res.status(500).json({ error: 'Failed to fetch Land Registry data' });
+  }
+});
+
+// ============ POSTCODES.IO ============
+
+app.get('/api/postcode/lookup', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const postcode = (req.query.postcode as string || '').trim();
+    if (!postcode) return res.status(400).json({ error: 'Postcode required' });
+
+    const url = `https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      if (response.status === 404) return res.status(404).json({ error: 'Postcode not found' });
+      return res.status(response.status).json({ error: 'Postcodes.io API error' });
+    }
+
+    const data: any = await response.json();
+    if (data.status === 200 && data.result) {
+      res.json({
+        postcode: data.result.postcode,
+        latitude: data.result.latitude,
+        longitude: data.result.longitude,
+        admin_district: data.result.admin_district,
+        admin_ward: data.result.admin_ward,
+        parish: data.result.parish,
+        parliamentary_constituency: data.result.parliamentary_constituency,
+        region: data.result.region,
+        country: data.result.country,
+        quality: data.result.quality,
+        eastings: data.result.eastings,
+        northings: data.result.northings,
+        outcode: data.result.outcode,
+        incode: data.result.incode
+      });
+    } else {
+      res.status(404).json({ error: 'Postcode not found' });
+    }
+  } catch (err) {
+    console.error('Postcodes.io error:', err);
+    res.status(500).json({ error: 'Failed to lookup postcode' });
+  }
+});
+
+app.get('/api/postcode/autocomplete', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const q = (req.query.query as string || '').trim();
+    if (!q || q.length < 2) {
+      return res.status(400).json({ error: 'Query must be at least 2 characters' });
+    }
+
+    const url = `https://api.postcodes.io/postcodes/${encodeURIComponent(q)}/autocomplete`;
+    const response = await fetch(url);
+
+    if (!response.ok) return res.json({ result: [] });
+
+    const data: any = await response.json();
+    res.json({ result: data.result || [] });
+  } catch (err) {
+    console.error('Postcodes.io autocomplete error:', err);
+    res.status(500).json({ error: 'Failed to autocomplete postcode' });
+  }
+});
+
+// ============ COMPANIES HOUSE ============
+
+app.get('/api/companies-house/search', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const q = (req.query.query as string || '').trim();
+    if (!q) return res.status(400).json({ error: 'Company name or number required' });
+
+    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
+    if (!apiKey) return res.status(501).json({ error: 'Companies House API key not configured' });
+
+    const url = `https://api.company-information.service.gov.uk/search/companies?q=${encodeURIComponent(q)}&items_per_page=10`;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(apiKey + ':').toString('base64')}`,
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) return res.status(response.status).json({ error: 'Companies House API error' });
+
+    const data: any = await response.json();
+    const results = (data.items || []).map((item: any) => ({
+      company_number: item.company_number,
+      company_name: item.title,
+      company_status: item.company_status,
+      company_type: item.company_type,
+      date_of_creation: item.date_of_creation,
+      address: item.address ? {
+        line_1: item.address.address_line_1,
+        line_2: item.address.address_line_2,
+        locality: item.address.locality,
+        postal_code: item.address.postal_code,
+        country: item.address.country
+      } : null
+    }));
+
+    await logAudit(req.user?.id, req.user?.email, 'view', 'companies_house_search');
+    res.json(results);
+  } catch (err) {
+    console.error('Companies House error:', err);
+    res.status(500).json({ error: 'Failed to search Companies House' });
+  }
+});
+
+app.get('/api/companies-house/company/:companyNumber', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const companyNumber = req.params.companyNumber as string;
+    if (!companyNumber) return res.status(400).json({ error: 'Company number required' });
+
+    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
+    if (!apiKey) return res.status(501).json({ error: 'Companies House API key not configured' });
+
+    const url = `https://api.company-information.service.gov.uk/company/${encodeURIComponent(companyNumber)}`;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(apiKey + ':').toString('base64')}`,
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) return res.status(404).json({ error: 'Company not found' });
+      return res.status(response.status).json({ error: 'Companies House API error' });
+    }
+
+    const data: any = await response.json();
+    const result = {
+      company_number: data.company_number,
+      company_name: data.company_name,
+      company_status: data.company_status,
+      company_type: data.type,
+      date_of_creation: data.date_of_creation,
+      jurisdiction: data.jurisdiction,
+      registered_office_address: data.registered_office_address,
+      accounts: data.accounts,
+      confirmation_statement: data.confirmation_statement,
+      sic_codes: data.sic_codes,
+      has_insolvency_history: data.has_insolvency_history,
+      has_charges: data.has_charges
+    };
+
+    await logAudit(req.user?.id, req.user?.email, 'view', 'companies_house_detail', undefined, { company_number: companyNumber });
+    res.json(result);
+  } catch (err) {
+    console.error('Companies House error:', err);
+    res.status(500).json({ error: 'Failed to fetch company details' });
   }
 });
 
 // ============ INVENTORY ROUTES ============
 registerInventoryRoutes(app, authMiddleware);
 
-// SPA fallback (disabled in production - frontend deployed separately)
-// app.get(/^(?!\/api).*/, (req, res) => {
-//   res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
-// });
+// Serve static frontend files
+app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+
+// SPA fallback
+app.get(/^(?!\/api).*/, (req, res) => {
+  res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
+});
 
 // Start server
 async function start() {

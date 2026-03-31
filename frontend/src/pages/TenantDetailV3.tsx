@@ -150,6 +150,9 @@ export default function TenantDetailV3() {
   // Guarantor expand
   const [guarantorExpanded, setGuarantorExpanded] = useState(false);
 
+  // Properties list for selector
+  const [allProperties, setAllProperties] = useState<any[]>([]);
+
   const loadDetail = async () => {
     try {
       const t = await api.get(`/api/tenants/${id}`);
@@ -157,6 +160,12 @@ export default function TenantDetailV3() {
       setForm(tenantToForm(t));
     } catch (e) { console.error(e); }
   };
+
+  useEffect(() => {
+    (async () => {
+      try { setAllProperties(await api.get('/api/properties')); } catch {}
+    })();
+  }, []);
 
   // Load tenant
   useEffect(() => {
@@ -440,6 +449,13 @@ export default function TenantDetailV3() {
               </div>
               {isEditing('tenancy') ? (
                 <div className="space-y-3">
+                  <Select label="Property" value={form.property_id || ''} onChange={v => setForm({ ...form, property_id: v ? Number(v) : null })}
+                    options={[{ value: '', label: 'No property linked' }, ...allProperties.map((p: any) => ({ value: String(p.id), label: `${p.address}, ${p.postcode}` }))]} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <DatePicker label="Tenancy Start Date" value={form.tenancy_start_date} onChange={v => setForm({ ...form, tenancy_start_date: v })} />
+                    <Select label="Tenancy Type" value={form.tenancy_type} onChange={v => setForm({ ...form, tenancy_type: v })}
+                      options={[{ value: '', label: 'Select...' }, { value: 'AST', label: 'AST' }, { value: 'HMO', label: 'HMO' }, { value: 'Rolling', label: 'Rolling' }, { value: 'Other', label: 'Other' }]} />
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <Input label="Monthly Rent (£)" value={form.monthly_rent} onChange={v => setForm({ ...form, monthly_rent: v })} placeholder="0.00" />
                     <Select label="Deposit Scheme" value={form.deposit_scheme} onChange={v => setForm({ ...form, deposit_scheme: v })}
@@ -457,6 +473,21 @@ export default function TenantDetailV3() {
                 </div>
               ) : (
                 <div className="space-y-3">
+                  {tenant?.property_id ? (
+                    <div>
+                      <p className="text-xs text-[var(--text-muted)]">Property</p>
+                      <button onClick={() => navigate(`/v3/properties/${tenant.property_id}`)}
+                        className="text-sm mt-0.5 text-[var(--accent-orange)] hover:underline flex items-center gap-1">
+                        <Building2 size={13} /> {tenant.property_address || `Property #${tenant.property_id}`}
+                      </button>
+                    </div>
+                  ) : (
+                    <ReadField label="Property" value="No property linked" />
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <ReadField label="Tenancy Start" value={form.tenancy_start_date ? formatDateDMY(form.tenancy_start_date) : null} />
+                    <ReadField label="Tenancy Type" value={form.tenancy_type} />
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <ReadField label="Monthly Rent" value={form.monthly_rent ? `£${Number(form.monthly_rent).toLocaleString()}` : null} />
                     <ReadField label="Deposit Scheme" value={

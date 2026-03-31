@@ -975,7 +975,10 @@ export default function PropertyDetailV3() {
                               {landlord.ownership_entity_type === 'company' ? 'Limited Company' : 'Individual'}
                             </span>
                           </div>
-                          <p className="text-xs text-[var(--text-muted)]">{landlord.email || landlord.phone || 'Landlord'}</p>
+                          <p className="text-xs text-[var(--text-muted)]">
+                            {landlord.company_number && <span className="mr-2">Co. #{landlord.company_number}</span>}
+                            {landlord.email || landlord.phone || 'Landlord'}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

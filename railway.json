@@ -1,6 +1,10 @@
 {
     "$schema": "https://railway.com/railway.schema.json",
+    "build": {
+        "buildCommand": "chmod +x render-build.sh && ./render-build.sh"
+    },
     "deploy": {
+        "startCommand": "cd backend && node dist/index-pg.js",
         "healthcheckPath": "/api/health",
         "healthcheckTimeout": 300,
         "restartPolicyType": "ON_FAILURE",

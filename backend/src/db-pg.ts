@@ -45,9 +45,22 @@ export async function initDb() {
         name TEXT NOT NULL,
         email TEXT,
         phone TEXT,
+        alt_email TEXT,
+        date_of_birth DATE,
+        home_address TEXT,
         address TEXT,
+        company_number TEXT,
+        entity_type TEXT DEFAULT 'individual' CHECK(entity_type IN ('individual', 'company', 'trust')),
+        marketing_post INTEGER DEFAULT 0,
+        marketing_email INTEGER DEFAULT 0,
+        marketing_phone INTEGER DEFAULT 0,
+        marketing_sms INTEGER DEFAULT 0,
+        kyc_completed INTEGER DEFAULT 0,
+        landlord_type TEXT DEFAULT 'external' CHECK(landlord_type IN ('internal', 'external')),
+        referral_source TEXT,
         notes TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
       -- DIRECTORS (Company Directors/Contact Persons)
@@ -60,6 +73,7 @@ export async function initDb() {
         date_of_birth DATE,
         role TEXT,
         kyc_completed INTEGER DEFAULT 0,
+        archived INTEGER DEFAULT 0,
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -112,6 +126,7 @@ export async function initDb() {
         status TEXT DEFAULT 'new' CHECK(status IN ('new', 'viewing_booked', 'awaiting_response', 'onboarding', 'rejected', 'converted')),
         follow_up_date DATE,
         viewing_date DATE,
+        viewing_with TEXT,
         linked_property_id INTEGER,
         notes TEXT,
         rejection_reason TEXT,
@@ -152,7 +167,7 @@ export async function initDb() {
         onboarded_date DATE,
         notes TEXT,
         amenities TEXT,
-        tenant_id INTEGER REFERENCES tenants(id),
+        tenant_id INTEGER,
         image_url TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -279,12 +294,12 @@ export async function initDb() {
         description TEXT,
         priority TEXT DEFAULT 'medium' CHECK(priority IN ('low', 'medium', 'high')),
         status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'archived')),
-        assigned_to INTEGER REFERENCES users(id),
-        entity_type TEXT CHECK(entity_type IN ('property', 'tenant', 'landlord', 'enquiry', 'maintenance', 'general', NULL)),
+        assigned_to TEXT,
+        entity_type TEXT CHECK(entity_type IN ('property', 'tenant', 'landlord', 'enquiry', 'tenant_enquiry', 'landlord_bdm', 'maintenance', 'general', NULL)),
         entity_id INTEGER,
         due_date DATE,
         follow_up_date DATE,
-        task_type TEXT CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', NULL)),
+        task_type TEXT CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', 'viewing', NULL)),
         notes TEXT,
         completed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -303,6 +318,29 @@ export async function initDb() {
         size INTEGER,
         uploaded_by INTEGER REFERENCES users(id),
         uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- PROPERTY EXPENSES
+      CREATE TABLE IF NOT EXISTS property_expenses (
+        id SERIAL PRIMARY KEY,
+        property_id INTEGER NOT NULL REFERENCES properties(id),
+        description TEXT NOT NULL,
+        amount NUMERIC(10,2) NOT NULL,
+        category TEXT NOT NULL DEFAULT 'other',
+        expense_date DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- TRANSACTIONS
+      CREATE TABLE IF NOT EXISTS transactions (
+        id SERIAL PRIMARY KEY,
+        tenancy_id INTEGER NOT NULL REFERENCES tenancies(id),
+        type TEXT NOT NULL CHECK(type IN ('rent_due', 'payment', 'deposit', 'fee', 'refund')),
+        amount NUMERIC(10,2) NOT NULL,
+        description TEXT,
+        date DATE NOT NULL,
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
       -- PROPERTY VIEWINGS
@@ -444,6 +482,73 @@ export async function initDb() {
     } catch (err) {
       console.log('[Migration] Status constraint may already be updated:', err);
     }
+
+    // Add missing columns to landlords table
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS alt_email TEXT;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS home_address TEXT;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS entity_type TEXT DEFAULT 'individual';
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS marketing_post INTEGER DEFAULT 0;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS marketing_email INTEGER DEFAULT 0;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS marketing_phone INTEGER DEFAULT 0;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS marketing_sms INTEGER DEFAULT 0;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS kyc_completed INTEGER DEFAULT 0;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS landlord_type TEXT DEFAULT 'external';
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS referral_source TEXT;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Add viewing_with column to tenant_enquiries if missing
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS viewing_with TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Add archived column to directors if missing
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE directors ADD COLUMN IF NOT EXISTS archived INTEGER DEFAULT 0;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Fix tasks table: drop FK on assigned_to, change to TEXT, fix CHECK constraints
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_assigned_to_fkey;
+        ALTER TABLE tasks ALTER COLUMN assigned_to TYPE TEXT USING assigned_to::TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+    await client.query(`
+      ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_entity_type_check;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tasks ADD CONSTRAINT tasks_entity_type_check CHECK(entity_type IN ('property', 'tenant', 'landlord', 'enquiry', 'tenant_enquiry', 'landlord_bdm', 'maintenance', 'general', NULL));
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+    await client.query(`
+      ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_task_type_check;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tasks ADD CONSTRAINT tasks_task_type_check CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', 'viewing', NULL));
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Fix audit_log action CHECK constraint to include all actions
+    await client.query(`
+      ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_action_check;
+    `);
 
     // Run inventory migration
     await runInventoryMigration(pool);

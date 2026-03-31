@@ -13,6 +13,7 @@ import { getPropertyImage } from '../utils/propertyImages';
 interface Landlord {
   id: number; name: string; email: string; phone: string; address: string; notes: string;
   alt_email: string; date_of_birth: string; home_address: string; company_number: string;
+  entity_type: string; // 'individual' | 'company' | 'trust'
   marketing_post: number; marketing_email: number; marketing_phone: number; marketing_sms: number;
   kyc_completed: number; property_count: number; referral_source: string;
 }
@@ -81,6 +82,7 @@ export default function LandlordDetailV3() {
   const [form, setForm] = useState({
     name: '', email: '', phone: '', notes: '',
     alt_email: '', date_of_birth: '', home_address: '', company_number: '', referral_source: '',
+    entity_type: 'individual',
     marketing_post: false, marketing_email: false, marketing_phone: false, marketing_sms: false,
     kyc_completed: false,
   });
@@ -108,6 +110,7 @@ export default function LandlordDetailV3() {
     name: l.name || '', email: l.email || '', phone: l.phone || '',
     notes: '', alt_email: l.alt_email || '', date_of_birth: l.date_of_birth || '', home_address: l.home_address || '',
     company_number: l.company_number || '', referral_source: l.referral_source || '',
+    entity_type: l.entity_type || 'individual',
     marketing_post: !!l.marketing_post, marketing_email: !!l.marketing_email,
     marketing_phone: !!l.marketing_phone, marketing_sms: !!l.marketing_sms,
     kyc_completed: !!l.kyc_completed,
@@ -263,8 +266,18 @@ export default function LandlordDetailV3() {
           <div className="p-4 md:p-8 flex flex-col sm:flex-row items-start sm:items-center gap-4 md:gap-6">
             <Avatar name={landlord.name} size="xl" />
             <div className="flex-1">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-2xl font-bold">{landlord.name}</h1>
+                {landlord.entity_type === 'company' && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg px-2 py-0.5">
+                    <Building2 size={12} /> Limited Company
+                  </span>
+                )}
+                {landlord.entity_type === 'trust' && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-lg px-2 py-0.5">
+                    <Building2 size={12} /> Trust
+                  </span>
+                )}
                 {landlord.kyc_completed ? (
                   <span className="inline-flex items-center gap-1 text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg px-2 py-0.5">
                     <ShieldCheck size={12} /> KYC Verified
@@ -299,38 +312,43 @@ export default function LandlordDetailV3() {
             {/* Contact Information */}
             <GlassCard className={`p-6 ${editing ? 'relative z-10 overflow-visible' : ''}`}>
               <SectionHeader title="Contact Information" />
-              {editing ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input label="Full Name" value={form.name} onChange={v => setForm({ ...form, name: v })} />
-                  {directors.length === 0 && (
-                    <DatePicker label="Date of Birth" value={form.date_of_birth} onChange={v => setForm({ ...form, date_of_birth: v })} />
-                  )}
-                  {directors.length > 0 && (
-                    <Input label="Company Number" value={form.company_number} onChange={v => setForm({ ...form, company_number: v })} />
-                  )}
-                  <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" />
-                  <Input label="Alternative Email" value={form.alt_email} onChange={v => setForm({ ...form, alt_email: v })} type="email" />
-                  <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
-                  <AddressAutocomplete label={directors.length > 0 ? "Registered Address" : "Home Address"} value={form.home_address} onChange={v => setForm({ ...form, home_address: v })} />
-                  <Select label="Referral Source" value={form.referral_source} onChange={v => setForm({ ...form, referral_source: v })}
-                    options={[{ value: '', label: 'Select...' }, { value: 'Website', label: 'Website' }, { value: 'Word of Mouth', label: 'Word of Mouth' }, { value: 'Social Media', label: 'Social Media' }, { value: 'Rightmove', label: 'Rightmove' }, { value: 'Zoopla', label: 'Zoopla' }, { value: 'Referral', label: 'Referral' }, { value: 'Walk-in', label: 'Walk-in' }, { value: 'Other', label: 'Other' }]} />
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <ReadField icon={UserCircle} label="Full Name" value={landlord.name} />
-                  {directors.length === 0 && (
-                    <ReadField icon={Calendar} label="Date of Birth" value={landlord.date_of_birth} />
-                  )}
-                  {directors.length > 0 && (
-                    <ReadField icon={Building2} label="Company Number" value={landlord.company_number} />
-                  )}
-                  <ReadField icon={Mail} label="Email" value={landlord.email} />
-                  <ReadField icon={Mail} label="Alternative Email" value={landlord.alt_email} />
-                  <ReadField icon={Phone} label="Phone" value={landlord.phone} />
-                  <ReadField icon={MapPin} label={directors.length > 0 ? "Registered Address" : "Home Address"} value={landlord.home_address} />
-                  <ReadField icon={Megaphone} label="Referral Source" value={landlord.referral_source} />
-                </div>
-              )}
+              {(() => {
+                const isCompany = form.entity_type === 'company' || landlord.entity_type === 'company';
+                return editing ? (
+                  <div className="space-y-4">
+                    <Select label="Entity Type" value={form.entity_type} onChange={v => setForm({ ...form, entity_type: v })}
+                      options={[{ value: 'individual', label: 'Individual' }, { value: 'company', label: 'Limited Company' }, { value: 'trust', label: 'Trust' }]} />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input label={isCompany ? "Company Name" : "Full Name"} value={form.name} onChange={v => setForm({ ...form, name: v })} />
+                      {isCompany ? (
+                        <Input label="Company Number" value={form.company_number} onChange={v => setForm({ ...form, company_number: v })} />
+                      ) : (
+                        <DatePicker label="Date of Birth" value={form.date_of_birth} onChange={v => setForm({ ...form, date_of_birth: v })} />
+                      )}
+                      <Input label={isCompany ? "Company Email" : "Email"} value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" />
+                      <Input label="Alternative Email" value={form.alt_email} onChange={v => setForm({ ...form, alt_email: v })} type="email" />
+                      <Input label={isCompany ? "Office Phone" : "Phone"} value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
+                      <AddressAutocomplete label={isCompany ? "Registered Address" : "Home Address"} value={form.home_address} onChange={v => setForm({ ...form, home_address: v })} />
+                      <Select label="Referral Source" value={form.referral_source} onChange={v => setForm({ ...form, referral_source: v })}
+                        options={[{ value: '', label: 'Select...' }, { value: 'Website', label: 'Website' }, { value: 'Word of Mouth', label: 'Word of Mouth' }, { value: 'Social Media', label: 'Social Media' }, { value: 'Rightmove', label: 'Rightmove' }, { value: 'Zoopla', label: 'Zoopla' }, { value: 'Referral', label: 'Referral' }, { value: 'Walk-in', label: 'Walk-in' }, { value: 'Other', label: 'Other' }]} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <ReadField icon={isCompany ? Building2 : UserCircle} label={isCompany ? "Company Name" : "Full Name"} value={landlord.name} />
+                    {isCompany ? (
+                      <ReadField icon={Building2} label="Company Number" value={landlord.company_number} />
+                    ) : (
+                      <ReadField icon={Calendar} label="Date of Birth" value={landlord.date_of_birth} />
+                    )}
+                    <ReadField icon={Mail} label={isCompany ? "Company Email" : "Email"} value={landlord.email} />
+                    <ReadField icon={Mail} label="Alternative Email" value={landlord.alt_email} />
+                    <ReadField icon={Phone} label={isCompany ? "Office Phone" : "Phone"} value={landlord.phone} />
+                    <ReadField icon={MapPin} label={isCompany ? "Registered Address" : "Home Address"} value={landlord.home_address} />
+                    <ReadField icon={Megaphone} label="Referral Source" value={landlord.referral_source} />
+                  </div>
+                );
+              })()}
             </GlassCard>
 
             {/* Properties */}
@@ -380,7 +398,7 @@ export default function LandlordDetailV3() {
             </GlassCard>
 
             {/* Directors (Limited Company Only) */}
-            {(directors.length > 0 || archivedDirectors.length > 0) && (
+            {(directors.length > 0 || archivedDirectors.length > 0 || landlord.entity_type === 'company' || landlord.company_number) && (
               <GlassCard className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <SectionHeader title="Company Directors" />
