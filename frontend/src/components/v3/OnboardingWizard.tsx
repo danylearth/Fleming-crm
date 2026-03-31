@@ -1,0 +1,453 @@
+import { useState, useEffect } from 'react';
+import { useApi } from '../../hooks/useApi';
+import { useAuth } from '../../context/AuthContext';
+import { Button, Input, Select, DatePicker, GlassCard } from './index';
+import {
+  CheckCircle, Circle, Clock, Mail, FileText, Shield, CreditCard,
+  ChevronRight, ChevronDown, AlertTriangle, User, X, Phone
+} from 'lucide-react';
+
+// Traffic light colours
+const STATUS = {
+  red: { bg: 'bg-red-500/15', border: 'border-red-500/30', text: 'text-red-400', dot: 'bg-red-500' },
+  amber: { bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400', dot: 'bg-amber-500' },
+  green: { bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-500' },
+};
+
+interface OnboardingWizardProps {
+  enquiryId: number;
+  enquiry: Record<string, any>;
+  properties: { id: number; address: string; postcode?: string; rent_amount?: number }[];
+  users: { id: number; name: string; email: string }[];
+  onClose: () => void;
+  onUpdate: () => void;
+}
+
+export default function OnboardingWizard({ enquiryId, enquiry, properties, users, onClose, onUpdate }: OnboardingWizardProps) {
+  const api = useApi();
+  const { user } = useAuth();
+  const [saving, setSaving] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
+
+  // Step 1: Holding Deposit Request
+  const [hdMonthlyRent, setHdMonthlyRent] = useState('');
+  const [hdSecurityDeposit, setHdSecurityDeposit] = useState('');
+  const [hdHoldingDeposit, setHdHoldingDeposit] = useState('');
+  const [hdFollowUpDate, setHdFollowUpDate] = useState('');
+
+  // Step 2: Holding Deposit Received
+  const [hdReceivedDate, setHdReceivedDate] = useState('');
+  const [hdReceivedAmount, setHdReceivedAmount] = useState('');
+
+  // Step 5: Credit check
+  const [creditScore, setCreditScore] = useState('');
+
+  // Initialize from enquiry data
+  useEffect(() => {
+    const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
+    const rent = enquiry.monthly_rent_agreed || prop?.rent_amount || 0;
+    setHdMonthlyRent(String(rent || ''));
+    if (rent) {
+      setHdSecurityDeposit(String(Math.round(rent * 5 / 4.33)));
+      setHdHoldingDeposit(String(Math.round(rent * 12 / 52)));
+    }
+    setHdReceivedAmount(enquiry.holding_deposit_received_amount ? String(enquiry.holding_deposit_received_amount) : '');
+    setCreditScore(enquiry.credit_score || '');
+    // Set active step based on progress
+    if (!enquiry.holding_deposit_requested) setActiveStep(0);
+    else if (!enquiry.holding_deposit_received) setActiveStep(1);
+    else if (!enquiry.application_form_completed) setActiveStep(2);
+    else if (!enquiry.id_primary_verified_1 || !enquiry.id_secondary_verified_1) setActiveStep(3);
+    else if (!enquiry.bank_statements_received || !enquiry.credit_check_completed) setActiveStep(4);
+    else setActiveStep(5);
+  }, [enquiry]);
+
+  const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
+  const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
+  const isJoint = !!enquiry.is_joint_application;
+
+  // Step definitions
+  const steps = [
+    {
+      label: 'Request Holding Deposit',
+      icon: Mail,
+      getStatus: () => enquiry.holding_deposit_requested ? 'green' : 'red',
+      desc: enquiry.holding_deposit_requested ? `Sent to ${enquiry.email_1}` : 'Send email with deposit details & application form',
+    },
+    {
+      label: 'Holding Deposit Received',
+      icon: CheckCircle,
+      getStatus: () => enquiry.holding_deposit_received ? 'green' : enquiry.holding_deposit_requested ? 'amber' : 'red',
+      desc: enquiry.holding_deposit_received
+        ? `£${Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount).toLocaleString()} received`
+        : enquiry.holding_deposit_requested ? 'Waiting for payment' : 'Request deposit first',
+    },
+    {
+      label: 'Application Form',
+      icon: FileText,
+      getStatus: () => enquiry.application_form_completed ? 'green' : enquiry.application_form_sent ? 'amber' : 'red',
+      desc: enquiry.application_form_completed ? 'Completed & signed' : enquiry.application_form_sent ? 'Sent — waiting for tenant' : 'Not yet sent',
+    },
+    {
+      label: 'ID Verification',
+      icon: Shield,
+      getStatus: () => {
+        const done1 = enquiry.id_primary_verified_1 && enquiry.id_secondary_verified_1;
+        const done2 = !isJoint || (enquiry.id_primary_verified_2 && enquiry.id_secondary_verified_2);
+        return done1 && done2 ? 'green' : (enquiry.id_primary_verified_1 || enquiry.id_secondary_verified_1) ? 'amber' : 'red';
+      },
+      desc: 'Primary & secondary ID for all applicants',
+    },
+    {
+      label: 'Financial Checks',
+      icon: CreditCard,
+      getStatus: () => {
+        const all = enquiry.bank_statements_received && enquiry.source_of_funds_verified && enquiry.employment_check_completed && enquiry.credit_check_completed;
+        const any = enquiry.bank_statements_received || enquiry.source_of_funds_verified || enquiry.employment_check_completed || enquiry.credit_check_completed;
+        return all ? 'green' : any ? 'amber' : 'red';
+      },
+      desc: 'Bank statements, source of funds, employment & credit',
+    },
+    {
+      label: 'Convert to Tenant',
+      icon: User,
+      getStatus: () => enquiry.status === 'converted' ? 'green' : 'red',
+      desc: enquiry.status === 'converted' ? 'Converted' : 'Complete all steps to proceed',
+    },
+  ];
+
+  const allPreviousComplete = (stepIdx: number) => {
+    for (let i = 0; i < stepIdx; i++) {
+      if (steps[i].getStatus() !== 'green') return false;
+    }
+    return true;
+  };
+
+  // Actions
+  const requestHoldingDeposit = async () => {
+    if (!hdMonthlyRent || !hdHoldingDeposit) return;
+    setSaving(true);
+    try {
+      await api.post(`/api/tenant-enquiries/${enquiryId}/request-holding-deposit`, {
+        monthly_rent: Number(hdMonthlyRent),
+        security_deposit: Number(hdSecurityDeposit),
+        holding_deposit: Number(hdHoldingDeposit),
+        follow_up_date: hdFollowUpDate || null,
+      });
+      onUpdate();
+    } catch (err) { console.error(err); }
+    setSaving(false);
+  };
+
+  const confirmDepositReceived = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/api/tenant-enquiries/${enquiryId}`, {
+        ...enquiry, holding_deposit_received: 1,
+        holding_deposit_received_date: hdReceivedDate || new Date().toISOString().split('T')[0],
+        holding_deposit_received_amount: Number(hdReceivedAmount) || enquiry.holding_deposit_amount,
+      });
+      // Log to activity
+      api.post('/api/activity', {
+        action: 'update', entity_type: 'tenant_enquiry', entity_id: enquiryId,
+        changes: { action: 'holding_deposit_received', amount: hdReceivedAmount, date: hdReceivedDate },
+      }).catch(() => {});
+      onUpdate();
+    } catch (err) { console.error(err); }
+    setSaving(false);
+  };
+
+  const updateField = async (fields: Record<string, any>) => {
+    setSaving(true);
+    try {
+      await api.put(`/api/tenant-enquiries/${enquiryId}`, { ...enquiry, ...fields });
+      onUpdate();
+    } catch (err) { console.error(err); }
+    setSaving(false);
+  };
+
+  const convertToTenant = async () => {
+    setSaving(true);
+    try {
+      await api.post(`/api/tenant-enquiries/${enquiryId}/convert`, {
+        property_id: enquiry.linked_property_id,
+        tenancy_start_date: new Date().toISOString().split('T')[0],
+      });
+      onUpdate();
+      onClose();
+    } catch (err) { console.error(err); }
+    setSaving(false);
+  };
+
+  const StatusDot = ({ status }: { status: string }) => (
+    <div className={`w-3 h-3 rounded-full ${STATUS[status as keyof typeof STATUS]?.dot || STATUS.red.dot}`} />
+  );
+
+  const StepCard = ({ idx, step, children }: { idx: number; step: typeof steps[0]; children: React.ReactNode }) => {
+    const status = step.getStatus();
+    const s = STATUS[status as keyof typeof STATUS] || STATUS.red;
+    const isActive = activeStep === idx;
+
+    return (
+      <div className={`rounded-xl border transition-all ${isActive ? s.border + ' ' + s.bg : 'border-[var(--border-subtle)] bg-[var(--bg-subtle)]/50'}`}>
+        <button
+          onClick={() => setActiveStep(isActive ? -1 : idx)}
+          className="w-full flex items-center gap-3 px-4 py-3 text-left"
+        >
+          <StatusDot status={status} />
+          <step.icon size={16} className={s.text} />
+          <div className="flex-1 min-w-0">
+            <p className={`text-sm font-medium ${isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+              {step.label}
+            </p>
+            <p className="text-[10px] text-[var(--text-muted)] truncate">{step.desc}</p>
+          </div>
+          <span className={`text-[10px] font-medium uppercase tracking-wider ${s.text}`}>
+            {status === 'green' ? 'Done' : status === 'amber' ? 'Pending' : 'To Do'}
+          </span>
+          <ChevronDown size={14} className={`text-[var(--text-muted)] transition-transform ${isActive ? 'rotate-180' : ''}`} />
+        </button>
+        {isActive && (
+          <div className="px-4 pb-4 space-y-3">
+            <div className="h-px bg-[var(--border-subtle)]" />
+            {children}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-[var(--border-subtle)]">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white font-bold text-sm">
+            {name.charAt(0)}
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-bold">{name}</h3>
+            <p className="text-xs text-[var(--text-muted)]">
+              {prop ? `${prop.address}${prop.postcode ? `, ${prop.postcode}` : ''}` : 'No property linked'}
+            </p>
+          </div>
+          {/* Progress */}
+          <div className="text-right">
+            <p className="text-xs text-[var(--text-muted)]">Progress</p>
+            <p className="text-sm font-bold text-emerald-400">
+              {steps.filter(s => s.getStatus() === 'green').length}/{steps.length}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] ml-2"><X size={18} /></button>
+        </div>
+
+        {/* Steps */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+
+          {/* Step 1: Request Holding Deposit */}
+          <StepCard idx={0} step={steps[0]}>
+            {enquiry.holding_deposit_requested ? (
+              <div className="text-xs text-emerald-400 flex items-center gap-2">
+                <CheckCircle size={14} /> Email sent to {enquiry.email_1} on {enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at).toLocaleDateString('en-GB') : 'N/A'}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Monthly Rent (£)</label>
+                    <input type="number" value={hdMonthlyRent} onChange={e => {
+                      setHdMonthlyRent(e.target.value);
+                      const r = Number(e.target.value);
+                      if (r > 0) { setHdHoldingDeposit(String(Math.round(r * 12 / 52))); setHdSecurityDeposit(String(Math.round(r * 5 / 4.33))); }
+                    }} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Security Dep. (£)</label>
+                    <input type="number" value={hdSecurityDeposit} onChange={e => setHdSecurityDeposit(e.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Holding Dep. (£)</label>
+                    <input type="number" value={hdHoldingDeposit} onChange={e => setHdHoldingDeposit(e.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+                  </div>
+                </div>
+                <DatePicker label="Follow-up Date" value={hdFollowUpDate} onChange={setHdFollowUpDate} />
+                <div className="bg-[var(--bg-subtle)] rounded-lg p-3 text-[10px] text-[var(--text-muted)] space-y-1">
+                  <p className="font-medium text-[var(--text-secondary)]">Will send to: {enquiry.email_1}</p>
+                  <p>From: accounts@fleminglettings.co.uk</p>
+                  <p>Includes: Holding Deposit PDF + Application Form Link</p>
+                </div>
+                <Button variant="gradient" onClick={requestHoldingDeposit} disabled={saving || !hdMonthlyRent || !hdHoldingDeposit}>
+                  {saving ? 'Sending...' : 'Send Email & Application Link'}
+                </Button>
+              </>
+            )}
+          </StepCard>
+
+          {/* Step 2: Holding Deposit Received */}
+          <StepCard idx={1} step={steps[1]}>
+            {enquiry.holding_deposit_received ? (
+              <div className="text-xs text-emerald-400 flex items-center gap-2">
+                <CheckCircle size={14} /> £{Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount).toLocaleString()} received
+                {enquiry.holding_deposit_received_date && ` on ${new Date(enquiry.holding_deposit_received_date).toLocaleDateString('en-GB')}`}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Amount Received (£)</label>
+                    <input type="number" value={hdReceivedAmount} onChange={e => setHdReceivedAmount(e.target.value)} placeholder={String(enquiry.holding_deposit_amount || '')}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+                  </div>
+                  <DatePicker label="Date Received" value={hdReceivedDate} onChange={setHdReceivedDate} />
+                </div>
+                <Button variant="gradient" onClick={confirmDepositReceived} disabled={saving}>
+                  {saving ? 'Saving...' : 'Confirm Deposit Received'}
+                </Button>
+              </>
+            )}
+          </StepCard>
+
+          {/* Step 3: Application Form */}
+          <StepCard idx={2} step={steps[2]}>
+            {enquiry.application_form_completed ? (
+              <div className="space-y-2">
+                <div className="text-xs text-emerald-400 flex items-center gap-2">
+                  <CheckCircle size={14} /> Application completed & signed
+                  {enquiry.app_signed_at && ` on ${new Date(enquiry.app_signed_at).toLocaleDateString('en-GB')}`}
+                </div>
+                {enquiry.app_signature && (
+                  <div className="bg-white rounded-lg p-2 inline-block">
+                    <img src={enquiry.app_signature} alt="Signature" className="h-12" />
+                  </div>
+                )}
+              </div>
+            ) : enquiry.application_form_sent ? (
+              <div className="space-y-2">
+                <div className="text-xs text-amber-400 flex items-center gap-2">
+                  <Clock size={14} /> Waiting for tenant to complete the form
+                </div>
+                {enquiry.application_form_token && (
+                  <div className="bg-[var(--bg-subtle)] rounded-lg p-3">
+                    <p className="text-[10px] text-[var(--text-muted)] mb-1">Application Form Link:</p>
+                    <p className="text-xs text-[var(--accent-orange)] break-all">
+                      https://apply.fleminglettings.co.uk/onboarding/{enquiry.application_form_token}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-xs text-[var(--text-muted)]">
+                <AlertTriangle size={14} className="inline mr-1 text-amber-400" />
+                Application form link will be sent with the holding deposit email (Step 1)
+              </div>
+            )}
+          </StepCard>
+
+          {/* Step 4: ID Verification */}
+          <StepCard idx={3} step={steps[3]}>
+            <div className="space-y-2">
+              <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Applicant 1 — {enquiry.first_name_1}</p>
+              <div className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
+                <span className="text-xs">Primary ID</span>
+                <div className="flex gap-1">
+                  <button onClick={() => updateField({ id_primary_verified_1: enquiry.id_primary_verified_1 ? 0 : 1 })} disabled={saving}
+                    className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry.id_primary_verified_1 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
+                    {enquiry.id_primary_verified_1 ? 'Verified' : 'Mark Verified'}
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
+                <span className="text-xs">Secondary ID</span>
+                <button onClick={() => updateField({ id_secondary_verified_1: enquiry.id_secondary_verified_1 ? 0 : 1 })} disabled={saving}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry.id_secondary_verified_1 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
+                  {enquiry.id_secondary_verified_1 ? 'Verified' : 'Mark Verified'}
+                </button>
+              </div>
+              {isJoint && (
+                <>
+                  <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mt-3">Applicant 2 — {enquiry.first_name_2 || 'Joint'}</p>
+                  <div className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
+                    <span className="text-xs">Primary ID</span>
+                    <button onClick={() => updateField({ id_primary_verified_2: enquiry.id_primary_verified_2 ? 0 : 1 })} disabled={saving}
+                      className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry.id_primary_verified_2 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
+                      {enquiry.id_primary_verified_2 ? 'Verified' : 'Mark Verified'}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
+                    <span className="text-xs">Secondary ID</span>
+                    <button onClick={() => updateField({ id_secondary_verified_2: enquiry.id_secondary_verified_2 ? 0 : 1 })} disabled={saving}
+                      className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry.id_secondary_verified_2 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
+                      {enquiry.id_secondary_verified_2 ? 'Verified' : 'Mark Verified'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </StepCard>
+
+          {/* Step 5: Financial Checks */}
+          <StepCard idx={4} step={steps[4]}>
+            <div className="space-y-2">
+              {[
+                { key: 'bank_statements_received', label: '3 Months Bank Statements' },
+                { key: 'source_of_funds_verified', label: 'Source of Funds' },
+                { key: 'employment_check_completed', label: 'Employment Check' },
+              ].map(item => (
+                <div key={item.key} className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
+                  <span className="text-xs">{item.label}</span>
+                  <button onClick={() => updateField({ [item.key]: enquiry[item.key] ? 0 : 1 })} disabled={saving}
+                    className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry[item.key] ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
+                    {enquiry[item.key] ? 'Complete' : 'Mark Complete'}
+                  </button>
+                </div>
+              ))}
+              <div className="h-px bg-[var(--border-subtle)]" />
+              <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Credit Check</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] text-[var(--text-muted)] mb-1">Credit Score</label>
+                  <input type="text" value={creditScore} onChange={e => setCreditScore(e.target.value)} placeholder="e.g. 720"
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+                </div>
+                <div className="flex items-end">
+                  <Button variant={enquiry.credit_check_completed ? 'outline' : 'gradient'} size="sm" onClick={() => updateField({
+                    credit_check_completed: 1, credit_score: creditScore, credit_check_date: new Date().toISOString().split('T')[0],
+                  })} disabled={saving || !creditScore}>
+                    {enquiry.credit_check_completed ? 'Updated' : 'Save Score'}
+                  </Button>
+                </div>
+              </div>
+              {enquiry.credit_score && (
+                <div className="text-xs text-emerald-400 flex items-center gap-2">
+                  <CheckCircle size={14} /> Credit score: {enquiry.credit_score}
+                  {enquiry.credit_check_date && ` (checked ${new Date(enquiry.credit_check_date).toLocaleDateString('en-GB')})`}
+                </div>
+              )}
+            </div>
+          </StepCard>
+
+          {/* Step 6: Convert to Tenant */}
+          <StepCard idx={5} step={steps[5]}>
+            {allPreviousComplete(5) ? (
+              <div className="space-y-3">
+                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <p className="text-sm font-medium text-emerald-400">All checks complete</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{name} is ready to be converted to a tenant.</p>
+                </div>
+                <Button variant="gradient" onClick={convertToTenant} disabled={saving}>
+                  {saving ? 'Converting...' : 'Convert to Tenant'}
+                </Button>
+              </div>
+            ) : (
+              <div className="text-xs text-[var(--text-muted)] flex items-center gap-2">
+                <AlertTriangle size={14} className="text-amber-400" />
+                Complete all previous steps before converting to tenant
+              </div>
+            )}
+          </StepCard>
+
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 import { SearchDropdown } from '../components/v3/SearchDropdown';
+import OnboardingWizard from '../components/v3/OnboardingWizard';
 
 interface EnquiryRaw {
   id: number;
@@ -269,6 +270,9 @@ export default function EnquiriesV3() {
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [smsBody, setSmsBody] = useState('');
   const [allUsers, setAllUsers] = useState<{ id: number; name: string; email: string }[]>([]);
+  // Onboarding wizard
+  const [onboardingEnquiryId, setOnboardingEnquiryId] = useState<number | null>(null);
+  const [onboardingData, setOnboardingData] = useState<Record<string, any> | null>(null);
   // Bulk actions state
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -810,7 +814,16 @@ export default function EnquiriesV3() {
                   <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p><p className="text-xs text-[var(--text-muted)]">Schedule a follow-up date</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <button onClick={() => setWorkflowMode('onboarding')}
+                <button onClick={async () => {
+                  if (workflowEnquiry) {
+                    try {
+                      const full = await api.get(`/api/tenant-enquiries/${workflowEnquiry.id}`);
+                      setOnboardingData(full);
+                      setOnboardingEnquiryId(workflowEnquiry.id);
+                      setWorkflowEnquiry(null);
+                    } catch {}
+                  }
+                }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center"><OnboardingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Start Onboarding</p><p className="text-xs text-[var(--text-muted)]">Begin tenant onboarding</p></div>
@@ -955,6 +968,24 @@ export default function EnquiriesV3() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Onboarding Wizard */}
+      {onboardingEnquiryId && onboardingData && (
+        <OnboardingWizard
+          enquiryId={onboardingEnquiryId}
+          enquiry={onboardingData}
+          properties={properties}
+          users={allUsers}
+          onClose={() => { setOnboardingEnquiryId(null); setOnboardingData(null); }}
+          onUpdate={async () => {
+            try {
+              const fresh = await api.get(`/api/tenant-enquiries/${onboardingEnquiryId}`);
+              setOnboardingData(fresh);
+            } catch {}
+            await load();
+          }}
+        />
       )}
     </V3Layout>
   );

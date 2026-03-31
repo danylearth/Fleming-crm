@@ -13,6 +13,7 @@ import {
   ChevronDown, MessageSquare, Plus, ShieldCheck, AlertTriangle
 } from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
+import OnboardingWizard from '../components/v3/OnboardingWizard';
 
 // ==================== CONSTANTS ====================
 const STATUS_COLORS: Record<string, string> = {
@@ -161,6 +162,9 @@ export default function EnquiryDetailV3() {
   const [smsHistory, setSmsHistory] = useState<any[]>([]);
   const [smsCompose, setSmsCompose] = useState('');
   const [smsSending, setSmsSending] = useState(false);
+
+  // Onboarding wizard
+  const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
 
   // Holding Deposit modal
   const [showHoldingDeposit, setShowHoldingDeposit] = useState(false);
@@ -391,8 +395,13 @@ export default function EnquiryDetailV3() {
             </div>
             <div className="flex items-center gap-3">
               <CompletionRing percent={completionPercent} />
+              {form.status === 'onboarding' && (
+                <Button variant="gradient" size="sm" onClick={() => setShowOnboardingWizard(true)}>
+                  <CheckCircle size={14} className="mr-1.5" /> Onboarding
+                </Button>
+              )}
               {!['converted', 'rejected'].includes(form.status) && (
-                <Button variant="gradient" size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); setSmsEnabled(!!form.phone_1); setSmsBody(''); }}>
+                <Button variant={form.status === 'onboarding' ? 'outline' : 'gradient'} size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); setSmsEnabled(!!form.phone_1); setSmsBody(''); }}>
                   <ArrowRight size={14} className="mr-1.5" /> Progress
                 </Button>
               )}
@@ -1010,6 +1019,18 @@ export default function EnquiryDetailV3() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Onboarding Wizard */}
+      {showOnboardingWizard && data && (
+        <OnboardingWizard
+          enquiryId={Number(id)}
+          enquiry={data}
+          properties={properties}
+          users={users}
+          onClose={() => setShowOnboardingWizard(false)}
+          onUpdate={async () => { await loadDetail(); }}
+        />
       )}
     </V3Layout>
   );

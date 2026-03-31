@@ -815,6 +815,23 @@ const onboardingCols = [
   'app_signature TEXT',
   'app_signed_at DATETIME',
   'app_declaration_agreed INTEGER DEFAULT 0',
+  // Holding deposit tracking
+  'holding_deposit_received_date TEXT',
+  'holding_deposit_received_amount REAL',
+  // ID Verification
+  'id_primary_verified_1 INTEGER DEFAULT 0',
+  'id_secondary_verified_1 INTEGER DEFAULT 0',
+  'id_primary_verified_2 INTEGER DEFAULT 0',
+  'id_secondary_verified_2 INTEGER DEFAULT 0',
+  // Financial checks
+  'bank_statements_received INTEGER DEFAULT 0',
+  'source_of_funds_verified INTEGER DEFAULT 0',
+  'employment_check_completed INTEGER DEFAULT 0',
+  'credit_check_completed INTEGER DEFAULT 0',
+  'credit_score TEXT',
+  'credit_check_date TEXT',
+  // Onboarding step tracking
+  'onboarding_step INTEGER DEFAULT 0',
 ];
 for (const col of onboardingCols) {
   try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN ${col}`); } catch (e) {}
