@@ -7,16 +7,10 @@
     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 
     <style>
-        @font-face {
-            font-family: 'Switzer';
-            font-weight: 400;
-            src: url('https://fleminglettings.co.uk/wp-content/uploads/2023/10/Switzer-Regular.otf') format('OpenType');
-        }
-        @font-face {
-            font-family: 'Switzer';
-            font-weight: 700;
-            src: url('https://fleminglettings.co.uk/wp-content/uploads/2023/10/Switzer-Bold.otf') format('OpenType');
-        }
+        @font-face { font-family: 'Lufga'; font-weight: 400; src: url('fonts/Lufga-Regular.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 500; src: url('fonts/Lufga-Medium.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 600; src: url('fonts/Lufga-SemiBold.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 700; src: url('fonts/Lufga-Bold.otf') format('opentype'); }
 
         * {
             margin: 0;
@@ -25,7 +19,7 @@
         }
 
         body {
-            font-family: 'Switzer', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: 'Lufga', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #25073B 0%, #DC006D 100%);
             min-height: 100vh;
             display: flex;
@@ -90,8 +84,7 @@
 
         /* Form Container */
         .form-wrapper {
-            padding: 50px 40px;
-            min-height: 500px;
+            padding: 40px 40px 30px;
         }
 
         /* Steps */
@@ -142,6 +135,10 @@
             margin-bottom: 8px;
         }
 
+        input, select, textarea, button {
+            font-family: 'Lufga', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
         input[type="text"],
         input[type="email"],
         input[type="tel"],
@@ -154,7 +151,7 @@
             border: 2px solid #e0e0e0;
             border-radius: 10px;
             font-size: 16px;
-            font-family: 'Switzer', sans-serif;
+            font-family: 'Lufga', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             transition: all 0.3s;
             background: white;
             color: #333;
@@ -226,6 +223,26 @@
             border-color: #DC006D;
         }
 
+        /* Compact pill radio buttons (horizontal flow) */
+        .radio-group-compact {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .radio-group-compact .radio-option {
+            flex: 0 0 auto;
+        }
+
+        .radio-group-compact .radio-option label {
+            padding: 12px 22px;
+            border-radius: 50px;
+            font-size: 14px;
+            white-space: nowrap;
+            text-align: center;
+        }
+
         /* Checkbox Styles */
         .checkbox-group {
             display: flex;
@@ -259,10 +276,10 @@
 
         /* Marketing Preferences */
         .marketing-prefs {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            display: flex;
+            gap: 20px;
             margin-top: 10px;
+            flex-wrap: wrap;
         }
 
         .marketing-prefs .checkbox-group {
@@ -370,7 +387,7 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
-            font-family: 'Switzer', sans-serif;
+            font-family: 'Lufga', sans-serif;
         }
 
         .btn-primary {
@@ -413,6 +430,7 @@
             align-items: center;
             justify-content: center;
             font-size: 40px;
+            color: white;
         }
 
         .success-message {
@@ -450,7 +468,7 @@
             }
 
             .marketing-prefs {
-                grid-template-columns: 1fr;
+                gap: 15px;
             }
 
             .container {
@@ -589,17 +607,497 @@
             font-size: 14px;
         }
 
-        /* Conditional field animation */
-        .conditional-fields {
-            overflow: hidden;
-            transition: max-height 0.3s ease, opacity 0.3s ease;
+        /* Custom Date Picker */
+        .date-picker-wrapper {
+            position: relative;
         }
 
-        .conditional-fields.hidden {
+        .date-picker-wrapper input {
+            cursor: pointer;
+            padding-right: 45px;
+        }
+
+        .date-picker-wrapper .calendar-icon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            color: #DC006D;
+            font-size: 18px;
+        }
+
+        .date-picker-dropdown {
+            position: fixed;
+            z-index: 1000;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 20px;
+            width: 320px;
+            display: none;
+            font-family: 'Lufga', sans-serif;
+        }
+
+        .date-picker-dropdown.open {
+            display: block;
+        }
+
+        .dp-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .dp-header-center {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dp-month-btn, .dp-year-btn {
+            background: #f5f5f5;
+            border: none;
+            font-family: 'Lufga', sans-serif;
+            font-weight: 700;
+            font-size: 15px;
+            color: #DC006D;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .dp-year-btn {
+            color: #25073B;
+        }
+
+        .dp-month-btn:hover, .dp-year-btn:hover {
+            background: #fdf2f7;
+            color: #DC006D;
+            text-decoration: underline;
+        }
+
+        .dp-nav {
+            background: none;
+            border: 2px solid #e0e0e0;
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #25073B;
+            transition: all 0.2s;
+        }
+
+        .dp-nav:hover {
+            border-color: #DC006D;
+            color: #DC006D;
+        }
+
+        .dp-weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            margin-bottom: 6px;
+        }
+
+        .dp-weekday {
+            text-align: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: #999;
+            padding: 6px 0;
+            text-transform: uppercase;
+        }
+
+        .dp-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+
+        .dp-day {
+            text-align: center;
+            padding: 10px 0;
+            font-size: 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.15s;
+            color: #333;
+            font-weight: 500;
+            border: none;
+            background: none;
+            font-family: 'Lufga', sans-serif;
+        }
+
+        .dp-day:hover {
+            background: #fdf2f7;
+            color: #DC006D;
+        }
+
+        .dp-day.today {
+            border: 2px solid #DC006D;
+        }
+
+        .dp-day.selected {
+            background: linear-gradient(135deg, #DC006D 0%, #25073B 100%);
+            color: white;
+            font-weight: 700;
+        }
+
+        .dp-day.other-month {
+            color: #ccc;
+        }
+
+        .dp-day.disabled {
+            color: #ddd;
+            cursor: not-allowed;
+        }
+
+        .dp-day.disabled:hover {
+            background: none;
+        }
+
+        .dp-footer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .dp-footer button {
+            background: none;
+            border: none;
+            font-family: 'Lufga', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .dp-clear {
+            color: #999;
+        }
+
+        .dp-clear:hover {
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .dp-today-btn {
+            color: #DC006D;
+        }
+
+        .dp-today-btn:hover {
+            background: #fdf2f7;
+        }
+
+        /* Month/Year selection overlay */
+        .dp-selector {
+            display: none;
+        }
+
+        .dp-selector.open {
+            display: block;
+        }
+
+        .dp-selector h4 {
+            color: #25073B;
+            font-size: 15px;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .dp-selector-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .dp-selector-item {
+            padding: 10px;
+            text-align: center;
+            border-radius: 10px;
+            border: none;
+            background: none;
+            font-family: 'Lufga', sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.15s;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .dp-selector-item:hover {
+            background: #fdf2f7;
+            color: #DC006D;
+        }
+
+        .dp-selector-item.active {
+            background: linear-gradient(135deg, #DC006D 0%, #25073B 100%);
+            color: white;
+            font-weight: 700;
+        }
+
+        .dp-year-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .dp-year-grid::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .dp-year-grid::-webkit-scrollbar-thumb {
+            background: #DC006D;
+            border-radius: 2px;
+        }
+
+        .dp-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 999;
+        }
+
+        .dp-overlay.open {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .date-picker-dropdown {
+                width: 100%;
+                top: auto !important;
+                bottom: 0;
+                left: 0 !important;
+                right: 0;
+                border-radius: 20px 20px 0 0;
+                padding: 25px 20px;
+                box-shadow: 0 -10px 40px rgba(0,0,0,0.2);
+            }
+        }
+
+        /* Custom Select Dropdown */
+        .custom-select {
+            position: relative;
+        }
+
+        .custom-select-trigger {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: 'Lufga', sans-serif;
+            background: white;
+            color: #333;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.3s;
+            -webkit-appearance: none;
+            user-select: none;
+        }
+
+        .custom-select-trigger:hover {
+            border-color: #DC006D;
+        }
+
+        .custom-select-trigger.open {
+            border-color: #DC006D;
+            box-shadow: 0 0 0 3px rgba(220, 0, 109, 0.1);
+            border-radius: 10px 10px 0 0;
+        }
+
+        .custom-select-trigger .placeholder {
+            color: #999;
+        }
+
+        .custom-select-trigger .arrow {
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid #999;
+            transition: transform 0.2s;
+        }
+
+        .custom-select-trigger.open .arrow {
+            transform: rotate(180deg);
+        }
+
+        .custom-select-options {
+            display: none;
+            position: fixed;
+            background: white;
+            border: 2px solid #DC006D;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 1001;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+
+        .custom-select-options.open {
+            display: block;
+        }
+
+        .custom-select-options::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .custom-select-options::-webkit-scrollbar-track {
+            background: #f5f5f5;
+            border-radius: 0 0 10px 0;
+        }
+
+        .custom-select-options::-webkit-scrollbar-thumb {
+            background: #DC006D;
+            border-radius: 3px;
+        }
+
+        .custom-select-option {
+            padding: 12px 15px;
+            cursor: pointer;
+            font-size: 15px;
+            font-family: 'Lufga', sans-serif;
+            transition: background 0.15s;
+            color: #333;
+        }
+
+        .custom-select-option:hover {
+            background: #fdf2f7;
+            color: #DC006D;
+        }
+
+        .custom-select-option.selected {
+            background: linear-gradient(135deg, #DC006D 0%, #25073B 100%);
+            color: white;
+            font-weight: 600;
+        }
+
+        .custom-select-option:last-child {
+            border-radius: 0 0 8px 8px;
+        }
+
+        /* Search within custom select (for nationality etc) */
+        .custom-select-search {
+            padding: 10px 15px;
+            border-bottom: 1px solid #f0f0f0;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 1;
+        }
+
+        .custom-select-search input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: 'Lufga', sans-serif;
+            outline: none;
+        }
+
+        .custom-select-search input:focus {
+            border-color: #DC006D;
+        }
+
+        /* Modal mode for searchable (long) selects */
+        .custom-select-options.modal-mode {
+            position: fixed;
+            top: 50% !important;
+            left: 50% !important;
+            right: auto !important;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 400px;
+            max-height: 70vh;
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            z-index: 1001;
+        }
+
+        .custom-select-options.modal-mode .custom-select-search {
+            border-radius: 16px 16px 0 0;
+            padding: 16px;
+        }
+
+        .custom-select-options.modal-mode .custom-select-search input {
+            padding: 14px 16px;
+            font-size: 16px;
+            border-radius: 10px;
+        }
+
+        .cs-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+
+        .cs-overlay.open {
+            display: block;
+        }
+
+        /* Hide native selects that have been replaced */
+        select.custom-replaced {
+            display: none !important;
+        }
+
+        @media (max-width: 768px) {
+            .custom-select-trigger {
+                padding: 14px;
+                font-size: 16px;
+            }
+
+            .custom-select-options {
+                max-height: 200px;
+            }
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            .custom-select-trigger {
+                min-height: 48px;
+            }
+
+            .custom-select-option {
+                padding: 14px 15px;
+                min-height: 44px;
+            }
+        }
+
+        /* Smooth show/hide for employment fields */
+        .employment-fields {
             max-height: 0;
+            overflow: hidden;
             opacity: 0;
-            margin: 0;
-            padding: 0;
+            transition: max-height 0.4s ease, opacity 0.3s ease;
+        }
+
+        .employment-fields.visible {
+            max-height: 600px;
+            opacity: 1;
         }
     </style>
 </head>
@@ -607,7 +1105,7 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <img src="https://fleminglettings.co.uk/wp-content/uploads/2023/10/image-4-1.png" alt="Fleming Lettings" class="logo">
+            <img src="logo-white.png" alt="Fleming Lettings" class="logo">
             <a href="https://fleminglettings.co.uk" class="back-button">← Back to Website</a>
         </div>
 
@@ -665,12 +1163,15 @@
 
                     <div class="input-group">
                         <label>Contact Number *</label>
-                        <input type="tel" name="contactNumber" required>
+                        <input type="tel" name="contactNumber" required inputmode="numeric" placeholder="e.g. 07123456789" oninput="this.value = this.value.replace(/[^0-9+\s-]/g, '')">
                     </div>
 
                     <div class="input-group">
-                        <label>Date of Birth * <span style="font-weight: 400; color: #999; font-size: 12px;">(DD/MM/YYYY)</span></label>
-                        <input type="date" name="dob" id="dob" required placeholder="DD/MM/YYYY">
+                        <label>Date of Birth *</label>
+                        <div class="date-picker-wrapper">
+                            <input type="text" name="dob" id="dob" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('dob')" readonly>
+                            <span class="calendar-icon">&#x1F4C5;</span>
+                        </div>
                     </div>
 
                     <div class="button-group">
@@ -682,28 +1183,30 @@
                 <!-- Step 3: Current Address -->
                 <div class="step" data-step="3">
                     <h2>Some more information about you</h2>
-
-                    <div class="input-group">
-                        <label>Current Address *</label>
-                        <input type="text" name="address" placeholder="Street address" required>
-                    </div>
+                    <p class="step-description">This helps us understand your current situation.</p>
 
                     <div class="two-col">
+                        <div class="input-group">
+                            <label>Current Address *</label>
+                            <input type="text" name="address" placeholder="Street address" required>
+                        </div>
                         <div class="input-group">
                             <label>Postcode *</label>
                             <input type="text" name="Postcode" required>
                         </div>
-                        <div class="input-group">
-                            <label>Years at this address *</label>
-                            <input type="text" name="yearofaddress" placeholder="e.g. 2" required>
-                        </div>
                     </div>
 
-                    <div class="input-group">
-                        <label>Nationality *</label>
-                        <select name="Nationality" id="nationalitySelect" required>
-                            <option value="">Please select an option</option>
-                        </select>
+                    <div class="two-col">
+                        <div class="input-group">
+                            <label>Years at this address *</label>
+                            <input type="text" name="yearofaddress" placeholder="e.g. 2" required inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                        </div>
+                        <div class="input-group">
+                            <label>Nationality *</label>
+                            <select name="Nationality" id="nationalitySelect" required>
+                                <option value="">Please select an option</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="button-group">
@@ -729,7 +1232,7 @@
                         </select>
                     </div>
 
-                    <div id="employmentDetails" style="display: none;">
+                    <div id="employmentDetails" class="employment-fields">
                         <div class="input-group">
                             <label>Job Title</label>
                             <input type="text" name="job_title" placeholder="e.g. Software Engineer">
@@ -737,7 +1240,7 @@
 
                         <div class="input-group">
                             <label>Annual Salary (£)</label>
-                            <input type="text" name="AnnualSalary" placeholder="e.g. 30000">
+                            <input type="text" name="AnnualSalary" placeholder="e.g. 30000" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                         </div>
 
                         <div class="input-group">
@@ -786,8 +1289,11 @@
 
                     <div class="two-col">
                         <div class="input-group">
-                            <label>Date of Birth <span style="font-weight: 400; color: #999; font-size: 12px;">(DD/MM/YYYY)</span></label>
-                            <input type="date" name="dob2">
+                            <label>Date of Birth</label>
+                            <div class="date-picker-wrapper">
+                                <input type="text" name="dob2" id="dob2" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('dob2')" readonly>
+                                <span class="calendar-icon">&#x1F4C5;</span>
+                            </div>
                         </div>
                         <div class="input-group">
                             <label>Nationality</label>
@@ -820,7 +1326,7 @@
                         </select>
                     </div>
 
-                    <div id="employmentDetails2" style="display: none;">
+                    <div id="employmentDetails2" class="employment-fields">
                         <div class="two-col">
                             <div class="input-group">
                                 <label>Job Title</label>
@@ -828,7 +1334,7 @@
                             </div>
                             <div class="input-group">
                                 <label>Annual Salary (£)</label>
-                                <input type="number" name="AnnualSalary2" min="0">
+                                <input type="text" name="AnnualSalary2" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                             </div>
                         </div>
                         <div class="input-group">
@@ -856,7 +1362,7 @@
 
                     <div class="input-group">
                         <label>Tenancy Type *</label>
-                        <div class="radio-group">
+                        <div class="radio-group-compact">
                             <div class="radio-option">
                                 <input type="radio" name="tenancylookingfor" id="shortterm" value="Short term" required>
                                 <label for="shortterm">Short term</label>
@@ -878,7 +1384,7 @@
 
                     <div class="input-group">
                         <label>Property Type *</label>
-                        <div class="radio-group">
+                        <div class="radio-group-compact">
                             <div class="radio-option">
                                 <input type="radio" name="typeofproperty" id="house" value="House" required>
                                 <label for="house">House</label>
@@ -900,8 +1406,8 @@
                                 <label for="bedsit">Bedsit</label>
                             </div>
                             <div class="radio-option">
-                                <input type="radio" name="typeofproperty" id="bedroom" value="Bedroom">
-                                <label for="bedroom">Bedroom</label>
+                                <input type="radio" name="typeofproperty" id="other" value="Other">
+                                <label for="other">Other</label>
                             </div>
                         </div>
                     </div>
@@ -931,7 +1437,7 @@
 
                         <div class="input-group">
                             <label>Maximum Monthly Budget (£) *</label>
-                            <input type="number" name="rent_max" min="250" placeholder="e.g. 1200" required>
+                            <input type="text" name="rent_max" placeholder="e.g. 1200" required inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                         </div>
                     </div>
 
@@ -962,7 +1468,7 @@
                 <!-- Step 8: Final Page - Notes, Upload, Property Interest, Marketing, T&Cs -->
                 <div class="step" data-step="8">
                     <h2>Finally here! &#x1F973;</h2>
-                    <p class="step-description">Let's get ready to rent!</p>
+                    <p class="step-description">Ready. Set. Let!</p>
 
                     <!-- Property Interest (moved here from step 6) -->
                     <div class="input-group">
@@ -978,12 +1484,9 @@
                             </div>
                         </div>
                         <div id="propertySearchSection" style="display: none;">
-                            <div class="property-search-container">
-                                <input type="text" id="propertySearchInput" placeholder="Start typing an address to search..." oninput="searchProperties(this.value)">
-                                <div class="property-search-results" id="propertySearchResults"></div>
-                            </div>
-                            <input type="hidden" name="property_id" id="selectedPropertyId">
-                            <div id="selectedPropertyDisplay" style="margin-top: 8px; font-size: 14px; color: #25073B; font-weight: 500;"></div>
+                            <select name="property_id" id="propertySelect">
+                                <option value="">Select a property</option>
+                            </select>
                         </div>
                     </div>
 
@@ -1031,21 +1534,21 @@
                     <div class="checkbox-group">
                         <input type="checkbox" id="termsConsent" name="termsConsent" required>
                         <label for="termsConsent">
-                            Please tick here to accept our <a href="https://fleminglettings.co.uk/terms-and-conditions/" target="_blank">terms and conditions</a>. *
+                            Please tick here to accept our <a href="https://fleminglettings.co.uk/terms-and-conditions/" target="_blank">terms and conditions</a>.&nbsp;*
                         </label>
                     </div>
 
                     <div class="checkbox-group">
                         <input type="checkbox" id="marketingPolicyConsent" name="marketingPolicyConsent" required>
                         <label for="marketingPolicyConsent">
-                            Please tick here to accept our marketing and communications policies. *
+                            Please tick here to accept our marketing and communications policies.&nbsp;*
                         </label>
                     </div>
 
-                    <!-- reCAPTCHA -->
-                    <div class="recaptcha-container">
+                    <!-- reCAPTCHA - uncomment when site key is ready -->
+                    <!-- <div class="recaptcha-container">
                         <div class="g-recaptcha" data-sitekey="YOUR_RECAPTCHA_SITE_KEY"></div>
-                    </div>
+                    </div> -->
 
                     <div class="button-group">
                         <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
@@ -1058,14 +1561,57 @@
                     <div class="success-message">
                         <div class="success-icon">✓</div>
                         <h2>Thank you!</h2>
-                        <p class="step-description">Your enquiry has been received successfully. We'll be in touch within 24 hours to discuss your requirements and help you find your perfect property.</p>
-                        <p style="margin-top: 20px; font-size: 14px; color: #999;">Reference: <strong id="refNumber"></strong></p>
+                        <p class="step-description">Your inquiry has been received successfully. We will be in touch shortly to discuss your requirements and progress your application further.</p>
                         <div class="button-group" style="justify-content: center; margin-top: 40px;">
                             <a href="https://fleminglettings.co.uk" class="btn btn-primary" style="text-decoration: none; text-align: center;">Back to Fleming Lettings</a>
                         </div>
                     </div>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Select Modal Overlay -->
+    <div class="cs-overlay" id="csOverlay" onclick="closeAllCustomSelects()"></div>
+
+    <!-- Date Picker Overlay (mobile) -->
+    <div class="dp-overlay" id="dpOverlay" onclick="closeDatePicker()"></div>
+
+    <!-- Date Picker Dropdown -->
+    <div class="date-picker-dropdown" id="datePicker">
+        <div class="dp-header">
+            <button type="button" class="dp-nav" onclick="dpPrevMonth()">&#x2039;</button>
+            <div class="dp-header-center">
+                <button type="button" class="dp-month-btn" id="dpMonthBtn" onclick="showMonthSelector()">January</button>
+                <button type="button" class="dp-year-btn" id="dpYearBtn" onclick="showYearSelector()">2026</button>
+            </div>
+            <button type="button" class="dp-nav" onclick="dpNextMonth()">&#x203A;</button>
+        </div>
+        <div class="dp-weekdays">
+            <span class="dp-weekday">Mo</span>
+            <span class="dp-weekday">Tu</span>
+            <span class="dp-weekday">We</span>
+            <span class="dp-weekday">Th</span>
+            <span class="dp-weekday">Fr</span>
+            <span class="dp-weekday">Sa</span>
+            <span class="dp-weekday">Su</span>
+        </div>
+        <div class="dp-days" id="dpDays"></div>
+        <div class="dp-footer">
+            <button type="button" class="dp-clear" onclick="dpClear()">Clear</button>
+            <button type="button" class="dp-today-btn" onclick="dpSelectToday()">Today</button>
+        </div>
+
+        <!-- Month Selector -->
+        <div class="dp-selector" id="monthSelector">
+            <h4>Select Month</h4>
+            <div class="dp-selector-grid" id="monthGrid"></div>
+        </div>
+
+        <!-- Year Selector -->
+        <div class="dp-selector" id="yearSelector">
+            <h4>Select Year</h4>
+            <div class="dp-year-grid" id="yearGrid"></div>
         </div>
     </div>
 
@@ -1099,6 +1645,197 @@
             "Zimbabwean","Rather not say"
         ];
 
+        // ===== CUSTOM DATE PICKER =====
+        const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        let dpYear, dpMonth, dpTargetInput, dpSelectedDate;
+
+        function openDatePicker(inputId) {
+            dpTargetInput = document.getElementById(inputId);
+            const existing = parseDDMMYYYY(dpTargetInput.value);
+            const now = new Date();
+
+            if (existing) {
+                dpYear = existing.getFullYear();
+                dpMonth = existing.getMonth();
+                dpSelectedDate = existing;
+            } else {
+                dpYear = now.getFullYear();
+                dpMonth = now.getMonth();
+                dpSelectedDate = null;
+            }
+
+            const picker = document.getElementById('datePicker');
+            document.getElementById('dpOverlay').classList.add('open');
+
+            // Position picker below the input using fixed positioning
+            if (window.innerWidth > 768) {
+                const rect = dpTargetInput.getBoundingClientRect();
+                const pickerHeight = 380;
+                const spaceBelow = window.innerHeight - rect.bottom;
+
+                picker.style.left = rect.left + 'px';
+                picker.style.width = Math.min(320, rect.width) + 'px';
+
+                if (spaceBelow >= pickerHeight) {
+                    picker.style.top = (rect.bottom + 5) + 'px';
+                } else {
+                    picker.style.top = (rect.top - pickerHeight - 5) + 'px';
+                }
+            }
+
+            renderCalendar();
+            picker.classList.add('open');
+        }
+
+        function closeDatePicker() {
+            document.getElementById('datePicker').classList.remove('open');
+            document.getElementById('dpOverlay').classList.remove('open');
+            document.getElementById('monthSelector').classList.remove('open');
+            document.getElementById('yearSelector').classList.remove('open');
+        }
+
+        function renderCalendar() {
+            document.getElementById('dpMonthBtn').textContent = months[dpMonth];
+            document.getElementById('dpYearBtn').textContent = dpYear;
+
+            const firstDay = new Date(dpYear, dpMonth, 1);
+            const lastDay = new Date(dpYear, dpMonth + 1, 0);
+            const startDay = (firstDay.getDay() + 6) % 7; // Monday = 0
+            const daysInMonth = lastDay.getDate();
+            const prevLastDay = new Date(dpYear, dpMonth, 0).getDate();
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            let html = '';
+
+            // Previous month days
+            for (let i = startDay - 1; i >= 0; i--) {
+                const day = prevLastDay - i;
+                html += `<button type="button" class="dp-day other-month" onclick="dpSelectDay(${dpYear},${dpMonth - 1},${day})">${day}</button>`;
+            }
+
+            // Current month days
+            for (let d = 1; d <= daysInMonth; d++) {
+                const date = new Date(dpYear, dpMonth, d);
+                const isToday = date.getTime() === today.getTime();
+                const isSelected = dpSelectedDate && date.getTime() === dpSelectedDate.getTime();
+                let cls = 'dp-day';
+                if (isToday) cls += ' today';
+                if (isSelected) cls += ' selected';
+                html += `<button type="button" class="${cls}" onclick="dpSelectDay(${dpYear},${dpMonth},${d})">${d}</button>`;
+            }
+
+            // Next month days
+            const totalCells = startDay + daysInMonth;
+            const remaining = (7 - (totalCells % 7)) % 7;
+            for (let d = 1; d <= remaining; d++) {
+                html += `<button type="button" class="dp-day other-month" onclick="dpSelectDay(${dpYear},${dpMonth + 1},${d})">${d}</button>`;
+            }
+
+            document.getElementById('dpDays').innerHTML = html;
+        }
+
+        function dpSelectDay(year, month, day) {
+            const date = new Date(year, month, day);
+            dpSelectedDate = date;
+            dpYear = date.getFullYear();
+            dpMonth = date.getMonth();
+
+            const dd = String(date.getDate()).padStart(2, '0');
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const yyyy = date.getFullYear();
+            dpTargetInput.value = `${dd}/${mm}/${yyyy}`;
+            dpTargetInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+            closeDatePicker();
+        }
+
+        function dpPrevMonth() {
+            dpMonth--;
+            if (dpMonth < 0) { dpMonth = 11; dpYear--; }
+            renderCalendar();
+        }
+
+        function dpNextMonth() {
+            dpMonth++;
+            if (dpMonth > 11) { dpMonth = 0; dpYear++; }
+            renderCalendar();
+        }
+
+        function dpSelectToday() {
+            const now = new Date();
+            dpSelectDay(now.getFullYear(), now.getMonth(), now.getDate());
+        }
+
+        function dpClear() {
+            dpTargetInput.value = '';
+            dpSelectedDate = null;
+            closeDatePicker();
+        }
+
+        function hideDpContent() {
+            document.getElementById('dpDays').style.display = 'none';
+            document.querySelector('#datePicker .dp-footer').style.display = 'none';
+            document.querySelector('#datePicker .dp-weekdays').style.display = 'none';
+        }
+
+        function showDpContent() {
+            document.getElementById('dpDays').style.display = '';
+            document.querySelector('#datePicker .dp-footer').style.display = '';
+            document.querySelector('#datePicker .dp-weekdays').style.display = '';
+        }
+
+        function showMonthSelector() {
+            const grid = document.getElementById('monthGrid');
+            grid.innerHTML = months.map((m, i) =>
+                `<button type="button" class="dp-selector-item${i === dpMonth ? ' active' : ''}" onclick="selectMonth(${i})">${m.substring(0, 3)}</button>`
+            ).join('');
+            document.getElementById('monthSelector').classList.add('open');
+            document.getElementById('yearSelector').classList.remove('open');
+            hideDpContent();
+        }
+
+        function selectMonth(m) {
+            dpMonth = m;
+            document.getElementById('monthSelector').classList.remove('open');
+            showDpContent();
+            renderCalendar();
+        }
+
+        function showYearSelector() {
+            const grid = document.getElementById('yearGrid');
+            const currentYear = new Date().getFullYear();
+            let html = '';
+            for (let y = currentYear; y >= 1920; y--) {
+                html += `<button type="button" class="dp-selector-item${y === dpYear ? ' active' : ''}" onclick="selectYear(${y})">${y}</button>`;
+            }
+            grid.innerHTML = html;
+            document.getElementById('yearSelector').classList.add('open');
+            document.getElementById('monthSelector').classList.remove('open');
+            hideDpContent();
+
+            setTimeout(() => {
+                const active = grid.querySelector('.active');
+                if (active) active.scrollIntoView({ block: 'center' });
+            }, 50);
+        }
+
+        function selectYear(y) {
+            dpYear = y;
+            document.getElementById('yearSelector').classList.remove('open');
+            showDpContent();
+            renderCalendar();
+        }
+
+        // Close date picker when clicking outside
+        document.addEventListener('click', function(e) {
+            const picker = document.getElementById('datePicker');
+            if (!picker.classList.contains('open')) return;
+            if (e.target.closest('.date-picker-dropdown') || e.target.closest('.date-picker-wrapper')) return;
+            closeDatePicker();
+        });
+
         // Populate nationality dropdowns
         function populateNationalities() {
             const selects = document.querySelectorAll('#nationalitySelect, #nationalitySelect2');
@@ -1112,19 +1849,24 @@
             });
         }
 
-        // Employment status conditional fields
+        // Employment status conditional fields (smooth transition)
         function setupEmploymentToggle(selectId, detailsId) {
             const select = document.getElementById(selectId);
             if (!select) return;
             select.addEventListener('change', function() {
                 const details = document.getElementById(detailsId);
                 const employed = ['Full-Time Employed', 'Part-Time Employed', 'Self-Employed'].includes(this.value);
-                details.style.display = employed ? 'block' : 'none';
-                if (!employed) {
-                    // Clear employment detail fields when hidden
-                    details.querySelectorAll('input, select').forEach(input => {
-                        input.value = '';
-                    });
+                if (employed) {
+                    details.classList.add('visible');
+                    // Re-init custom selects inside the revealed section
+                    setTimeout(() => initCustomSelects(), 450);
+                } else {
+                    details.classList.remove('visible');
+                    setTimeout(() => {
+                        details.querySelectorAll('input, select').forEach(input => {
+                            input.value = '';
+                        });
+                    }, 400);
                 }
             });
         }
@@ -1144,9 +1886,32 @@
             window.scrollTo(0, 0);
         }
 
+        // Auto-format date input as DD/MM/YYYY
+        function formatDateInput(input) {
+            let value = input.value.replace(/[^\d]/g, '');
+            if (value.length > 8) value = value.substring(0, 8);
+            if (value.length >= 5) {
+                value = value.substring(0, 2) + '/' + value.substring(2, 4) + '/' + value.substring(4);
+            } else if (value.length >= 3) {
+                value = value.substring(0, 2) + '/' + value.substring(2);
+            }
+            input.value = value;
+        }
+
+        function parseDDMMYYYY(dateStr) {
+            if (!dateStr) return null;
+            const parts = dateStr.split('/');
+            if (parts.length !== 3) return null;
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const year = parseInt(parts[2], 10);
+            if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+            return new Date(year, month, day);
+        }
+
         function validateAge(dateValue) {
-            if (!dateValue) return false;
-            const dob = new Date(dateValue);
+            const dob = parseDDMMYYYY(dateValue);
+            if (!dob) return false;
             const today = new Date();
             let age = today.getFullYear() - dob.getFullYear();
             const monthDiff = today.getMonth() - dob.getMonth();
@@ -1234,53 +1999,25 @@
             document.getElementById('errorContainer').innerHTML = '';
         }
 
-        // Property search
+        // Property interest toggle
         function togglePropertySearch(show) {
-            document.getElementById('propertySearchSection').style.display = show ? 'block' : 'none';
+            const section = document.getElementById('propertySearchSection');
+            section.style.display = show ? 'block' : 'none';
             if (!show) {
-                document.getElementById('selectedPropertyId').value = '';
-                document.getElementById('propertySearchInput').value = '';
-                document.getElementById('selectedPropertyDisplay').innerHTML = '';
+                document.getElementById('propertySelect').value = '';
+            }
+            // Re-init custom selects if showing (to style the property dropdown)
+            if (show) {
+                const existing = section.querySelector('.custom-select');
+                if (!existing) {
+                    const sel = section.querySelector('select');
+                    if (sel) {
+                        sel.classList.remove('custom-replaced');
+                        initCustomSelects();
+                    }
+                }
             }
         }
-
-        function searchProperties(query) {
-            const resultsEl = document.getElementById('propertySearchResults');
-            if (query.length < 2) {
-                resultsEl.style.display = 'none';
-                return;
-            }
-
-            const filtered = loadedProperties.filter(p => {
-                const searchStr = `${p.address} ${p.postcode}`.toLowerCase();
-                return searchStr.includes(query.toLowerCase());
-            });
-
-            if (filtered.length === 0) {
-                resultsEl.style.display = 'none';
-                return;
-            }
-
-            resultsEl.innerHTML = filtered.map(p =>
-                `<div class="search-result" onclick="selectProperty(${p.id}, '${p.address.replace(/'/g, "\\'")}${p.postcode ? ', ' + p.postcode : ''} - ${p.bedrooms} bed ${p.property_type}')">${p.address}${p.postcode ? ', ' + p.postcode : ''} - ${p.bedrooms} bed ${p.property_type} - £${p.rent_amount}/month</div>`
-            ).join('');
-            resultsEl.style.display = 'block';
-        }
-
-        function selectProperty(id, display) {
-            document.getElementById('selectedPropertyId').value = id;
-            document.getElementById('propertySearchInput').value = '';
-            document.getElementById('selectedPropertyDisplay').innerHTML = '✓ ' + display;
-            document.getElementById('propertySearchResults').style.display = 'none';
-        }
-
-        // Close search results when clicking outside
-        document.addEventListener('click', function(e) {
-            if (!e.target.closest('.property-search-container')) {
-                const results = document.getElementById('propertySearchResults');
-                if (results) results.style.display = 'none';
-            }
-        });
 
         // File upload handling
         function handleFileUpload(input) {
@@ -1335,13 +2072,23 @@
                 }
             });
 
-            // Add marketing preferences as object
-            data.marketing_preferences = {
-                email: document.getElementById('marketEmail').checked,
-                sms: document.getElementById('marketSMS').checked,
-                phone: document.getElementById('marketPhone').checked,
-                post: document.getElementById('marketPost').checked
-            };
+            // Convert DD/MM/YYYY dates to YYYY-MM-DD for backend
+            function convertDateForBackend(ddmmyyyy) {
+                if (!ddmmyyyy) return null;
+                const parts = ddmmyyyy.split('/');
+                if (parts.length !== 3) return ddmmyyyy;
+                return `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+            if (data.dob) data.dob = convertDateForBackend(data.dob);
+            if (data.dob2) data.dob2 = convertDateForBackend(data.dob2);
+
+            // Add marketing preferences as string for notes
+            const marketingPrefs = [];
+            if (document.getElementById('marketEmail').checked) marketingPrefs.push('Email');
+            if (document.getElementById('marketSMS').checked) marketingPrefs.push('SMS');
+            if (document.getElementById('marketPhone').checked) marketingPrefs.push('Phone');
+            if (document.getElementById('marketPost').checked) marketingPrefs.push('Post');
+            data.marketing_preferences = marketingPrefs.join(', ');
 
             try {
                 const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -1403,8 +2150,117 @@
             }
         }
 
+        // ===== CUSTOM SELECT DROPDOWNS =====
+        function initCustomSelects() {
+            document.querySelectorAll('select:not(.custom-replaced)').forEach(nativeSelect => {
+                nativeSelect.classList.add('custom-replaced');
+
+                const options = Array.from(nativeSelect.options);
+                const isSearchable = options.length > 10;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'custom-select';
+
+                const trigger = document.createElement('div');
+                trigger.className = 'custom-select-trigger';
+                const selectedText = nativeSelect.options[nativeSelect.selectedIndex]?.text || '';
+                const hasValue = nativeSelect.value !== '';
+                trigger.innerHTML = `<span class="${hasValue ? '' : 'placeholder'}">${selectedText || 'Please select'}</span><span class="arrow"></span>`;
+
+                const dropdown = document.createElement('div');
+                dropdown.className = 'custom-select-options';
+
+                if (isSearchable) {
+                    const searchBox = document.createElement('div');
+                    searchBox.className = 'custom-select-search';
+                    searchBox.innerHTML = '<input type="text" placeholder="Type to search...">';
+                    dropdown.appendChild(searchBox);
+
+                    searchBox.querySelector('input').addEventListener('input', function(e) {
+                        const query = e.target.value.toLowerCase();
+                        dropdown.querySelectorAll('.custom-select-option').forEach(opt => {
+                            const text = opt.textContent.toLowerCase();
+                            opt.style.display = text.includes(query) ? '' : 'none';
+                        });
+                    });
+
+                    searchBox.querySelector('input').addEventListener('click', function(e) {
+                        e.stopPropagation();
+                    });
+                }
+
+                options.forEach((opt, i) => {
+                    if (i === 0 && !opt.value) return; // Skip placeholder option
+                    const optEl = document.createElement('div');
+                    optEl.className = 'custom-select-option' + (opt.value === nativeSelect.value ? ' selected' : '');
+                    optEl.textContent = opt.text;
+                    optEl.dataset.value = opt.value;
+                    optEl.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        nativeSelect.value = this.dataset.value;
+                        nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        trigger.querySelector('span:first-child').textContent = this.textContent;
+                        trigger.querySelector('span:first-child').classList.remove('placeholder');
+                        dropdown.querySelectorAll('.custom-select-option').forEach(o => o.classList.remove('selected'));
+                        this.classList.add('selected');
+                        closeAllCustomSelects();
+                    });
+                    dropdown.appendChild(optEl);
+                });
+
+                trigger.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const isOpen = dropdown.classList.contains('open');
+                    closeAllCustomSelects();
+                    if (!isOpen) {
+                        trigger.classList.add('open');
+                        document.getElementById('csOverlay').classList.add('open');
+
+                        if (isSearchable) {
+                            // Modal mode for long lists (centered)
+                            dropdown.classList.add('modal-mode');
+                            document.body.appendChild(dropdown);
+                        } else {
+                            // Fixed position below trigger for short lists
+                            const rect = trigger.getBoundingClientRect();
+                            dropdown.style.top = rect.bottom + 'px';
+                            dropdown.style.left = rect.left + 'px';
+                            dropdown.style.width = rect.width + 'px';
+                            document.body.appendChild(dropdown);
+                        }
+
+                        dropdown.classList.add('open');
+                        if (isSearchable) {
+                            setTimeout(() => dropdown.querySelector('.custom-select-search input').focus(), 50);
+                        }
+                    }
+                });
+
+                wrapper.appendChild(trigger);
+                wrapper.appendChild(dropdown);
+                nativeSelect.parentNode.insertBefore(wrapper, nativeSelect);
+            });
+        }
+
+        function closeAllCustomSelects() {
+            // Return all floating dropdowns to their wrappers and close
+            document.querySelectorAll('body > .custom-select-options').forEach(d => {
+                d.classList.remove('open', 'modal-mode');
+                d.style.top = ''; d.style.left = ''; d.style.width = '';
+                const si = d.querySelector('.custom-select-search input');
+                if (si) { si.value = ''; d.querySelectorAll('.custom-select-option').forEach(o => o.style.display = ''); }
+            });
+            document.getElementById('csOverlay').classList.remove('open');
+            document.querySelectorAll('.custom-select-trigger').forEach(t => t.classList.remove('open'));
+        }
+
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.custom-select') || e.target.closest('.custom-select-options')) return;
+            closeAllCustomSelects();
+        });
+
         // Initialize
         populateNationalities();
+        initCustomSelects();
         setupEmploymentToggle('employmentStatus', 'employmentDetails');
         setupEmploymentToggle('employmentStatus2', 'employmentDetails2');
         updateProgress();
