@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApi } from '../../hooks/useApi';
-import { Clock, Eye, Plus, Pencil, Trash2, LogIn, Upload, StickyNote, MessageSquare } from 'lucide-react';
+import { Clock, Eye, Plus, Pencil, Trash2, LogIn, Upload, StickyNote, MessageSquare, FileUp, ArrowRight, Mail } from 'lucide-react';
 
 interface AuditEntry {
   id: number;
@@ -21,6 +21,9 @@ const ACTION_CONFIG: Record<string, { icon: typeof Clock; color: string; label: 
   export: { icon: Upload, color: 'text-cyan-400 bg-cyan-500/20', label: 'Exported' },
   note_added: { icon: StickyNote, color: 'text-pink-400 bg-pink-500/20', label: 'Note added' },
   sms_sent: { icon: MessageSquare, color: 'text-teal-400 bg-teal-500/20', label: 'SMS sent' },
+  document_upload: { icon: FileUp, color: 'text-orange-400 bg-orange-500/20', label: 'Document uploaded' },
+  status_changed: { icon: ArrowRight, color: 'text-indigo-400 bg-indigo-500/20', label: 'Status changed' },
+  email_sent: { icon: Mail, color: 'text-sky-400 bg-sky-500/20', label: 'Email sent' },
 };
 
 function timeAgo(dateStr: string) {
@@ -98,6 +101,21 @@ export default function ActivityTimeline({ entityType, entityId }: { entityType:
                 {entry.action === 'sms_sent' && entry.changes && (
                   <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-2">
                     {(() => { try { const c = JSON.parse(entry.changes); return `To: ${c.to_phone || ''}${c.message ? ' — ' + c.message : ''}`; } catch { return ''; } })()}
+                  </p>
+                )}
+                {entry.action === 'document_upload' && entry.changes && (
+                  <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-2">
+                    {(() => { try { const c = JSON.parse(entry.changes); return `${c.doc_type || 'Document'}${c.original_name ? ' — ' + c.original_name : ''}`; } catch { return ''; } })()}
+                  </p>
+                )}
+                {entry.action === 'status_changed' && entry.changes && (
+                  <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-2">
+                    {(() => { try { const c = JSON.parse(entry.changes); return `${c.from || '?'} → ${c.to || '?'}`; } catch { return ''; } })()}
+                  </p>
+                )}
+                {entry.action === 'email_sent' && entry.changes && (
+                  <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-2">
+                    {(() => { try { const c = JSON.parse(entry.changes); return `To: ${c.to || ''}${c.subject ? ' — ' + c.subject : ''}`; } catch { return ''; } })()}
                   </p>
                 )}
                 <p className="text-[10px] text-[var(--text-muted)]">
