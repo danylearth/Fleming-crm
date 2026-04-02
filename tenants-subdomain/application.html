@@ -510,7 +510,9 @@
     </div>
 
     <script>
-        const API_URL = 'https://valiant-alignment-production.up.railway.app';
+        const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:3001'
+            : 'https://fleming-crm-api-production-7e58.up.railway.app';
         let formData = null;
         let hasSigned = false;
         let sigCtx = null;
