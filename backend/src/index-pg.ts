@@ -2335,7 +2335,12 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
       }
 
       await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, {
-        action: 'holding_deposit_requested', monthly_rent, security_deposit, holding_deposit, email_sent_to: enquiry.email_1,
+        action: 'holding_deposit_requested', monthly_rent, security_deposit, holding_deposit,
+      });
+
+      await logAudit(req.user?.id, req.user?.email, 'email_sent', 'tenant_enquiry', enquiryId, {
+        to: enquiry.email_1,
+        subject: emailContent.subject,
       });
     }
 
