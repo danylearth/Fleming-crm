@@ -25,11 +25,16 @@ export async function sendSms(params: SendSmsParams): Promise<{ success: boolean
   }
 
   try {
-    const message = await twilioClient.messages.create({
+    const createOpts: Record<string, string> = {
       body: params.body,
       from: TWILIO_PHONE,
       to: params.to,
-    });
+    };
+    // Only set statusCallback when BASE_URL is configured (Twilio can't reach localhost)
+    if (process.env.BASE_URL) {
+      createOpts.statusCallback = `${process.env.BASE_URL}/api/sms/status`;
+    }
+    const message = await twilioClient.messages.create(createOpts);
     console.log('[SMS SENT]', { to: params.to, sid: message.sid });
     return { success: true, sid: message.sid };
   } catch (err: any) {
