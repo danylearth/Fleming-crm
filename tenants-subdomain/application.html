@@ -801,25 +801,109 @@
 
                     <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">EMPLOYMENT</span><div class="line"></div></div>
 
-                    <div class="two-col">
-                        <div class="input-group">
-                            <label>Employment Status *</label>
-                            <select id="f_employment_status" required>
-                                <option value="">Select...</option>
-                                <option value="Employed">Employed</option>
-                                <option value="Self-Employed">Self-Employed</option>
-                                <option value="Student">Student</option>
-                                <option value="Retired">Retired</option>
-                                <option value="Unemployed">Unemployed</option>
-                            </select>
+                    <div class="input-group">
+                        <label>Employment Status *</label>
+                        <select id="f_employment_status" required onchange="toggleEmploymentFields()">
+                            <option value="">Select...</option>
+                            <option value="Employed">Employed</option>
+                            <option value="Self-Employed">Self-Employed</option>
+                            <option value="Student">Student</option>
+                            <option value="Retired">Retired</option>
+                            <option value="Unemployed">Unemployed</option>
+                        </select>
+                    </div>
+
+                    <!-- Employed fields -->
+                    <div id="employment-employed" style="display:none;">
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>Employer Name *</label>
+                                <input type="text" id="f_employer" />
+                            </div>
+                            <div class="input-group">
+                                <label>Employer Address</label>
+                                <input type="text" id="f_employer_address" placeholder="Employer's address" />
+                            </div>
+                            <div class="input-group">
+                                <label>Employer Contact Number</label>
+                                <input type="tel" id="f_employer_contact" inputmode="tel" placeholder="Employer's phone number" />
+                            </div>
+                            <div class="input-group">
+                                <label>Years of Service</label>
+                                <input type="text" id="f_years_of_service" inputmode="numeric" placeholder="e.g. 3" />
+                            </div>
+                            <div class="input-group">
+                                <label>Pay Frequency</label>
+                                <select id="f_pay_frequency">
+                                    <option value="">Select...</option>
+                                    <option value="Weekly">Weekly</option>
+                                    <option value="Fortnightly">Fortnightly</option>
+                                    <option value="Monthly">Monthly</option>
+                                    <option value="Annually">Annually</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Annual Salary (&pound;)</label>
+                                <input type="text" id="f_income" inputmode="numeric" placeholder="e.g. 35000" />
+                            </div>
+                            <div class="input-group">
+                                <label>Other Income (&pound;)</label>
+                                <input type="text" id="f_other_income" inputmode="numeric" placeholder="e.g. 5000" />
+                            </div>
                         </div>
-                        <div class="input-group">
-                            <label>Employer Name</label>
-                            <input type="text" id="f_employer" />
+                    </div>
+
+                    <!-- Self-Employed fields -->
+                    <div id="employment-self-employed" style="display:none;">
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>Business / Employer Name *</label>
+                                <input type="text" id="f_employer_se" />
+                            </div>
+                            <div class="input-group">
+                                <label>Business Address</label>
+                                <input type="text" id="f_employer_address_se" placeholder="Business address" />
+                            </div>
+                            <div class="input-group">
+                                <label>Business Contact Number</label>
+                                <input type="tel" id="f_employer_contact_se" inputmode="tel" placeholder="Business phone number" />
+                            </div>
+                            <div class="input-group">
+                                <label>Years of Service</label>
+                                <input type="text" id="f_years_of_service_se" inputmode="numeric" placeholder="e.g. 5" />
+                            </div>
+                            <div class="input-group">
+                                <label>Pay Frequency</label>
+                                <select id="f_pay_frequency_se">
+                                    <option value="">Select...</option>
+                                    <option value="Weekly">Weekly</option>
+                                    <option value="Fortnightly">Fortnightly</option>
+                                    <option value="Monthly">Monthly</option>
+                                    <option value="Annually">Annually</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Annual Salary (&pound;)</label>
+                                <input type="text" id="f_income_se" inputmode="numeric" placeholder="e.g. 45000" />
+                            </div>
+                            <div class="input-group">
+                                <label>Other Income (&pound;)</label>
+                                <input type="text" id="f_other_income_se" inputmode="numeric" placeholder="e.g. 5000" />
+                            </div>
+                            <div class="input-group">
+                                <label>Tax Years Completed</label>
+                                <input type="text" id="f_tax_years" inputmode="numeric" placeholder="e.g. 3" />
+                            </div>
                         </div>
-                        <div class="input-group">
-                            <label>Annual Income (&pound;)</label>
-                            <input type="number" id="f_income" inputmode="numeric" min="0" step="100" />
+                    </div>
+
+                    <!-- Unemployed / Student / Retired fields -->
+                    <div id="employment-other" style="display:none;">
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>Annual Income (&pound;)</label>
+                                <input type="text" id="f_income_other" inputmode="numeric" placeholder="e.g. 12000" />
+                            </div>
                         </div>
                     </div>
 
@@ -1208,6 +1292,23 @@
             }
         }
 
+        function toggleEmploymentFields() {
+            const status = document.getElementById('f_employment_status').value;
+            const employed = document.getElementById('employment-employed');
+            const selfEmployed = document.getElementById('employment-self-employed');
+            const other = document.getElementById('employment-other');
+            employed.style.display = 'none';
+            selfEmployed.style.display = 'none';
+            other.style.display = 'none';
+            if (status === 'Employed') {
+                employed.style.display = 'block';
+            } else if (status === 'Self-Employed') {
+                selfEmployed.style.display = 'block';
+            } else if (status === 'Student' || status === 'Retired' || status === 'Unemployed') {
+                other.style.display = 'block';
+            }
+        }
+
         function toggleEdit(btn) {
             const input = btn.parentElement.querySelector('input');
             const isReadonly = input.hasAttribute('readonly');
@@ -1331,12 +1432,22 @@
             btn.textContent = 'Submitting...';
 
             try {
+                const empStatus = document.getElementById('f_employment_status').value;
+                const gv = (id) => document.getElementById(id)?.value || null;
+                const toNum = (id) => { const v = document.getElementById(id)?.value; return v ? Number(v) : null; };
+
                 const payload = {
                     current_address_1: document.getElementById('f_address').value,
                     date_of_birth_1: document.getElementById('f_dob').value,
                     employment_status_1: document.getElementById('f_employment_status').value,
-                    employer_1: document.getElementById('f_employer').value,
-                    income_1: document.getElementById('f_income').value ? Number(document.getElementById('f_income').value) : null,
+                    employer_1: empStatus === 'Employed' ? gv('f_employer') : empStatus === 'Self-Employed' ? gv('f_employer_se') : null,
+                    income_1: empStatus === 'Employed' ? toNum('f_income') : empStatus === 'Self-Employed' ? toNum('f_income_se') : toNum('f_income_other'),
+                    app_employer_address: empStatus === 'Employed' ? gv('f_employer_address') : empStatus === 'Self-Employed' ? gv('f_employer_address_se') : null,
+                    app_employer_contact: empStatus === 'Employed' ? gv('f_employer_contact') : empStatus === 'Self-Employed' ? gv('f_employer_contact_se') : null,
+                    app_years_of_service: empStatus === 'Employed' ? gv('f_years_of_service') : empStatus === 'Self-Employed' ? gv('f_years_of_service_se') : null,
+                    app_pay_frequency: empStatus === 'Employed' ? gv('f_pay_frequency') : empStatus === 'Self-Employed' ? gv('f_pay_frequency_se') : null,
+                    app_other_income: empStatus === 'Employed' ? toNum('f_other_income') : empStatus === 'Self-Employed' ? toNum('f_other_income_se') : null,
+                    app_tax_years: empStatus === 'Self-Employed' ? gv('f_tax_years') : null,
                     app_ni_number: document.getElementById('f_ni').value,
                     app_previous_address_1: document.getElementById('f_prev_address_1').value,
                     app_years_at_current: document.getElementById('f_years_current').value ? Number(document.getElementById('f_years_current').value) : null,

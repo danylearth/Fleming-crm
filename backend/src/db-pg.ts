@@ -441,6 +441,12 @@ export async function initDb() {
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS bank_statements_received INTEGER DEFAULT 0;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS source_of_funds_verified INTEGER DEFAULT 0;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS employment_check_completed INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_employer_address TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_employer_contact TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_years_of_service TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_pay_frequency TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_other_income REAL;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_tax_years TEXT;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS credit_check_completed INTEGER DEFAULT 0;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS credit_score TEXT;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS credit_check_date TEXT;

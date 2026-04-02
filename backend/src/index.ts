@@ -966,7 +966,10 @@ app.post('/api/public/application-form/:token', (req, res) => {
         date_of_birth_1=COALESCE(?, date_of_birth_1),
         employer_1=COALESCE(?, employer_1),
         income_1=COALESCE(?, income_1),
-        employment_status_1=COALESCE(?, employment_status_1)
+        employment_status_1=COALESCE(?, employment_status_1),
+        app_employer_address=?, app_employer_contact=?,
+        app_years_of_service=?, app_pay_frequency=?,
+        app_other_income=?, app_tax_years=?
       WHERE application_form_token=?
     `).run(
       d.app_ni_number || null, d.app_previous_address_1 || null, d.app_previous_address_2 || null,
@@ -977,7 +980,11 @@ app.post('/api/public/application-form/:token', (req, res) => {
       d.app_next_of_kin_name || null, d.app_next_of_kin_phone || null, d.app_next_of_kin_relationship || null,
       d.app_signature || null, d.app_declaration_agreed ? 1 : 0,
       d.current_address_1 || null, d.date_of_birth_1 || null, d.employer_1 || null,
-      d.income_1 || null, d.employment_status_1 || null, req.params.token,
+      d.income_1 || null, d.employment_status_1 || null,
+      d.app_employer_address || null, d.app_employer_contact || null,
+      d.app_years_of_service || null, d.app_pay_frequency || null,
+      d.app_other_income || null, d.app_tax_years || null,
+      req.params.token,
     );
 
     logAudit(null, 'tenant-self-service', 'update', 'tenant_enquiry', enquiry.id, { action: 'application_form_completed' });

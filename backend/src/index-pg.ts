@@ -1506,6 +1506,9 @@ app.post('/api/public/application-form/:token', async (req, res) => {
       app_signature, app_declaration_agreed,
       // Also allow updating basic info
       current_address_1, date_of_birth_1, employer_1, income_1, employment_status_1,
+      // Employment detail fields
+      app_employer_address, app_employer_contact, app_years_of_service,
+      app_pay_frequency, app_other_income, app_tax_years,
     } = req.body;
 
     await run(`
@@ -1522,7 +1525,10 @@ app.post('/api/public/application-form/:token', async (req, res) => {
         date_of_birth_1=COALESCE($21, date_of_birth_1),
         employer_1=COALESCE($22, employer_1),
         income_1=COALESCE($23, income_1),
-        employment_status_1=COALESCE($24, employment_status_1)
+        employment_status_1=COALESCE($24, employment_status_1),
+        app_employer_address=$26, app_employer_contact=$27,
+        app_years_of_service=$28, app_pay_frequency=$29,
+        app_other_income=$30, app_tax_years=$31
       WHERE application_form_token=$25
     `, [
       app_ni_number || null, app_previous_address_1 || null, app_previous_address_2 || null,
@@ -1534,6 +1540,9 @@ app.post('/api/public/application-form/:token', async (req, res) => {
       app_signature || null, app_declaration_agreed ? 1 : 0,
       current_address_1 || null, date_of_birth_1 || null, employer_1 || null,
       income_1 || null, employment_status_1 || null, req.params.token,
+      app_employer_address || null, app_employer_contact || null,
+      app_years_of_service || null, app_pay_frequency || null,
+      app_other_income || null, app_tax_years || null,
     ]);
 
     // Log activity
