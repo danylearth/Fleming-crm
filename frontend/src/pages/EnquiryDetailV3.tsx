@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   Save, Pencil, X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle,
   Calendar, ExternalLink, CheckCircle, Clock, Mail, Phone, ChevronRight,
-  ChevronDown, MessageSquare, Plus, ShieldCheck, AlertTriangle
+  ChevronDown, MessageSquare, Plus, ShieldCheck, AlertTriangle, Send
 } from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
 import OnboardingWizard from '../components/v3/OnboardingWizard';
@@ -769,8 +769,9 @@ export default function EnquiryDetailV3() {
                       placeholder={`Send SMS to ${data.phone_1}...`}
                       rows={1}
                       className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors resize-none [field-sizing:content]" />
-                    <Button variant="gradient" onClick={sendStandaloneSms} disabled={smsSending || !smsCompose.trim()}>
-                      <Phone size={14} />
+                    <Button variant="gradient" onClick={sendStandaloneSms} disabled={smsSending || !smsCompose.trim()} className="gap-1.5">
+                      <Send size={14} />
+                      <span>Send</span>
                     </Button>
                   </div>
                 </div>
