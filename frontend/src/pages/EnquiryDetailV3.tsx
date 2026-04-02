@@ -742,13 +742,19 @@ export default function EnquiryDetailV3() {
 
             {/* SMS History */}
             <GlassCard className="p-6">
-              <SectionHeader title="SMS History" icon={<Phone size={16} />} />
+              <SectionHeader title="SMS History" icon={<Phone size={16} />} action={loadSmsHistory} actionLabel="Refresh" />
               <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                 {smsHistory.length === 0 && <p className="text-xs text-[var(--text-muted)]">No messages sent yet</p>}
                 {smsHistory.map((sms: any) => (
                   <div key={sms.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${sms.status === 'sent' ? 'bg-green-500/20 text-green-400' : sms.status === 'failed' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                        sms.status === 'delivered'   ? 'bg-green-500/20 text-green-400' :
+                        sms.status === 'sent'        ? 'bg-blue-500/20 text-blue-400' :
+                        sms.status === 'queued' || sms.status === 'sending' ? 'bg-amber-500/20 text-amber-400' :
+                        sms.status === 'failed' || sms.status === 'undelivered' ? 'bg-red-500/20 text-red-400' :
+                                                       'bg-gray-500/20 text-gray-400'
+                      }`}>
                         {sms.status}
                       </span>
                       <span className="text-[10px] text-[var(--text-muted)]">{sms.to_phone}</span>
