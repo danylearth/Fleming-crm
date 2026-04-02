@@ -838,6 +838,13 @@ const onboardingCols = [
   'credit_check_date TEXT',
   // Onboarding step tracking
   'onboarding_step INTEGER DEFAULT 0',
+  // References expansion
+  'app_has_employer_ref INTEGER DEFAULT 0',
+  'app_employer_ref_employee_id TEXT',
+  'app_employer_ref_consent INTEGER DEFAULT 0',
+  'app_has_landlord_ref INTEGER DEFAULT 0',
+  'app_landlord_ref_property_address TEXT',
+  'app_landlord_ref_consent INTEGER DEFAULT 0',
 ];
 for (const col of onboardingCols) {
   try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN ${col}`); } catch (e) {}

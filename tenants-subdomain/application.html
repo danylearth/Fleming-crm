@@ -910,17 +910,43 @@
                     <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">REFERENCES</span><div class="line"></div></div>
 
                     <h3>Employer Reference</h3>
-                    <div class="two-col three">
-                        <div class="input-group"><label>Name</label><input type="text" id="f_emp_ref_name" /></div>
-                        <div class="input-group"><label>Phone</label><input type="tel" id="f_emp_ref_phone" inputmode="tel" /></div>
-                        <div class="input-group"><label>Email</label><input type="email" id="f_emp_ref_email" /></div>
+                    <div class="checkbox-group" style="margin-bottom:12px;">
+                        <input type="checkbox" id="f_has_employer_ref" onchange="toggleRefSection('employer')" />
+                        <span>Do you have an employer's reference?</span>
+                    </div>
+                    <div id="employer-ref-fields" style="display:none;">
+                        <div class="two-col">
+                            <div class="input-group"><label>Name / Department *</label><input type="text" id="f_emp_ref_name" /></div>
+                            <div class="input-group"><label>Contact Number *</label><input type="tel" id="f_emp_ref_phone" inputmode="tel" /></div>
+                        </div>
+                        <div class="two-col">
+                            <div class="input-group"><label>Email *</label><input type="email" id="f_emp_ref_email" /></div>
+                            <div class="input-group"><label>Employee ID / Reference</label><input type="text" id="f_emp_ref_employee_id" /></div>
+                        </div>
+                        <div class="checkbox-group" style="margin-top:8px;">
+                            <input type="checkbox" id="f_emp_ref_consent" />
+                            <span>Please confirm we can contact this reference *</span>
+                        </div>
                     </div>
 
                     <h3 style="margin-top:16px;">Previous Landlord Reference</h3>
-                    <div class="two-col three">
-                        <div class="input-group"><label>Name</label><input type="text" id="f_ll_ref_name" /></div>
-                        <div class="input-group"><label>Phone</label><input type="tel" id="f_ll_ref_phone" inputmode="tel" /></div>
-                        <div class="input-group"><label>Email</label><input type="email" id="f_ll_ref_email" /></div>
+                    <div class="checkbox-group" style="margin-bottom:12px;">
+                        <input type="checkbox" id="f_has_landlord_ref" onchange="toggleRefSection('landlord')" />
+                        <span>Do you have a previous landlord reference?</span>
+                    </div>
+                    <div id="landlord-ref-fields" style="display:none;">
+                        <div class="two-col">
+                            <div class="input-group"><label>Name / Department *</label><input type="text" id="f_ll_ref_name" /></div>
+                            <div class="input-group"><label>Contact Number *</label><input type="tel" id="f_ll_ref_phone" inputmode="tel" /></div>
+                        </div>
+                        <div class="two-col">
+                            <div class="input-group"><label>Email *</label><input type="email" id="f_ll_ref_email" /></div>
+                            <div class="input-group"><label>Property Address / Reference Number</label><input type="text" id="f_ll_ref_property_address" /></div>
+                        </div>
+                        <div class="checkbox-group" style="margin-top:8px;">
+                            <input type="checkbox" id="f_ll_ref_consent" />
+                            <span>Please confirm we can contact this reference *</span>
+                        </div>
                     </div>
 
                     <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">BANK DETAILS</span><div class="line"></div></div>
@@ -1309,6 +1335,27 @@
             }
         }
 
+        function toggleRefSection(type) {
+            if (type === 'employer') {
+                const checked = document.getElementById('f_has_employer_ref').checked;
+                const fields = document.getElementById('employer-ref-fields');
+                fields.style.display = checked ? 'block' : 'none';
+                // Toggle required attributes
+                ['f_emp_ref_name', 'f_emp_ref_phone', 'f_emp_ref_email', 'f_emp_ref_consent'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (checked) el.setAttribute('required', ''); else el.removeAttribute('required');
+                });
+            } else {
+                const checked = document.getElementById('f_has_landlord_ref').checked;
+                const fields = document.getElementById('landlord-ref-fields');
+                fields.style.display = checked ? 'block' : 'none';
+                ['f_ll_ref_name', 'f_ll_ref_phone', 'f_ll_ref_email', 'f_ll_ref_consent'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (checked) el.setAttribute('required', ''); else el.removeAttribute('required');
+                });
+            }
+        }
+
         function toggleEdit(btn) {
             const input = btn.parentElement.querySelector('input');
             const isReadonly = input.hasAttribute('readonly');
@@ -1451,12 +1498,18 @@
                     app_ni_number: document.getElementById('f_ni').value,
                     app_previous_address_1: document.getElementById('f_prev_address_1').value,
                     app_years_at_current: document.getElementById('f_years_current').value ? Number(document.getElementById('f_years_current').value) : null,
+                    app_has_employer_ref: document.getElementById('f_has_employer_ref').checked ? 1 : 0,
                     app_employer_ref_name: document.getElementById('f_emp_ref_name').value,
                     app_employer_ref_phone: document.getElementById('f_emp_ref_phone').value,
                     app_employer_ref_email: document.getElementById('f_emp_ref_email').value,
+                    app_employer_ref_employee_id: document.getElementById('f_emp_ref_employee_id').value,
+                    app_employer_ref_consent: document.getElementById('f_emp_ref_consent').checked ? 1 : 0,
+                    app_has_landlord_ref: document.getElementById('f_has_landlord_ref').checked ? 1 : 0,
                     app_landlord_ref_name: document.getElementById('f_ll_ref_name').value,
                     app_landlord_ref_phone: document.getElementById('f_ll_ref_phone').value,
                     app_landlord_ref_email: document.getElementById('f_ll_ref_email').value,
+                    app_landlord_ref_property_address: document.getElementById('f_ll_ref_property_address').value,
+                    app_landlord_ref_consent: document.getElementById('f_ll_ref_consent').checked ? 1 : 0,
                     app_bank_name: document.getElementById('f_bank_name').value,
                     app_bank_sort_code: document.getElementById('f_bank_sort').value,
                     app_bank_account_number: document.getElementById('f_bank_account').value,
