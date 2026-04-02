@@ -44,6 +44,7 @@ const upload = multer({
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
@@ -2437,6 +2438,24 @@ app.post('/api/sms/send', authMiddleware, async (req: AuthRequest, res) => {
   } catch (err) {
     console.error('Error sending SMS:', err);
     res.status(500).json({ error: 'Failed to send SMS' });
+  }
+});
+
+// Twilio delivery status webhook (unauthenticated — called by Twilio)
+app.post('/api/sms/status', async (req, res) => {
+  try {
+    const { MessageSid, MessageStatus, ErrorCode } = req.body;
+    if (!MessageSid || !MessageStatus) {
+      return res.status(400).send('Missing MessageSid or MessageStatus');
+    }
+    await run(
+      'UPDATE sms_messages SET status = $1, error_message = CASE WHEN $2::text IS NOT NULL AND $2::text != \'0\' THEN COALESCE(error_message, \'\') || \' ErrorCode:\' || $2::text ELSE error_message END WHERE twilio_sid = $3',
+      [MessageStatus, ErrorCode || null, MessageSid]
+    );
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('Error processing SMS status webhook:', err);
+    res.sendStatus(500);
   }
 });
 
