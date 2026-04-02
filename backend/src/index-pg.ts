@@ -1921,6 +1921,25 @@ app.get('/api/tenancies', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+app.post('/api/tenancies', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const d = req.body;
+    if (!d.property_id || !d.tenant_id || !d.start_date || !d.rent_amount) {
+      return res.status(400).json({ error: 'property_id, tenant_id, start_date, and rent_amount are required' });
+    }
+    const id = await insert(
+      'INSERT INTO tenancies (property_id, tenant_id, start_date, end_date, rent_amount, deposit_amount, status, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [d.property_id, d.tenant_id, d.start_date, d.end_date || null, d.rent_amount, d.deposit_amount || null, 'active', d.notes || null]
+    );
+    await run("UPDATE properties SET status = 'let' WHERE id = $1", [d.property_id]);
+    await logAudit(req.user?.id, req.user?.email, 'create', 'tenancy', id, { property_id: d.property_id, tenant_id: d.tenant_id, start_date: d.start_date, rent_amount: d.rent_amount });
+    res.json({ id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create tenancy' });
+  }
+});
+
 app.get('/api/rent-payments', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const payments = await query(`
