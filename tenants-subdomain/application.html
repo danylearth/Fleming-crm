@@ -87,12 +87,13 @@
             width: 100%;
             border: 1.5px solid #e0e0e0;
             border-radius: 12px;
-            padding: 12px 16px;
-            font-size: 14px;
+            padding: 14px 16px;
+            font-size: 16px;
             font-family: inherit;
             transition: border-color 0.2s;
             background: #fafafa;
             color: #333;
+            min-height: 48px;
         }
         input:focus, select:focus, textarea:focus {
             outline: none;
@@ -166,10 +167,12 @@
             padding: 12px 0;
         }
         .checkbox-row input[type="checkbox"] {
-            width: 20px; height: 20px;
+            width: 24px; height: 24px;
+            min-width: 24px;
             margin-top: 2px;
             accent-color: #DC006D;
             flex-shrink: 0;
+            cursor: pointer;
         }
         .checkbox-row span { font-size: 14px; color: #555; line-height: 1.5; }
 
@@ -178,15 +181,16 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            padding: 14px 32px;
+            padding: 16px 32px;
             border: none;
             border-radius: 14px;
-            font-size: 15px;
+            font-size: 16px;
             font-weight: 600;
             font-family: inherit;
             cursor: pointer;
             transition: all 0.2s;
             width: 100%;
+            min-height: 52px;
         }
         .btn-primary {
             background: linear-gradient(135deg, #DC006D 0%, #a5004f 100%);
@@ -205,7 +209,12 @@
             display: flex;
             gap: 8px;
             justify-content: center;
-            margin-bottom: 24px;
+            padding: 16px 0;
+            margin-bottom: 8px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: linear-gradient(135deg, #25073B 0%, #DC006D 100%);
         }
         .step-dot {
             width: 10px; height: 10px; border-radius: 50%;
@@ -214,6 +223,13 @@
         }
         .step-dot.active { background: #fff; width: 28px; border-radius: 5px; }
         .step-dot.done { background: #22c55e; }
+        .step-label {
+            font-size: 12px;
+            color: rgba(255,255,255,0.8);
+            font-weight: 500;
+            margin-left: 12px;
+            white-space: nowrap;
+        }
 
         .success-card {
             text-align: center;
@@ -236,9 +252,15 @@
         .pre-filled { background: #f0f0f0; color: #888; }
 
         @media (max-width: 600px) {
+            body { padding: 12px; }
             .form-grid, .form-grid.three, .summary-grid { grid-template-columns: 1fr; }
-            .card { padding: 20px; }
+            .card { padding: 20px 16px; }
+            .card { margin-bottom: 12px; }
             h1 { font-size: 20px; }
+            .form-grid { gap: 12px; }
+            .section-divider { margin: 20px 0 14px; }
+            .signature-area { height: 120px; }
+            .clear-sig { padding: 6px 14px; font-size: 12px; min-height: 36px; }
         }
     </style>
 </head>
@@ -268,10 +290,11 @@
 
         <!-- Form -->
         <form id="application-form" style="display:none;" onsubmit="return false;">
-            <div class="step-indicator">
+            <div class="step-indicator" id="step-indicator">
                 <div class="step-dot active" id="dot-1"></div>
                 <div class="step-dot" id="dot-2"></div>
                 <div class="step-dot" id="dot-3"></div>
+                <span class="step-label" id="step-label">Step 1 of 3 — Terms</span>
             </div>
 
             <!-- STEP 1: Holding Deposit Terms -->
@@ -380,7 +403,7 @@
                         </div>
                         <div>
                             <label>Years at Current Address *</label>
-                            <input type="number" id="f_years_current" min="0" max="50" required />
+                            <input type="number" id="f_years_current" inputmode="numeric" min="0" max="50" required />
                         </div>
                         <div>
                             <label>Previous Address</label>
@@ -408,7 +431,7 @@
                         </div>
                         <div>
                             <label>Annual Income (&#163;)</label>
-                            <input type="number" id="f_income" min="0" step="100" />
+                            <input type="number" id="f_income" inputmode="numeric" min="0" step="100" />
                         </div>
                     </div>
 
@@ -417,14 +440,14 @@
                     <h3>Employer Reference</h3>
                     <div class="form-grid three">
                         <div><label>Name</label><input type="text" id="f_emp_ref_name" /></div>
-                        <div><label>Phone</label><input type="tel" id="f_emp_ref_phone" /></div>
+                        <div><label>Phone</label><input type="tel" id="f_emp_ref_phone" inputmode="tel" /></div>
                         <div><label>Email</label><input type="email" id="f_emp_ref_email" /></div>
                     </div>
 
                     <h3 style="margin-top:16px;">Previous Landlord Reference</h3>
                     <div class="form-grid three">
                         <div><label>Name</label><input type="text" id="f_ll_ref_name" /></div>
-                        <div><label>Phone</label><input type="tel" id="f_ll_ref_phone" /></div>
+                        <div><label>Phone</label><input type="tel" id="f_ll_ref_phone" inputmode="tel" /></div>
                         <div><label>Email</label><input type="email" id="f_ll_ref_email" /></div>
                     </div>
 
@@ -432,15 +455,15 @@
 
                     <div class="form-grid three">
                         <div><label>Bank Name *</label><input type="text" id="f_bank_name" required /></div>
-                        <div><label>Sort Code *</label><input type="text" id="f_bank_sort" placeholder="00-00-00" required /></div>
-                        <div><label>Account Number *</label><input type="text" id="f_bank_account" placeholder="00000000" required /></div>
+                        <div><label>Sort Code *</label><input type="text" id="f_bank_sort" inputmode="numeric" placeholder="00-00-00" required /></div>
+                        <div><label>Account Number *</label><input type="text" id="f_bank_account" inputmode="numeric" placeholder="00000000" required /></div>
                     </div>
 
                     <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">NEXT OF KIN</span><div class="line"></div></div>
 
                     <div class="form-grid three">
                         <div><label>Full Name *</label><input type="text" id="f_nok_name" required /></div>
-                        <div><label>Phone *</label><input type="tel" id="f_nok_phone" required /></div>
+                        <div><label>Phone *</label><input type="tel" id="f_nok_phone" inputmode="tel" required /></div>
                         <div><label>Relationship *</label><input type="text" id="f_nok_rel" placeholder="e.g. Parent, Partner" required /></div>
                     </div>
 
@@ -566,12 +589,14 @@
             document.getElementById('f_date').value = today.toLocaleDateString('en-GB');
         }
 
+        const stepLabels = { 1: 'Terms', 2: 'Your Details', 3: 'Declaration' };
         function goToStep(n) {
             [1, 2, 3].forEach(s => {
                 document.getElementById(`step-${s}`).style.display = s === n ? 'block' : 'none';
                 const dot = document.getElementById(`dot-${s}`);
                 dot.className = s < n ? 'step-dot done' : s === n ? 'step-dot active' : 'step-dot';
             });
+            document.getElementById('step-label').textContent = `Step ${n} of 3 — ${stepLabels[n]}`;
             window.scrollTo({ top: 0, behavior: 'smooth' });
             if (n === 3) initSignature();
         }
