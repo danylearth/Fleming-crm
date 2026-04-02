@@ -764,10 +764,11 @@ export default function EnquiryDetailV3() {
               {data?.phone_1 && (
                 <div className="mt-3">
                   <div className="flex gap-2">
-                    <input value={smsCompose} onChange={e => setSmsCompose(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendStandaloneSms()}
+                    <textarea value={smsCompose} onChange={e => setSmsCompose(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendStandaloneSms(); } }}
                       placeholder={`Send SMS to ${data.phone_1}...`}
-                      className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
+                      rows={1}
+                      className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors resize-none [field-sizing:content]" />
                     <Button variant="gradient" onClick={sendStandaloneSms} disabled={smsSending || !smsCompose.trim()}>
                       <Phone size={14} />
                     </Button>
