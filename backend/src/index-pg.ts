@@ -1170,6 +1170,9 @@ app.get('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
 app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
+    const enquiryId = parseInt(req.params.id as string);
+    // Fetch old record to detect status changes
+    const oldRecord = await queryOne(`SELECT status FROM tenant_enquiries WHERE id=$1`, [enquiryId]);
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -1184,6 +1187,11 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
     fields.push(`updated_at=CURRENT_TIMESTAMP`);
     values.push(req.params.id);
     await run(`UPDATE tenant_enquiries SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+    // Audit logging: detect status change vs general field update
+    if (d.status && oldRecord && d.status !== oldRecord.status) {
+      await logAudit(req.user?.id, req.user?.email, 'status_changed', 'tenant_enquiry', enquiryId, { from: oldRecord.status, to: d.status });
+    }
+    await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, d);
     const updated = await queryOne(`SELECT te.*, p.address as property_address FROM tenant_enquiries te LEFT JOIN properties p ON p.id = te.linked_property_id WHERE te.id=$1`, [req.params.id]);
     res.json(updated);
   } catch (err) {
