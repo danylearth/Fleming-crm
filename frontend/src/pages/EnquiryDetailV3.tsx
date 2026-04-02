@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
 import OnboardingWizard from '../components/v3/OnboardingWizard';
+import EmailPreviewModal from '../components/v3/EmailPreviewModal';
 
 // ==================== CONSTANTS ====================
 const STATUS_COLORS: Record<string, string> = {
@@ -39,6 +40,64 @@ const EMPLOYMENT_OPTIONS = [
   { value: '', label: '-' }, { value: 'Employed', label: 'Employed' }, { value: 'Self-Employed', label: 'Self-Employed' },
   { value: 'Unemployed', label: 'Unemployed' }, { value: 'Student', label: 'Student' }, { value: 'Retired', label: 'Retired' },
 ];
+
+// ==================== EMAIL TEMPLATES ====================
+function buildHoldingDepositEmailHtml(
+  name: string, address: string, monthlyRent: number, securityDeposit: number, holdingDeposit: number
+): string {
+  return `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
+      <h1 style="color: #fff; margin: 0; font-size: 22px;">Fleming Lettings</h1>
+      <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px;">Holding Deposit Request</p>
+    </div>
+    <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
+      <p style="font-size: 15px; color: #333;">Dear ${name},</p>
+      <p style="font-size: 14px; color: #555; line-height: 1.6;">
+        Thank you for your interest in <strong>${address}</strong>. We are pleased to confirm that we would like to proceed with your application.
+      </p>
+      <p style="font-size: 14px; color: #555; line-height: 1.6;">
+        To secure this property, we require an initial holding deposit. Please see the financial summary below:
+      </p>
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <tr style="background: #f8f8f8;">
+          <td style="padding: 12px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Monthly Rent</td>
+          <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">&pound;${monthlyRent.toLocaleString()}</td>
+        </tr>
+        <tr>
+          <td style="padding: 12px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Security Deposit</td>
+          <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">&pound;${securityDeposit.toLocaleString()}</td>
+        </tr>
+        <tr style="background: #f0f8ff;">
+          <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #DC006D; border-bottom: 2px solid #DC006D;">Holding Deposit (due now)</td>
+          <td style="padding: 12px 16px; font-size: 16px; font-weight: 700; color: #DC006D; text-align: right; border-bottom: 2px solid #DC006D;">&pound;${holdingDeposit.toLocaleString()}</td>
+        </tr>
+      </table>
+      <p style="font-size: 14px; color: #555; line-height: 1.6;">
+        Please complete your application and review the holding deposit terms by clicking the button below:
+      </p>
+      <div style="text-align: center; margin: 24px 0;">
+        <a href="#" style="display: inline-block; background: linear-gradient(135deg, #DC006D, #a5004f); color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;">
+          Complete Application &amp; Review Terms
+        </a>
+      </div>
+      <p style="font-size: 13px; color: #888; line-height: 1.6;">
+        The Holding Deposit Information Sheet is attached to this email for your records. Please read it carefully before making any payment.
+      </p>
+      <p style="font-size: 14px; color: #555; line-height: 1.6;">
+        If you have any questions, please don't hesitate to contact our accounts team.
+      </p>
+      <p style="font-size: 14px; color: #555;">
+        Kind regards,<br/><strong>Fleming Lettings</strong><br/>
+        <span style="font-size: 12px; color: #888;">01902 212 415 | accounts@fleminglettings.co.uk</span>
+      </p>
+    </div>
+    <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
+      <p style="font-size: 11px; color: #999; margin: 0;">
+        Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG
+      </p>
+    </div>
+  </div>`;
+}
 
 // ==================== HELPERS ====================
 function formatDateDMY(dateStr: string): string {
@@ -939,95 +998,67 @@ export default function EnquiryDetailV3() {
       )}
 
       {/* ==================== HOLDING DEPOSIT MODAL ==================== */}
-      {showHoldingDeposit && (
-        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowHoldingDeposit(false)}>
-          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="text-lg font-bold">Request Holding Deposit</h3>
-                <p className="text-xs text-[var(--text-muted)]">
-                  Send email to {data?.email_1} from accounts@fleminglettings.co.uk
-                </p>
-              </div>
-              <button onClick={() => setShowHoldingDeposit(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Monthly Rent (£) *</label>
-                  <input type="number" value={hdMonthlyRent} onChange={e => {
-                    setHdMonthlyRent(e.target.value);
-                    const r = Number(e.target.value);
-                    if (r > 0) {
-                      setHdHoldingDeposit(String(Math.round(r * 12 / 52)));
-                      setHdSecurityDeposit(String(Math.round(r * 5 / 4.33)));
-                    }
-                  }}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
-                </div>
-                <div>
-                  <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Security Deposit (£)</label>
-                  <input type="number" value={hdSecurityDeposit} onChange={e => setHdSecurityDeposit(e.target.value)}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
-                </div>
-                <div>
-                  <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Holding Deposit (£) *</label>
-                  <input type="number" value={hdHoldingDeposit} onChange={e => setHdHoldingDeposit(e.target.value)}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
-                  <p className="text-[10px] text-[var(--text-muted)] mt-1">1 week's rent (annual / 52)</p>
-                </div>
-              </div>
-
-              <DatePicker label="Follow-up Date" value={hdFollowUpDate} onChange={setHdFollowUpDate} />
-
-              {/* Email Preview */}
-              <div>
-                <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Email Preview</label>
-                <div className="bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl p-4 text-xs text-[var(--text-secondary)] space-y-2">
-                  <p><strong>To:</strong> {data?.email_1}</p>
-                  <p><strong>From:</strong> accounts@fleminglettings.co.uk</p>
-                  <p><strong>Subject:</strong> Holding Deposit Request - {selectedProp?.address || 'Property'}</p>
-                  <div className="h-px bg-[var(--border-subtle)] my-2" />
-                  <p>Dear {[data?.first_name_1, data?.last_name_1].filter(Boolean).join(' ')},</p>
-                  <p>Thank you for your interest in <strong>{selectedProp?.address || 'the property'}</strong>. We are pleased to confirm that we would like to proceed with your application.</p>
-                  <p>Financial Summary:</p>
-                  <div className="bg-[var(--bg-hover)] rounded-lg p-3 space-y-1">
-                    <div className="flex justify-between"><span>Monthly Rent:</span><strong>£{Number(hdMonthlyRent || 0).toLocaleString()}</strong></div>
-                    <div className="flex justify-between"><span>Security Deposit:</span><strong>£{Number(hdSecurityDeposit || 0).toLocaleString()}</strong></div>
-                    <div className="flex justify-between text-[var(--accent-orange)]"><span>Holding Deposit (due now):</span><strong>£{Number(hdHoldingDeposit || 0).toLocaleString()}</strong></div>
-                  </div>
-                  <p>A link to complete your application and review the holding deposit terms will be included.</p>
-                  <p className="text-[var(--text-muted)]">+ Holding Deposit Information Sheet (PDF attached)</p>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <Button variant="ghost" onClick={() => setShowHoldingDeposit(false)}>Cancel</Button>
-                <Button variant="gradient" onClick={async () => {
-                  if (!hdMonthlyRent || !hdHoldingDeposit) return;
-                  setHdSending(true);
-                  try {
-                    await api.post(`/api/tenant-enquiries/${id}/request-holding-deposit`, {
-                      monthly_rent: Number(hdMonthlyRent),
-                      security_deposit: Number(hdSecurityDeposit),
-                      holding_deposit: Number(hdHoldingDeposit),
-                      follow_up_date: hdFollowUpDate || null,
-                    });
-                    setShowHoldingDeposit(false);
-                    await loadDetail();
-                  } catch (err) {
-                    console.error('Failed to send holding deposit request:', err);
-                  }
-                  setHdSending(false);
-                }} disabled={hdSending || !hdMonthlyRent || !hdHoldingDeposit}>
-                  {hdSending ? 'Sending...' : 'Send Email & Create Form Link'}
-                </Button>
-              </div>
-            </div>
+      <EmailPreviewModal
+        open={showHoldingDeposit}
+        onClose={() => setShowHoldingDeposit(false)}
+        to={data?.email_1 || ''}
+        from="accounts@fleminglettings.co.uk"
+        initialSubject={`Holding Deposit Request - ${selectedProp?.address || 'Property'}`}
+        initialBodyHtml={buildHoldingDepositEmailHtml(
+          [data?.first_name_1, data?.last_name_1].filter(Boolean).join(' ') || 'Applicant',
+          selectedProp?.address || 'the property',
+          Number(hdMonthlyRent || 0),
+          Number(hdSecurityDeposit || 0),
+          Number(hdHoldingDeposit || 0),
+        )}
+        sending={hdSending}
+        sendLabel="Send Email & Create Form Link"
+        onSend={async () => {
+          if (!hdMonthlyRent || !hdHoldingDeposit) return;
+          setHdSending(true);
+          try {
+            await api.post(`/api/tenant-enquiries/${id}/request-holding-deposit`, {
+              monthly_rent: Number(hdMonthlyRent),
+              security_deposit: Number(hdSecurityDeposit),
+              holding_deposit: Number(hdHoldingDeposit),
+              follow_up_date: hdFollowUpDate || null,
+            });
+            setShowHoldingDeposit(false);
+            await loadDetail();
+          } catch (err) {
+            console.error('Failed to send holding deposit request:', err);
+          }
+          setHdSending(false);
+        }}
+      >
+        {/* Financial inputs above the email preview */}
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Monthly Rent (£) *</label>
+            <input type="number" value={hdMonthlyRent} onChange={e => {
+              setHdMonthlyRent(e.target.value);
+              const r = Number(e.target.value);
+              if (r > 0) {
+                setHdHoldingDeposit(String(Math.round(r * 12 / 52)));
+                setHdSecurityDeposit(String(Math.round(r * 5 / 4.33)));
+              }
+            }}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Security Deposit (£)</label>
+            <input type="number" value={hdSecurityDeposit} onChange={e => setHdSecurityDeposit(e.target.value)}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Holding Deposit (£) *</label>
+            <input type="number" value={hdHoldingDeposit} onChange={e => setHdHoldingDeposit(e.target.value)}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
+            <p className="text-[10px] text-[var(--text-muted)] mt-1">1 week's rent (annual / 52)</p>
           </div>
         </div>
-      )}
+        <DatePicker label="Follow-up Date" value={hdFollowUpDate} onChange={setHdFollowUpDate} />
+      </EmailPreviewModal>
 
       {/* Onboarding Wizard */}
       {showOnboardingWizard && data && (
