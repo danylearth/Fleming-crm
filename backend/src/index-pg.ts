@@ -1870,6 +1870,7 @@ app.post('/api/documents/:entityType/:entityId', authMiddleware, upload.single('
       'INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
       [entityType, entityId, doc_type, file.filename, file.originalname, file.mimetype, file.size, req.user?.id]
     );
+    await logAudit(req.user?.id, req.user?.email, 'document_upload', entityType as string, parseInt(entityId as string), { doc_type, original_name: file.originalname, size: file.size });
     res.json({ id, doc_type, original_name: file.originalname });
   } catch (err) {
     res.status(500).json({ error: 'Failed to upload document' });
