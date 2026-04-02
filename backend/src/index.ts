@@ -1435,8 +1435,8 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
     const data = req.body;
     const enquiryId = parseInt(req.params.id);
 
-    // Get current enquiry to check for status change
-    const currentEnquiry = db.prepare('SELECT status, first_name_1, last_name_1 FROM tenant_enquiries WHERE id = ?').get(enquiryId) as any;
+    // Get current enquiry to check for status and onboarding field changes
+    const currentEnquiry = db.prepare('SELECT * FROM tenant_enquiries WHERE id = ?').get(enquiryId) as any;
     const statusChanged = currentEnquiry && currentEnquiry.status !== data.status;
 
     const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','employment_status_1','employer_1','income_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason','renting_requirements','is_permanent_address','holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_token','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step'];
@@ -1507,7 +1507,33 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
       }
     }
 
-    logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, data);
+    // Audit logging: capture onboarding field changes with old/new values
+    if (currentEnquiry) {
+      const onboardingFields = ['holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step'];
+      const fieldChanges: Record<string, { from: any; to: any }> = {};
+      for (const key of onboardingFields) {
+        if (key in data) {
+          const oldVal = currentEnquiry[key] ?? null;
+          const newVal = data[key] ?? null;
+          if (String(oldVal) !== String(newVal)) {
+            fieldChanges[key] = { from: oldVal, to: newVal };
+          }
+        }
+      }
+      if (Object.keys(fieldChanges).length > 0) {
+        if (statusChanged) {
+          logAudit(req.user?.id, req.user?.email, 'status_changed', 'tenant_enquiry', enquiryId, { from: currentEnquiry.status, to: data.status });
+        }
+        logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, fieldChanges);
+      } else {
+        if (statusChanged) {
+          logAudit(req.user?.id, req.user?.email, 'status_changed', 'tenant_enquiry', enquiryId, { from: currentEnquiry.status, to: data.status });
+        }
+        logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, data);
+      }
+    } else {
+      logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, data);
+    }
     res.json({ success: true });
   } catch (err) {
     console.error(err);

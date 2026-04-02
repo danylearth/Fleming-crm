@@ -1171,8 +1171,8 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
   try {
     const d = req.body;
     const enquiryId = parseInt(req.params.id as string);
-    // Fetch old record to detect status changes
-    const oldRecord = await queryOne(`SELECT status FROM tenant_enquiries WHERE id=$1`, [enquiryId]);
+    // Fetch old record to detect status and onboarding field changes
+    const oldRecord = await queryOne(`SELECT * FROM tenant_enquiries WHERE id=$1`, [enquiryId]);
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -1187,11 +1187,31 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
     fields.push(`updated_at=CURRENT_TIMESTAMP`);
     values.push(req.params.id);
     await run(`UPDATE tenant_enquiries SET ${fields.join(', ')} WHERE id=$${idx}`, values);
-    // Audit logging: detect status change vs general field update
+    // Audit logging: detect status change
     if (d.status && oldRecord && d.status !== oldRecord.status) {
       await logAudit(req.user?.id, req.user?.email, 'status_changed', 'tenant_enquiry', enquiryId, { from: oldRecord.status, to: d.status });
     }
-    await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, d);
+    // Audit logging: capture onboarding field changes with old/new values
+    if (oldRecord) {
+      const onboardingFields = ['holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step'];
+      const fieldChanges: Record<string, { from: any; to: any }> = {};
+      for (const key of onboardingFields) {
+        if (key in d) {
+          const oldVal = oldRecord[key] ?? null;
+          const newVal = d[key] ?? null;
+          if (String(oldVal) !== String(newVal)) {
+            fieldChanges[key] = { from: oldVal, to: newVal };
+          }
+        }
+      }
+      if (Object.keys(fieldChanges).length > 0) {
+        await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, fieldChanges);
+      } else {
+        await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, d);
+      }
+    } else {
+      await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, d);
+    }
     const updated = await queryOne(`SELECT te.*, p.address as property_address FROM tenant_enquiries te LEFT JOIN properties p ON p.id = te.linked_property_id WHERE te.id=$1`, [req.params.id]);
     res.json(updated);
   } catch (err) {
