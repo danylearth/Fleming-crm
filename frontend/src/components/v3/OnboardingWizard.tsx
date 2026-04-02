@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Input, Select, DatePicker, GlassCard } from './index';
+import EmailPreviewModal from './EmailPreviewModal';
 import {
   CheckCircle, Circle, Clock, Mail, FileText, Shield, CreditCard,
-  ChevronRight, ChevronDown, AlertTriangle, User, X, Phone
+  ChevronRight, ChevronDown, AlertTriangle, User, X, Phone, Send
 } from 'lucide-react';
 
 // Traffic light colours
@@ -41,6 +42,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
   // Step 5: Credit check
   const [creditScore, setCreditScore] = useState('');
+
+  // Application email modal
+  const [showApplicationEmail, setShowApplicationEmail] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   // Initialize from enquiry data
   useEffect(() => {
@@ -186,6 +191,111 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     setSaving(false);
   };
 
+  const propertyAddress = (() => {
+    const prop = properties.find(p => p.id === enquiry.linked_property_id);
+    return prop ? [prop.address, prop.postcode].filter(Boolean).join(', ') : '';
+  })();
+
+  const applicantName = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
+
+  const buildTenancyApplicationEmailHtml = (): string => {
+    const rent = Number(enquiry.monthly_rent_agreed || 0);
+    const secDep = Number(enquiry.security_deposit_amount || 0);
+    const holdDep = Number(enquiry.holding_deposit_amount || 0);
+    const formUrl = enquiry.application_form_token
+      ? `https://apply.fleminglettings.co.uk/onboarding/${enquiry.application_form_token}`
+      : '#';
+    const deadline = new Date();
+    deadline.setDate(deadline.getDate() + 14);
+    const deadlineStr = deadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    return `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
+        <h1 style="color: #fff; margin: 0; font-size: 22px;">Fleming Lettings</h1>
+        <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px;">Tenancy Application</p>
+      </div>
+      <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
+        <p style="font-size: 15px; color: #333;">Dear ${applicantName},</p>
+        <p style="font-size: 14px; color: #555; line-height: 1.6;">
+          Thank you for your interest in renting <strong>${propertyAddress}</strong>. We are pleased to invite you to complete your tenancy application.
+        </p>
+        <p style="font-size: 14px; color: #555; line-height: 1.6;">
+          Please review the financial details below and complete your application within <strong>14 days</strong> (by ${deadlineStr}).
+        </p>
+        <h3 style="font-size: 15px; color: #333; margin: 24px 0 12px; border-bottom: 2px solid #DC006D; padding-bottom: 8px;">Financial Summary</h3>
+        <table style="width: 100%; border-collapse: collapse; margin: 0 0 20px;">
+          <tr style="background: #f8f8f8;">
+            <td style="padding: 12px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Monthly Rent</td>
+            <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">&pound;${rent.toLocaleString()}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Security Deposit</td>
+            <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">&pound;${secDep.toLocaleString()}</td>
+          </tr>
+          <tr style="background: #f0f8ff;">
+            <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #DC006D; border-bottom: 2px solid #DC006D;">Holding Deposit</td>
+            <td style="padding: 12px 16px; font-size: 16px; font-weight: 700; color: #DC006D; text-align: right; border-bottom: 2px solid #DC006D;">&pound;${holdDep.toLocaleString()}</td>
+          </tr>
+        </table>
+        <h3 style="font-size: 15px; color: #333; margin: 24px 0 12px; border-bottom: 2px solid #DC006D; padding-bottom: 8px;">Bank Details for Payment</h3>
+        <table style="width: 100%; border-collapse: collapse; margin: 0 0 20px;">
+          <tr style="background: #f8f8f8;">
+            <td style="padding: 10px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Account Name</td>
+            <td style="padding: 10px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">Fleming Lettings and Developments UK Limited</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Bank</td>
+            <td style="padding: 10px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">Barclays</td>
+          </tr>
+          <tr style="background: #f8f8f8;">
+            <td style="padding: 10px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Sort Code</td>
+            <td style="padding: 10px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">20-08-64</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Account Number</td>
+            <td style="padding: 10px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">03803880</td>
+          </tr>
+        </table>
+        <p style="font-size: 14px; color: #555; line-height: 1.6;">
+          Please complete your tenancy application by clicking the button below:
+        </p>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${formUrl}" style="display: inline-block; background: linear-gradient(135deg, #DC006D, #a5004f); color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;">
+            Complete Tenancy Application
+          </a>
+        </div>
+        <p style="font-size: 13px; color: #888; line-height: 1.6;">
+          Please ensure your application is completed by <strong>${deadlineStr}</strong>. Failure to complete within this timeframe may result in the property being offered to another applicant.
+        </p>
+        <p style="font-size: 14px; color: #555;">
+          Kind regards,<br/><strong>Fleming Lettings</strong><br/>
+          <span style="font-size: 12px; color: #888;">01902 212 415 | accounts@fleminglettings.co.uk</span>
+        </p>
+      </div>
+      <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
+        <p style="font-size: 11px; color: #999; margin: 0;">
+          Fleming Lettings and Developments UK Limited<br/>
+          Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG
+        </p>
+      </div>
+    </div>`;
+  };
+
+  const sendApplicationEmail = async ({ subject, bodyHtml }: { subject: string; bodyHtml: string }) => {
+    setSendingEmail(true);
+    try {
+      await api.post(`/api/tenant-enquiries/${enquiryId}/send-application-email`, {
+        subject,
+        body_html: bodyHtml,
+      });
+      setShowApplicationEmail(false);
+      onUpdate();
+    } catch (err) {
+      console.error('Failed to send application email:', err);
+    }
+    setSendingEmail(false);
+  };
+
   const StatusDot = ({ status }: { status: string }) => (
     <div className={`w-3 h-3 rounded-full ${STATUS[status as keyof typeof STATUS]?.dot || STATUS.red.dot}`} />
   );
@@ -329,7 +439,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 )}
               </div>
             ) : enquiry.application_form_sent ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="text-xs text-amber-400 flex items-center gap-2">
                   <Clock size={14} /> Waiting for tenant to complete the form
                 </div>
@@ -341,6 +451,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     </p>
                   </div>
                 )}
+                <Button variant="secondary" onClick={() => setShowApplicationEmail(true)} disabled={!enquiry.email_1} className="flex items-center gap-2">
+                  <Send size={14} /> Send Application Email
+                </Button>
               </div>
             ) : (
               <div className="text-xs text-[var(--text-muted)]">
@@ -455,6 +568,18 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
         </div>
       </div>
+
+      <EmailPreviewModal
+        open={showApplicationEmail}
+        onClose={() => setShowApplicationEmail(false)}
+        onSend={sendApplicationEmail}
+        sending={sendingEmail}
+        to={enquiry.email_1 || ''}
+        from="accounts@fleminglettings.co.uk"
+        initialSubject={`Tenancy Application – ${propertyAddress}`}
+        initialBodyHtml={buildTenancyApplicationEmailHtml()}
+        sendLabel="Send Application Email"
+      />
     </div>
   );
 }

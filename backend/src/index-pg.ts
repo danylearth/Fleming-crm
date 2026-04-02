@@ -2414,6 +2414,36 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
   }
 });
 
+// Send tenancy application email (editable preview)
+app.post('/api/tenant-enquiries/:id/send-application-email', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const enquiryId = Number(req.params.id);
+    const { subject, body_html } = req.body;
+    if (!subject || !body_html) return res.status(400).json({ error: 'subject and body_html required' });
+
+    const enquiry = await queryOne(`SELECT email_1, first_name_1, last_name_1 FROM tenant_enquiries WHERE id = $1`, [enquiryId]);
+    if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
+    if (!enquiry.email_1) return res.status(400).json({ error: 'Enquiry has no email address' });
+
+    const { sendEmail } = require('./email');
+    await sendEmail({
+      to: enquiry.email_1,
+      subject,
+      html: body_html,
+      from: 'Fleming Lettings Accounts <accounts@fleminglettings.co.uk>',
+    });
+
+    await logAudit(req.user?.id, req.user?.email, 'email_sent', 'tenant_enquiry', enquiryId, {
+      to: enquiry.email_1, subject, template: 'tenancy_application',
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error sending application email:', err);
+    res.status(500).json({ error: 'Failed to send application email' });
+  }
+});
+
 // ============ SMS ============
 
 app.post('/api/sms/send', authMiddleware, async (req: AuthRequest, res) => {
