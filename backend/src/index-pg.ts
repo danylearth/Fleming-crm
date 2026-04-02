@@ -1739,6 +1739,29 @@ app.get('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+app.delete('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    // Delete associated documents first
+    const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['task', req.params.id]);
+    for (const doc of documents) {
+      const filePath = path.join(uploadsDir, doc.file_name);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+    await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['task', req.params.id]);
+
+    // Delete the task
+    await run('DELETE FROM tasks WHERE id = $1', [req.params.id]);
+
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'task', parseInt(req.params.id as string));
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to delete task:', err);
+    res.status(500).json({ error: 'Failed to delete task' });
+  }
+});
+
 app.post('/api/tasks/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { ids } = req.body;
