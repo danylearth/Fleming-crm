@@ -120,7 +120,7 @@ export function DatePicker({ label, value, onChange, placeholder = 'DD-MM-YYYY',
         <button
           type="button"
           onClick={() => setYearPicker(!yearPicker)}
-          className="text-sm font-medium text-[var(--text-primary)] hover:text-white transition-colors px-2 py-0.5 rounded-lg hover:bg-[var(--bg-hover)]"
+          className="text-sm font-medium text-[var(--text-primary)] hover:text-[var(--text-primary)] transition-colors px-2 py-0.5 rounded-lg hover:bg-[var(--bg-hover)]"
         >
           {MONTHS[viewMonth]} {viewYear}
         </button>
@@ -180,8 +180,8 @@ export function DatePicker({ label, value, onChange, placeholder = 'DD-MM-YYYY',
                   className={`w-9 h-9 rounded-lg text-xs flex items-center justify-center transition-colors
                     ${!cell.current ? 'opacity-50 cursor-default' : ''}
                     ${isSelected ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white font-bold' : ''}
-                    ${!isSelected && cell.current ? 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-white' : ''}
-                    ${isToday && !isSelected ? 'ring-1 ring-[var(--accent)]/50 font-semibold text-white' : ''}
+                    ${!isSelected && cell.current ? 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' : ''}
+                    ${isToday && !isSelected ? 'ring-1 ring-[var(--accent)]/50 font-semibold text-[var(--text-primary)]' : ''}
                   `}
                 >
                   {cell.day}
@@ -197,7 +197,7 @@ export function DatePicker({ label, value, onChange, placeholder = 'DD-MM-YYYY',
         <button
           type="button"
           onClick={() => { onChange(todayIso); setOpen(false); setYearPicker(false); }}
-          className="text-xs text-white hover:underline"
+          className="text-xs text-[var(--text-primary)] hover:underline"
         >
           Today
         </button>
