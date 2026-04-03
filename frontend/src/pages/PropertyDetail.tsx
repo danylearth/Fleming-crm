@@ -1273,7 +1273,7 @@ export default function PropertyDetail() {
                     ...users.map(u => ({ value: u.name, label: `${u.name} (${u.role})` }))
                   ]}
                 />
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Priority</label>
                     <div className="flex gap-1.5">
@@ -1401,7 +1401,7 @@ export default function PropertyDetail() {
                     <p className="text-sm text-[var(--text-secondary)]">{selectedTask.description}</p>
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">Priority</p>
                     <Tag>{selectedTask.priority}</Tag>

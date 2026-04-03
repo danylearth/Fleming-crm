@@ -167,7 +167,7 @@ export default function EmailPreviewModal({
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3 pt-2">
+          <div className="flex flex-wrap gap-3 pt-2">
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
             <Button
               variant="gradient"

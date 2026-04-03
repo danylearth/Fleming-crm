@@ -172,7 +172,7 @@ export default function PostcodeAutocomplete({
 
         {/* Address Dropdown (after postcode selection) - only show if not using address field positioning */}
         {showAddresses && !showDropdownOnAddress && (
-          <div className="absolute z-50 w-[400px] mt-1 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
+          <div className="absolute z-50 w-full max-w-[400px] mt-1 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
             <div className="px-4 py-2 bg-[var(--bg-subtle)] border-b border-[var(--border-subtle)]">
               <p className="text-xs font-medium text-[var(--text-secondary)]">
                 {addresses.length > 0 ? 'Select an address:' : 'No addresses found'}

@@ -438,7 +438,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                 </div>
 
                 {/* Financial summary */}
-                <div className="bg-[var(--bg-subtle)] rounded-lg p-3 grid grid-cols-3 gap-3">
+                <div className="bg-[var(--bg-subtle)] rounded-lg p-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {enquiry.monthly_rent_agreed && (
                     <div>
                       <p className="text-[10px] text-[var(--text-muted)]">Monthly Rent</p>
@@ -518,7 +518,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Monthly Rent (£)</label>
                     <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdMonthlyRent} onChange={e => {

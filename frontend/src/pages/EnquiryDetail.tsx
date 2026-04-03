@@ -1081,7 +1081,7 @@ export default function EnquiryDetail() {
         }}
       >
         {/* Financial inputs above the email preview */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Monthly Rent (£) *</label>
             <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdMonthlyRent} onChange={e => {

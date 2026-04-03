@@ -370,7 +370,7 @@ function PropertyDropdown({ properties, value, onChange, enquiries, linkedProper
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen(!open)}
-        className="flex items-center gap-2.5 pl-3.5 pr-3 py-2.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl text-sm text-[var(--text-primary)] hover:border-[var(--border-input)] transition-colors min-w-[220px]">
+        className="flex items-center gap-2.5 pl-3.5 pr-3 py-2.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl text-sm text-[var(--text-primary)] hover:border-[var(--border-input)] transition-colors w-full sm:min-w-[220px] sm:w-auto">
         <Building2 size={14} className="text-[var(--text-muted)] shrink-0" />
         <span className="flex-1 text-left truncate">{label}</span>
         {value && (
@@ -382,7 +382,7 @@ function PropertyDropdown({ properties, value, onChange, enquiries, linkedProper
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1.5 w-[320px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
+        <div className="absolute top-full left-0 mt-1.5 w-[calc(100vw-2rem)] sm:w-[320px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
           {/* Search */}
           <div className="p-2.5 border-b border-[var(--border-subtle)]">
             <div className="relative">

@@ -37,7 +37,7 @@ npm run render-build / render-start  # Render deployment
 /
 ├── frontend/src/
 │   ├── pages/          # Route components (V3 suffix removed, e.g. Dashboard.tsx)
-│   ├── components/     # Layout.tsx, AILayout.tsx, V3Layout.tsx, v3/ lib
+│   ├── components/     # Layout.tsx, v3/ lib
 │   ├── context/        # AuthContext, ThemeContext, PortfolioContext
 │   ├── hooks/          # useApi, useAIChat, useGovernmentAPIs, usePermissions
 │   └── App.tsx         # All routes defined here
@@ -74,7 +74,7 @@ Monorepo with separate frontend (Vercel), backend API (Railway/PostgreSQL), and 
 
 ## Code Patterns
 - **Single UI version:** V1/V2 deleted, V3 suffix removed — pages are now `Page.tsx` (e.g. `Dashboard.tsx`)
-- **V3 active layout:** `V3Layout.tsx` with collapsible sidebar, navy/gold theme (`#1a2332`/`#d4af37`)
+- **Active layout:** `Layout.tsx` with collapsible sidebar, navy/gold theme (`#1a2332`/`#d4af37`)
 - **API calls:** `useApi` hook + fetch with `Authorization: Bearer` header
 - **Polymorphic relations:** tasks/documents use `entity_type` + `entity_id`
 - **Audit logging:** `logAudit(userId, email, action, entityType, entityId, changes)` on all mutations

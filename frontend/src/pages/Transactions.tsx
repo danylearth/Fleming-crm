@@ -112,18 +112,20 @@ export default function Transactions() {
                 {payments.length === 0 ? (
                   <EmptyState message="No payment records yet" icon={<PoundSterling size={24} />} />
                 ) : (
-                  <div className="space-y-1 overflow-x-auto">
-                    <div className="grid grid-cols-4 gap-2 min-w-[500px] text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider pb-2 border-b border-[var(--border-subtle)]">
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[400px] space-y-1">
+                    <div className="grid grid-cols-4 gap-2 text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider pb-2 border-b border-[var(--border-subtle)]">
                       <span>Tenant</span><span>Property</span><span className="text-right">Amount</span><span className="text-right">Date</span>
                     </div>
                     {payments.slice(0, 15).map(p => (
-                      <div key={p.id} className="grid grid-cols-4 gap-2 min-w-[500px] py-2.5 border-b border-[var(--border-subtle)] text-sm">
+                      <div key={p.id} className="grid grid-cols-4 gap-2 py-2.5 border-b border-[var(--border-subtle)] text-sm">
                         <span className="truncate">{p.tenant_name || '—'}</span>
                         <span className="truncate text-[var(--text-secondary)]">{p.property_address || '—'}</span>
                         <span className="text-right font-medium text-emerald-400">{fmt(p.amount)}</span>
                         <span className="text-right text-[var(--text-muted)]">{new Date(p.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
                       </div>
                     ))}
+                    </div>
                   </div>
                 )}
               </Card>
@@ -156,13 +158,13 @@ export default function Transactions() {
 
             {/* Vacancy info */}
             <GlassCard className="mt-6 p-5">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h3 className="text-sm font-semibold mb-1">Vacancy Rate</h3>
                   <p className="text-xs text-[var(--text-muted)]">{totalCount - occupiedCount} of {totalCount} properties vacant</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-48 h-2 bg-[var(--bg-hover)] rounded-full overflow-hidden">
+                  <div className="w-32 sm:w-48 h-2 bg-[var(--bg-hover)] rounded-full overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-orange-500 to-pink-500 rounded-full transition-all" style={{ width: `${100 - vacancyRate}%` }} />
                   </div>
                   <span className="text-sm font-bold">{(100 - vacancyRate).toFixed(0)}%</span>

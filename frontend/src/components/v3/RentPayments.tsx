@@ -157,7 +157,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
 
       {showAdd && (
         <div className="mb-4 p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-color)] space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <DatePicker label="Due Date" value={form.due_date} onChange={v => setForm({ ...form, due_date: v })} />
             <Input label="Amount (£)" value={form.amount_due} onChange={v => setForm({ ...form, amount_due: v })} placeholder="1200" />
           </div>

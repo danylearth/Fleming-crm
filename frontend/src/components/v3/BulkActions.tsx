@@ -19,7 +19,7 @@ export default function BulkActions({
   if (selectedIds.length === 0) return null;
 
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--accent-orange)]/30 rounded-xl p-4 mb-6 flex items-center justify-between shadow-sm">
+    <div className="bg-[var(--bg-card)] border border-[var(--accent-orange)]/30 rounded-xl p-4 mb-6 flex items-center justify-between flex-wrap gap-2 shadow-sm">
       <div className="flex items-center gap-4">
         <span className="text-[var(--text-primary)] font-medium">
           {selectedIds.length} {entityName}{selectedIds.length !== 1 ? 's' : ''} selected

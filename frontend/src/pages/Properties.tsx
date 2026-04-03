@@ -237,7 +237,7 @@ export default function Properties() {
           <div className="h-[calc(100vh-320px)] rounded-2xl overflow-hidden border border-[var(--border-subtle)] flex">
             {/* Property List Sidebar */}
             <div
-              className="w-96 border-r border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 overflow-y-auto"
+              className="w-full sm:w-80 md:w-96 shrink-0 border-r border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 overflow-y-auto"
               onMouseLeave={() => setHoveredPropertyId(null)}
             >
               <div className="p-4 space-y-2">

@@ -154,9 +154,9 @@
 
 - [x] **Audit public form → CRM pipeline** — Submit tenant enquiry via `apply.fleminglettings.co.uk`, verify it appears in CRM kanban. Submit landlord enquiry, verify in BDM pipeline.
 
-- [ ] **Audit Government API integrations** — Test Land Registry, Postcodes.io, EPC, Companies House, Council Tax lookups on property detail page.
+- [x] **Audit Government API integrations** — Test Land Registry, Postcodes.io, EPC, Companies House, Council Tax lookups on property detail page.
 
-- [ ] **Test responsive behavior on all V3 pages** — Check all pages at tablet and mobile breakpoints. Identify and fix layout issues.
+- [x] **Test responsive behavior on all V3 pages** — Check all pages at tablet and mobile breakpoints. Identify and fix layout issues.
 
 ### Future Release (Out of Scope)
 

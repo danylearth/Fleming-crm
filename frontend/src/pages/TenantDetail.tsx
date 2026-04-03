@@ -487,11 +487,11 @@ export default function TenantDetail() {
                   ) : (
                     <ReadField label="Property" value="No property linked" />
                   )}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <ReadField label="Tenancy Start" value={form.tenancy_start_date ? formatDateDMY(form.tenancy_start_date) : null} />
                     <ReadField label="Tenancy Type" value={form.tenancy_type} />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <ReadField label="Monthly Rent" value={form.monthly_rent ? `£${Number(form.monthly_rent).toLocaleString()}` : null} />
                     <ReadField label="Deposit Scheme" value={
                       form.deposit_scheme === 'tds' ? 'Tenancy Deposit Scheme' :
@@ -595,7 +595,7 @@ export default function TenantDetail() {
                     <YesNo value={!!form.holding_deposit_received} onChange={v => setForm({ ...form, holding_deposit_received: v })} disabled={!isEditing('checklist')} />
                   </div>
                   {form.holding_deposit_received && (
-                    <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                       {isEditing('checklist') ? (
                         <>
                           <Input label="Amount (£)" value={form.holding_deposit_amount} onChange={v => setForm({ ...form, holding_deposit_amount: v })} placeholder="0.00" />
