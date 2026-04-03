@@ -2937,10 +2937,11 @@ app.get('/api/epc-lookup', authMiddleware, async (req: AuthRequest, res) => {
       current_efficiency: r['current-energy-efficiency'],
       property_type: r['property-type'],
       inspection_date: r['inspection-date'],
+      lodgement_date: r['lodgement-date'],
       certificate_number: r['lmk-key'],
     }));
 
-    logAudit(req.user?.id, req.user?.email, 'view', 'epc_lookup');
+    await logAudit(req.user?.id, req.user?.email, 'view', 'epc_lookup');
     res.json(results);
   } catch (err) {
     console.error('EPC API error:', err);
@@ -2978,6 +2979,7 @@ app.get('/api/council-tax-lookup', authMiddleware, async (req: AuthRequest, res)
       monthlyTax: r.monthly_tax,
     })) : [];
 
+    await logAudit(req.user?.id, req.user?.email, 'view', 'council_tax_lookup');
     res.json(results);
   } catch (err) {
     console.error('Council tax lookup error:', err);
@@ -2995,7 +2997,7 @@ app.get('/api/land-registry/price-paid', authMiddleware, async (req: AuthRequest
     // HM Land Registry Price Paid Data API - Free, Open Government License
     // Using SPARQL endpoint for price paid data
     const cleanPostcode = postcode.replace(/\s/g, '').toUpperCase();
-    const url = `http://landregistry.data.gov.uk/data/ppi/transaction-record.json?_pageSize=20&propertyAddress.postcode=${encodeURIComponent(cleanPostcode)}`;
+    const url = `https://landregistry.data.gov.uk/data/ppi/transaction-record.json?_pageSize=20&propertyAddress.postcode=${encodeURIComponent(cleanPostcode)}`;
 
     const response = await fetch(url, {
       headers: { Accept: 'application/json' }
@@ -3018,7 +3020,7 @@ app.get('/api/land-registry/price-paid', authMiddleware, async (req: AuthRequest
       transaction_id: item.transactionId
     }));
 
-    logAudit(req.user?.id, req.user?.email, 'view', 'land_registry_lookup');
+    await logAudit(req.user?.id, req.user?.email, 'view', 'land_registry_lookup');
     res.json(results);
   } catch (err) {
     console.error('Land Registry error:', err);
@@ -3140,7 +3142,7 @@ app.get('/api/companies-house/search', authMiddleware, async (req: AuthRequest, 
       } : null
     }));
 
-    logAudit(req.user?.id, req.user?.email, 'view', 'companies_house_search');
+    await logAudit(req.user?.id, req.user?.email, 'view', 'companies_house_search');
     res.json(results);
   } catch (err) {
     console.error('Companies House error:', err);
@@ -3190,7 +3192,7 @@ app.get('/api/companies-house/company/:companyNumber', authMiddleware, async (re
       has_charges: data.has_charges
     };
 
-    logAudit(req.user?.id, req.user?.email, 'view', 'companies_house_detail', undefined, { company_number: companyNumber });
+    await logAudit(req.user?.id, req.user?.email, 'view', 'companies_house_detail', undefined, { company_number: companyNumber });
     res.json(result);
   } catch (err) {
     console.error('Companies House error:', err);

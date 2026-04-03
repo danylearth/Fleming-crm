@@ -740,17 +740,13 @@ export default function PropertyDetail() {
                     <div className="col-span-full flex gap-2">
                       <button type="button" onClick={async () => {
                         try {
-                          console.log('Fetching EPC data for postcode:', form.postcode);
                           const data = await api.get(`/api/epc-lookup?postcode=${encodeURIComponent(form.postcode)}`);
-                          console.log('EPC data received:', data);
 
                           if (data && data.length > 0) {
                             // Try to match by address, or use first result
-                            const match = data.find((cert: { address?: string; current_rating?: string; lodgement_date?: string }) =>
+                            const match = data.find((cert: { address?: string; current_rating?: string; lodgement_date?: string; inspection_date?: string }) =>
                               cert.address?.toLowerCase().includes(form.address.toLowerCase())
                             ) || data[0];
-
-                            console.log('Using EPC certificate:', match);
 
                             const updates: Record<string, string> = {};
 
@@ -760,21 +756,19 @@ export default function PropertyDetail() {
                             }
 
                             // Calculate expiry date (EPC certificates are valid for 10 years)
-                            if (match.lodgement_date) {
-                              const lodgementDate = new Date(match.lodgement_date);
+                            const dateField = match.lodgement_date || match.inspection_date;
+                            if (dateField) {
+                              const lodgementDate = new Date(dateField);
                               const expiryDate = new Date(lodgementDate);
                               expiryDate.setFullYear(expiryDate.getFullYear() + 10);
                               updates.epc_expiry_date = expiryDate.toISOString().split('T')[0];
-                              console.log('EPC expiry date calculated:', updates.epc_expiry_date);
                             }
 
                             setForm(f => ({ ...f, ...updates }));
                           } else {
-                            console.log('No EPC data found for this postcode');
                             alert('No EPC data found for this postcode. Try entering the data manually.');
                           }
-                        } catch (error) {
-                          console.error('Failed to fetch EPC data:', error);
+                        } catch {
                           alert('Failed to fetch EPC data. Please try again or enter manually.');
                         }
                       }} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-colors">
@@ -783,8 +777,14 @@ export default function PropertyDetail() {
                       <button type="button" onClick={async () => {
                         try {
                           const data = await api.get(`/api/council-tax-lookup?postcode=${encodeURIComponent(form.postcode)}`);
-                          if (data.length > 0 && data[0].band) setForm(f => ({ ...f, council_tax_band: data[0].band }));
-                        } catch { /* Silently ignore */ }
+                          if (data.length > 0 && data[0].band) {
+                            setForm(f => ({ ...f, council_tax_band: data[0].band }));
+                          } else {
+                            alert('No council tax data found for this postcode.');
+                          }
+                        } catch {
+                          alert('Failed to fetch council tax data. The API may not be configured.');
+                        }
                       }} className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-colors">
                         Auto-fetch Council Tax
                       </button>

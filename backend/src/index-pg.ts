@@ -2977,6 +2977,7 @@ app.get('/api/epc-lookup', authMiddleware, async (req: AuthRequest, res) => {
       current_efficiency: r['current-energy-efficiency'],
       property_type: r['property-type'],
       inspection_date: r['inspection-date'],
+      lodgement_date: r['lodgement-date'],
       certificate_number: r['lmk-key'],
     }));
 
@@ -3014,6 +3015,7 @@ app.get('/api/council-tax-lookup', authMiddleware, async (req: AuthRequest, res)
       monthlyTax: r.monthly_tax,
     })) : [];
 
+    await logAudit(req.user?.id, req.user?.email, 'view', 'council_tax_lookup');
     res.json(results);
   } catch (err) {
     console.error('Council tax lookup error:', err);
@@ -3029,7 +3031,7 @@ app.get('/api/land-registry/price-paid', authMiddleware, async (req: AuthRequest
     if (!postcode) return res.status(400).json({ error: 'Postcode required' });
 
     const cleanPostcode = postcode.replace(/\s/g, '').toUpperCase();
-    const url = `http://landregistry.data.gov.uk/data/ppi/transaction-record.json?_pageSize=20&propertyAddress.postcode=${encodeURIComponent(cleanPostcode)}`;
+    const url = `https://landregistry.data.gov.uk/data/ppi/transaction-record.json?_pageSize=20&propertyAddress.postcode=${encodeURIComponent(cleanPostcode)}`;
 
     const response = await fetch(url, {
       headers: { Accept: 'application/json' }

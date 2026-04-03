@@ -93,17 +93,13 @@ export default function PostcodeAutocomplete({
 
     // Fetch addresses from Land Registry if callback provided
     if (onAddressSelect) {
-      console.log('Fetching addresses for postcode:', postcode);
       const priceData = await fetchPricePaid(postcode);
-      console.log('Land Registry data:', priceData);
       if (priceData && priceData.length > 0) {
         // Get unique addresses
         const uniqueAddresses = [...new Set(priceData.map((item: { address: string }) => item.address))];
-        console.log('Unique addresses:', uniqueAddresses);
         setAddresses(uniqueAddresses);
         setShowAddresses(true);
       } else {
-        console.log('No addresses found for postcode');
         // Show dropdown with "no addresses" message
         setAddresses([]);
         setShowAddresses(true);
