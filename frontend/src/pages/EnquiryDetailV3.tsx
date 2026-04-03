@@ -1034,9 +1034,10 @@ export default function EnquiryDetailV3() {
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Monthly Rent (£) *</label>
-            <input type="number" value={hdMonthlyRent} onChange={e => {
-              setHdMonthlyRent(e.target.value);
-              const r = Number(e.target.value);
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdMonthlyRent} onChange={e => {
+              const v = e.target.value.replace(/[^0-9.]/g, '');
+              setHdMonthlyRent(v);
+              const r = Number(v);
               if (r > 0) {
                 setHdHoldingDeposit(String(Math.round(r * 12 / 52)));
               }
@@ -1045,12 +1046,12 @@ export default function EnquiryDetailV3() {
           </div>
           <div>
             <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Security Deposit (£)</label>
-            <input type="number" value={hdSecurityDeposit} onChange={e => setHdSecurityDeposit(e.target.value)}
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdSecurityDeposit} onChange={e => setHdSecurityDeposit(e.target.value.replace(/[^0-9.]/g, ''))}
               className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
           </div>
           <div>
             <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Holding Deposit (£) *</label>
-            <input type="number" value={hdHoldingDeposit} onChange={e => setHdHoldingDeposit(e.target.value)}
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdHoldingDeposit} onChange={e => setHdHoldingDeposit(e.target.value.replace(/[^0-9.]/g, ''))}
               className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
             <p className="text-[10px] text-[var(--text-muted)] mt-1">1 week's rent (annual / 52)</p>
           </div>

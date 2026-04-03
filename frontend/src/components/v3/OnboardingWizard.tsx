@@ -371,19 +371,20 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Monthly Rent (£)</label>
-                    <input type="number" value={hdMonthlyRent} onChange={e => {
-                      setHdMonthlyRent(e.target.value);
-                      const r = Number(e.target.value);
+                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdMonthlyRent} onChange={e => {
+                      const v = e.target.value.replace(/[^0-9.]/g, '');
+                      setHdMonthlyRent(v);
+                      const r = Number(v);
                       if (r > 0) { setHdHoldingDeposit(String(Math.round(r * 12 / 52))); }
                     }} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Security Dep. (£)</label>
-                    <input type="number" value={hdSecurityDeposit} onChange={e => setHdSecurityDeposit(e.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdSecurityDeposit} onChange={e => setHdSecurityDeposit(e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Holding Dep. (£)</label>
-                    <input type="number" value={hdHoldingDeposit} onChange={e => setHdHoldingDeposit(e.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdHoldingDeposit} onChange={e => setHdHoldingDeposit(e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
                   </div>
                 </div>
                 <DatePicker label="Follow-up Date" value={hdFollowUpDate} onChange={setHdFollowUpDate} />
@@ -411,7 +412,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Amount Received (£)</label>
-                    <input type="number" value={hdReceivedAmount} onChange={e => setHdReceivedAmount(e.target.value)} placeholder={String(enquiry.holding_deposit_amount || '')}
+                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdReceivedAmount} onChange={e => setHdReceivedAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder={String(enquiry.holding_deposit_amount || '')}
                       className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
                   </div>
                   <DatePicker label="Date Received" value={hdReceivedDate} onChange={setHdReceivedDate} />
