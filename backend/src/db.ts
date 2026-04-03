@@ -696,6 +696,7 @@ if (propSchema && propSchema.sql && propSchema.sql.includes('CHECK')) {
       status TEXT DEFAULT 'to_let',
       onboarded_date DATE,
       notes TEXT,
+      amenities TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (landlord_id) REFERENCES landlords(id)
