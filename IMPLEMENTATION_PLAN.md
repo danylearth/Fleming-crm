@@ -148,11 +148,11 @@
 
 - [x] **Audit all V3 pages load without console errors** — Visit each page in dev, check for React errors, missing data, broken layouts. Test both light and dark mode.
 
-- [ ] **Audit all CRUD endpoints** — Test create/read/update/delete for every entity via the UI. Verify data persists correctly in PG.
+- [x] **Audit all CRUD endpoints** — Test create/read/update/delete for every entity via the UI. Verify data persists correctly in PG.
 
-- [ ] **Audit conversion workflows end-to-end** — Test BDM → Landlord and Enquiry → Tenant conversions. Verify data copies correctly and source records marked as converted.
+- [x] **Audit conversion workflows end-to-end** — Test BDM → Landlord and Enquiry → Tenant conversions. Verify data copies correctly and source records marked as converted.
 
-- [ ] **Audit public form → CRM pipeline** — Submit tenant enquiry via `apply.fleminglettings.co.uk`, verify it appears in CRM kanban. Submit landlord enquiry, verify in BDM pipeline.
+- [x] **Audit public form → CRM pipeline** — Submit tenant enquiry via `apply.fleminglettings.co.uk`, verify it appears in CRM kanban. Submit landlord enquiry, verify in BDM pipeline.
 
 - [ ] **Audit Government API integrations** — Test Land Registry, Postcodes.io, EPC, Companies House, Council Tax lookups on property detail page.
 

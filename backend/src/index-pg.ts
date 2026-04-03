@@ -747,9 +747,14 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
       epcCertificate,
       eicrCertificate,
       gasCertificate,
+      // Company details (if Limited Company)
+      company_name,
+      company_number,
+      company_address,
       // Additional
       additionalNotes,
-      marketingConsent
+      marketingConsent,
+      marketing_preferences
     } = req.body;
 
     // Validation
@@ -800,6 +805,14 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
     notes += `Nationality: ${nationality}\n`;
     notes += `Contact: ${email} | ${phone}\n\n`;
 
+    if (registration_type === 'Limited Company' && (company_name || company_number)) {
+      notes += `=== COMPANY DETAILS ===\n`;
+      notes += `Company Name: ${company_name || 'N/A'}\n`;
+      notes += `Company Number: ${company_number || 'N/A'}\n`;
+      if (company_address) notes += `Registered Address: ${company_address}\n`;
+      notes += `\n`;
+    }
+
     if (is_joint) {
       notes += `=== JOINT APPLICANT ===\n`;
       notes += `Name: ${firstName2} ${surname2}\n`;
@@ -822,28 +835,32 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
 
     if (alreadyLet === 'Yes') {
       notes += `=== CURRENT TENANCY ===\n`;
-      notes += `Tenancy Type: ${tenancyType}\n`;
-      notes += `Current Management: ${currentManagement}\n`;
-      notes += `Length of Let: ${lengthOfLet} months\n`;
-      notes += `Monthly Rental Income: £${monthlyRentalIncome}\n`;
-      notes += `Considering Rent Increase: ${consideringRentIncrease}\n`;
-      if (consideringRentIncrease === 'Yes' && newRentAmount) {
-        notes += `New Rent Amount: £${newRentAmount}\n`;
+      if (tenancyType) notes += `Tenancy Type: ${tenancyType}\n`;
+      if (currentManagement) notes += `Current Management: ${currentManagement}\n`;
+      if (lengthOfLet) notes += `Length of Let: ${lengthOfLet} months\n`;
+      if (monthlyRentalIncome) notes += `Monthly Rental Income: £${monthlyRentalIncome}\n`;
+      if (consideringRentIncrease) {
+        notes += `Considering Rent Increase: ${consideringRentIncrease}\n`;
+        if (consideringRentIncrease === 'Yes' && newRentAmount) {
+          notes += `New Rent Amount: £${newRentAmount}\n`;
+        }
       }
       notes += `\n`;
     }
 
-    notes += `=== TENANT SOURCING ===\n`;
-    notes += `Looking for New Tenant: ${lookingForNewTenant}\n`;
-    if (lookingForNewTenant === 'Yes' && newTenantReason) {
-      notes += `Reason: ${newTenantReason}\n`;
+    if (lookingForNewTenant) {
+      notes += `=== TENANT SOURCING ===\n`;
+      notes += `Looking for New Tenant: ${lookingForNewTenant}\n`;
+      if (lookingForNewTenant === 'Yes' && newTenantReason) {
+        notes += `Reason: ${newTenantReason}\n`;
+      }
+      notes += `\n`;
     }
-    notes += `\n`;
 
     notes += `=== COMPLIANCE CERTIFICATES ===\n`;
-    notes += `EPC: ${epcCertificate}\n`;
-    notes += `EICR: ${eicrCertificate}\n`;
-    notes += `Gas Safety: ${gasCertificate}\n\n`;
+    notes += `EPC: ${epcCertificate || 'Not provided'}\n`;
+    notes += `EICR: ${eicrCertificate || 'Not provided'}\n`;
+    notes += `Gas Safety: ${gasCertificate || 'Not provided'}\n\n`;
 
     if (additionalNotes) {
       notes += `=== ADDITIONAL NOTES ===\n`;
@@ -851,7 +868,7 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
     }
 
     notes += `=== MARKETING ===\n`;
-    notes += `Marketing Consent: ${marketingConsent === 'on' ? 'Yes' : 'No'}\n`;
+    notes += `Marketing Preferences: ${marketing_preferences || (marketingConsent === 'on' ? 'Yes' : 'None')}\n`;
 
     // Get client IP for audit
     const client_ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -981,6 +998,8 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
       email_1: form_email2 || null,
       phone_1: contactNumber2 || null,
       current_address_1: address2 || null,
+      postcode_1: Postcode2 || null,
+      years_at_address_1: yearofaddress2 || null,
       date_of_birth_1: dob2 || null,
       nationality_1: Nationality2 || null,
       employment_status_1: EmploymentStatus2 || null,
