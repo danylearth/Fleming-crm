@@ -626,6 +626,10 @@
             input[type="number"], select, textarea { min-height: 48px; }
             .checkbox-group input[type="checkbox"] { width: 24px; height: 24px; }
         }
+        /* Google Places autocomplete dropdown */
+        .pac-container { z-index: 10000 !important; font-family: 'Lufga', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        .pac-item { padding: 8px 12px; font-size: 14px; cursor: pointer; }
+        .pac-item:hover { background: #f5f5f5; }
     </style>
 </head>
 <body>
@@ -787,7 +791,7 @@
                     <div class="two-col">
                         <div class="input-group full-width">
                             <label>Current Address *</label>
-                            <input type="text" id="f_address" required />
+                            <input type="text" id="f_address" placeholder="Start typing an address..." required />
                         </div>
                         <div class="input-group">
                             <label>Years at Current Address *</label>
@@ -1127,6 +1131,11 @@
         const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
             ? 'http://localhost:3001'
             : 'https://fleming-crm-api-production-7e58.up.railway.app';
+
+        // Google Places API key — set this to enable address autocomplete
+        // Same key as VITE_GOOGLE_PLACES_API_KEY used in the React frontend
+        const GOOGLE_PLACES_API_KEY = 'AIzaSyAolxeq3QhpLfGKY8oI47TLlVaTgz_gnyk';
+
         let formData = null;
         let hasSigned = false;
         let sigCtx = null;
@@ -1633,7 +1642,45 @@
             }
         }
 
+        // ===== GOOGLE PLACES AUTOCOMPLETE =====
+        const ADDRESS_FIELD_IDS = [
+            'f_address',
+            'f_prev_address_1',
+            'f_employer_address',
+            'f_employer_address_se',
+            'f_nok_address',
+            'f_nok2_address'
+        ];
+
+        function loadGooglePlaces() {
+            if (!GOOGLE_PLACES_API_KEY) return;
+            const script = document.createElement('script');
+            script.src = 'https://maps.googleapis.com/maps/api/js?key=' + GOOGLE_PLACES_API_KEY + '&libraries=places&callback=initAddressAutocomplete';
+            script.async = true;
+            script.defer = true;
+            document.head.appendChild(script);
+        }
+
+        function initAddressAutocomplete() {
+            ADDRESS_FIELD_IDS.forEach(function(id) {
+                const input = document.getElementById(id);
+                if (!input) return;
+                const ac = new google.maps.places.Autocomplete(input, {
+                    componentRestrictions: { country: 'gb' },
+                    fields: ['address_components', 'formatted_address'],
+                    types: ['address']
+                });
+                ac.addListener('place_changed', function() {
+                    const place = ac.getPlace();
+                    if (place && place.formatted_address) {
+                        input.value = place.formatted_address;
+                    }
+                });
+            });
+        }
+
         // Init
+        loadGooglePlaces();
         if (token && token !== 'onboarding') {
             loadForm();
         } else {
