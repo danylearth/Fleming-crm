@@ -2459,25 +2459,32 @@ app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res)
       VALUES (?, ?, 'pending', 'high', 'tenant_enquiry', ?, 'viewing', ?, ?)
     `).run(taskTitle, taskDescription, enquiry_id || null, viewing_date, assigned_to || req.user?.name || null);
 
-    // Send SMS if requested
-    if (send_sms && viewer_phone && sms_message) {
-      const { sendSms, normalizeUkPhone } = require('./sms');
-      const normalizedPhone = normalizeUkPhone(viewer_phone);
-      const smsResult = await sendSms({ to: normalizedPhone, body: sms_message });
-      db.prepare(`
-        INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
-        sms_message, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
-        smsResult.error || null, req.user?.id || null, req.user?.email || null
-      );
-      logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id || 0, { to_phone: normalizedPhone, message: sms_message.substring(0, 100) });
-    }
-
     logAudit(req.user?.id, req.user?.email, 'create', 'property_viewing', Number(result.lastInsertRowid), { viewer_name, viewing_date, property_id });
 
     res.json({ id: result.lastInsertRowid });
+
+    // Send SMS fire-and-forget after response — Twilio API call is slow and shouldn't block the user
+    if (send_sms && viewer_phone && sms_message) {
+      const { sendSms, normalizeUkPhone } = require('./sms');
+      const normalizedPhone = normalizeUkPhone(viewer_phone);
+      sendSms({ to: normalizedPhone, body: sms_message })
+        .then((smsResult: { success: boolean; sid?: string; error?: string }) => {
+          try {
+            db.prepare(`
+              INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
+              sms_message, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
+              smsResult.error || null, req.user?.id || null, req.user?.email || null
+            );
+            logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id || 0, { to_phone: normalizedPhone, message: sms_message.substring(0, 100) });
+          } catch (dbErr) {
+            console.error('[SMS] Failed to log SMS to database:', dbErr);
+          }
+        })
+        .catch((err: any) => console.error('[SMS] Fire-and-forget SMS failed:', err));
+    }
   } catch (err) {
     console.error('Error creating viewing:', err);
     res.status(500).json({ error: 'Failed to create viewing' });

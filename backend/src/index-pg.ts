@@ -2526,24 +2526,31 @@ app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res)
       VALUES ($1, $2, 'pending', 'high', 'tenant_enquiry', $3, 'viewing', $4, $5)
     `, [taskTitle, taskDescription, enquiry_id || null, viewing_date, assigned_to || req.user?.name || null]);
 
-    // Send SMS if requested
+    await logAudit(req.user?.id, req.user?.email, 'create', 'property_viewing', viewingId, { viewer_name, viewing_date, property_id });
+    res.json({ id: viewingId });
+
+    // Send SMS fire-and-forget after response — Twilio API call is slow and shouldn't block the user
     if (send_sms && viewer_phone && sms_message) {
       const { sendSms, normalizeUkPhone } = require('./sms');
       const normalizedPhone = normalizeUkPhone(viewer_phone);
-      const smsResult = await sendSms({ to: normalizedPhone, body: sms_message });
-      await insert(`
-        INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      `, [
-        enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
-        sms_message, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
-        smsResult.error || null, req.user?.id || null, req.user?.email || null
-      ]);
-      await logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id || 0, { to_phone: normalizedPhone, message: sms_message.substring(0, 100) });
+      sendSms({ to: normalizedPhone, body: sms_message })
+        .then(async (smsResult: { success: boolean; sid?: string; error?: string }) => {
+          try {
+            await insert(`
+              INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            `, [
+              enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
+              sms_message, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
+              smsResult.error || null, req.user?.id || null, req.user?.email || null
+            ]);
+            await logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id || 0, { to_phone: normalizedPhone, message: sms_message.substring(0, 100) });
+          } catch (dbErr) {
+            console.error('[SMS] Failed to log SMS to database:', dbErr);
+          }
+        })
+        .catch((err: any) => console.error('[SMS] Fire-and-forget SMS failed:', err));
     }
-
-    await logAudit(req.user?.id, req.user?.email, 'create', 'property_viewing', viewingId, { viewer_name, viewing_date, property_id });
-    res.json({ id: viewingId });
   } catch (err) {
     console.error('Error creating viewing:', err);
     res.status(500).json({ error: 'Failed to create viewing' });
