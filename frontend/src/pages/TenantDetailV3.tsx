@@ -20,7 +20,8 @@ interface Tenant {
   is_joint_tenancy?: number;
   title_2?: string; first_name_2?: string; last_name_2?: string;
   email_2?: string; phone_2?: string; date_of_birth_2?: string;
-  nok_name?: string; nok_relationship?: string; nok_phone?: string; nok_email?: string;
+  nok_name?: string; nok_relationship?: string; nok_phone?: string; nok_email?: string; nok_address?: string;
+  nok_2_name?: string; nok_2_relationship?: string; nok_2_phone?: string; nok_2_email?: string; nok_2_address?: string;
   kyc_completed_1?: number; kyc_completed_2?: number;
   kyc_primary_id?: number; kyc_secondary_id?: number;
   kyc_address_verification?: number; kyc_personal_verification?: number;
@@ -195,7 +196,9 @@ export default function TenantDetailV3() {
       title_2: t.title_2 || '', first_name_2: t.first_name_2 || '', last_name_2: t.last_name_2 || '',
       email_2: t.email_2 || '', phone_2: t.phone_2 || '', date_of_birth_2: t.date_of_birth_2 || '',
       nok_name: t.nok_name || '', nok_relationship: t.nok_relationship || '',
-      nok_phone: t.nok_phone || '', nok_email: t.nok_email || '',
+      nok_phone: t.nok_phone || '', nok_email: t.nok_email || '', nok_address: t.nok_address || '',
+      nok_2_name: t.nok_2_name || '', nok_2_relationship: t.nok_2_relationship || '',
+      nok_2_phone: t.nok_2_phone || '', nok_2_email: t.nok_2_email || '', nok_2_address: t.nok_2_address || '',
       kyc_completed_1: !!t.kyc_completed_1, kyc_completed_2: !!t.kyc_completed_2,
       guarantor_required: !!t.guarantor_required,
       guarantor_name: t.guarantor_name || '', guarantor_address: t.guarantor_address || '',

@@ -50,17 +50,17 @@
 
 - [x] **Mobile-optimize application form** — In `application.html`: increase touch targets to 44px min, add `inputmode` attributes on numeric/tel fields (currently missing), add sticky step indicator, improve padding. Viewport meta already exists. Per spec 1.8.
 
-- [ ] **Match application form styling to registration form** — Update fonts, box styles, logo, header ("Your tenancy application form"), "14 days" deadline text. Match `index.html` design. Per spec 1.8.
+- [x] **Match application form styling to registration form** — Update fonts, box styles, logo, header ("Your tenancy application form"), "14 days" deadline text. Match `index.html` design. Per spec 1.8.
 
-- [ ] **Add edit icons on pre-populated read-only fields** — Personal info fields (name, email, phone) are pre-populated and read-only. Add pencil/edit icon that enables inline editing. Per spec 1.8.
+- [x] **Add edit icons on pre-populated read-only fields** — Personal info fields (name, email, phone) are pre-populated and read-only. Add pencil/edit icon that enables inline editing. Per spec 1.8.
 
-- [ ] **Fix date fields to DD/MM/YYYY format with calendar icon** — Currently plain text inputs. Add date picker or formatted input matching registration form. Per spec 1.8.
+- [x] **Fix date fields to DD/MM/YYYY format with calendar icon** — Currently plain text inputs. Add date picker or formatted input matching registration form. Per spec 1.8.
 
-- [ ] **Restructure employment section** — Replace flat employer/income fields with conditional sections per spec 1.8: Employed (employer name, address, contact, years of service, pay frequency, annual salary, other income), Self-employed (similar + tax years), Unemployed/Student/Retired (annual income only).
+- [x] **Restructure employment section** — Replace flat employer/income fields with conditional sections per spec 1.8: Employed (employer name, address, contact, years of service, pay frequency, annual salary, other income), Self-employed (similar + tax years), Unemployed/Student/Retired (annual income only).
 
-- [ ] **Add references section with consent checkboxes** — Per spec 1.8: Employer ref (name/dept, phone, email, employee ID) and Previous Landlord ref (name/dept, phone, email, property address) each with mandatory "confirm we can contact" checkbox. Replace current basic name/phone/email fields.
+- [x] **Add references section with consent checkboxes** — Per spec 1.8: Employer ref (name/dept, phone, email, employee ID) and Previous Landlord ref (name/dept, phone, email, property address) each with mandatory "confirm we can contact" checkbox. Replace current basic name/phone/email fields.
 
-- [ ] **Expand next of kin to 2 entries with address field** — Currently 1 entry with name/phone/relationship. Expand to 2 entries, each with name, address, contact number, relationship. Per spec 1.8.
+- [x] **Expand next of kin to 2 entries with address field** — Currently 1 entry with name/phone/relationship. Expand to 2 entries, each with name, address, contact number, relationship. Per spec 1.8.
 
 - [ ] **Add 8 declaration checkboxes** — Replace current 2 checkboxes with 8 mandatory declarations per spec 1.8 (holding deposit T&C, accuracy, GDPR, employer/bank/landlord enquiries, How to Rent guide, credit check, T&C, marketing).
 

@@ -209,6 +209,12 @@ export async function initDb() {
         nok_relationship TEXT,
         nok_phone TEXT,
         nok_email TEXT,
+        nok_address TEXT,
+        nok_2_name TEXT,
+        nok_2_relationship TEXT,
+        nok_2_phone TEXT,
+        nok_2_email TEXT,
+        nok_2_address TEXT,
         kyc_completed_1 INTEGER DEFAULT 0,
         kyc_completed_2 INTEGER DEFAULT 0,
         guarantor_required INTEGER DEFAULT 0,
@@ -396,6 +402,12 @@ export async function initDb() {
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS deposit_scheme TEXT;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS authority_to_contact INTEGER DEFAULT 0;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS proof_of_income INTEGER DEFAULT 0;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_address TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_name TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_relationship TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_phone TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_email TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_address TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `);
@@ -429,6 +441,11 @@ export async function initDb() {
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_name TEXT;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_phone TEXT;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_relationship TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_address TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_2_name TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_2_phone TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_2_relationship TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_2_address TEXT;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_signature TEXT;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_signed_at TIMESTAMP;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_declaration_agreed INTEGER DEFAULT 0;
