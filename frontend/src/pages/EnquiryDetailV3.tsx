@@ -854,7 +854,7 @@ export default function EnquiryDetailV3() {
       {/* ==================== WORKFLOW MODAL ==================== */}
       {showWorkflow && (
         <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowWorkflow(false)}>
-          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <Avatar name={name} size="md" />
@@ -869,7 +869,7 @@ export default function EnquiryDetailV3() {
             {workflowMode === 'choose' ? (
               <div className="space-y-2">
                 <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Progress</p>
-                <button onClick={() => { setWorkflowMode('viewing'); const fn = form.first_name_1 || ''; const prop = properties.find(p => p.id === Number(wfPropId)); if (prop && wfDate) setSmsBody(`Hi ${fn}, your appointment has been booked to view ${prop.address} on ${wfDate}${wfTime ? ' at ' + wfTime : ''}. If you are running late or need to reschedule then please call our offices on 01902 212 415. See you soon!`); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                <button onClick={() => setWorkflowMode('viewing')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><BookingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />

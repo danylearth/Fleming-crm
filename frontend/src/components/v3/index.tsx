@@ -1,4 +1,5 @@
-import { type ReactNode, useState, useRef, useEffect } from 'react';
+import { type ReactNode, useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 // ─── Card ───
 export function Card({ children, className = '', onClick, hover }: {
@@ -83,29 +84,91 @@ export function Select({ label, value, onChange, options, className = '', search
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0, openUp: false });
   const selected = options.find(o => o.value === value);
   const showSearch = searchable === true || (searchable !== false && options.length > 5);
   const filtered = search ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase())) : options;
 
+  const updatePos = useCallback(() => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUp = spaceBelow < 260 && rect.top > spaceBelow;
+      setPos({
+        top: openUp ? rect.top : rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+        openUp,
+      });
+    }
+  }, []);
+
   useEffect(() => {
     if (!open) return;
+    updatePos();
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setSearch(''); }
+      const target = e.target as Node;
+      if (
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
+        setOpen(false);
+        setSearch('');
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  }, [open, updatePos]);
 
   useEffect(() => {
     if (open && showSearch && searchRef.current) searchRef.current.focus();
   }, [open, showSearch]);
 
+  const dropdown = open ? createPortal(
+    <div
+      ref={dropdownRef}
+      className="fixed bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden"
+      style={{
+        top: pos.openUp ? undefined : pos.top,
+        bottom: pos.openUp ? window.innerHeight - pos.top + 4 : undefined,
+        left: pos.left,
+        width: pos.width,
+        zIndex: 9999,
+      }}
+    >
+      {showSearch && (
+        <div className="p-2 border-b border-[var(--border-subtle)]">
+          <input ref={searchRef} type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search..." className="w-full bg-[var(--bg-hover)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none" />
+        </div>
+      )}
+      <div className="max-h-56 overflow-y-auto py-1">
+        {filtered.map(o => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => { onChange(o.value); setOpen(false); setSearch(''); }}
+            className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-[var(--bg-hover)] ${
+              value === o.value ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-secondary)]'
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+        {filtered.length === 0 && <p className="px-4 py-2 text-xs text-[var(--text-muted)]">No results</p>}
+      </div>
+    </div>,
+    document.body,
+  ) : null;
+
   return (
-    <div className={`relative ${className}`} ref={ref}>
+    <div className={className}>
       {label && <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">{label}</label>}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors text-left"
@@ -115,31 +178,7 @@ export function Select({ label, value, onChange, options, className = '', search
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-xl z-50 overflow-hidden">
-          {showSearch && (
-            <div className="p-2 border-b border-[var(--border-subtle)]">
-              <input ref={searchRef} type="text" value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search..." className="w-full bg-[var(--bg-hover)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none" />
-            </div>
-          )}
-          <div className="max-h-56 overflow-y-auto py-1">
-            {filtered.map(o => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => { onChange(o.value); setOpen(false); setSearch(''); }}
-                className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-[var(--bg-hover)] ${
-                  value === o.value ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-secondary)]'
-                }`}
-              >
-                {o.label}
-              </button>
-            ))}
-            {filtered.length === 0 && <p className="px-4 py-2 text-xs text-[var(--text-muted)]">No results</p>}
-          </div>
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }
