@@ -74,11 +74,11 @@
 
 - [x] **Fix security deposit pre-population** — Remove `Math.round(rent * 5 / 4.33)` auto-calculation in `OnboardingWizard.tsx` line 50 and `EnquiryDetailV3.tsx` line 705. Leave security deposit field empty for manual entry. Keep holding deposit auto-calc. Per spec 1.6.
 
-- [ ] **Fix holding deposit input for full number entry** — Change from `type="number"` to `type="text" inputmode="numeric"` with validation pattern, allowing paste and full number entry. In both `EnquiryDetailV3.tsx` and `OnboardingWizard.tsx`. Per spec 1.6.
+- [x] **Fix holding deposit input for full number entry** — Change from `type="number"` to `type="text" inputmode="numeric"` with validation pattern, allowing paste and full number entry. In both `EnquiryDetailV3.tsx` and `OnboardingWizard.tsx`. Per spec 1.6.
 
-- [ ] **Fix light mode date picker contrast** — In `DatePicker.tsx`: remove hardcoded `text-white` on hover states (line 183), today highlight (line 184), and "Today" footer button (line 200). Replace with `text-[var(--text-primary)]` or theme-aware values. "Clear" button (line 205) already uses CSS vars correctly. Per spec 1.6.
+- [x] **Fix light mode date picker contrast** — In `DatePicker.tsx`: remove hardcoded `text-white` on hover states (line 183), today highlight (line 184), and "Today" footer button (line 200). Replace with `text-[var(--text-primary)]` or theme-aware values. "Clear" button (line 205) already uses CSS vars correctly. Per spec 1.6.
 
-- [ ] **Investigate and fix "Progress" screen glitchiness** — Workflow modal in `EnquiryDetailV3.tsx` lines 803–837. Check for: stale closures in `setWorkflowMode` callbacks, DatePicker portal positioning inside modal, Select dropdown z-index conflicts with modal overlay.
+- [x] **Investigate and fix "Progress" screen glitchiness** — Workflow modal in `EnquiryDetailV3.tsx` lines 803–837. Check for: stale closures in `setWorkflowMode` callbacks, DatePicker portal positioning inside modal, Select dropdown z-index conflicts with modal overlay.
 
 ### Onboarding Improvements (spec 1.9)
 
