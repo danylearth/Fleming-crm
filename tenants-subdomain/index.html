@@ -1060,6 +1060,27 @@
             display: block;
         }
 
+        /* Property loading spinner */
+        .property-loading {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .property-loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e5e7eb;
+            border-top-color: #1a56db;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         /* Hide native selects that have been replaced */
         select.custom-replaced {
             display: none !important;
@@ -1619,6 +1640,7 @@
         let currentStep = 1;
         const totalSteps = 8; // Excluding success step
         let loadedProperties = [];
+        let loadPropertiesPromise = null;
         let uploadedFiles = [];
 
         // Full list of world nationalities in alphabetical order
@@ -2004,13 +2026,32 @@
             const section = document.getElementById('propertySearchSection');
             section.style.display = show ? 'block' : 'none';
             if (!show) {
-                document.getElementById('propertySelect').value = '';
+                const sel = document.getElementById('propertySelect');
+                if (sel) sel.value = '';
                 return;
             }
 
-            // Make sure properties are loaded
+            // Show loading spinner while properties load
             if (loadedProperties.length === 0) {
+                section.innerHTML = '<div class="property-loading"><div class="property-loading-spinner"></div>Loading available properties...</div>';
                 await loadProperties();
+                // Restore the select element after loading
+                section.innerHTML = '';
+                const sel = document.createElement('select');
+                sel.name = 'property_id';
+                sel.id = 'propertySelect';
+                if (loadedProperties.length === 0) {
+                    sel.innerHTML = '<option value="">No properties available</option>';
+                } else {
+                    sel.innerHTML = '<option value="">Select a property</option>';
+                    loadedProperties.forEach(p => {
+                        const option = document.createElement('option');
+                        option.value = p.id;
+                        option.textContent = `${p.address}${p.postcode ? ', ' + p.postcode : ''} - ${p.bedrooms} bed ${p.property_type} - £${p.rent_amount}/mo`;
+                        sel.appendChild(option);
+                    });
+                }
+                section.appendChild(sel);
             }
 
             // Remove any existing custom select wrapper
@@ -2021,11 +2062,6 @@
             sel.classList.remove('custom-replaced');
             sel.style.display = '';
             delete sel.dataset.deferred;
-
-            // Show how many properties are available
-            if (loadedProperties.length === 0) {
-                sel.innerHTML = '<option value="">No properties available</option>';
-            }
 
             setTimeout(() => initCustomSelects(), 100);
         }
@@ -2167,29 +2203,35 @@
             }
         }
 
-        // Load available properties
-        async function loadProperties() {
-            try {
-                const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                    ? 'http://localhost:3001/api/public/properties'
-                    : 'https://fleming-crm-api-production-7e58.up.railway.app/api/public/properties';
+        // Load available properties (deduplicated — returns shared promise if already in-flight)
+        function loadProperties() {
+            if (loadPropertiesPromise) return loadPropertiesPromise;
+            loadPropertiesPromise = (async () => {
+                try {
+                    const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                        ? 'http://localhost:3001/api/public/properties'
+                        : 'https://fleming-crm-api-production-7e58.up.railway.app/api/public/properties';
 
-                const response = await fetch(apiUrl);
-                loadedProperties = await response.json();
+                    const response = await fetch(apiUrl);
+                    loadedProperties = await response.json();
 
-                // Populate the property select dropdown
-                const select = document.getElementById('propertySelect');
-                if (select) {
-                    loadedProperties.forEach(p => {
-                        const option = document.createElement('option');
-                        option.value = p.id;
-                        option.textContent = `${p.address}${p.postcode ? ', ' + p.postcode : ''} - ${p.bedrooms} bed ${p.property_type} - £${p.rent_amount}/mo`;
-                        select.appendChild(option);
-                    });
+                    // Populate the property select dropdown if it exists and hasn't been replaced by loading UI
+                    const select = document.getElementById('propertySelect');
+                    if (select) {
+                        // Clear existing options except the first placeholder
+                        while (select.options.length > 1) select.remove(1);
+                        loadedProperties.forEach(p => {
+                            const option = document.createElement('option');
+                            option.value = p.id;
+                            option.textContent = `${p.address}${p.postcode ? ', ' + p.postcode : ''} - ${p.bedrooms} bed ${p.property_type} - £${p.rent_amount}/mo`;
+                            select.appendChild(option);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Failed to load properties:', error);
                 }
-            } catch (error) {
-                console.error('Failed to load properties:', error);
-            }
+            })();
+            return loadPropertiesPromise;
         }
 
         // ===== CUSTOM SELECT DROPDOWNS =====
