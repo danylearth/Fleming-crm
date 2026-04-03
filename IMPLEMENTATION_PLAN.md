@@ -90,27 +90,27 @@
 
 - [x] **Change Holding Deposit step to tracking view** — Replace current send-only UI with tracking: show date email was sent, email preview/attachments summary, and "Date Deposit Received" field sourced from onboarding checklist data. Per spec 1.9.
 
-- [ ] **Pre-populate enquiry record from completed application form** — In `POST /api/public/application-form/:token` handler (both `index.ts` and `index-pg.ts`), after saving form data, UPDATE the parent `tenant_enquiries` record with employment, address, and personal details from the submission. Per spec 1.9.
+- [x] **Pre-populate enquiry record from completed application form** — In `POST /api/public/application-form/:token` handler (both `index.ts` and `index-pg.ts`), after saving form data, UPDATE the parent `tenant_enquiries` record with employment, address, and personal details from the submission. Per spec 1.9.
 
 ## Medium Priority
 
 ### Tenant Registration Form Fixes (spec 1.1)
 
-- [ ] **Fix form submission error on apply.fleminglettings.co.uk** — Investigate `tenants-subdomain/index.html` form POST to `/api/public/tenant-enquiries`. Check backend CORS, endpoint URL config, error responses. Test locally with both SQLite and PG backends. Note: `application.html` had wrong API URL — check if `index.html` has similar issues.
+- [x] **Fix form submission error on apply.fleminglettings.co.uk** — Investigate `tenants-subdomain/index.html` form POST to `/api/public/tenant-enquiries`. Check backend CORS, endpoint URL config, error responses. Test locally with both SQLite and PG backends. Note: `application.html` had wrong API URL — check if `index.html` has similar issues.
 
-- [ ] **Fix property search grey screen** — In `index.html`, the `cs-overlay` (line 1575) appears when custom select opens. Properties load from `/api/public/properties` (called at page init line 2311 AND on demand). If API is slow, overlay shows with empty dropdown. Fix: ensure loading spinner inside dropdown, or preload more aggressively.
+- [x] **Fix property search grey screen** — In `index.html`, the `cs-overlay` (line 1575) appears when custom select opens. Properties load from `/api/public/properties` (called at page init line 2311 AND on demand). If API is slow, overlay shows with empty dropdown. Fix: ensure loading spinner inside dropdown, or preload more aggressively.
 
 ### Property Linking (spec 1.4)
 
-- [ ] **Improve property search/select UX on enquiry detail** — In `EnquiryDetailV3.tsx` lines 583–591, the linked property `<Select>` is not searchable (unlike the viewing booking select at line 855 which IS searchable). Add `searchable` prop or replace with combobox.
+- [x] **Improve property search/select UX on enquiry detail** — In `EnquiryDetailV3.tsx` lines 583–591, the linked property `<Select>` is not searchable (unlike the viewing booking select at line 855 which IS searchable). Add `searchable` prop or replace with combobox.
 
 ### Joint Applicant Handling (spec 1.5)
 
-- [ ] **Fix Applicant 2 document upload** — Document upload for joint applicant currently non-functional. Investigate existing upload code and wire up to documents API with correct entity linkage.
+- [x] **Fix Applicant 2 document upload** — Document upload for joint applicant currently non-functional. Investigate existing upload code and wire up to documents API with correct entity linkage.
 
-- [ ] **Create separate interlinked enquiry records for joint applicants** — Currently joint applicants stored as `_2` suffix columns on single record. Per spec 1.5: create individual `tenant_enquiry` records linked via `joint_partner_id` field. Requires schema change + UI updates.
+- [x] **Create separate interlinked enquiry records for joint applicants** — Currently joint applicants stored as `_2` suffix columns on single record. Per spec 1.5: create individual `tenant_enquiry` records linked via `joint_partner_id` field. Requires schema change + UI updates.
 
-- [ ] **On conversion, create two separate tenant records** — When converting a joint enquiry, create individual tenant records for both applicants and link both to the property. Per spec 1.5.
+- [x] **On conversion, create two separate tenant records** — When converting a joint enquiry, create individual tenant records for both applicants and link both to the property. Per spec 1.5.
 
 ### Google Places Address Autocomplete (per specs/google-places-autocomplete.md)
 

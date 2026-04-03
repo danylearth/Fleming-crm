@@ -1682,20 +1682,19 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
 
     const { property_id, tenancy_start_date, tenancy_type, monthly_rent } = req.body;
-
-    // Create tenant
     const name = `${enquiry.first_name_1} ${enquiry.last_name_1}`;
+    const isJoint = !!enquiry.joint_partner_id;
+
+    // Create tenant record for this applicant
     const result = db.prepare(`
       INSERT INTO tenants (
         title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
-        is_joint_tenancy, title_2, first_name_2, last_name_2, email_2, phone_2, date_of_birth_2,
-        kyc_completed_1, kyc_completed_2, property_id, tenancy_start_date, tenancy_type, monthly_rent
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       enquiry.title_1, enquiry.first_name_1, enquiry.last_name_1, name, enquiry.email_1, enquiry.phone_1,
-      enquiry.date_of_birth_1, enquiry.is_joint_application, enquiry.title_2, enquiry.first_name_2,
-      enquiry.last_name_2, enquiry.email_2, enquiry.phone_2, enquiry.date_of_birth_2,
-      enquiry.kyc_completed_1, enquiry.kyc_completed_2, property_id, tenancy_start_date, tenancy_type, monthly_rent
+      enquiry.date_of_birth_1, isJoint ? 1 : (enquiry.is_joint_application || 0), enquiry.kyc_completed_1,
+      property_id, tenancy_start_date, tenancy_type, monthly_rent
     );
 
     // Update enquiry status
@@ -1703,7 +1702,32 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
       .run(req.params.id);
 
     logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', parseInt(req.params.id), { converted_to_tenant: result.lastInsertRowid });
-    res.json({ tenant_id: result.lastInsertRowid });
+
+    // If joint application with linked partner, convert partner too
+    let partnerTenantId: number | bigint | null = null;
+    if (isJoint) {
+      const partner = db.prepare('SELECT * FROM tenant_enquiries WHERE id = ?').get(enquiry.joint_partner_id) as any;
+      if (partner && partner.status !== 'converted') {
+        const partnerName = `${partner.first_name_1} ${partner.last_name_1}`;
+        const partnerResult = db.prepare(`
+          INSERT INTO tenants (
+            title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
+            is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          partner.title_1, partner.first_name_1, partner.last_name_1, partnerName, partner.email_1, partner.phone_1,
+          partner.date_of_birth_1, 1, partner.kyc_completed_1,
+          property_id, tenancy_start_date, tenancy_type, monthly_rent
+        );
+        partnerTenantId = partnerResult.lastInsertRowid;
+
+        db.prepare("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .run(enquiry.joint_partner_id);
+        logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiry.joint_partner_id, { converted_to_tenant: partnerTenantId });
+      }
+    }
+
+    res.json({ tenant_id: result.lastInsertRowid, partner_tenant_id: partnerTenantId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to convert enquiry' });
