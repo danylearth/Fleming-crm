@@ -62,11 +62,11 @@
 
 - [x] **Expand next of kin to 2 entries with address field** — Currently 1 entry with name/phone/relationship. Expand to 2 entries, each with name, address, contact number, relationship. Per spec 1.8.
 
-- [ ] **Add 8 declaration checkboxes** — Replace current 2 checkboxes with 8 mandatory declarations per spec 1.8 (holding deposit T&C, accuracy, GDPR, employer/bank/landlord enquiries, How to Rent guide, credit check, T&C, marketing).
+- [x] **Add 8 declaration checkboxes** — Replace current 2 checkboxes with 8 mandatory declarations per spec 1.8 (holding deposit T&C, accuracy, GDPR, employer/bank/landlord enquiries, How to Rent guide, credit check, T&C, marketing).
 
-- [ ] **Replace "previous address" with "Add a previous address" button** — Change always-visible previous address field to a button that reveals fields on click. Per spec 1.8.
+- [x] **Replace "previous address" with "Add a previous address" button** — Change always-visible previous address field to a button that reveals fields on click. Per spec 1.8.
 
-- [ ] **Add free-text box** — "Is there any further information you would like to submit?" textarea before declarations. Per spec 1.8.
+- [x] **Add free-text box** — "Is there any further information you would like to submit?" textarea before declarations. Per spec 1.8.
 
 - [ ] **Update `POST /api/public/application-form/:token` to accept new fields** — Backend must accept expanded employment, references, next of kin (2 entries), and declaration fields. Update both `index.ts` and `index-pg.ts`.
 

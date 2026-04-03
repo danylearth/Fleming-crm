@@ -996,6 +996,13 @@
                     <h2>Declaration & Signature</h2>
                     <p class="step-description">Please review and agree to the declarations below, then sign to confirm.</p>
 
+                    <div class="input-group">
+                        <label>Is there any further information you would like to submit?</label>
+                        <textarea id="f_further_info" rows="4" placeholder="Optional — include any additional details you feel are relevant to your application"></textarea>
+                    </div>
+
+                    <h3 style="margin-top: 24px; margin-bottom: 12px; font-size: 16px; font-weight: 600;">Declarations</h3>
+
                     <div class="checkbox-group">
                         <input type="checkbox" id="f_decl_holding_deposit" required />
                         <span>I have read and agree to the <strong>Holding Deposit Terms and Conditions</strong> as outlined above. I understand that the holding deposit may be retained in accordance with the Tenant Fees Act 2019.</span>
@@ -1589,6 +1596,7 @@
                     app_next_of_kin_2_phone: document.getElementById('f_nok2_phone').value,
                     app_next_of_kin_2_relationship: document.getElementById('f_nok2_rel').value,
                     app_next_of_kin_2_address: document.getElementById('f_nok2_address').value,
+                    app_further_info: document.getElementById('f_further_info').value || null,
                     app_signature: sigData,
                     app_declaration_agreed: true,
                     app_decl_holding_deposit: document.getElementById('f_decl_holding_deposit').checked,
