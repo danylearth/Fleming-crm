@@ -86,9 +86,9 @@
 
 - [x] **Add document upload to ID Verification step** — `OnboardingWizard.tsx` Step 4 (lines ~353–393) currently only has "Mark Verified" toggles. Add file upload input for ID documents using existing documents API. Per spec 1.9.
 
-- [ ] **Change Application Form step to progress tracker** — Step 3 partially done (shows "Waiting for tenant" and URL). Enhance: add visual progress states (not sent → sent/waiting → completed), show completion timestamp when done. Per spec 1.9.
+- [x] **Change Application Form step to progress tracker** — Step 3 partially done (shows "Waiting for tenant" and URL). Enhance: add visual progress states (not sent → sent/waiting → completed), show completion timestamp when done. Per spec 1.9.
 
-- [ ] **Change Holding Deposit step to tracking view** — Replace current send-only UI with tracking: show date email was sent, email preview/attachments summary, and "Date Deposit Received" field sourced from onboarding checklist data. Per spec 1.9.
+- [x] **Change Holding Deposit step to tracking view** — Replace current send-only UI with tracking: show date email was sent, email preview/attachments summary, and "Date Deposit Received" field sourced from onboarding checklist data. Per spec 1.9.
 
 - [ ] **Pre-populate enquiry record from completed application form** — In `POST /api/public/application-form/:token` handler (both `index.ts` and `index-pg.ts`), after saving form data, UPDATE the parent `tenant_enquiries` record with employment, address, and personal details from the submission. Per spec 1.9.
 

@@ -6,7 +6,7 @@ import EmailPreviewModal from './EmailPreviewModal';
 import {
   CheckCircle, Circle, Clock, Mail, FileText, Shield, CreditCard,
   ChevronRight, ChevronDown, AlertTriangle, User, X, Phone, Send,
-  Download, Upload, Trash2
+  Download, Upload, Trash2, Eye, Paperclip
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -49,6 +49,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   // Application email modal
   const [showApplicationEmail, setShowApplicationEmail] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+
+  // Holding deposit email preview modal
+  const [showHDEmailPreview, setShowHDEmailPreview] = useState(false);
 
   // Documents for ID verification step
   const [enquiryDocs, setEnquiryDocs] = useState<{ id: number; doc_type: string; original_name: string; mime_type: string; size: number; uploaded_at: string }[]>([]);
@@ -427,10 +430,13 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           {/* Step 1: Request Holding Deposit */}
           <StepCard idx={0} step={steps[0]}>
             {enquiry.holding_deposit_requested ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
+                {/* Email sent confirmation */}
                 <div className="text-xs text-emerald-400 flex items-center gap-2">
                   <CheckCircle size={14} /> Email sent to {enquiry.email_1} on {enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at).toLocaleDateString('en-GB') : 'N/A'}
                 </div>
+
+                {/* Financial summary */}
                 <div className="bg-[var(--bg-subtle)] rounded-lg p-3 grid grid-cols-3 gap-3">
                   {enquiry.monthly_rent_agreed && (
                     <div>
@@ -450,6 +456,63 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       <p className="text-sm font-medium text-[var(--text-primary)]">£{Number(enquiry.holding_deposit_amount).toLocaleString()}</p>
                     </div>
                   )}
+                </div>
+
+                {/* Email & attachments summary */}
+                <div className="bg-[var(--bg-subtle)] rounded-lg p-3 space-y-2">
+                  <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Email Summary</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-[10px] text-[var(--text-muted)]">To</p>
+                      <p className="text-xs text-[var(--text-primary)]">{enquiry.email_1}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[var(--text-muted)]">From</p>
+                      <p className="text-xs text-[var(--text-primary)]">accounts@fleminglettings.co.uk</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[var(--text-muted)]">Subject</p>
+                      <p className="text-xs text-[var(--text-primary)]">Tenancy Application – {propertyAddress || 'Property'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[var(--text-muted)]">Sent</p>
+                      <p className="text-xs text-[var(--text-primary)]">{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</p>
+                    </div>
+                  </div>
+                  <div className="h-px bg-[var(--border-subtle)]" />
+                  <div>
+                    <p className="text-[10px] text-[var(--text-muted)] mb-1">Attachments</p>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1 text-[10px] text-[var(--text-secondary)] bg-[var(--bg-hover)] rounded px-2 py-1">
+                        <Paperclip size={10} /> Holding Deposit Request (PDF)
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-[var(--text-secondary)] bg-[var(--bg-hover)] rounded px-2 py-1">
+                        <FileText size={10} /> Application Form Link
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowHDEmailPreview(true)}
+                    className="flex items-center gap-1.5 text-[10px] font-medium text-[var(--accent-orange)] hover:underline mt-1"
+                  >
+                    <Eye size={12} /> View Email Preview
+                  </button>
+                </div>
+
+                {/* Deposit received status */}
+                <div className={`rounded-lg p-3 border ${enquiry.holding_deposit_received ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-amber-500/10 border-amber-500/20'}`}>
+                  <div className="flex items-center gap-2">
+                    {enquiry.holding_deposit_received ? (
+                      <CheckCircle size={14} className="text-emerald-400" />
+                    ) : (
+                      <Clock size={14} className="text-amber-400" />
+                    )}
+                    <span className={`text-xs font-medium ${enquiry.holding_deposit_received ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {enquiry.holding_deposit_received
+                        ? `Deposit received${enquiry.holding_deposit_received_date ? ` on ${new Date(enquiry.holding_deposit_received_date).toLocaleDateString('en-GB')}` : ''}`
+                        : 'Awaiting deposit payment'}
+                    </span>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -489,48 +552,75 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           {/* Step 2: Holding Deposit Received */}
           <StepCard idx={1} step={steps[1]}>
             {enquiry.holding_deposit_received ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="text-xs text-emerald-400 flex items-center gap-2">
-                  <CheckCircle size={14} /> £{Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount).toLocaleString()} received
-                  {enquiry.holding_deposit_received_date && ` on ${new Date(enquiry.holding_deposit_received_date).toLocaleDateString('en-GB')}`}
+                  <CheckCircle size={14} /> Deposit received and confirmed
                 </div>
-                <div className="bg-[var(--bg-subtle)] rounded-lg p-3 grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-[10px] text-[var(--text-muted)]">Amount Received</p>
-                    <p className="text-sm font-medium text-[var(--text-primary)]">£{Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-[var(--text-muted)]">Date Received</p>
-                    <p className="text-sm font-medium text-[var(--text-primary)]">{enquiry.holding_deposit_received_date ? new Date(enquiry.holding_deposit_received_date).toLocaleDateString('en-GB') : '—'}</p>
-                  </div>
-                  {enquiry.onboarding_email_sent_at && (
-                    <div>
-                      <p className="text-[10px] text-[var(--text-muted)]">Email Sent</p>
-                      <p className="text-sm font-medium text-[var(--text-primary)]">{new Date(enquiry.onboarding_email_sent_at).toLocaleDateString('en-GB')}</p>
+
+                {/* Tracking timeline */}
+                <div className="bg-[var(--bg-subtle)] rounded-lg p-3 space-y-3">
+                  <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Deposit Tracking</p>
+                  <div className="space-y-2">
+                    {/* Email sent row */}
+                    <div className="flex items-start gap-3">
+                      <div className="flex flex-col items-center">
+                        <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                          <Mail size={10} className="text-emerald-400" />
+                        </div>
+                        <div className="w-px h-full bg-emerald-500/30 min-h-[16px]" />
+                      </div>
+                      <div className="pb-2">
+                        <p className="text-xs text-[var(--text-primary)] font-medium">Email sent to {enquiry.email_1}</p>
+                        <p className="text-[10px] text-[var(--text-muted)]">{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</p>
+                      </div>
                     </div>
-                  )}
-                  {enquiry.email_1 && (
-                    <div>
-                      <p className="text-[10px] text-[var(--text-muted)]">Sent To</p>
-                      <p className="text-sm font-medium text-[var(--text-primary)]">{enquiry.email_1}</p>
+                    {/* Deposit received row */}
+                    <div className="flex items-start gap-3">
+                      <div className="flex flex-col items-center">
+                        <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                          <CheckCircle size={10} className="text-emerald-400" />
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[var(--text-primary)] font-medium">£{Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount).toLocaleString()} received</p>
+                        <p className="text-[10px] text-[var(--text-muted)]">{enquiry.holding_deposit_received_date ? new Date(enquiry.holding_deposit_received_date).toLocaleDateString('en-GB') : '—'}</p>
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             ) : (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Amount Received (£)</label>
-                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdReceivedAmount} onChange={e => setHdReceivedAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder={String(enquiry.holding_deposit_amount || '')}
-                      className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+              <div className="space-y-3">
+                {/* Email tracking context */}
+                {enquiry.holding_deposit_requested && enquiry.onboarding_email_sent_at && (
+                  <div className="bg-[var(--bg-subtle)] rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                      <Mail size={12} className="text-amber-400" />
+                      <span>Deposit request sent to <strong>{enquiry.email_1}</strong> on {new Date(enquiry.onboarding_email_sent_at).toLocaleDateString('en-GB')}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                      <CreditCard size={12} className="text-amber-400" />
+                      <span>Amount requested: <strong>£{Number(enquiry.holding_deposit_amount || 0).toLocaleString()}</strong></span>
+                    </div>
                   </div>
-                  <DatePicker label="Date Received" value={hdReceivedDate} onChange={setHdReceivedDate} />
+                )}
+
+                {/* Date Deposit Received */}
+                <div className="rounded-lg border border-[var(--border-input)] p-3 space-y-3">
+                  <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Confirm Payment</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Amount Received (£)</label>
+                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdReceivedAmount} onChange={e => setHdReceivedAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder={String(enquiry.holding_deposit_amount || '')}
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+                    </div>
+                    <DatePicker label="Date Deposit Received" value={hdReceivedDate} onChange={setHdReceivedDate} />
+                  </div>
+                  <Button variant="gradient" onClick={confirmDepositReceived} disabled={saving}>
+                    {saving ? 'Saving...' : 'Confirm Deposit Received'}
+                  </Button>
                 </div>
-                <Button variant="gradient" onClick={confirmDepositReceived} disabled={saving}>
-                  {saving ? 'Saving...' : 'Confirm Deposit Received'}
-                </Button>
-              </>
+              </div>
             )}
           </StepCard>
 
@@ -859,6 +949,29 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         initialBodyHtml={buildTenancyApplicationEmailHtml()}
         sendLabel="Send Application Email"
       />
+
+      {/* Holding deposit email preview (read-only) */}
+      {showHDEmailPreview && (
+        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={() => setShowHDEmailPreview(false)}>
+          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border-subtle)]">
+              <h4 className="text-sm font-bold text-[var(--text-primary)]">Email Preview</h4>
+              <button onClick={() => setShowHDEmailPreview(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={16} /></button>
+            </div>
+            <div className="p-4 space-y-2 text-xs text-[var(--text-secondary)]">
+              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">To:</span><span>{enquiry.email_1}</span></div>
+              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">From:</span><span>accounts@fleminglettings.co.uk</span></div>
+              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">Subject:</span><span className="font-medium">Tenancy Application – {propertyAddress || 'Property'}</span></div>
+              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">Sent:</span><span>{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span></div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+              <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden bg-white">
+                <div dangerouslySetInnerHTML={{ __html: buildTenancyApplicationEmailHtml() }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
