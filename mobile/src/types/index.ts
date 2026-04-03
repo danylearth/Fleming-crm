@@ -127,6 +127,9 @@ export type RootStackParamList = {
 export type MainTabParamList = {
   Dashboard: undefined;
   Properties: undefined;
+  Tenants: undefined;
+  Maintenance: undefined;
+  Tasks: undefined;
   Inventories: undefined;
   Profile: undefined;
 };

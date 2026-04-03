@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker, SectionHeader } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
+import ContextualDocSlot from '../components/v3/ContextualDocSlot';
 import ActivityTimeline from '../components/v3/ActivityTimeline';
 import AddressAutocomplete from '../components/v3/AddressAutocomplete';
 import { useApi } from '../hooks/useApi';
@@ -237,6 +238,18 @@ export default function EnquiryDetail() {
   const [hdFollowUpDate, setHdFollowUpDate] = useState('');
   const [hdSending, setHdSending] = useState(false);
 
+  // Document types uploaded (for checklist linking)
+  const [uploadedDocTypes, setUploadedDocTypes] = useState<Set<string>>(new Set());
+
+  const loadDocs = useCallback(async () => {
+    try {
+      const docs = await api.get(`/api/documents/tenant_enquiry/${id}`);
+      if (Array.isArray(docs)) {
+        setUploadedDocTypes(new Set(docs.map((d: { doc_type: string }) => d.doc_type)));
+      }
+    } catch { /* docs fetch failed */ }
+  }, [id, api]);
+
   const loadDetail = useCallback(async () => {
     try {
       const [d, props, usersList] = await Promise.all([
@@ -263,7 +276,7 @@ export default function EnquiryDetail() {
   }, [id, api]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { loadDetail(); }, [loadDetail]);
+  useEffect(() => { loadDetail(); loadDocs(); }, [loadDetail, loadDocs]);
 
   // Load SMS history
   const loadSmsHistory = useCallback(async () => {
@@ -384,7 +397,7 @@ export default function EnquiryDetail() {
 
   // Checklist items
   function getChecklistItems() {
-    const items: { label: string; done: boolean }[] = [
+    const items: { label: string; done: boolean; category?: string }[] = [
       { label: 'KYC — Applicant 1', done: !!form.kyc_completed_1 },
     ];
     if (form.is_joint_application) {
@@ -394,10 +407,17 @@ export default function EnquiryDetail() {
     items.push({ label: 'Income Provided', done: !!form.income_1 });
     items.push({ label: 'Address Provided', done: !!form.current_address_1 });
     items.push({ label: 'Property Linked', done: !!form.linked_property_id });
-    items.push({ label: 'Holding Deposit Requested', done: !!form.holding_deposit_requested });
-    items.push({ label: 'Application Form Sent', done: !!form.application_form_sent });
-    items.push({ label: 'Application Form Completed', done: !!form.application_form_completed });
-    items.push({ label: 'Holding Deposit Received', done: !!form.holding_deposit_received });
+    // Onboarding
+    items.push({ label: 'Holding Deposit Requested', done: !!form.holding_deposit_requested, category: 'onboarding' });
+    items.push({ label: 'Holding Deposit Received', done: !!form.holding_deposit_received, category: 'onboarding' });
+    items.push({ label: 'Application Form Completed', done: !!form.application_form_completed, category: 'onboarding' });
+    // ID Verification
+    items.push({ label: 'Primary ID — Applicant 1', done: uploadedDocTypes.has('Primary ID'), category: 'id_verification' });
+    items.push({ label: 'Secondary ID — Applicant 1', done: uploadedDocTypes.has('Secondary ID'), category: 'id_verification' });
+    // Financial
+    items.push({ label: 'Bank Statements', done: uploadedDocTypes.has('Bank Statements'), category: 'financial' });
+    items.push({ label: 'Proof of Employment', done: uploadedDocTypes.has('Proof of Employment'), category: 'financial' });
+    items.push({ label: 'Credit Report', done: uploadedDocTypes.has('Credit Report'), category: 'financial' });
     return items;
   }
 
@@ -597,6 +617,33 @@ export default function EnquiryDetail() {
                   )}
                 </div>
               )}
+
+              {/* Identity Documents — contextual upload slots */}
+              <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+                <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Identity Documents</p>
+                <div className="flex flex-wrap gap-3">
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Primary ID" label="Primary ID" applicantNumber={1} onDocChange={loadDocs} />
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Secondary ID" label="Secondary ID" applicantNumber={1} onDocChange={loadDocs} />
+                </div>
+                {hasLinkedPartner && (
+                  <>
+                    <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4 mb-3">Identity Documents — Applicant 2</p>
+                    <div className="flex flex-wrap gap-3">
+                      <ContextualDocSlot entityType="tenant_enquiry" entityId={data.joint_partner_id} docType="Primary ID" label="Primary ID" applicantNumber={1} onDocChange={loadDocs} />
+                      <ContextualDocSlot entityType="tenant_enquiry" entityId={data.joint_partner_id} docType="Secondary ID" label="Secondary ID" applicantNumber={1} onDocChange={loadDocs} />
+                    </div>
+                  </>
+                )}
+                {!hasLinkedPartner && jointApp && (
+                  <>
+                    <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4 mb-3">Identity Documents — Applicant 2</p>
+                    <div className="flex flex-wrap gap-3">
+                      <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Primary ID" label="Primary ID" applicantNumber={2} onDocChange={loadDocs} />
+                      <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Secondary ID" label="Secondary ID" applicantNumber={2} onDocChange={loadDocs} />
+                    </div>
+                  </>
+                )}
+              </div>
             </GlassCard>
 
             {/* Employment & Address */}
@@ -640,7 +687,49 @@ export default function EnquiryDetail() {
                   )}
                 </div>
               )}
+
+              {/* Financial Documents — contextual upload slots */}
+              <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+                <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Financial Documents</p>
+                <div className="flex flex-wrap gap-3">
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Bank Statements" label="Bank Statements" applicantNumber={1} onDocChange={loadDocs} />
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Proof of Employment" label="Proof of Employment" applicantNumber={1} onDocChange={loadDocs} />
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Credit Report" label="Credit Report" applicantNumber={1} onDocChange={loadDocs} />
+                </div>
+              </div>
             </GlassCard>
+
+            {/* Next of Kin */}
+            {(data?.app_next_of_kin_name || data?.app_next_of_kin_phone || data?.app_next_of_kin_2_name) && (
+              <GlassCard className="p-6">
+                <SectionHeader title="Next of Kin" icon={<Users size={16} />} />
+                <div className="space-y-4 mt-4">
+                  {(data?.app_next_of_kin_name || data?.app_next_of_kin_phone) && (
+                    <div>
+                      <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Contact 1</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <ReadField label="Name" value={data?.app_next_of_kin_name} />
+                        <ReadField label="Relationship" value={data?.app_next_of_kin_relationship} />
+                        <ReadField label="Phone" value={data?.app_next_of_kin_phone} />
+                        <ReadField label="Address" value={data?.app_next_of_kin_address} />
+                      </div>
+                    </div>
+                  )}
+                  {(data?.app_next_of_kin_2_name || data?.app_next_of_kin_2_phone) && (
+                    <div>
+                      <div className="h-px bg-[var(--border-subtle)] mb-3" />
+                      <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Contact 2</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <ReadField label="Name" value={data?.app_next_of_kin_2_name} />
+                        <ReadField label="Relationship" value={data?.app_next_of_kin_2_relationship} />
+                        <ReadField label="Phone" value={data?.app_next_of_kin_2_phone} />
+                        <ReadField label="Address" value={data?.app_next_of_kin_2_address} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </GlassCard>
+            )}
 
             {/* Renting Requirements */}
             <GlassCard className="p-6">
@@ -798,10 +887,8 @@ export default function EnquiryDetail() {
                 </div>
 
                 <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
-                  <span className="text-xs">Application Form Sent</span>
-                  <span className={`text-[10px] font-medium ${form.application_form_sent ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
-                    {form.application_form_sent ? 'Yes' : 'No'}
-                  </span>
+                  <span className="text-xs">Holding Deposit Received</span>
+                  <YesNo value={!!form.holding_deposit_received} onChange={v => setField('holding_deposit_received', v)} disabled={!isEditing('checklist')} />
                 </div>
 
                 <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
@@ -811,10 +898,49 @@ export default function EnquiryDetail() {
                   </span>
                 </div>
 
+                {/* ID Verification items */}
+                <div className="h-px bg-[var(--border-subtle)] my-2" />
+                <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider px-1 mb-2">ID Verification</p>
+
                 <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
-                  <span className="text-xs">Holding Deposit Received</span>
-                  <YesNo value={!!form.holding_deposit_received} onChange={v => setField('holding_deposit_received', v)} disabled={!isEditing('checklist')} />
+                  <span className="text-xs flex items-center gap-1.5">
+                    {uploadedDocTypes.has('Primary ID') && <CheckCircle size={12} className="text-green-400" />}
+                    Primary ID — Applicant 1
+                  </span>
+                  <span className={`text-[10px] font-medium ${uploadedDocTypes.has('Primary ID') ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {uploadedDocTypes.has('Primary ID') ? '✓' : '—'}
+                  </span>
                 </div>
+
+                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs flex items-center gap-1.5">
+                    {uploadedDocTypes.has('Secondary ID') && <CheckCircle size={12} className="text-green-400" />}
+                    Secondary ID — Applicant 1
+                  </span>
+                  <span className={`text-[10px] font-medium ${uploadedDocTypes.has('Secondary ID') ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {uploadedDocTypes.has('Secondary ID') ? '✓' : '—'}
+                  </span>
+                </div>
+
+                {/* Financial items */}
+                <div className="h-px bg-[var(--border-subtle)] my-2" />
+                <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider px-1 mb-2">Financial</p>
+
+                {[
+                  { label: 'Bank Statements', type: 'Bank Statements' },
+                  { label: 'Proof of Employment', type: 'Proof of Employment' },
+                  { label: 'Credit Report', type: 'Credit Report' },
+                ].map(item => (
+                  <div key={item.type} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                    <span className="text-xs flex items-center gap-1.5">
+                      {uploadedDocTypes.has(item.type) && <CheckCircle size={12} className="text-green-400" />}
+                      {item.label}
+                    </span>
+                    <span className={`text-[10px] font-medium ${uploadedDocTypes.has(item.type) ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                      {uploadedDocTypes.has(item.type) ? '✓' : '—'}
+                    </span>
+                  </div>
+                ))}
 
                 {/* Request Holding Deposit button */}
                 {!form.holding_deposit_requested && form.linked_property_id && (

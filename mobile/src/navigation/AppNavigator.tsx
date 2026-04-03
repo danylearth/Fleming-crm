@@ -11,6 +11,9 @@ import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import PropertyListScreen from '../screens/PropertyListScreen';
 import PropertyDetailScreen from '../screens/PropertyDetailScreen';
+import TenantsScreen from '../screens/TenantsScreen';
+import MaintenanceScreen from '../screens/MaintenanceScreen';
+import TasksScreen from '../screens/TasksScreen';
 import InventoryListScreen from '../screens/InventoryListScreen';
 import InventoryDetailScreen from '../screens/InventoryDetailScreen';
 import CreateInventoryScreen from '../screens/CreateInventoryScreen';
@@ -51,9 +54,14 @@ function MainTabs() {
         options={{ title: 'Properties' }}
       />
       <Tab.Screen
-        name="Inventories"
-        component={InventoryListScreen}
-        options={{ title: 'Inventories' }}
+        name="Tenants"
+        component={TenantsScreen}
+        options={{ title: 'Tenants' }}
+      />
+      <Tab.Screen
+        name="Tasks"
+        component={TasksScreen}
+        options={{ title: 'Tasks' }}
       />
       <Tab.Screen
         name="Profile"

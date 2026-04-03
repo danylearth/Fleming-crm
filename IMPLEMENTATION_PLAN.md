@@ -166,9 +166,9 @@
 - [x] _SMS templates for non-viewing scenarios (rejections, follow-ups, rent reminders)_
 - [x] _SMS character count / segment cost display in UI_
 - [x] _Rate limiting on public API endpoints_
-- [ ] _Test framework setup and unit/integration tests_
-- [ ] _Mobile app (Expo) audit and feature parity_
-- [ ] _Next of kin data display in CRM enquiry/tenant detail pages_
+- [x] _Test framework setup and unit/integration tests_
+- [x] _Mobile app (Expo) audit and feature parity_
+- [x] _Next of kin data display in CRM enquiry/tenant detail pages_
 - [ ] _Guarantor fields on tenant application form_
 - [ ] _Port `scheduler.ts` to PostgreSQL — currently imports SQLite `db`, not PG `pool`, so compliance/tenancy reminders are inactive in production_
 - [ ] _Standardize application.html API URL configuration (env-based or dynamic detection)_

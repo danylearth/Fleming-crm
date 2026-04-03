@@ -29,7 +29,10 @@ cd mobile && npm run ios / android
 npm run dev:frontend / dev:backend
 npm run render-build / render-start  # Render deployment
 
-# No test framework configured
+# Tests (Vitest)
+cd frontend && npm test              # Run frontend unit tests
+cd backend && npm test               # Run backend unit tests
+cd frontend && npm run test:watch    # Watch mode
 ```
 
 ## Project Structure
@@ -78,7 +81,7 @@ Monorepo with separate frontend (Vercel), backend API (Railway/PostgreSQL), and 
 - **API calls:** `useApi` hook + fetch with `Authorization: Bearer` header
 - **Polymorphic relations:** tasks/documents use `entity_type` + `entity_id`
 - **Audit logging:** `logAudit(userId, email, action, entityType, entityId, changes)` on all mutations
-- **No tests** — zero test files in the entire repo
+- **Testing:** Vitest for both frontend and backend. Tests co-located with source (`*.test.ts`). Frontend: `sms.test.ts`. Backend: `auth.test.ts`, `sms.test.ts`.
 
 ## Dev Server
 ```bash

@@ -433,7 +433,68 @@ export default function TenantDetail() {
               )}
             </GlassCard>
 
-            {/* Next of Kin — removed per client feedback (not required during onboarding) */}
+            {/* Next of Kin */}
+            <GlassCard className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader title="Next of Kin" icon={<User size={16} />} />
+                <SectionEditButton editing={isEditing('nok')} onEdit={() => setEditingSection('nok')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
+              </div>
+              {isEditing('nok') ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Contact 1</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <Input label="Name" value={form.nok_name} onChange={v => setForm({ ...form, nok_name: v })} />
+                      <Input label="Relationship" value={form.nok_relationship} onChange={v => setForm({ ...form, nok_relationship: v })} />
+                      <Input label="Phone" value={form.nok_phone} onChange={v => setForm({ ...form, nok_phone: v })} />
+                      <Input label="Email" value={form.nok_email} onChange={v => setForm({ ...form, nok_email: v })} type="email" />
+                      <Input label="Address" value={form.nok_address} onChange={v => setForm({ ...form, nok_address: v })} />
+                    </div>
+                  </div>
+                  <div className="h-px bg-[var(--border-subtle)]" />
+                  <div>
+                    <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Contact 2</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <Input label="Name" value={form.nok_2_name} onChange={v => setForm({ ...form, nok_2_name: v })} />
+                      <Input label="Relationship" value={form.nok_2_relationship} onChange={v => setForm({ ...form, nok_2_relationship: v })} />
+                      <Input label="Phone" value={form.nok_2_phone} onChange={v => setForm({ ...form, nok_2_phone: v })} />
+                      <Input label="Email" value={form.nok_2_email} onChange={v => setForm({ ...form, nok_2_email: v })} type="email" />
+                      <Input label="Address" value={form.nok_2_address} onChange={v => setForm({ ...form, nok_2_address: v })} />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {form.nok_name || form.nok_phone ? (
+                    <div>
+                      <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Contact 1</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <ReadField label="Name" value={form.nok_name} />
+                        <ReadField label="Relationship" value={form.nok_relationship} />
+                        <ReadField label="Phone" value={form.nok_phone} />
+                        <ReadField label="Email" value={form.nok_email} />
+                        <ReadField label="Address" value={form.nok_address} />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[var(--text-muted)]">No next of kin details recorded</p>
+                  )}
+                  {(form.nok_2_name || form.nok_2_phone) && (
+                    <div>
+                      <div className="h-px bg-[var(--border-subtle)] mb-3" />
+                      <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Contact 2</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <ReadField label="Name" value={form.nok_2_name} />
+                        <ReadField label="Relationship" value={form.nok_2_relationship} />
+                        <ReadField label="Phone" value={form.nok_2_phone} />
+                        <ReadField label="Email" value={form.nok_2_email} />
+                        <ReadField label="Address" value={form.nok_2_address} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </GlassCard>
 
             {/* Rent Payments */}
             <RentPayments tenantId={tenant.id} compact />
