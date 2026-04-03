@@ -1331,6 +1331,7 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
     const isJoint = !!enquiry.joint_partner_id;
 
     // Create tenant record for this applicant — copy onboarding data collected during pipeline
+    const hasGuarantor = !!(enquiry.app_guarantor_name || enquiry.app_guarantor_phone || enquiry.app_guarantor_email);
     const tenantId = await insert(`
       INSERT INTO tenants (
         title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
@@ -1338,8 +1339,9 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
         holding_deposit_received, holding_deposit_amount, holding_deposit_date,
         nok_name, nok_relationship, nok_phone, nok_address,
         nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
+        guarantor_required, guarantor_name, guarantor_phone, guarantor_email, guarantor_address,
         notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
     `, [
       enquiry.title_1, enquiry.first_name_1, enquiry.last_name_1, name, enquiry.email_1, enquiry.phone_1,
       enquiry.date_of_birth_1, isJoint ? 1 : 0, enquiry.kyc_completed_1,
@@ -1347,6 +1349,7 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
       enquiry.holding_deposit_received || 0, enquiry.holding_deposit_amount || null, enquiry.holding_deposit_received_date || null,
       enquiry.app_next_of_kin_name || null, enquiry.app_next_of_kin_relationship || null, enquiry.app_next_of_kin_phone || null, enquiry.app_next_of_kin_address || null,
       enquiry.app_next_of_kin_2_name || null, enquiry.app_next_of_kin_2_relationship || null, enquiry.app_next_of_kin_2_phone || null, enquiry.app_next_of_kin_2_address || null,
+      hasGuarantor ? 1 : 0, enquiry.app_guarantor_name || null, enquiry.app_guarantor_phone || null, enquiry.app_guarantor_email || null, enquiry.app_guarantor_address || null,
       enquiry.notes || null
     ]);
 
@@ -1360,6 +1363,7 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
       const partner = await queryOne('SELECT * FROM tenant_enquiries WHERE id = $1', [enquiry.joint_partner_id]);
       if (partner && partner.status !== 'converted') {
         const partnerName = `${partner.first_name_1} ${partner.last_name_1}`;
+        const partnerHasGuarantor = !!(partner.app_guarantor_name || partner.app_guarantor_phone || partner.app_guarantor_email);
         partnerTenantId = await insert(`
           INSERT INTO tenants (
             title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
@@ -1367,8 +1371,9 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
             holding_deposit_received, holding_deposit_amount, holding_deposit_date,
             nok_name, nok_relationship, nok_phone, nok_address,
             nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
+            guarantor_required, guarantor_name, guarantor_phone, guarantor_email, guarantor_address,
             notes
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
         `, [
           partner.title_1, partner.first_name_1, partner.last_name_1, partnerName, partner.email_1, partner.phone_1,
           partner.date_of_birth_1, 1, partner.kyc_completed_1,
@@ -1376,6 +1381,7 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
           partner.holding_deposit_received || 0, partner.holding_deposit_amount || null, partner.holding_deposit_received_date || null,
           partner.app_next_of_kin_name || null, partner.app_next_of_kin_relationship || null, partner.app_next_of_kin_phone || null, partner.app_next_of_kin_address || null,
           partner.app_next_of_kin_2_name || null, partner.app_next_of_kin_2_relationship || null, partner.app_next_of_kin_2_phone || null, partner.app_next_of_kin_2_address || null,
+          partnerHasGuarantor ? 1 : 0, partner.app_guarantor_name || null, partner.app_guarantor_phone || null, partner.app_guarantor_email || null, partner.app_guarantor_address || null,
           partner.notes || null
         ]);
 
@@ -1709,6 +1715,37 @@ app.get('/api/public/check-duplicates', publicReadLimiter, async (req, res) => {
   }
 });
 
+// PUBLIC ENDPOINT - Companies House search (for landlord enquiry form)
+app.get('/api/public/companies-house/search', publicReadLimiter, async (req, res) => {
+  try {
+    const q = (req.query.query as string || '').trim();
+    if (!q || q.length < 3) return res.status(400).json({ error: 'Query must be at least 3 characters' });
+
+    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
+    if (!apiKey) {
+      return res.status(501).json({ error: 'Companies House API key not configured' });
+    }
+
+    const url = `https://api.company-information.service.gov.uk/search/companies?q=${encodeURIComponent(q)}&items_per_page=10`;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(apiKey + ':').toString('base64')}`,
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Companies House API error' });
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error('Public Companies House search error:', err);
+    res.status(500).json({ error: 'Failed to search Companies House' });
+  }
+});
+
 app.get('/api/public/properties', publicReadLimiter, async (req, res) => {
   try {
     console.log('[Public Properties] Fetching properties with status: to_let, available');
@@ -1777,6 +1814,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       app_bank_name, app_bank_sort_code, app_bank_account_number,
       app_next_of_kin_name, app_next_of_kin_phone, app_next_of_kin_relationship, app_next_of_kin_address,
       app_next_of_kin_2_name, app_next_of_kin_2_phone, app_next_of_kin_2_relationship, app_next_of_kin_2_address,
+      app_guarantor_name, app_guarantor_phone, app_guarantor_email, app_guarantor_address,
       app_signature, app_declaration_agreed,
       // Also allow updating basic info
       current_address_1, date_of_birth_1, employer_1, income_1, employment_status_1,
@@ -1814,7 +1852,8 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
         app_further_info=$43,
         app_decl_holding_deposit=$44, app_decl_info_accurate=$45, app_decl_gdpr=$46,
         app_decl_enquiries=$47, app_decl_documents=$48, app_decl_credit_check=$49,
-        app_decl_terms=$50, app_decl_marketing=$51
+        app_decl_terms=$50, app_decl_marketing=$51,
+        app_guarantor_name=$52, app_guarantor_phone=$53, app_guarantor_email=$54, app_guarantor_address=$55
       WHERE application_form_token=$36
     `, [
       app_ni_number || null, app_previous_address_1 || null, app_previous_address_2 || null,
@@ -1836,6 +1875,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       app_decl_holding_deposit ? 1 : 0, app_decl_info_accurate ? 1 : 0, app_decl_gdpr ? 1 : 0,
       app_decl_enquiries ? 1 : 0, app_decl_documents ? 1 : 0, app_decl_credit_check ? 1 : 0,
       app_decl_terms ? 1 : 0, app_decl_marketing ? 1 : 0,
+      app_guarantor_name || null, app_guarantor_phone || null, app_guarantor_email || null, app_guarantor_address || null,
     ]);
 
     // Log activity

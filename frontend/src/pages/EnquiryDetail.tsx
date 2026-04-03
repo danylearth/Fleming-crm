@@ -731,6 +731,19 @@ export default function EnquiryDetail() {
               </GlassCard>
             )}
 
+            {/* Guarantor */}
+            {(data?.app_guarantor_name || data?.app_guarantor_phone || data?.app_guarantor_email) && (
+              <GlassCard className="p-6">
+                <SectionHeader title="Guarantor" icon={<ShieldCheck size={16} />} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                  <ReadField label="Name" value={data?.app_guarantor_name} />
+                  <ReadField label="Phone" value={data?.app_guarantor_phone} />
+                  <ReadField label="Email" value={data?.app_guarantor_email} />
+                  <ReadField label="Address" value={data?.app_guarantor_address} />
+                </div>
+              </GlassCard>
+            )}
+
             {/* Renting Requirements */}
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">

@@ -893,6 +893,10 @@ const onboardingCols = [
   'app_decl_credit_check INTEGER DEFAULT 0',
   'app_decl_terms INTEGER DEFAULT 0',
   'app_decl_marketing INTEGER DEFAULT 0',
+  'app_guarantor_name TEXT',
+  'app_guarantor_phone TEXT',
+  'app_guarantor_email TEXT',
+  'app_guarantor_address TEXT',
 ];
 for (const col of onboardingCols) {
   try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN ${col}`); } catch (e) {}

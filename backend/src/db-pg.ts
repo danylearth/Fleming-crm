@@ -506,6 +506,10 @@ export async function initDb() {
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_credit_check INTEGER DEFAULT 0;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_terms INTEGER DEFAULT 0;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_marketing INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_guarantor_name TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_guarantor_phone TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_guarantor_email TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_guarantor_address TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `);

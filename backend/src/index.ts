@@ -927,6 +927,38 @@ app.post('/api/landlords-bdm/bulk-delete', authMiddleware, (req: AuthRequest, re
   }
 });
 
+// PUBLIC ENDPOINT - Companies House search (for landlord enquiry form)
+app.get('/api/public/companies-house/search', publicReadLimiter, async (req, res) => {
+  try {
+    const query = (req.query.query as string || '').trim();
+    if (!query || query.length < 3) return res.status(400).json({ error: 'Query must be at least 3 characters' });
+
+    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
+    if (!apiKey) {
+      return res.status(501).json({ error: 'Companies House API key not configured' });
+    }
+
+    const url = `https://api.company-information.service.gov.uk/search/companies?q=${encodeURIComponent(query)}&items_per_page=10`;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(apiKey + ':').toString('base64')}`,
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Companies House API error' });
+    }
+
+    const data = await response.json();
+    // Return in the format the landlord form expects
+    res.json(data);
+  } catch (err) {
+    console.error('Public Companies House search error:', err);
+    res.status(500).json({ error: 'Failed to search Companies House' });
+  }
+});
+
 // ============ TENANT ENQUIRIES ============
 
 // PUBLIC ENDPOINT - Get available properties for tenant enquiry form
@@ -1036,7 +1068,8 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, (req, res) 
         app_further_info=?,
         app_decl_holding_deposit=?, app_decl_info_accurate=?, app_decl_gdpr=?,
         app_decl_enquiries=?, app_decl_documents=?, app_decl_credit_check=?,
-        app_decl_terms=?, app_decl_marketing=?
+        app_decl_terms=?, app_decl_marketing=?,
+        app_guarantor_name=?, app_guarantor_phone=?, app_guarantor_email=?, app_guarantor_address=?
       WHERE application_form_token=?
     `).run(
       d.app_ni_number || null, d.app_previous_address_1 || null, d.app_previous_address_2 || null,
@@ -1058,6 +1091,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, (req, res) 
       d.app_decl_holding_deposit ? 1 : 0, d.app_decl_info_accurate ? 1 : 0, d.app_decl_gdpr ? 1 : 0,
       d.app_decl_enquiries ? 1 : 0, d.app_decl_documents ? 1 : 0, d.app_decl_credit_check ? 1 : 0,
       d.app_decl_terms ? 1 : 0, d.app_decl_marketing ? 1 : 0,
+      d.app_guarantor_name || null, d.app_guarantor_phone || null, d.app_guarantor_email || null, d.app_guarantor_address || null,
       req.params.token,
     );
 
@@ -1734,6 +1768,7 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
     const isJoint = !!enquiry.joint_partner_id;
 
     // Create tenant record — copy onboarding data collected during pipeline
+    const hasGuarantor = !!(enquiry.app_guarantor_name || enquiry.app_guarantor_phone || enquiry.app_guarantor_email);
     const result = db.prepare(`
       INSERT INTO tenants (
         title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
@@ -1741,8 +1776,9 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
         holding_deposit_received, holding_deposit_amount, holding_deposit_date,
         nok_name, nok_relationship, nok_phone, nok_address,
         nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
+        guarantor_required, guarantor_name, guarantor_phone, guarantor_email, guarantor_address,
         notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       enquiry.title_1, enquiry.first_name_1, enquiry.last_name_1, name, enquiry.email_1, enquiry.phone_1,
       enquiry.date_of_birth_1, isJoint ? 1 : (enquiry.is_joint_application || 0), enquiry.kyc_completed_1,
@@ -1750,6 +1786,7 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
       enquiry.holding_deposit_received || 0, enquiry.holding_deposit_amount || null, enquiry.holding_deposit_received_date || null,
       enquiry.app_next_of_kin_name || null, enquiry.app_next_of_kin_relationship || null, enquiry.app_next_of_kin_phone || null, enquiry.app_next_of_kin_address || null,
       enquiry.app_next_of_kin_2_name || null, enquiry.app_next_of_kin_2_relationship || null, enquiry.app_next_of_kin_2_phone || null, enquiry.app_next_of_kin_2_address || null,
+      hasGuarantor ? 1 : 0, enquiry.app_guarantor_name || null, enquiry.app_guarantor_phone || null, enquiry.app_guarantor_email || null, enquiry.app_guarantor_address || null,
       enquiry.notes || null
     );
 
@@ -1766,6 +1803,7 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
       const partner = db.prepare('SELECT * FROM tenant_enquiries WHERE id = ?').get(enquiry.joint_partner_id) as any;
       if (partner && partner.status !== 'converted') {
         const partnerName = `${partner.first_name_1} ${partner.last_name_1}`;
+        const partnerHasGuarantor = !!(partner.app_guarantor_name || partner.app_guarantor_phone || partner.app_guarantor_email);
         const partnerResult = db.prepare(`
           INSERT INTO tenants (
             title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
@@ -1773,8 +1811,9 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
             holding_deposit_received, holding_deposit_amount, holding_deposit_date,
             nok_name, nok_relationship, nok_phone, nok_address,
             nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
+            guarantor_required, guarantor_name, guarantor_phone, guarantor_email, guarantor_address,
             notes
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           partner.title_1, partner.first_name_1, partner.last_name_1, partnerName, partner.email_1, partner.phone_1,
           partner.date_of_birth_1, 1, partner.kyc_completed_1,
@@ -1782,6 +1821,7 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
           partner.holding_deposit_received || 0, partner.holding_deposit_amount || null, partner.holding_deposit_received_date || null,
           partner.app_next_of_kin_name || null, partner.app_next_of_kin_relationship || null, partner.app_next_of_kin_phone || null, partner.app_next_of_kin_address || null,
           partner.app_next_of_kin_2_name || null, partner.app_next_of_kin_2_relationship || null, partner.app_next_of_kin_2_phone || null, partner.app_next_of_kin_2_address || null,
+          partnerHasGuarantor ? 1 : 0, partner.app_guarantor_name || null, partner.app_guarantor_phone || null, partner.app_guarantor_email || null, partner.app_guarantor_address || null,
           partner.notes || null
         );
         partnerTenantId = partnerResult.lastInsertRowid;

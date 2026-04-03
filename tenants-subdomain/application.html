@@ -987,6 +987,23 @@
                         <div class="input-group"><label>Contact Number *</label><input type="tel" id="f_nok2_phone" inputmode="tel" required /></div>
                     </div>
 
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">GUARANTOR</span><div class="line"></div></div>
+
+                    <div class="checkbox-group" style="margin-bottom:12px;">
+                        <input type="checkbox" id="f_has_guarantor" onchange="toggleGuarantorSection()" />
+                        <span>Will you have a guarantor for this tenancy?</span>
+                    </div>
+                    <div id="guarantor-fields" style="display:none;">
+                        <div class="two-col">
+                            <div class="input-group"><label>Full Name *</label><input type="text" id="f_guarantor_name" /></div>
+                            <div class="input-group"><label>Contact Number *</label><input type="tel" id="f_guarantor_phone" inputmode="tel" /></div>
+                        </div>
+                        <div class="two-col">
+                            <div class="input-group"><label>Email *</label><input type="email" id="f_guarantor_email" /></div>
+                            <div class="input-group"><label>Address *</label><input type="text" id="f_guarantor_address" /></div>
+                        </div>
+                    </div>
+
                     <div class="button-group">
                         <button type="button" class="btn btn-secondary" onclick="goToStep(1)">Back</button>
                         <button type="button" class="btn btn-primary" onclick="goToStep(3)">Continue to Signature</button>
@@ -1434,6 +1451,16 @@
             }
         }
 
+        function toggleGuarantorSection() {
+            const checked = document.getElementById('f_has_guarantor').checked;
+            const fields = document.getElementById('guarantor-fields');
+            fields.style.display = checked ? 'block' : 'none';
+            ['f_guarantor_name', 'f_guarantor_phone', 'f_guarantor_email', 'f_guarantor_address'].forEach(id => {
+                const el = document.getElementById(id);
+                if (checked) el.setAttribute('required', ''); else el.removeAttribute('required');
+            });
+        }
+
         function toggleEdit(btn) {
             const input = btn.parentElement.querySelector('input');
             const isReadonly = input.hasAttribute('readonly');
@@ -1605,6 +1632,10 @@
                     app_next_of_kin_2_phone: document.getElementById('f_nok2_phone').value,
                     app_next_of_kin_2_relationship: document.getElementById('f_nok2_rel').value,
                     app_next_of_kin_2_address: document.getElementById('f_nok2_address').value,
+                    app_guarantor_name: document.getElementById('f_guarantor_name').value || null,
+                    app_guarantor_phone: document.getElementById('f_guarantor_phone').value || null,
+                    app_guarantor_email: document.getElementById('f_guarantor_email').value || null,
+                    app_guarantor_address: document.getElementById('f_guarantor_address').value || null,
                     app_further_info: document.getElementById('f_further_info').value || null,
                     app_signature: sigData,
                     app_declaration_agreed: true,
@@ -1649,7 +1680,8 @@
             'f_employer_address',
             'f_employer_address_se',
             'f_nok_address',
-            'f_nok2_address'
+            'f_nok2_address',
+            'f_guarantor_address'
         ];
 
         function loadGooglePlaces() {
