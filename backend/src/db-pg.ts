@@ -383,9 +383,31 @@ export async function initDb() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- EMAIL MESSAGES (delivery tracking via Resend webhooks)
+      CREATE TABLE IF NOT EXISTS email_messages (
+        id SERIAL PRIMARY KEY,
+        resend_id TEXT,
+        entity_type TEXT,
+        entity_id INTEGER,
+        to_email TEXT NOT NULL,
+        from_email TEXT,
+        subject TEXT,
+        template TEXT,
+        status TEXT DEFAULT 'sent',
+        sent_by INTEGER REFERENCES users(id),
+        sent_by_email TEXT,
+        opened_at TIMESTAMP,
+        clicked_at TIMESTAMP,
+        bounced_at TIMESTAMP,
+        error_message TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Create indexes
       CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
       CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
+      CREATE INDEX IF NOT EXISTS idx_email_messages_resend_id ON email_messages(resend_id);
+      CREATE INDEX IF NOT EXISTS idx_email_messages_entity ON email_messages(entity_type, entity_id);
       CREATE INDEX IF NOT EXISTS idx_properties_landlord ON properties(landlord_id);
       CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(status);
       CREATE INDEX IF NOT EXISTS idx_tenants_property ON tenants(property_id);

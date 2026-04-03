@@ -10,6 +10,8 @@ import db from './db';
 import { generateToken, authMiddleware, AuthRequest, requireRole } from './auth';
 import aiRouter from './ai/chat';
 import { startScheduler } from './scheduler';
+import { validateTwilioWebhook, normalizeUkPhone as normalizePhone } from './sms';
+import crypto from 'crypto';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,7 +45,13 @@ const upload = multer({
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    if (req.originalUrl === '/api/email/webhook') {
+      req.rawBody = buf.toString();
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: false }));
 
 // Serve static files from frontend build
@@ -2574,12 +2582,16 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
 
       const { sendEmail, holdingDepositRequestEmail } = require('./email');
       const emailContent = holdingDepositRequestEmail(name, address, monthly_rent, security_deposit, holding_deposit, applicationFormUrl);
-      await sendEmail({
+      const emailResult = await sendEmail({
         to: enquiry.email_1,
         subject: emailContent.subject,
         html: emailContent.html,
         from: 'Fleming Lettings Accounts <accounts@fleminglettings.co.uk>',
       });
+      db.prepare(`
+        INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
+        VALUES (?, 'tenant_enquiry', ?, ?, ?, ?, 'holding_deposit_request', ?, ?, ?)
+      `).run(emailResult.id || null, enquiryId, enquiry.email_1, 'accounts@fleminglettings.co.uk', emailContent.subject, emailResult.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null);
 
       if (follow_up_date) {
         db.prepare(`
@@ -2616,12 +2628,16 @@ app.post('/api/tenant-enquiries/:id/send-application-email', authMiddleware, asy
     if (!enquiry.email_1) return res.status(400).json({ error: 'Enquiry has no email address' });
 
     const { sendEmail } = require('./email');
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: enquiry.email_1,
       subject,
       html: body_html,
       from: 'Fleming Lettings Accounts <accounts@fleminglettings.co.uk>',
     });
+    db.prepare(`
+      INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
+      VALUES (?, 'tenant_enquiry', ?, ?, ?, ?, 'tenancy_application', ?, ?, ?)
+    `).run(emailResult.id || null, enquiryId, enquiry.email_1, 'accounts@fleminglettings.co.uk', subject, emailResult.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null);
 
     logAudit(req.user?.id, req.user?.email, 'email_sent', 'tenant_enquiry', enquiryId, {
       to: enquiry.email_1, subject, template: 'tenancy_application',
@@ -2662,8 +2678,8 @@ app.post('/api/sms/send', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-// Twilio delivery status webhook (unauthenticated — called by Twilio)
-app.post('/api/sms/status', (req, res) => {
+// Twilio delivery status webhook (validated via X-Twilio-Signature)
+app.post('/api/sms/status', validateTwilioWebhook, (req, res) => {
   try {
     const { MessageSid, MessageStatus, ErrorCode } = req.body;
     if (!MessageSid || !MessageStatus) {
@@ -2680,12 +2696,147 @@ app.post('/api/sms/status', (req, res) => {
   }
 });
 
+// Twilio inbound SMS webhook (validated via X-Twilio-Signature)
+app.post('/api/sms/inbound', validateTwilioWebhook, (req, res) => {
+  try {
+    const { From, Body, MessageSid } = req.body;
+    if (!From || !Body) {
+      return res.status(400).send('Missing From or Body');
+    }
+
+    const normalizedFrom = normalizePhone(From);
+    let enquiryId: number | null = null;
+
+    // Try to match sender phone to an existing enquiry
+    const enquiry = db.prepare(
+      `SELECT id FROM tenant_enquiries WHERE phone_1 = ? OR phone_1 = ? ORDER BY created_at DESC LIMIT 1`
+    ).get(From, normalizedFrom) as any;
+    if (enquiry) {
+      enquiryId = enquiry.id;
+    }
+
+    const result = db.prepare(`
+      INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, direction, status, twilio_sid)
+      VALUES (?, ?, ?, ?, 'inbound', 'received', ?)
+    `).run(enquiryId, process.env.TWILIO_PHONE_NUMBER || null, From, Body, MessageSid || null);
+
+    if (enquiryId) {
+      logAudit(undefined, undefined, 'sms_received', 'tenant_enquiry', enquiryId, {
+        from_phone: From, message: Body.substring(0, 100)
+      });
+    }
+
+    res.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+  } catch (err) {
+    console.error('Error processing inbound SMS:', err);
+    res.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+  }
+});
+
 app.get('/api/sms/enquiry/:enquiryId', authMiddleware, (req: AuthRequest, res) => {
   try {
     const messages = db.prepare('SELECT * FROM sms_messages WHERE enquiry_id = ? ORDER BY created_at DESC').all(req.params.enquiryId);
     res.json(messages);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch SMS history' });
+  }
+});
+
+// ============ EMAIL DELIVERY TRACKING ============
+
+// Resend webhook for email delivery events (validated via svix signature)
+app.post('/api/email/webhook', (req: any, res) => {
+  try {
+    const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+
+    if (webhookSecret && req.rawBody) {
+      const svixId = req.headers['svix-id'] as string;
+      const svixTimestamp = req.headers['svix-timestamp'] as string;
+      const svixSignature = req.headers['svix-signature'] as string;
+
+      if (!svixId || !svixTimestamp || !svixSignature) {
+        return res.status(403).json({ error: 'Missing svix headers' });
+      }
+
+      const timestamp = parseInt(svixTimestamp, 10);
+      const now = Math.floor(Date.now() / 1000);
+      if (Math.abs(now - timestamp) > 300) {
+        return res.status(403).json({ error: 'Webhook timestamp too old' });
+      }
+
+      const secretBytes = Buffer.from(webhookSecret.replace('whsec_', ''), 'base64');
+      const signaturePayload = `${svixId}.${svixTimestamp}.${req.rawBody}`;
+      const expectedSignature = crypto
+        .createHmac('sha256', secretBytes)
+        .update(signaturePayload)
+        .digest('base64');
+
+      const signatures = svixSignature.split(' ');
+      const isValid = signatures.some((sig: string) => {
+        const parts = sig.split(',');
+        return parts[0] === 'v1' && parts[1] === expectedSignature;
+      });
+
+      if (!isValid) {
+        console.warn('[RESEND] Invalid webhook signature');
+        return res.status(403).json({ error: 'Invalid signature' });
+      }
+    }
+
+    const { type, data } = req.body;
+    if (!type || !data?.email_id) {
+      return res.status(400).json({ error: 'Missing type or email_id' });
+    }
+
+    const resendId = data.email_id;
+
+    switch (type) {
+      case 'email.sent':
+        db.prepare('UPDATE email_messages SET status = ? WHERE resend_id = ?').run('sent', resendId);
+        break;
+      case 'email.delivered':
+        db.prepare('UPDATE email_messages SET status = ? WHERE resend_id = ?').run('delivered', resendId);
+        break;
+      case 'email.delivery_delayed':
+        db.prepare('UPDATE email_messages SET status = ? WHERE resend_id = ?').run('delayed', resendId);
+        break;
+      case 'email.bounced':
+        db.prepare('UPDATE email_messages SET status = ?, bounced_at = datetime(\'now\'), error_message = ? WHERE resend_id = ?')
+          .run('bounced', data.bounce?.message || 'Hard bounce', resendId);
+        break;
+      case 'email.complained':
+        db.prepare('UPDATE email_messages SET status = ?, error_message = ? WHERE resend_id = ?')
+          .run('complained', 'Marked as spam by recipient', resendId);
+        break;
+      case 'email.opened':
+        db.prepare('UPDATE email_messages SET opened_at = COALESCE(opened_at, datetime(\'now\')) WHERE resend_id = ?').run(resendId);
+        break;
+      case 'email.clicked':
+        db.prepare('UPDATE email_messages SET clicked_at = COALESCE(clicked_at, datetime(\'now\')) WHERE resend_id = ?').run(resendId);
+        break;
+      case 'email.failed':
+        db.prepare('UPDATE email_messages SET status = ?, error_message = ? WHERE resend_id = ?')
+          .run('failed', data.reason || 'Send failed', resendId);
+        break;
+    }
+
+    res.json({ received: true });
+  } catch (err) {
+    console.error('Error processing email webhook:', err);
+    res.sendStatus(500);
+  }
+});
+
+// Get email history for an entity
+app.get('/api/email/entity/:entityType/:entityId', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { entityType, entityId } = req.params;
+    const messages = db.prepare(
+      'SELECT * FROM email_messages WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC'
+    ).all(entityType, entityId);
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch email history' });
   }
 });
 

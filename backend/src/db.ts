@@ -791,6 +791,31 @@ db.exec(`
   );
 `);
 
+// Email messages table (delivery tracking via Resend webhooks)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS email_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    resend_id TEXT,
+    entity_type TEXT,
+    entity_id INTEGER,
+    to_email TEXT NOT NULL,
+    from_email TEXT,
+    subject TEXT,
+    template TEXT,
+    status TEXT DEFAULT 'sent',
+    sent_by INTEGER,
+    sent_by_email TEXT,
+    opened_at DATETIME,
+    clicked_at DATETIME,
+    bounced_at DATETIME,
+    error_message TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sent_by) REFERENCES users(id)
+  );
+`);
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_email_messages_resend_id ON email_messages(resend_id)'); } catch (e) {}
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_email_messages_entity ON email_messages(entity_type, entity_id)'); } catch (e) {}
+
 // Sprint 5: Onboarding & application form fields
 const onboardingCols = [
   'holding_deposit_requested INTEGER DEFAULT 0',

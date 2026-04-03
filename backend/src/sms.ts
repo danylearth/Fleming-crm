@@ -1,16 +1,48 @@
 // Twilio SMS integration — follows same pattern as email.ts
 // If TWILIO env vars are missing, simulates sends (console.log + fake SID)
 
-let twilioClient: any = null;
-const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER || '';
+import type { Request, Response, NextFunction } from 'express';
 
-if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+let twilioClient: any = null;
+let twilioLib: any = null;
+const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER || '';
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+
+if (process.env.TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
   try {
-    const twilio = require('twilio');
-    twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    twilioLib = require('twilio');
+    twilioClient = twilioLib(process.env.TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
   } catch (err) {
     console.warn('[SMS] Twilio package not installed — SMS will be simulated');
   }
+}
+
+/**
+ * Express middleware to validate Twilio webhook signatures.
+ * Skips validation when TWILIO_AUTH_TOKEN or BASE_URL is not configured (dev/simulation mode).
+ * In production, rejects requests with missing or invalid X-Twilio-Signature headers.
+ */
+export function validateTwilioWebhook(req: Request, res: Response, next: NextFunction) {
+  if (!TWILIO_AUTH_TOKEN || !process.env.BASE_URL || !twilioLib) {
+    // No auth token or base URL = simulation/dev mode, skip validation
+    return next();
+  }
+
+  const signature = req.headers['x-twilio-signature'] as string;
+  if (!signature) {
+    console.warn('[TWILIO] Missing X-Twilio-Signature header');
+    return res.status(403).send('Missing Twilio signature');
+  }
+
+  const url = `${process.env.BASE_URL}${req.originalUrl}`;
+  const isValid = twilioLib.validateRequest(TWILIO_AUTH_TOKEN, signature, url, req.body);
+
+  if (!isValid) {
+    console.warn('[TWILIO] Invalid webhook signature');
+    return res.status(403).send('Invalid signature');
+  }
+
+  next();
 }
 
 export interface SendSmsParams {
