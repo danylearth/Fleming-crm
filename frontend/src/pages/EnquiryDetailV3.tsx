@@ -405,7 +405,9 @@ export default function EnquiryDetailV3() {
   const name = [data.first_name_1, data.last_name_1].filter(Boolean).join(' ') || 'Unknown';
   const canConvert = form.status === 'onboarding' && form.linked_property_id && form.first_name_1 && form.last_name_1 && form.email_1;
   const selectedProp = properties.find(p => p.id === Number(form.linked_property_id));
-  const jointApp = !!form.is_joint_application || !!form.first_name_2 || !!form.last_name_2;
+  const hasLinkedPartner = !!data.joint_partner_id;
+  const jointApp = hasLinkedPartner || !!form.is_joint_application || !!form.first_name_2 || !!form.last_name_2;
+  const partnerName = hasLinkedPartner ? [data.partner_first_name, data.partner_last_name].filter(Boolean).join(' ') : null;
 
   // Renting requirements
   let rentingReqs: string[] = [];
@@ -433,6 +435,16 @@ export default function EnquiryDetailV3() {
                   </span>
                 )}
               </div>
+              {hasLinkedPartner && partnerName && (
+                <button onClick={() => navigate(`/v3/enquiries/${data.joint_partner_id}`)}
+                  className="flex items-center gap-2 mt-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group">
+                  <div className="w-7 h-7 rounded-lg bg-pink-500/15 flex items-center justify-center group-hover:bg-pink-500/25 transition-colors">
+                    <Users size={14} className="text-pink-400" />
+                  </div>
+                  <span>Joint applicant: <span className="font-medium">{partnerName}</span></span>
+                  <ChevronRight size={14} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              )}
               {selectedProp ? (
                 <button onClick={() => navigate(`/v3/properties/${selectedProp.id}`)}
                   className="flex items-center gap-2 mt-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group">
@@ -490,11 +502,21 @@ export default function EnquiryDetailV3() {
                     <Input label="Phone" value={form.phone_1 || ''} onChange={v => setField('phone_1', v)} />
                     <AddressAutocomplete label="Address" value={form.current_address_1 || ''} onChange={v => setField('current_address_1', v)} />
                   </div>
-                  <div className="flex items-center gap-3 mt-2">
-                    <label className="text-xs text-[var(--text-muted)]">Joint Application?</label>
-                    <YesNo value={!!form.is_joint_application} onChange={v => setField('is_joint_application', v)} />
-                  </div>
-                  {form.is_joint_application && (
+                  {!hasLinkedPartner && (
+                    <div className="flex items-center gap-3 mt-2">
+                      <label className="text-xs text-[var(--text-muted)]">Joint Application?</label>
+                      <YesNo value={!!form.is_joint_application} onChange={v => setField('is_joint_application', v)} />
+                    </div>
+                  )}
+                  {hasLinkedPartner && (
+                    <button onClick={() => navigate(`/v3/enquiries/${data.joint_partner_id}`)}
+                      className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-pink-500/10 border border-pink-500/20 hover:bg-pink-500/20 transition-colors w-fit text-sm">
+                      <Users size={14} className="text-pink-400" />
+                      <span className="text-pink-400">View joint applicant: <span className="font-medium">{partnerName}</span></span>
+                      <ChevronRight size={14} className="text-pink-400" />
+                    </button>
+                  )}
+                  {!hasLinkedPartner && form.is_joint_application && (
                     <>
                       <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4">Applicant 2</p>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -526,7 +548,18 @@ export default function EnquiryDetailV3() {
                       </div>
                     ))}
                   </div>
-                  {jointApp && (
+                  {hasLinkedPartner && partnerName && (
+                    <>
+                      <div className="h-px bg-[var(--border-subtle)] my-2" />
+                      <button onClick={() => navigate(`/v3/enquiries/${data.joint_partner_id}`)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-pink-500/10 border border-pink-500/20 hover:bg-pink-500/20 transition-colors w-fit text-sm">
+                        <Users size={14} className="text-pink-400" />
+                        <span className="text-pink-400">Joint applicant: <span className="font-medium">{partnerName}</span></span>
+                        <ChevronRight size={14} className="text-pink-400" />
+                      </button>
+                    </>
+                  )}
+                  {!hasLinkedPartner && jointApp && (
                     <>
                       <div className="h-px bg-[var(--border-subtle)] my-2" />
                       <div className="flex items-center gap-2 mb-2">
@@ -627,11 +660,11 @@ export default function EnquiryDetailV3() {
               )}
             </GlassCard>
 
-            {/* Documents — Applicant 1 */}
-            <DocumentUpload entityType="tenant_enquiry" entityId={Number(id)} applicantNumber={1} title={jointApp ? "Documents — Applicant 1" : "Documents"} />
+            {/* Documents */}
+            <DocumentUpload entityType="tenant_enquiry" entityId={Number(id)} applicantNumber={1} title={(!hasLinkedPartner && jointApp) ? "Documents — Applicant 1" : "Documents"} />
 
-            {/* Documents — Applicant 2 (joint applications only) */}
-            {jointApp && (
+            {/* Documents — Applicant 2 (only for legacy records without linked partner) */}
+            {!hasLinkedPartner && jointApp && (
               <DocumentUpload entityType="tenant_enquiry" entityId={Number(id)} applicantNumber={2} title="Documents — Applicant 2" />
             )}
           </div>
@@ -690,8 +723,8 @@ export default function EnquiryDetailV3() {
                   <YesNo value={!!form.kyc_completed_1} onChange={v => setField('kyc_completed_1', v)} disabled={!isEditing('checklist')} />
                 </div>
 
-                {/* KYC — Applicant 2 */}
-                {jointApp && (
+                {/* KYC — Applicant 2 (only for legacy records without linked partner) */}
+                {!hasLinkedPartner && jointApp && (
                   <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
                     <span className="text-xs">KYC — {form.first_name_2 || 'Applicant 2'}</span>
                     <YesNo value={!!form.kyc_completed_2} onChange={v => setField('kyc_completed_2', v)} disabled={!isEditing('checklist')} />

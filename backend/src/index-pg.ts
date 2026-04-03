@@ -950,7 +950,22 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
       notes += (notes ? '\n\n' : '') + `Marketing preferences: ${marketing_preferences}`;
     }
 
-    // Map form fields to database columns (only columns that exist in schema)
+    // Extract Applicant 2 data before building primary record (will go into separate linked record)
+    const app2RawFields: Record<string, any> = {
+      first_name_1: FirstName2 || null,
+      last_name_1: Surname2 || null,
+      email_1: form_email2 || null,
+      phone_1: contactNumber2 || null,
+      current_address_1: address2 || null,
+      date_of_birth_1: dob2 || null,
+      nationality_1: Nationality2 || null,
+      employment_status_1: EmploymentStatus2 || null,
+      employer_1: job_title2 || null,
+      income_1: AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
+      contract_type_1: contract_type2 || null,
+    };
+
+    // Map form fields to database columns — primary record (Applicant 1 only)
     const data: any = {
       first_name_1: FirstName,
       last_name_1: Surname,
@@ -966,17 +981,6 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
       income_1: AnnualSalary ? parseFloat(AnnualSalary) : null,
       contract_type_1: contract_type || null,
       is_joint_application: is_joint,
-      first_name_2: FirstName2 || null,
-      last_name_2: Surname2 || null,
-      email_2: form_email2 || null,
-      phone_2: contactNumber2 || null,
-      current_address_2: address2 || null,
-      date_of_birth_2: dob2 || null,
-      nationality_2: Nationality2 || null,
-      employment_status_2: EmploymentStatus2 || null,
-      employer_2: job_title2 || null,
-      income_2: AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
-      contract_type_2: contract_type2 || null,
       preferred_tenancy_type: tenancylookingfor || null,
       preferred_property_type: typeofproperty || null,
       preferred_bedrooms: noofbedrooms || null,
@@ -1006,8 +1010,47 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
       values
     );
 
+    // If joint application, create a separate linked record for Applicant 2
+    let partnerId: number | null = null;
+    if (is_joint && app2RawFields.first_name_1) {
+      const partnerData: Record<string, any> = {
+        ...app2RawFields,
+        is_joint_application: 1,
+        joint_partner_id: id,
+        linked_property_id: data.linked_property_id || null,
+        preferred_tenancy_type: data.preferred_tenancy_type || null,
+        preferred_property_type: data.preferred_property_type || null,
+        preferred_bedrooms: data.preferred_bedrooms || null,
+        preferred_parking: data.preferred_parking || null,
+        max_rent: data.max_rent || null,
+        notes: data.notes || null,
+        status: 'new'
+      };
+
+      const pCols: string[] = [];
+      const pPlaceholders: string[] = [];
+      const pValues: any[] = [];
+      let pIdx = 1;
+      for (const [key, value] of Object.entries(partnerData)) {
+        if (value !== null && value !== undefined && value !== '') {
+          pCols.push(key);
+          pPlaceholders.push(`$${pIdx++}`);
+          pValues.push(value);
+        }
+      }
+
+      partnerId = await insert(
+        `INSERT INTO tenant_enquiries (${pCols.join(', ')}) VALUES (${pPlaceholders.join(', ')})`,
+        pValues
+      );
+
+      // Link primary record back to partner
+      await run('UPDATE tenant_enquiries SET joint_partner_id = $1 WHERE id = $2', [partnerId, id]);
+    }
+
     res.json({
       enquiry_id: id,
+      partner_enquiry_id: partnerId,
       reference: `ENQ-${id}`,
       success: true,
       message: 'Enquiry submitted successfully'
@@ -1050,13 +1093,13 @@ app.post('/api/public/tenant-enquiries/:id/documents', upload.array('documents',
 app.post('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
-    const fields = [
+
+    // Applicant 1 fields for primary record
+    const primaryFields = [
       'title_1', 'first_name_1', 'last_name_1', 'email_1', 'phone_1',
       'date_of_birth_1', 'current_address_1', 'employment_status_1',
-      'employer_1', 'income_1', 'is_joint_application',
-      'title_2', 'first_name_2', 'last_name_2', 'email_2', 'phone_2',
-      'date_of_birth_2', 'current_address_2', 'employment_status_2',
-      'employer_2', 'income_2', 'linked_property_id', 'notes', 'status'
+      'employer_1', 'income_1', 'nationality_1', 'contract_type_1',
+      'is_joint_application', 'linked_property_id', 'notes', 'status'
     ];
 
     const values: any[] = [];
@@ -1064,7 +1107,7 @@ app.post('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) 
     const cols: string[] = [];
 
     let idx = 1;
-    for (const field of fields) {
+    for (const field of primaryFields) {
       if (field in d && d[field] !== '' && d[field] !== null) {
         cols.push(field);
         placeholders.push(`$${idx++}`);
@@ -1093,8 +1136,51 @@ app.post('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) 
       values
     );
 
+    // If joint application with Applicant 2 data, create a linked partner record
+    let partnerId: number | null = null;
+    if (d.is_joint_application && d.first_name_2) {
+      const app2FieldMap: Record<string, string> = {
+        title_2: 'title_1', first_name_2: 'first_name_1', last_name_2: 'last_name_1',
+        email_2: 'email_1', phone_2: 'phone_1', date_of_birth_2: 'date_of_birth_1',
+        current_address_2: 'current_address_1', employment_status_2: 'employment_status_1',
+        employer_2: 'employer_1', income_2: 'income_1', nationality_2: 'nationality_1',
+        contract_type_2: 'contract_type_1'
+      };
+
+      const partnerData: Record<string, any> = {
+        is_joint_application: 1,
+        joint_partner_id: id,
+        linked_property_id: d.linked_property_id || null,
+        status: d.status || 'new'
+      };
+      for (const [srcKey, dstKey] of Object.entries(app2FieldMap)) {
+        if (srcKey in d && d[srcKey] !== '' && d[srcKey] !== null) {
+          partnerData[dstKey] = d[srcKey];
+        }
+      }
+
+      const pCols: string[] = [];
+      const pPlaceholders: string[] = [];
+      const pValues: any[] = [];
+      let pIdx = 1;
+      for (const [key, value] of Object.entries(partnerData)) {
+        if (value !== null && value !== undefined && value !== '') {
+          pCols.push(key);
+          pPlaceholders.push(`$${pIdx++}`);
+          pValues.push(value);
+        }
+      }
+
+      partnerId = await insert(
+        `INSERT INTO tenant_enquiries (${pCols.join(', ')}) VALUES (${pPlaceholders.join(', ')})`,
+        pValues
+      );
+
+      await run('UPDATE tenant_enquiries SET joint_partner_id = $1 WHERE id = $2', [partnerId, id]);
+    }
+
     await logAudit(req.user?.id, req.user?.email, 'create', 'tenant_enquiry', id, d);
-    res.json({ id });
+    res.json({ id, partner_id: partnerId });
   } catch (err) {
     console.error('Enquiry creation error:', err);
     res.status(500).json({ error: 'Failed to create enquiry' });
@@ -1106,6 +1192,21 @@ app.get('/api/tenant-enquiries/check-duplicates', authMiddleware, async (req: Au
     const { email, phone, exclude_id } = req.query;
     const results: any[] = [];
 
+    // Get the joint partner ID so we can exclude it from duplicate results
+    let excludePartnerIds: number[] = [];
+    if (exclude_id) {
+      const currentEnquiry = await queryOne('SELECT joint_partner_id FROM tenant_enquiries WHERE id = $1', [exclude_id]);
+      if (currentEnquiry?.joint_partner_id) {
+        excludePartnerIds.push(currentEnquiry.joint_partner_id);
+      }
+      // Also check if this record IS a partner (someone else points to us)
+      const pointingToUs = await queryOne('SELECT id FROM tenant_enquiries WHERE joint_partner_id = $1', [exclude_id]);
+      if (pointingToUs) {
+        excludePartnerIds.push(pointingToUs.id);
+      }
+    }
+    const excludeIds = [Number(exclude_id) || 0, ...excludePartnerIds];
+
     if (email) {
       const tenantByEmail = await query('SELECT id, name, email, phone, property_id FROM tenants WHERE email = $1 OR email_2 = $1', [email]);
       tenantByEmail.forEach((t: any) => results.push({ ...t, source: 'tenant', match: 'email' }));
@@ -1114,8 +1215,8 @@ app.get('/api/tenant-enquiries/check-duplicates', authMiddleware, async (req: Au
       landlordByEmail.forEach((l: any) => results.push({ ...l, source: 'landlord', match: 'email' }));
 
       const enqByEmail = await query(
-        'SELECT id, first_name_1, last_name_1, email_1, phone_1, status FROM tenant_enquiries WHERE (email_1 = $1 OR email_2 = $1) AND id != $2',
-        [email, exclude_id || 0]
+        `SELECT id, first_name_1, last_name_1, email_1, phone_1, status FROM tenant_enquiries WHERE email_1 = $1 AND id != ALL($2::int[])`,
+        [email, excludeIds]
       );
       enqByEmail.forEach((e: any) => results.push({ ...e, name: `${e.first_name_1} ${e.last_name_1}`, source: 'enquiry', match: 'email' }));
     }
@@ -1132,8 +1233,8 @@ app.get('/api/tenant-enquiries/check-duplicates', authMiddleware, async (req: Au
       });
 
       const enqByPhone = await query(
-        'SELECT id, first_name_1, last_name_1, email_1, phone_1, status FROM tenant_enquiries WHERE (phone_1 = $1 OR phone_2 = $1) AND id != $2',
-        [phone, exclude_id || 0]
+        `SELECT id, first_name_1, last_name_1, email_1, phone_1, status FROM tenant_enquiries WHERE phone_1 = $1 AND id != ALL($2::int[])`,
+        [phone, excludeIds]
       );
       enqByPhone.forEach((e: any) => {
         if (!results.find(r => r.source === 'enquiry' && r.id === e.id)) {
@@ -1156,23 +1257,46 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
 
     const { property_id, tenancy_start_date, tenancy_type, monthly_rent } = req.body;
     const name = `${enquiry.first_name_1} ${enquiry.last_name_1}`;
+    const isJoint = !!enquiry.joint_partner_id;
 
+    // Create tenant record for this applicant
     const tenantId = await insert(`
       INSERT INTO tenants (
         title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
-        is_joint_tenancy, title_2, first_name_2, last_name_2, email_2, phone_2, date_of_birth_2,
-        kyc_completed_1, kyc_completed_2, property_id, tenancy_start_date, tenancy_type, monthly_rent
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     `, [
       enquiry.title_1, enquiry.first_name_1, enquiry.last_name_1, name, enquiry.email_1, enquiry.phone_1,
-      enquiry.date_of_birth_1, enquiry.is_joint_application, enquiry.title_2, enquiry.first_name_2,
-      enquiry.last_name_2, enquiry.email_2, enquiry.phone_2, enquiry.date_of_birth_2,
-      enquiry.kyc_completed_1, enquiry.kyc_completed_2, property_id, tenancy_start_date, tenancy_type, monthly_rent
+      enquiry.date_of_birth_1, isJoint ? 1 : 0, enquiry.kyc_completed_1,
+      property_id, tenancy_start_date, tenancy_type, monthly_rent
     ]);
 
     await run("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id]);
     await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', parseInt(req.params.id as string), { converted_to_tenant: tenantId });
-    res.json({ tenant_id: tenantId });
+
+    // If joint application with linked partner, convert partner too
+    let partnerTenantId: number | null = null;
+    if (isJoint) {
+      const partner = await queryOne('SELECT * FROM tenant_enquiries WHERE id = $1', [enquiry.joint_partner_id]);
+      if (partner && partner.status !== 'converted') {
+        const partnerName = `${partner.first_name_1} ${partner.last_name_1}`;
+        partnerTenantId = await insert(`
+          INSERT INTO tenants (
+            title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
+            is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        `, [
+          partner.title_1, partner.first_name_1, partner.last_name_1, partnerName, partner.email_1, partner.phone_1,
+          partner.date_of_birth_1, 1, partner.kyc_completed_1,
+          property_id, tenancy_start_date, tenancy_type, monthly_rent
+        ]);
+
+        await run("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [enquiry.joint_partner_id]);
+        await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiry.joint_partner_id, { converted_to_tenant: partnerTenantId });
+      }
+    }
+
+    res.json({ tenant_id: tenantId, partner_tenant_id: partnerTenantId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to convert enquiry' });
@@ -1182,8 +1306,13 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
 app.get('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const enquiry = await queryOne(`
-      SELECT te.*, p.address as property_address FROM tenant_enquiries te
-      LEFT JOIN properties p ON p.id = te.linked_property_id WHERE te.id = $1
+      SELECT te.*, p.address as property_address,
+        jp.first_name_1 as partner_first_name, jp.last_name_1 as partner_last_name,
+        jp.email_1 as partner_email, jp.status as partner_status
+      FROM tenant_enquiries te
+      LEFT JOIN properties p ON p.id = te.linked_property_id
+      LEFT JOIN tenant_enquiries jp ON jp.id = te.joint_partner_id
+      WHERE te.id = $1
     `, [req.params.id as string]);
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
     await logAudit(req.user?.id, req.user?.email, 'view', 'tenant_enquiry', parseInt(req.params.id as string));
@@ -1202,7 +1331,7 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
-    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','employment_status_1','employer_1','income_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason','renting_requirements','is_permanent_address','holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_token','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step'];
+    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','employment_status_1','employer_1','income_1','nationality_1','contract_type_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','nationality_2','contract_type_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason','renting_requirements','is_permanent_address','holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_token','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step','joint_partner_id'];
     for (const key of allowed) {
       if (key in d) {
         fields.push(`${key}=$${idx++}`);
@@ -1238,7 +1367,34 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
     } else {
       await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, d);
     }
-    const updated = await queryOne(`SELECT te.*, p.address as property_address FROM tenant_enquiries te LEFT JOIN properties p ON p.id = te.linked_property_id WHERE te.id=$1`, [req.params.id]);
+    // Sync shared fields to joint partner record if linked
+    const syncFields = ['status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason'];
+    const syncData: Record<string, any> = {};
+    for (const key of syncFields) {
+      if (key in d) syncData[key] = d[key];
+    }
+    if (Object.keys(syncData).length > 0 && oldRecord?.joint_partner_id) {
+      const sFields: string[] = [];
+      const sValues: any[] = [];
+      let sIdx = 1;
+      for (const [key, value] of Object.entries(syncData)) {
+        sFields.push(`${key}=$${sIdx++}`);
+        sValues.push(value);
+      }
+      sFields.push('updated_at=CURRENT_TIMESTAMP');
+      sValues.push(oldRecord.joint_partner_id);
+      await run(`UPDATE tenant_enquiries SET ${sFields.join(', ')} WHERE id=$${sIdx}`, sValues);
+    }
+
+    const updated = await queryOne(`
+      SELECT te.*, p.address as property_address,
+        jp.first_name_1 as partner_first_name, jp.last_name_1 as partner_last_name,
+        jp.email_1 as partner_email, jp.status as partner_status
+      FROM tenant_enquiries te
+      LEFT JOIN properties p ON p.id = te.linked_property_id
+      LEFT JOIN tenant_enquiries jp ON jp.id = te.joint_partner_id
+      WHERE te.id=$1
+    `, [req.params.id]);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Failed to update enquiry' });

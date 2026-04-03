@@ -901,6 +901,9 @@ for (const col of publicFormCols) {
   try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN ${col}`); } catch (e) {}
 }
 
+// Joint applicant: add self-referencing partner link column
+try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN joint_partner_id INTEGER REFERENCES tenant_enquiries(id)`); } catch (e) {}
+
 // Sprint 3: Property expenses table
 db.exec(`
   CREATE TABLE IF NOT EXISTS property_expenses (

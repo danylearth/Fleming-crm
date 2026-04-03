@@ -20,7 +20,7 @@ interface EnquiryRaw {
   status: string; created_at: string; updated_at?: string;
   linked_property_id?: number; property_address?: string;
   income_1?: number; employment_status_1?: string;
-  is_joint_application?: number; kyc_completed_1?: number;
+  is_joint_application?: number; joint_partner_id?: number; kyc_completed_1?: number;
   follow_up_date?: string; viewing_date?: string;
   notes?: string; rejection_reason?: string;
 }

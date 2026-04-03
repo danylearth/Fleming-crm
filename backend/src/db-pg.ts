@@ -645,6 +645,55 @@ export async function initDb() {
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS preferred_parking TEXT;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS max_rent REAL;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS marketing_preferences TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS joint_partner_id INTEGER REFERENCES tenant_enquiries(id);
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Migrate existing joint records: split _2 fields into separate linked enquiry records
+    await client.query(`
+      DO $$
+      DECLARE
+        rec RECORD;
+        new_id INTEGER;
+      BEGIN
+        FOR rec IN
+          SELECT * FROM tenant_enquiries
+          WHERE is_joint_application = 1
+            AND first_name_2 IS NOT NULL
+            AND first_name_2 != ''
+            AND joint_partner_id IS NULL
+        LOOP
+          INSERT INTO tenant_enquiries (
+            title_1, first_name_1, last_name_1, email_1, phone_1, date_of_birth_1,
+            current_address_1, employment_status_1, employer_1, income_1,
+            nationality_1, contract_type_1,
+            kyc_completed_1, id_primary_verified_1, id_secondary_verified_1,
+            is_joint_application, joint_partner_id,
+            linked_property_id, status, follow_up_date, viewing_date, viewing_with,
+            notes, rejection_reason, source,
+            holding_deposit_requested, holding_deposit_received, holding_deposit_amount,
+            security_deposit_amount, monthly_rent_agreed,
+            preferred_tenancy_type, preferred_property_type, preferred_bedrooms,
+            preferred_parking, max_rent,
+            created_at, updated_at
+          ) VALUES (
+            rec.title_2, rec.first_name_2, rec.last_name_2, rec.email_2, rec.phone_2, rec.date_of_birth_2,
+            rec.current_address_2, rec.employment_status_2, rec.employer_2, rec.income_2,
+            rec.nationality_2, rec.contract_type_2,
+            rec.kyc_completed_2, rec.id_primary_verified_2, rec.id_secondary_verified_2,
+            1, rec.id,
+            rec.linked_property_id, rec.status, rec.follow_up_date, rec.viewing_date, rec.viewing_with,
+            rec.notes, rec.rejection_reason, rec.source,
+            rec.holding_deposit_requested, rec.holding_deposit_received, rec.holding_deposit_amount,
+            rec.security_deposit_amount, rec.monthly_rent_agreed,
+            rec.preferred_tenancy_type, rec.preferred_property_type, rec.preferred_bedrooms,
+            rec.preferred_parking, rec.max_rent,
+            rec.created_at, CURRENT_TIMESTAMP
+          ) RETURNING id INTO new_id;
+
+          UPDATE tenant_enquiries SET joint_partner_id = new_id WHERE id = rec.id;
+        END LOOP;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `);
