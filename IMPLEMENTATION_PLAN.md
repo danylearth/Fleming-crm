@@ -171,5 +171,5 @@
 - [x] _Next of kin data display in CRM enquiry/tenant detail pages_
 - [x] _Guarantor fields on tenant application form_
 - [x] _Port `scheduler.ts` to PostgreSQL — currently imports SQLite `db`, not PG `pool`, so compliance/tenancy reminders are inactive in production_
-- [ ] _Standardize application.html API URL configuration (env-based or dynamic detection)_
+- [x] _Standardize application.html API URL configuration (env-based or dynamic detection)_
 - [ ] _Rename `components/v3/` directory to `components/ui/` or `components/shared/` — cosmetic consistency after V3 suffix removal. ~33 files, widespread import changes_

@@ -1637,6 +1637,13 @@
     </div>
 
     <script>
+        // API Configuration — override by setting window.FLEMING_API_URL before this script
+        const API_BASE_URL = window.FLEMING_API_URL || (
+            window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                ? 'http://localhost:3001'
+                : 'https://fleming-crm-api-production-7e58.up.railway.app'
+        );
+
         let currentStep = 1;
         const totalSteps = 8; // Excluding success step
         let loadedProperties = [];
@@ -2138,15 +2145,11 @@
             data.marketing_preferences = marketingPrefs.join(', ');
 
             try {
-                const baseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                    ? 'http://localhost:3001'
-                    : 'https://fleming-crm-api-production-7e58.up.railway.app';
-
                 // Check for duplicates first (fail open if endpoint errors)
                 try {
                     submitBtn.textContent = 'Checking...';
                     const dupParams = new URLSearchParams({ email: data.form_email, phone: data.contactNumber });
-                    const dupCheck = await fetch(`${baseUrl}/api/public/check-duplicates?${dupParams}`);
+                    const dupCheck = await fetch(`${API_BASE_URL}/api/public/check-duplicates?${dupParams}`);
                     if (dupCheck.ok) {
                         const dupResult = await dupCheck.json();
                         if (dupResult.duplicates && dupResult.duplicates.length > 0) {
@@ -2161,7 +2164,7 @@
                 }
 
                 submitBtn.textContent = 'Submitting...';
-                const apiUrl = `${baseUrl}/api/public/tenant-enquiries`;
+                const apiUrl = `${API_BASE_URL}/api/public/tenant-enquiries`;
 
                 const response = await fetch(apiUrl, {
                     method: 'POST',
@@ -2208,11 +2211,7 @@
             if (loadPropertiesPromise) return loadPropertiesPromise;
             loadPropertiesPromise = (async () => {
                 try {
-                    const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                        ? 'http://localhost:3001/api/public/properties'
-                        : 'https://fleming-crm-api-production-7e58.up.railway.app/api/public/properties';
-
-                    const response = await fetch(apiUrl);
+                    const response = await fetch(`${API_BASE_URL}/api/public/properties`);
                     loadedProperties = await response.json();
 
                     // Populate the property select dropdown if it exists and hasn't been replaced by loading UI

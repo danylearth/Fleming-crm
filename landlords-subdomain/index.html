@@ -1270,6 +1270,13 @@
     </div>
 
     <script>
+        // API Configuration — override by setting window.FLEMING_API_URL before this script
+        const API_BASE_URL = window.FLEMING_API_URL || (
+            window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                ? 'http://localhost:3001'
+                : 'https://fleming-crm-api-production-7e58.up.railway.app'
+        );
+
         let currentStep = 1;
         const totalSteps = 6; // Excluding success step
         let companySearchTimeout = null;
@@ -1560,11 +1567,7 @@
 
             companySearchTimeout = setTimeout(async () => {
                 try {
-                    const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                        ? 'http://localhost:3001'
-                        : 'https://fleming-crm-api-production-7e58.up.railway.app';
-
-                    const response = await fetch(`${apiUrl}/api/companies-house/search?query=${encodeURIComponent(query)}`);
+                    const response = await fetch(`${API_BASE_URL}/api/public/companies-house/search?query=${encodeURIComponent(query)}`);
                     const data = await response.json();
 
                     if (data.items && data.items.length > 0) {
@@ -1689,12 +1692,8 @@
             if (document.getElementById('marketPost').checked) prefs.push('Post');
             data.marketing_preferences = prefs.join(', ');
 
-            const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                ? 'http://localhost:3001'
-                : 'https://fleming-crm-api-production-7e58.up.railway.app';
-
             try {
-                const response = await fetch(`${API_URL}/api/public/landlord-enquiries`, {
+                const response = await fetch(`${API_BASE_URL}/api/public/landlord-enquiries`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)

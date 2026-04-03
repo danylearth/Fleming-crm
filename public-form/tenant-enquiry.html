@@ -806,6 +806,13 @@
     </div>
 
     <script>
+        // API Configuration — override by setting window.FLEMING_API_URL before this script
+        const API_BASE_URL = window.FLEMING_API_URL || (
+            window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                ? 'http://localhost:3001'
+                : 'https://fleming-crm-api-production-7e58.up.railway.app'
+        );
+
         let currentStep = 1;
         const totalSteps = 7; // Excluding success step
         
@@ -894,11 +901,7 @@
             });
 
             try {
-                const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                    ? 'http://localhost:3001/api/tenant-enquiries/public'
-                    : 'https://fleming-crm-api-production-7e58.up.railway.app/api/tenant-enquiries/public';
-
-                const response = await fetch(apiUrl, {
+                const response = await fetch(`${API_BASE_URL}/api/tenant-enquiries/public`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -924,11 +927,7 @@
         // Load available properties
         async function loadProperties() {
             try {
-                const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                    ? 'http://localhost:3001/api/public/properties'
-                    : 'https://fleming-crm-api-production-7e58.up.railway.app/api/public/properties';
-
-                const response = await fetch(apiUrl);
+                const response = await fetch(`${API_BASE_URL}/api/public/properties`);
                 const properties = await response.json();
 
                 const select = document.getElementById('propertySelect');

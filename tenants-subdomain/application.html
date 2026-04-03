@@ -1145,9 +1145,12 @@
     </div>
 
     <script>
-        const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-            ? 'http://localhost:3001'
-            : 'https://fleming-crm-api-production-7e58.up.railway.app';
+        // API Configuration — override by setting window.FLEMING_API_URL before this script
+        const API_BASE_URL = window.FLEMING_API_URL || (
+            window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                ? 'http://localhost:3001'
+                : 'https://fleming-crm-api-production-7e58.up.railway.app'
+        );
 
         // Google Places API key — set this to enable address autocomplete
         // Same key as VITE_GOOGLE_PLACES_API_KEY used in the React frontend
@@ -1381,7 +1384,7 @@
         // Load form data
         async function loadForm() {
             try {
-                const res = await fetch(`${API_URL}/api/public/application-form/${token}`);
+                const res = await fetch(`${API_BASE_URL}/api/public/application-form/${token}`);
                 if (res.status === 410) {
                     document.getElementById('loading-state').style.display = 'none';
                     document.getElementById('completed-state').style.display = 'block';
@@ -1649,7 +1652,7 @@
                     app_decl_marketing: document.getElementById('f_decl_marketing').checked,
                 };
 
-                const res = await fetch(`${API_URL}/api/public/application-form/${token}`, {
+                const res = await fetch(`${API_BASE_URL}/api/public/application-form/${token}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
