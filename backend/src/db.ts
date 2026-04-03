@@ -871,6 +871,35 @@ for (const col of onboardingCols) {
   try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN ${col}`); } catch (e) {}
 }
 
+// Public form columns (match PG schema for parity)
+const publicFormCols = [
+  'postcode_1 TEXT',
+  'years_at_address_1 TEXT',
+  'nationality_1 TEXT',
+  'contract_type_1 TEXT',
+  'job_title_1 TEXT',
+  'annual_salary_1 REAL',
+  'postcode_2 TEXT',
+  'years_at_address_2 TEXT',
+  'nationality_2 TEXT',
+  'contract_type_2 TEXT',
+  'job_title_2 TEXT',
+  'annual_salary_2 REAL',
+  'preferred_tenancy_type TEXT',
+  'reason_for_renting TEXT',
+  'preferred_property_type TEXT',
+  'preferred_bedrooms TEXT',
+  'preferred_parking TEXT',
+  'max_rent REAL',
+  'monthly_rent_budget REAL',
+  'marketing_preferences TEXT',
+  'form_submission_ip TEXT',
+  'form_version TEXT',
+];
+for (const col of publicFormCols) {
+  try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN ${col}`); } catch (e) {}
+}
+
 // Sprint 3: Property expenses table
 db.exec(`
   CREATE TABLE IF NOT EXISTS property_expenses (

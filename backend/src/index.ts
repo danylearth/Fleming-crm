@@ -917,6 +917,38 @@ app.get('/api/public/properties', (req, res) => {
   }
 });
 
+// PUBLIC ENDPOINT - Check for duplicate enquiries (no auth)
+app.get('/api/public/check-duplicates', (req, res) => {
+  try {
+    const { email, phone } = req.query;
+    if (!email && !phone) {
+      return res.json({ duplicates: [] });
+    }
+    const duplicates: any[] = [];
+
+    if (email) {
+      const emailMatches = db.prepare(
+        `SELECT id, first_name_1, last_name_1, 'tenant_enquiry' as source, 'email' as match_type
+         FROM tenant_enquiries WHERE email_1 = ? AND created_at > datetime('now', '-24 hours')`
+      ).all(email);
+      duplicates.push(...emailMatches);
+    }
+
+    if (phone) {
+      const phoneMatches = db.prepare(
+        `SELECT id, first_name_1, last_name_1, 'tenant_enquiry' as source, 'phone' as match_type
+         FROM tenant_enquiries WHERE phone_1 = ? AND created_at > datetime('now', '-24 hours')`
+      ).all(phone);
+      duplicates.push(...phoneMatches);
+    }
+
+    res.json({ duplicates });
+  } catch (err) {
+    console.error('Error checking duplicates:', err);
+    res.json({ duplicates: [] }); // Fail open
+  }
+});
+
 // ============ PUBLIC APPLICATION FORM (DocuSign-lite) ============
 
 app.get('/api/public/application-form/:token', (req, res) => {
@@ -1204,7 +1236,7 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
 
 // PUBLIC ENDPOINT - No authentication required
 // This endpoint receives submissions from the Fleming Lettings public tenant enquiry form
-app.post('/api/tenant-enquiries/public', async (req, res) => {
+app.post('/api/public/tenant-enquiries', async (req, res) => {
   try {
     const {
       // Registration type
@@ -1245,7 +1277,13 @@ app.post('/api/tenant-enquiries/public', async (req, res) => {
       rent_min,
       rent_max,
       // Property selection
-      property_id
+      property_id,
+      // New fields from updated form
+      contract_type,
+      contract_type2,
+      additional_notes,
+      marketing_preferences,
+      has_property_interest
     } = req.body;
 
     // Validation
@@ -1286,70 +1324,70 @@ app.post('/api/tenant-enquiries/public', async (req, res) => {
     // Get client IP for audit
     const client_ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-    // Insert into database
-    const result = db.prepare(`
-      INSERT INTO tenant_enquiries (
-        first_name_1, last_name_1, email_1, phone_1, current_address_1, postcode_1,
-        years_at_address_1, date_of_birth_1, nationality_1, employment_status_1,
-        job_title_1, annual_salary_1, income_1,
-        is_joint_application,
-        first_name_2, last_name_2, email_2, phone_2, current_address_2, postcode_2,
-        years_at_address_2, date_of_birth_2, nationality_2, employment_status_2,
-        job_title_2, annual_salary_2, income_2,
-        preferred_tenancy_type, reason_for_renting, property_type, bedrooms,
-        parking_required, monthly_rent_budget,
-        linked_property_id, form_submission_ip, form_version, status, created_at
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
-      )
-    `).run(
-      // Applicant 1
-      FirstName,
-      Surname,
-      form_email,
-      contactNumber,
-      address || null,
-      Postcode || null,
-      yearofaddress || null,
-      dob || null,
-      Nationality || null,
-      EmploymentStatus || null,
-      job_title || null,
-      AnnualSalary ? parseFloat(AnnualSalary) : null,
-      AnnualSalary ? parseFloat(AnnualSalary) : null, // income_1 (same as annual_salary)
-      // Joint
-      is_joint,
-      // Applicant 2
-      FirstName2 || null,
-      Surname2 || null,
-      form_email2 || null,
-      contactNumber2 || null,
-      address2 || null,
-      Postcode2 || null,
-      yearofaddress2 || null,
-      dob2 || null,
-      Nationality2 || null,
-      EmploymentStatus2 || null,
-      job_title2 || null,
-      AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
-      AnnualSalary2 ? parseFloat(AnnualSalary2) : null, // income_2
-      // Property requirements
-      tenancylookingfor || null,
-      reasonforrenting || null,
-      typeofproperty || null,
-      noofbedrooms ? parseInt(noofbedrooms) : null,
-      roadparking || null,
-      rent_max ? parseFloat(rent_max) : null,
-      // Property linking
-      property_id ? parseInt(property_id) : null,
-      // Metadata
-      client_ip,
-      'v1',
-      'new'
-    );
+    // Only store user's additional notes - structured data goes into proper columns
+    let notes = '';
+    if (additional_notes) {
+      notes = additional_notes;
+    }
+    if (marketing_preferences) {
+      notes += (notes ? '\n\n' : '') + `Marketing preferences: ${marketing_preferences}`;
+    }
+
+    // Map form fields to database columns (matching PG schema)
+    const data: Record<string, any> = {
+      first_name_1: FirstName,
+      last_name_1: Surname,
+      email_1: form_email,
+      phone_1: contactNumber,
+      current_address_1: address || null,
+      postcode_1: Postcode || null,
+      years_at_address_1: yearofaddress || null,
+      nationality_1: Nationality || null,
+      date_of_birth_1: dob || null,
+      employment_status_1: EmploymentStatus || null,
+      employer_1: job_title || null,
+      income_1: AnnualSalary ? parseFloat(AnnualSalary) : null,
+      contract_type_1: contract_type || null,
+      is_joint_application: is_joint,
+      first_name_2: FirstName2 || null,
+      last_name_2: Surname2 || null,
+      email_2: form_email2 || null,
+      phone_2: contactNumber2 || null,
+      current_address_2: address2 || null,
+      date_of_birth_2: dob2 || null,
+      nationality_2: Nationality2 || null,
+      employment_status_2: EmploymentStatus2 || null,
+      employer_2: job_title2 || null,
+      income_2: AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
+      contract_type_2: contract_type2 || null,
+      preferred_tenancy_type: tenancylookingfor || null,
+      preferred_property_type: typeofproperty || null,
+      preferred_bedrooms: noofbedrooms || null,
+      preferred_parking: roadparking || null,
+      max_rent: rent_max ? parseFloat(rent_max) : null,
+      marketing_preferences: marketing_preferences || null,
+      linked_property_id: property_id ? parseInt(property_id) : null,
+      notes: notes || null,
+      form_submission_ip: client_ip,
+      form_version: 'v1',
+      status: 'new'
+    };
+
+    // Build dynamic INSERT (skip null/undefined/empty values)
+    const cols: string[] = [];
+    const placeholders: string[] = [];
+    const values: any[] = [];
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== null && value !== undefined && value !== '') {
+        cols.push(key);
+        placeholders.push('?');
+        values.push(value);
+      }
+    }
+
+    const result = db.prepare(
+      `INSERT INTO tenant_enquiries (${cols.join(', ')}) VALUES (${placeholders.join(', ')})`
+    ).run(...values);
 
     const enquiryId = result.lastInsertRowid;
 
@@ -1374,6 +1412,30 @@ app.post('/api/tenant-enquiries/public', async (req, res) => {
       success: false,
       error: 'An error occurred while submitting your enquiry. Please try again or contact us directly.'
     });
+  }
+});
+
+// PUBLIC ENDPOINT - Upload documents for a tenant enquiry (no auth)
+app.post('/api/public/tenant-enquiries/:id/documents', upload.array('documents', 10), (req, res) => {
+  try {
+    const enquiryId = req.params.id;
+    const enquiry = db.prepare('SELECT id FROM tenant_enquiries WHERE id = ?').get(enquiryId);
+    if (!enquiry) {
+      return res.status(404).json({ error: 'Enquiry not found' });
+    }
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+    for (const file of files) {
+      db.prepare(
+        'INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run('tenant_enquiry', enquiryId, 'supporting_document', file.filename, file.originalname, file.mimetype, file.size, 'public_form');
+    }
+    res.json({ success: true, message: `${files.length} document(s) uploaded` });
+  } catch (err) {
+    console.error('Public document upload error:', err);
+    res.status(500).json({ error: 'Failed to upload document' });
   }
 });
 

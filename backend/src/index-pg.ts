@@ -1021,6 +1021,31 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
   }
 });
 
+// PUBLIC ENDPOINT - Upload documents for a tenant enquiry (no auth)
+app.post('/api/public/tenant-enquiries/:id/documents', upload.array('documents', 10), async (req, res) => {
+  try {
+    const enquiryId = req.params.id;
+    const enquiry = await queryOne('SELECT id FROM tenant_enquiries WHERE id = $1', [enquiryId]);
+    if (!enquiry) {
+      return res.status(404).json({ error: 'Enquiry not found' });
+    }
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+    for (const file of files) {
+      await insert(
+        'INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        ['tenant_enquiry', enquiryId, 'supporting_document', file.filename, file.originalname, file.mimetype, file.size, 'public_form']
+      );
+    }
+    res.json({ success: true, message: `${files.length} document(s) uploaded` });
+  } catch (err) {
+    console.error('Public document upload error:', err);
+    res.status(500).json({ error: 'Failed to upload document' });
+  }
+});
+
 // Internal authenticated endpoint
 app.post('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) => {
   try {
