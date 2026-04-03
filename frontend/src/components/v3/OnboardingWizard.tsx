@@ -536,105 +536,153 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
           {/* Step 3: Application Form */}
           <StepCard idx={2} step={steps[2]}>
-            {enquiry.application_form_completed ? (
-              <div className="space-y-2">
-                <div className="text-xs text-emerald-400 flex items-center gap-2">
-                  <CheckCircle size={14} /> Application completed & signed
-                  {enquiry.app_signed_at && ` on ${new Date(enquiry.app_signed_at).toLocaleDateString('en-GB')}`}
-                </div>
-                {enquiry.app_signature && (
-                  <div>
-                    <p className="text-[10px] text-[var(--text-muted)] mb-1">Signature</p>
-                    <div className="bg-white rounded-lg p-2 inline-block">
-                      <img src={enquiry.app_signature} alt="Signature" className="h-12" />
+            {/* Progress tracker — three milestones */}
+            {(() => {
+              const sent = !!enquiry.application_form_sent;
+              const completed = !!enquiry.application_form_completed;
+              const milestones = [
+                { label: 'Not Sent', reached: true, active: !sent && !completed, ts: null },
+                { label: 'Sent — Waiting', reached: sent, active: sent && !completed, ts: enquiry.onboarding_email_sent_at },
+                { label: 'Completed', reached: completed, active: completed, ts: enquiry.app_signed_at },
+              ];
+              return (
+                <div className="space-y-4">
+                  {/* Horizontal progress tracker */}
+                  <div className="flex items-start">
+                    {milestones.map((m, i) => (
+                      <div key={m.label} className="flex items-start flex-1">
+                        <div className="flex flex-col items-center flex-1">
+                          {/* Node */}
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-colors ${
+                            m.active
+                              ? completed ? 'border-emerald-500 bg-emerald-500/20' : sent ? 'border-amber-500 bg-amber-500/20' : 'border-red-500 bg-red-500/20'
+                              : m.reached ? 'border-emerald-500 bg-emerald-500/20' : 'border-[var(--border-input)] bg-[var(--bg-subtle)]'
+                          }`}>
+                            {m.reached && i > 0 ? (
+                              <CheckCircle size={14} className={m.active && !completed ? 'text-amber-400' : 'text-emerald-400'} />
+                            ) : m.active && i === 0 ? (
+                              <Circle size={10} className="text-red-400 fill-red-400" />
+                            ) : (
+                              <Circle size={10} className="text-[var(--text-muted)]" />
+                            )}
+                          </div>
+                          {/* Label */}
+                          <p className={`text-[10px] mt-1 text-center font-medium ${
+                            m.active ? (completed ? 'text-emerald-400' : sent ? 'text-amber-400' : 'text-red-400') : m.reached ? 'text-emerald-400' : 'text-[var(--text-muted)]'
+                          }`}>{m.label}</p>
+                          {/* Timestamp */}
+                          {m.ts && m.reached && (
+                            <p className="text-[9px] text-[var(--text-muted)] mt-0.5">
+                              {new Date(m.ts).toLocaleDateString('en-GB')}
+                            </p>
+                          )}
+                        </div>
+                        {/* Connector line */}
+                        {i < milestones.length - 1 && (
+                          <div className={`h-0.5 flex-1 mt-3 mx-1 rounded ${
+                            milestones[i + 1].reached ? 'bg-emerald-500' : sent && i === 0 ? 'bg-amber-500' : 'bg-[var(--border-input)]'
+                          }`} />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Contextual content below the tracker */}
+                  {completed ? (
+                    <div className="space-y-2">
+                      {enquiry.app_signature && (
+                        <div>
+                          <p className="text-[10px] text-[var(--text-muted)] mb-1">Signature</p>
+                          <div className="bg-white rounded-lg p-2 inline-block">
+                            <img src={enquiry.app_signature} alt="Signature" className="h-12" />
+                          </div>
+                        </div>
+                      )}
+                      <div className="bg-[var(--bg-subtle)] rounded-lg p-3 space-y-2">
+                        <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Application Details</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {enquiry.app_ni_number && (
+                            <div>
+                              <p className="text-[10px] text-[var(--text-muted)]">NI Number</p>
+                              <p className="text-xs text-[var(--text-primary)]">{enquiry.app_ni_number}</p>
+                            </div>
+                          )}
+                          {enquiry.employer_1 && (
+                            <div>
+                              <p className="text-[10px] text-[var(--text-muted)]">Employer</p>
+                              <p className="text-xs text-[var(--text-primary)]">{enquiry.employer_1}</p>
+                            </div>
+                          )}
+                          {enquiry.income_1 && (
+                            <div>
+                              <p className="text-[10px] text-[var(--text-muted)]">Income</p>
+                              <p className="text-xs text-[var(--text-primary)]">£{Number(enquiry.income_1).toLocaleString()}</p>
+                            </div>
+                          )}
+                          {enquiry.app_bank_name && (
+                            <div>
+                              <p className="text-[10px] text-[var(--text-muted)]">Bank</p>
+                              <p className="text-xs text-[var(--text-primary)]">{enquiry.app_bank_name}</p>
+                            </div>
+                          )}
+                        </div>
+                        {(enquiry.app_has_landlord_ref || enquiry.app_has_employer_ref) && (
+                          <>
+                            <div className="h-px bg-[var(--border-subtle)]" />
+                            <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">References</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {enquiry.app_landlord_ref_name && (
+                                <div>
+                                  <p className="text-[10px] text-[var(--text-muted)]">Landlord Ref</p>
+                                  <p className="text-xs text-[var(--text-primary)]">{enquiry.app_landlord_ref_name}</p>
+                                  {enquiry.app_landlord_ref_phone && <p className="text-[10px] text-[var(--text-muted)]">{enquiry.app_landlord_ref_phone}</p>}
+                                </div>
+                              )}
+                              {enquiry.app_employer_ref_name && (
+                                <div>
+                                  <p className="text-[10px] text-[var(--text-muted)]">Employer Ref</p>
+                                  <p className="text-xs text-[var(--text-primary)]">{enquiry.app_employer_ref_name}</p>
+                                  {enquiry.app_employer_ref_phone && <p className="text-[10px] text-[var(--text-muted)]">{enquiry.app_employer_ref_phone}</p>}
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+                        {enquiry.app_next_of_kin_name && (
+                          <>
+                            <div className="h-px bg-[var(--border-subtle)]" />
+                            <div>
+                              <p className="text-[10px] text-[var(--text-muted)]">Next of Kin</p>
+                              <p className="text-xs text-[var(--text-primary)]">{enquiry.app_next_of_kin_name} ({enquiry.app_next_of_kin_relationship || 'N/A'})</p>
+                              {enquiry.app_next_of_kin_phone && <p className="text-[10px] text-[var(--text-muted)]">{enquiry.app_next_of_kin_phone}</p>}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-                <div className="bg-[var(--bg-subtle)] rounded-lg p-3 space-y-2">
-                  <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Application Details</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {enquiry.app_ni_number && (
-                      <div>
-                        <p className="text-[10px] text-[var(--text-muted)]">NI Number</p>
-                        <p className="text-xs text-[var(--text-primary)]">{enquiry.app_ni_number}</p>
-                      </div>
-                    )}
-                    {enquiry.employer_1 && (
-                      <div>
-                        <p className="text-[10px] text-[var(--text-muted)]">Employer</p>
-                        <p className="text-xs text-[var(--text-primary)]">{enquiry.employer_1}</p>
-                      </div>
-                    )}
-                    {enquiry.income_1 && (
-                      <div>
-                        <p className="text-[10px] text-[var(--text-muted)]">Income</p>
-                        <p className="text-xs text-[var(--text-primary)]">£{Number(enquiry.income_1).toLocaleString()}</p>
-                      </div>
-                    )}
-                    {enquiry.app_bank_name && (
-                      <div>
-                        <p className="text-[10px] text-[var(--text-muted)]">Bank</p>
-                        <p className="text-xs text-[var(--text-primary)]">{enquiry.app_bank_name}</p>
-                      </div>
-                    )}
-                  </div>
-                  {(enquiry.app_has_landlord_ref || enquiry.app_has_employer_ref) && (
-                    <>
-                      <div className="h-px bg-[var(--border-subtle)]" />
-                      <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">References</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {enquiry.app_landlord_ref_name && (
-                          <div>
-                            <p className="text-[10px] text-[var(--text-muted)]">Landlord Ref</p>
-                            <p className="text-xs text-[var(--text-primary)]">{enquiry.app_landlord_ref_name}</p>
-                            {enquiry.app_landlord_ref_phone && <p className="text-[10px] text-[var(--text-muted)]">{enquiry.app_landlord_ref_phone}</p>}
-                          </div>
-                        )}
-                        {enquiry.app_employer_ref_name && (
-                          <div>
-                            <p className="text-[10px] text-[var(--text-muted)]">Employer Ref</p>
-                            <p className="text-xs text-[var(--text-primary)]">{enquiry.app_employer_ref_name}</p>
-                            {enquiry.app_employer_ref_phone && <p className="text-[10px] text-[var(--text-muted)]">{enquiry.app_employer_ref_phone}</p>}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                  {enquiry.app_next_of_kin_name && (
-                    <>
-                      <div className="h-px bg-[var(--border-subtle)]" />
-                      <div>
-                        <p className="text-[10px] text-[var(--text-muted)]">Next of Kin</p>
-                        <p className="text-xs text-[var(--text-primary)]">{enquiry.app_next_of_kin_name} ({enquiry.app_next_of_kin_relationship || 'N/A'})</p>
-                        {enquiry.app_next_of_kin_phone && <p className="text-[10px] text-[var(--text-muted)]">{enquiry.app_next_of_kin_phone}</p>}
-                      </div>
-                    </>
+                  ) : sent ? (
+                    <div className="space-y-3">
+                      {enquiry.application_form_token && (
+                        <div className="bg-[var(--bg-subtle)] rounded-lg p-3">
+                          <p className="text-[10px] text-[var(--text-muted)] mb-1">Application Form Link:</p>
+                          <p className="text-xs text-[var(--accent-orange)] break-all">
+                            https://apply.fleminglettings.co.uk/onboarding/{enquiry.application_form_token}
+                          </p>
+                        </div>
+                      )}
+                      <Button variant="secondary" onClick={() => setShowApplicationEmail(true)} disabled={!enquiry.email_1} className="flex items-center gap-2">
+                        <Send size={14} /> Send Application Email
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-[var(--text-muted)]">
+                      <AlertTriangle size={14} className="inline mr-1 text-amber-400" />
+                      Application form link will be sent with the holding deposit email (Step 1)
+                    </div>
                   )}
                 </div>
-              </div>
-            ) : enquiry.application_form_sent ? (
-              <div className="space-y-3">
-                <div className="text-xs text-amber-400 flex items-center gap-2">
-                  <Clock size={14} /> Waiting for tenant to complete the form
-                </div>
-                {enquiry.application_form_token && (
-                  <div className="bg-[var(--bg-subtle)] rounded-lg p-3">
-                    <p className="text-[10px] text-[var(--text-muted)] mb-1">Application Form Link:</p>
-                    <p className="text-xs text-[var(--accent-orange)] break-all">
-                      https://apply.fleminglettings.co.uk/onboarding/{enquiry.application_form_token}
-                    </p>
-                  </div>
-                )}
-                <Button variant="secondary" onClick={() => setShowApplicationEmail(true)} disabled={!enquiry.email_1} className="flex items-center gap-2">
-                  <Send size={14} /> Send Application Email
-                </Button>
-              </div>
-            ) : (
-              <div className="text-xs text-[var(--text-muted)]">
-                <AlertTriangle size={14} className="inline mr-1 text-amber-400" />
-                Application form link will be sent with the holding deposit email (Step 1)
-              </div>
-            )}
+              );
+            })()}
           </StepCard>
 
           {/* Step 4: ID Verification */}
