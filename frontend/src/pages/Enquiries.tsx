@@ -240,7 +240,7 @@ function EmploymentFields({ form, setField, suffix, editing }: {
 }
 
 // ─── Main Page ───
-export default function EnquiriesV3() {
+export default function Enquiries() {
   const api = useApi();
   const navigate = useNavigate();
   const [rawEnquiries, setRawEnquiries] = useState<EnquiryRaw[]>([]);

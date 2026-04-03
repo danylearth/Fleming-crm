@@ -452,7 +452,7 @@ function PropertyDropdown({ properties, value, onChange, enquiries, linkedProper
 }
 
 // ─── Main Page ───
-export default function EnquiriesKanbanV3() {
+export default function EnquiriesKanban() {
   const api = useApi();
   const navigate = useNavigate();
   const [enquiries, setEnquiries] = useState<EnquiryRaw[]>([]);

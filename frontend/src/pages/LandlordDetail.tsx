@@ -66,7 +66,7 @@ function Toggle({ label, checked, onChange, disabled }: { label: string; checked
   );
 }
 
-export default function LandlordDetailV3() {
+export default function LandlordDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const api = useApi();

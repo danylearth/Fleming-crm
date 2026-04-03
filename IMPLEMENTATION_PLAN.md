@@ -128,9 +128,9 @@
 
 - [x] **Delete all V2 page files (10 files)** — `DashboardV2.tsx`, `EnquiriesV2.tsx`, `EnquiriesListV2.tsx`, `TenantsV2.tsx`, `BDMV2.tsx`, `MaintenanceV2.tsx`, `TasksV2.tsx`, `TransactionsV2.tsx`, `PropertiesV2.tsx`, `LandlordsV2.tsx`. Delete `AILayout.tsx` from `components/`. Kept `useAIChat.ts` — still used by V3 `FloatingAI.tsx`.
 
-- [ ] **Remove V1/V2 routes and imports from `App.tsx`** — Remove V1 routes (lines 98–124), V2 routes (lines 127–138), and all corresponding imports. 23 routes to remove.
+- [x] **Remove V1/V2 routes and imports from `App.tsx`** — Remove V1 routes (lines 98–124), V2 routes (lines 127–138), and all corresponding imports. 23 routes to remove.
 
-- [ ] **Rename all V3 files to drop suffix (19 files)** — `DashboardV3.tsx` → `Dashboard.tsx`, etc. Update all imports across the codebase. List: DashboardV3, PropertiesV3, PropertyDetailV3, LandlordsV3, LandlordDetailV3, TenantsV3, TenantDetailV3, EnquiriesV3, EnquiriesKanbanV3, EnquiryDetailV3, BDMV3, BDMDetailV3, MaintenanceV3, TasksV3, TaskDetailV3, TransactionsV3, UsersV3, SettingsV3, LoginV3.
+- [x] **Rename all V3 files to drop suffix (19 files)** — `DashboardV3.tsx` → `Dashboard.tsx`, etc. Update all imports across the codebase. List: DashboardV3, PropertiesV3, PropertyDetailV3, LandlordsV3, LandlordDetailV3, TenantsV3, TenantDetailV3, EnquiriesV3, EnquiriesKanbanV3, EnquiryDetailV3, BDMV3, BDMDetailV3, MaintenanceV3, TasksV3, TaskDetailV3, TransactionsV3, UsersV3, SettingsV3, LoginV3.
 
 - [ ] **Update route paths to remove `/v3` prefix** — Change `/v3/properties` → `/properties`, etc. Update default redirect from `/v3` to `/`. Update `V3Layout.tsx` sidebar nav links. Update any hardcoded `/v3/` links in components.
 

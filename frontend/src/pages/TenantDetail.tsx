@@ -132,7 +132,7 @@ function SectionEditButton({ editing, onEdit, onSave, onCancel, saving }: {
 }
 
 // ==================== COMPONENT ====================
-export default function TenantDetailV3() {
+export default function TenantDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const api = useApi();

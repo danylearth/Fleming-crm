@@ -50,7 +50,7 @@ const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string; b
 
 const TASK_TYPES = ['manual', 'viewing', 'follow_up', 'document', 'maintenance', 'onboarding', 'compliance', 'other'];
 
-export default function TaskDetailV3() {
+export default function TaskDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const api = useApi();

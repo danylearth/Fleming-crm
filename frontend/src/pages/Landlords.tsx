@@ -21,7 +21,7 @@ interface TenantOption {
   id: number; name: string; property_id: number;
 }
 
-export default function LandlordsV3() {
+export default function Landlords() {
   const navigate = useNavigate();
   const api = useApi();
   const [landlords, setLandlords] = useState<Landlord[]>([]);

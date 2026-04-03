@@ -41,7 +41,7 @@ function MapAutoFit({ tenants, coords, properties }: {
   return null;
 }
 
-export default function TenantsV3() {
+export default function Tenants() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const api = useApi();

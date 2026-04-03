@@ -121,7 +121,7 @@ function Toggle({ label, checked, onChange, disabled }: { label: string; checked
   );
 }
 
-export default function PropertyDetailV3() {
+export default function PropertyDetail() {
   const { id } = useParams();
   const api = useApi();
   const navigate = useNavigate();

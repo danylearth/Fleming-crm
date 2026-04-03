@@ -101,7 +101,7 @@ function FilterDropdown({ icon: Icon, label, value, displayValue, onClear, items
   );
 }
 
-export default function TasksV3() {
+export default function Tasks() {
   const api = useApi();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);

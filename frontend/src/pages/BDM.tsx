@@ -38,7 +38,7 @@ function isOverdue(d: string) {
   return new Date(d) < new Date(new Date().toDateString());
 }
 
-export default function BDMV3() {
+export default function BDM() {
   const navigate = useNavigate();
   const api = useApi();
   const [prospects, setProspects] = useState<Prospect[]>([]);

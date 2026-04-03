@@ -58,7 +58,7 @@ function ReadField({ label, value }: { label: string; value?: string | null }) {
   return <div><p className="text-xs text-[var(--text-muted)]">{label}</p><p className="text-sm mt-0.5">{value || '—'}</p></div>;
 }
 
-export default function BDMDetailV3() {
+export default function BDMDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const api = useApi();

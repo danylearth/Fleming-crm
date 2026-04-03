@@ -34,7 +34,7 @@ interface Enquiry {
   email_1?: string; phone_1?: string;
 }
 
-export default function DashboardV3() {
+export default function Dashboard() {
   const api = useApi();
   const { user } = useAuth();
   const navigate = useNavigate();

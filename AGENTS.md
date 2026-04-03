@@ -36,7 +36,7 @@ npm run render-build / render-start  # Render deployment
 ```
 /
 ├── frontend/src/
-│   ├── pages/          # Route components (V1/V2/V3 versions coexist)
+│   ├── pages/          # Route components (V3 suffix removed, e.g. Dashboard.tsx)
 │   ├── components/     # Layout.tsx, AILayout.tsx, V3Layout.tsx, v3/ lib
 │   ├── context/        # AuthContext, ThemeContext, PortfolioContext
 │   ├── hooks/          # useApi, useAIChat, useGovernmentAPIs, usePermissions
@@ -73,7 +73,7 @@ Monorepo with separate frontend (Vercel), backend API (Railway/PostgreSQL), and 
 - **Mobile app** — Expo RN with secure token storage, same API
 
 ## Code Patterns
-- **Three UI versions coexist:** V1 (`Page.tsx`), V2 (`PageV2.tsx`), V3 (`PageV3.tsx`) — V3 is production
+- **Single UI version:** V1/V2 deleted, V3 suffix removed — pages are now `Page.tsx` (e.g. `Dashboard.tsx`)
 - **V3 active layout:** `V3Layout.tsx` with collapsible sidebar, navy/gold theme (`#1a2332`/`#d4af37`)
 - **API calls:** `useApi` hook + fetch with `Authorization: Bearer` header
 - **Polymorphic relations:** tasks/documents use `entity_type` + `entity_id`

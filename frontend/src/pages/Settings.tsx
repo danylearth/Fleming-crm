@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 import { Camera, Lock, Bell, Palette, Bot, Mail, Key, CheckCircle, AlertCircle } from 'lucide-react';
 
-export default function SettingsV3() {
+export default function Settings() {
   const { user } = useAuth();
   const api = useApi();
   const [oldPassword, setOldPassword] = useState('');

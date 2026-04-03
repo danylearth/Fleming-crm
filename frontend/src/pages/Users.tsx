@@ -17,7 +17,7 @@ interface User {
   last_login?: string;
 }
 
-export default function UsersV3() {
+export default function Users() {
   const navigate = useNavigate();
   const api = useApi();
   const { canManageUsers, isAdmin } = usePermissions();

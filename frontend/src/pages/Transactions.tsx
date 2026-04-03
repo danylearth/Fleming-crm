@@ -30,7 +30,7 @@ interface Tenancy {
   status?: string;
 }
 
-export default function TransactionsV3() {
+export default function Transactions() {
   const api = useApi();
   const [payments, setPayments] = useState<RentPayment[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);

@@ -186,7 +186,7 @@ function SectionEditButton({ editing, onEdit, onSave, onCancel, saving }: {
 }
 
 // ==================== COMPONENT ====================
-export default function EnquiryDetailV3() {
+export default function EnquiryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const api = useApi();

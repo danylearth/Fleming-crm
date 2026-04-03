@@ -37,7 +37,7 @@ function statusLabel(s: string) {
   return STATUSES.find(st => st.key === s)?.label || s;
 }
 
-export default function PropertiesV3() {
+export default function Properties() {
   const api = useApi();
   const navigate = useNavigate();
   const [properties, setProperties] = useState<Property[]>([]);

@@ -47,7 +47,7 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export default function MaintenanceV3() {
+export default function Maintenance() {
   const api = useApi();
   const [items, setItems] = useState<MaintenanceItem[]>([]);
   const [properties, setProperties] = useState<{ id: number; address: string }[]>([]);
