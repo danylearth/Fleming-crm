@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Avatar, SectionHeader, DatePicker } from '../components/v3';
-import DocumentUpload from '../components/v3/DocumentUpload';
-import ActivityTimeline from '../components/v3/ActivityTimeline';
+import { GlassCard, Button, Input, Select, Avatar, SectionHeader, DatePicker } from '../components/ui';
+import DocumentUpload from '../components/ui/DocumentUpload';
+import ActivityTimeline from '../components/ui/ActivityTimeline';
 import { useApi } from '../hooks/useApi';
 import {
   Pencil, Save, X, Mail, Phone, MapPin, Calendar, MessageSquare, Clock,

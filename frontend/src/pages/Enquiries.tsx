@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState, DataTable, DatePicker } from '../components/v3';
-import BulkActions from '../components/v3/BulkActions';
+import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState, DataTable, DatePicker } from '../components/ui';
+import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Calendar, LayoutGrid, List, Building2, ArrowRight, XCircle, Mail, Phone } from 'lucide-react';
-import { BookingIcon, AwaitingIcon, OnboardingIcon } from '../components/v3/icons/FlemingIcons';
+import { BookingIcon, AwaitingIcon, OnboardingIcon } from '../components/ui/icons/FlemingIcons';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
-import { SearchDropdown } from '../components/v3/SearchDropdown';
-import OnboardingWizard from '../components/v3/OnboardingWizard';
+import { SearchDropdown } from '../components/ui/SearchDropdown';
+import OnboardingWizard from '../components/ui/OnboardingWizard';
 import { calculateSmsSegments } from '../utils/sms';
 
 interface EnquiryRaw {

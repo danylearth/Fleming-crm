@@ -40,7 +40,7 @@ cd frontend && npm run test:watch    # Watch mode
 /
 ├── frontend/src/
 │   ├── pages/          # Route components (V3 suffix removed, e.g. Dashboard.tsx)
-│   ├── components/     # Layout.tsx, v3/ lib
+│   ├── components/     # Layout.tsx, ui/ lib
 │   ├── context/        # AuthContext, ThemeContext, PortfolioContext
 │   ├── hooks/          # useApi, useAIChat, useGovernmentAPIs, usePermissions
 │   └── App.tsx         # All routes defined here

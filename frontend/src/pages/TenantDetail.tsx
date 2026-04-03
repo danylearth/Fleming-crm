@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, DatePicker } from '../components/v3';
-import DocumentUpload from '../components/v3/DocumentUpload';
-import RentPayments from '../components/v3/RentPayments';
-import ActivityTimeline from '../components/v3/ActivityTimeline';
+import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, DatePicker } from '../components/ui';
+import DocumentUpload from '../components/ui/DocumentUpload';
+import RentPayments from '../components/ui/RentPayments';
+import ActivityTimeline from '../components/ui/ActivityTimeline';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import {

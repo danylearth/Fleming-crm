@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Avatar, SectionHeader, EmptyState, Card, DatePicker } from '../components/v3';
-import DocumentUpload from '../components/v3/DocumentUpload';
-import ActivityTimeline from '../components/v3/ActivityTimeline';
-import AddressAutocomplete from '../components/v3/AddressAutocomplete';
+import { GlassCard, Button, Input, Select, Avatar, SectionHeader, EmptyState, Card, DatePicker } from '../components/ui';
+import DocumentUpload from '../components/ui/DocumentUpload';
+import ActivityTimeline from '../components/ui/ActivityTimeline';
+import AddressAutocomplete from '../components/ui/AddressAutocomplete';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Briefcase, Trash2, RotateCcw } from 'lucide-react';

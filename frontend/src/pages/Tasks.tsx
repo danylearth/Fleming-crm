@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Card, GlassCard, Button, Input, Select, Avatar, ProgressRing, EmptyState, DatePicker } from '../components/v3';
-import BulkActions from '../components/v3/BulkActions';
+import { Card, GlassCard, Button, Input, Select, Avatar, ProgressRing, EmptyState, DatePicker } from '../components/ui';
+import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import {
   Plus, X, CheckCircle2, Clock, Inbox, Calendar, Search, ChevronDown,

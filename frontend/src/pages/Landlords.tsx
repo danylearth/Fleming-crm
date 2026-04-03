@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState, DataTable, SearchDropdown } from '../components/v3';
-import BulkActions from '../components/v3/BulkActions';
+import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState, DataTable, SearchDropdown } from '../components/ui';
+import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Building2, Phone, Mail, Search, Check, LayoutGrid, List, User, AlertCircle, Briefcase } from 'lucide-react';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';

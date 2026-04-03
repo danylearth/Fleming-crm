@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Button, Avatar, SearchBar, EmptyState, Input, Select, DatePicker } from '../components/v3';
+import { Button, Avatar, SearchBar, EmptyState, Input, Select, DatePicker } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { getPropertyImage } from '../utils/propertyImages';
 import {
@@ -11,7 +11,7 @@ import {
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import {
   NewIcon, BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon
-} from '../components/v3/icons/FlemingIcons';
+} from '../components/ui/icons/FlemingIcons';
 
 interface EnquiryRaw {
   id: number;

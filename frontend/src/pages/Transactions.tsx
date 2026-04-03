@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { Card, GlassCard, EmptyState } from '../components/v3';
+import { Card, GlassCard, EmptyState } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { PoundSterling, TrendingUp, TrendingDown, Home } from 'lucide-react';
 

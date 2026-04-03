@@ -88,8 +88,8 @@ cd landlords-subdomain && vercel --prod
 
 **Key Backend Files:**
 - `src/auth.ts` - JWT authentication middleware and token generation
-- `src/email.ts` - Email service using Resend for notifications
-- `src/sms.ts` - Twilio SMS integration (simulates sends if Twilio env vars missing)
+- `src/email.ts` - Email service using Resend, with delivery tracking via webhooks (`email_messages` table)
+- `src/sms.ts` - Twilio SMS integration with inbound webhook, templates, and delivery status. Simulates sends if Twilio env vars missing.
 - `src/scheduler.ts` - Background job scheduler for compliance reminders and automated task creation
 - `src/ai/chat.ts` - AI assistant router for natural language queries
 - `src/inventory-routes.ts` - Property inventory with photo upload and thumbnail generation (sharp)
@@ -125,24 +125,18 @@ Special routes:
 
 ### Frontend Structure
 
-**Three UI Versions:**
-The codebase contains three iterations of the UI (V1, V2, V3). V3 is the current production version with a navy/gold color scheme.
+**Single UI Version:**
+V1 and V2 have been deleted. The V3 suffix has been removed from all pages — files are now named `Dashboard.tsx`, `Properties.tsx`, etc.
 
 **Routing:**
 - All routes configured in `src/App.tsx`
 - Protected routes wrapped with `<ProtectedRoute>` component
 - Auth context manages user state and redirects
-- Default route redirects to `/v3`
 
-**Page Naming Convention:**
-- V1: `PageName.tsx`
-- V2: `PageNameV2.tsx`
-- V3: `PageNameV3.tsx` (current production)
-
-**Current V3 Pages:**
+**Pages:**
 - List + Detail pages for: Properties, Landlords, Tenants, Enquiries, BDM, Maintenance, Tasks
 - Dashboard, Settings, Transactions, Users, Login
-- Enquiries have both list (`EnquiriesV3`) and kanban board (`EnquiriesKanbanV3`) views
+- Enquiries have both list (`Enquiries`) and kanban board (`EnquiriesKanban`) views
 
 **Context Providers:**
 - `AuthContext.tsx` - User authentication state, login/logout, token management
@@ -150,15 +144,15 @@ The codebase contains three iterations of the UI (V1, V2, V3). V3 is the current
 - `PortfolioContext.tsx` - Portfolio type filtering (internal vs external landlords)
 
 **Component Organization:**
-- `components/` - Shared components (Layout, AILayout, DocumentsSection)
-- `components/v3/` - V3-specific reusable components
+- `components/` - Shared components (Layout, DocumentsSection)
+- `components/ui/` - Reusable UI components
 - `pages/` - Top-level route components
 - `hooks/` - Custom React hooks
-- `utils/` - Utility functions
+- `utils/` - Utility functions (including `sms.ts` for SMS segment calculation)
 
 **Styling:**
 - TailwindCSS with custom navy/gold theme
-- Theme colors defined in `tailwind.config.js`
+- `Layout.tsx` with collapsible sidebar
 - Navy primary: `#1a2332`
 - Gold accent: `#d4af37`
 
@@ -363,6 +357,8 @@ Then configure DNS CNAME records:
 - `COMPANIES_HOUSE_API_KEY` - Register at https://developer.company-information.service.gov.uk (FREE)
 - `COUNCIL_TAX_API_KEY` - Subscribe at https://www.counciltaxfinder.com (PAID - Monthly subscription)
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` - Twilio SMS (optional, simulates if missing)
+- `RESEND_WEBHOOK_SECRET` - For Resend email delivery tracking webhooks (svix HMAC-SHA256)
+- `BASE_URL` - Backend base URL for webhook callback URLs
 - Note: Land Registry and Postcodes.io require NO API keys
 
 **Deployment Configurations:**
@@ -425,13 +421,31 @@ logAudit(userId, userEmail, 'create', 'landlord', entityId, changesObject);
 - `gas_reminder`, `eicr_reminder`, `epc_reminder` - Auto-created by scheduler
 - Tasks have `entity_type` and `entity_id` for linking to related entities
 
+### Joint Applicants
+- `tenant_enquiries.joint_partner_id` self-references to link two individual enquiry records
+- Each applicant has their own record, documents, and KYC
+- Shared fields (status, property, viewing) sync on update
+- Legacy records may still have `_2` suffix columns without `joint_partner_id` — UI handles both patterns
+
+### SMS & Email Integration
+- **SMS:** Twilio integration in `src/sms.ts`. Templates defined as exported functions (viewingConfirmationSms, followUpSms, rejectionSms, rentReminderSms). Frontend generates template text inline when workflow mode is selected.
+- **SMS segments:** `frontend/src/utils/sms.ts` exports `calculateSmsSegments(text)` for GSM-7 vs UCS-2 encoding detection
+- **Inbound SMS:** `/api/sms/inbound` receives Twilio webhooks, matches sender phone to `tenant_enquiries.phone_1`, stores with `direction='inbound'` in `sms_messages`
+- **Email tracking:** `email_messages` table stores all sent emails with `resend_id`. Resend webhook at `/api/email/webhook` updates delivery status (delivered, bounced, opened, clicked, failed)
+- **Webhook validation:** Twilio validated via `twilio.validateRequest()`. Resend validated via svix HMAC-SHA256 using `RESEND_WEBHOOK_SECRET`. Both skip validation in dev when secrets aren't configured.
+
+### Rate Limiting
+- `express-rate-limit` on all `/api/public/*` routes
+- POST endpoints: 10 req/15min, GET endpoints: 60 req/15min
+- Applied as per-route middleware in both `index.ts` and `index-pg.ts`
+
 ## Important Constraints
 
 1. **Express 5:** The backend uses Express 5 (`express@^5.2.1`), not Express 4. Route handlers return promises natively; error handling differs from Express 4 patterns.
 
 2. **Database Flexibility:** Backend supports both SQLite (dev) and PostgreSQL (prod). Never hardcode SQL that's specific to one database type. The codebase uses different entry points (`index.ts` vs `index-pg.ts`) to handle this.
 
-3. **Version Coexistence:** V1, V2, V3 pages coexist. When modifying functionality, check if changes need to propagate across versions or if V3 is the only active version.
+3. **Single UI Version:** V1 and V2 have been deleted. Only one version exists (formerly V3, now renamed without suffix). No need to propagate changes across versions.
 
 4. **Polymorphic Relationships:** Tasks and documents use `entity_type` + `entity_id` pattern. Always ensure both fields are set when creating these records.
 

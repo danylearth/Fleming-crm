@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Card, GlassCard, SectionHeader, StatusDot, EmptyState, Tag } from '../components/v3';
+import { Card, GlassCard, SectionHeader, StatusDot, EmptyState, Tag } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { getPropertyImage } from '../utils/propertyImages';

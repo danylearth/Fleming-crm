@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker, SectionHeader } from '../components/v3';
-import DocumentUpload from '../components/v3/DocumentUpload';
-import ContextualDocSlot from '../components/v3/ContextualDocSlot';
-import ActivityTimeline from '../components/v3/ActivityTimeline';
-import AddressAutocomplete from '../components/v3/AddressAutocomplete';
+import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker, SectionHeader } from '../components/ui';
+import DocumentUpload from '../components/ui/DocumentUpload';
+import ContextualDocSlot from '../components/ui/ContextualDocSlot';
+import ActivityTimeline from '../components/ui/ActivityTimeline';
+import AddressAutocomplete from '../components/ui/AddressAutocomplete';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -13,10 +13,10 @@ import {
   Calendar, ExternalLink, CheckCircle, Clock, Mail, Phone, ChevronRight,
   MessageSquare, Plus, ShieldCheck, AlertTriangle, Send
 } from 'lucide-react';
-import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
+import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/ui/icons/FlemingIcons';
 import { calculateSmsSegments } from '../utils/sms';
-import OnboardingWizard from '../components/v3/OnboardingWizard';
-import EmailPreviewModal from '../components/v3/EmailPreviewModal';
+import OnboardingWizard from '../components/ui/OnboardingWizard';
+import EmailPreviewModal from '../components/ui/EmailPreviewModal';
 
 // ==================== CONSTANTS ====================
 const STATUS_COLORS: Record<string, string> = {

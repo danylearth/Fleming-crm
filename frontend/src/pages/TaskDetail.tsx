@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Card, GlassCard, Button, Select, Avatar, EmptyState, DatePicker } from '../components/v3';
+import { Card, GlassCard, Button, Select, Avatar, EmptyState, DatePicker } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import {
   ArrowLeft, Pencil, Save, X, Calendar, Clock, User, Building2,

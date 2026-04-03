@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, SearchDropdown, PostcodeAutocomplete } from '../components/v3';
-import AddressAutocomplete from '../components/v3/AddressAutocomplete';
-import BulkActions from '../components/v3/BulkActions';
+import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, SearchDropdown, PostcodeAutocomplete } from '../components/ui';
+import AddressAutocomplete from '../components/ui/AddressAutocomplete';
+import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Building2, Plus, List, Map, X, Search, ChevronDown, User } from 'lucide-react';
-import PropertyMap from '../components/v3/PropertyMap';
+import PropertyMap from '../components/ui/PropertyMap';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 
 interface Property {

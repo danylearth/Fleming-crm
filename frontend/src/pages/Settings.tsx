@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Avatar, SectionHeader } from '../components/v3';
+import { GlassCard, Button, Input, Avatar, SectionHeader } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 import { Camera, Lock, Bell, Palette, Bot, Mail, Key, CheckCircle, AlertCircle } from 'lucide-react';

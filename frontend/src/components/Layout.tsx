@@ -6,8 +6,8 @@ import { Menu, LogOut, ChevronLeft, ChevronRight, X, Sun, Moon, Users } from 'lu
 import {
   DashboardIcon, EnquiriesIcon, PropertiesIcon, LandlordsIcon, TenantsIcon,
   BdmIcon, MaintenanceIcon, TasksIcon, FinancialsIcon, SettingsIcon
-} from './v3/icons/FlemingIcons';
-import FloatingAI from './v3/FloatingAI';
+} from './ui/icons/FlemingIcons';
+import FloatingAI from './ui/FloatingAI';
 import { useTheme } from '../context/ThemeContext';
 
 const navItems = [

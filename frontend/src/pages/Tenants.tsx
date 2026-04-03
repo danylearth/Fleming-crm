@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable } from '../components/v3';
-import BulkActions from '../components/v3/BulkActions';
+import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable } from '../components/ui';
+import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Mail, Phone, Building2, Calendar, Search, ChevronDown, LayoutGrid, List, User, MapPin } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';

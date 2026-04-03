@@ -172,4 +172,4 @@
 - [x] _Guarantor fields on tenant application form_
 - [x] _Port `scheduler.ts` to PostgreSQL — currently imports SQLite `db`, not PG `pool`, so compliance/tenancy reminders are inactive in production_
 - [x] _Standardize application.html API URL configuration (env-based or dynamic detection)_
-- [ ] _Rename `components/v3/` directory to `components/ui/` or `components/shared/` — cosmetic consistency after V3 suffix removal. ~33 files, widespread import changes_
+- [x] _Rename `components/v3/` directory to `components/ui/` — cosmetic consistency after V3 suffix removal. ~33 files, widespread import changes_

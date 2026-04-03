@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Avatar, EmptyState, DataTable, type Column } from '../components/v3';
+import { GlassCard, Button, Input, Select, Avatar, EmptyState, DataTable, type Column } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { usePermissions } from '../hooks/usePermissions';
 import { Plus, X, Users as UsersIcon, Shield, ShieldAlert, Eye, Key, CheckCircle, XCircle, Copy, type LucideIcon } from 'lucide-react';
