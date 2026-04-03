@@ -179,3 +179,8 @@ input[type="checkbox"]:focus {
   ring-color: #6b7280;
   ring-opacity: 0.5;
 }
+
+/* Google Places Autocomplete dropdown — ensure it renders above modals/drawers */
+.pac-container {
+  z-index: 10000 !important;
+}
