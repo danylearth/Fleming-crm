@@ -641,6 +641,7 @@ export default function EnquiryDetailV3() {
               </div>
               {isEditing('property') ? (
                 <Select
+                  searchable
                   value={String(form.linked_property_id || '')}
                   onChange={v => setField('linked_property_id', v ? Number(v) : null)}
                   options={[
