@@ -993,13 +993,43 @@
                     <p class="step-description">Please review and agree to the declarations below, then sign to confirm.</p>
 
                     <div class="checkbox-group">
-                        <input type="checkbox" id="f_agree_terms" required />
+                        <input type="checkbox" id="f_decl_holding_deposit" required />
                         <span>I have read and agree to the <strong>Holding Deposit Terms and Conditions</strong> as outlined above. I understand that the holding deposit may be retained in accordance with the Tenant Fees Act 2019.</span>
                     </div>
 
                     <div class="checkbox-group">
-                        <input type="checkbox" id="f_agree_info" required />
+                        <input type="checkbox" id="f_decl_info_accurate" required />
                         <span>I confirm that all information provided in this application is <strong>true, complete, and accurate</strong> to the best of my knowledge. I understand that providing false or misleading information may result in the forfeiture of my holding deposit.</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_gdpr" required />
+                        <span>I consent to the collection and processing of my personal data in accordance with the <strong>Privacy Notice</strong> provided by Fleming Lettings &amp; Developments UK Limited, and in compliance with the UK General Data Protection Regulation (GDPR).</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_enquiries" required />
+                        <span>I authorise Fleming Lettings &amp; Developments UK Limited to make enquiries with my <strong>employer, bank, previous landlord, and any referees</strong> named in this application to verify the information provided.</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_documents" required />
+                        <span>I consent to receive the <strong>How to Rent guide, Energy Performance Certificate (EPC), Gas Safety Certificate, and Electrical Installation Condition Report (EICR)</strong> via email.</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_credit_check" required />
+                        <span>I authorise <strong>Fleming Lettings &amp; Developments UK Limited</strong> to carry out a credit check and referencing process in connection with this tenancy application.</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_terms" required />
+                        <span>I have read and accept the <strong>Terms and Conditions</strong> of Fleming Lettings &amp; Developments UK Limited.</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_marketing" required />
+                        <span>I accept the <strong>marketing and communications policies</strong> of Fleming Lettings &amp; Developments UK Limited and consent to receiving communications regarding my tenancy and related services.</span>
                     </div>
 
                     <div class="input-group" style="margin-top: 24px;">
@@ -1468,9 +1498,15 @@
             const errEl = document.getElementById('submit-error');
             errEl.style.display = 'none';
 
-            // Validate
-            if (!document.getElementById('f_agree_terms').checked || !document.getElementById('f_agree_info').checked) {
-                errEl.textContent = 'Please agree to both declarations.';
+            // Validate all 8 declaration checkboxes
+            const declIds = [
+                'f_decl_holding_deposit', 'f_decl_info_accurate', 'f_decl_gdpr',
+                'f_decl_enquiries', 'f_decl_documents', 'f_decl_credit_check',
+                'f_decl_terms', 'f_decl_marketing'
+            ];
+            const allChecked = declIds.every(id => document.getElementById(id).checked);
+            if (!allChecked) {
+                errEl.textContent = 'Please agree to all declarations before submitting.';
                 errEl.style.display = 'block';
                 return;
             }
@@ -1537,6 +1573,14 @@
                     app_next_of_kin_2_address: document.getElementById('f_nok2_address').value,
                     app_signature: sigData,
                     app_declaration_agreed: true,
+                    app_decl_holding_deposit: document.getElementById('f_decl_holding_deposit').checked,
+                    app_decl_info_accurate: document.getElementById('f_decl_info_accurate').checked,
+                    app_decl_gdpr: document.getElementById('f_decl_gdpr').checked,
+                    app_decl_enquiries: document.getElementById('f_decl_enquiries').checked,
+                    app_decl_documents: document.getElementById('f_decl_documents').checked,
+                    app_decl_credit_check: document.getElementById('f_decl_credit_check').checked,
+                    app_decl_terms: document.getElementById('f_decl_terms').checked,
+                    app_decl_marketing: document.getElementById('f_decl_marketing').checked,
                 };
 
                 const res = await fetch(`${API_URL}/api/public/application-form/${token}`, {
