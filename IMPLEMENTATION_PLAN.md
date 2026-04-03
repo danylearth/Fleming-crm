@@ -124,9 +124,9 @@
 
 ### V1/V2 Cleanup (spec Workstream 2)
 
-- [ ] **Delete all V1 page files (16 files)** — `Dashboard.tsx`, `Properties.tsx`, `PropertyDetail.tsx`, `Landlords.tsx`, `LandlordDetail.tsx`, `LandlordsBDM.tsx`, `LandlordBDMDetail.tsx`, `Tenants.tsx`, `TenantDetail.tsx`, `TenantEnquiries.tsx`, `TenantEnquiryDetail.tsx`, `Maintenance.tsx`, `Transactions.tsx`, `Tasks.tsx`, `Login.tsx`, `ApplicantConcept.tsx`. Delete `Layout.tsx` from `components/`.
+- [x] **Delete all V1 page files (16 files)** — `Dashboard.tsx`, `Properties.tsx`, `PropertyDetail.tsx`, `Landlords.tsx`, `LandlordDetail.tsx`, `LandlordsBDM.tsx`, `LandlordBDMDetail.tsx`, `Tenants.tsx`, `TenantDetail.tsx`, `TenantEnquiries.tsx`, `TenantEnquiryDetail.tsx`, `Maintenance.tsx`, `Transactions.tsx`, `Tasks.tsx`, `Login.tsx`, `ApplicantConcept.tsx`. Delete `Layout.tsx` from `components/`.
 
-- [ ] **Delete all V2 page files (10 files)** — `DashboardV2.tsx`, `EnquiriesV2.tsx`, `EnquiriesListV2.tsx`, `TenantsV2.tsx`, `BDMV2.tsx`, `MaintenanceV2.tsx`, `TasksV2.tsx`, `TransactionsV2.tsx`, `PropertiesV2.tsx`, `LandlordsV2.tsx`. Delete `AILayout.tsx` from `components/`. Delete `useAIChat.ts` from `hooks/`.
+- [x] **Delete all V2 page files (10 files)** — `DashboardV2.tsx`, `EnquiriesV2.tsx`, `EnquiriesListV2.tsx`, `TenantsV2.tsx`, `BDMV2.tsx`, `MaintenanceV2.tsx`, `TasksV2.tsx`, `TransactionsV2.tsx`, `PropertiesV2.tsx`, `LandlordsV2.tsx`. Delete `AILayout.tsx` from `components/`. Kept `useAIChat.ts` — still used by V3 `FloatingAI.tsx`.
 
 - [ ] **Remove V1/V2 routes and imports from `App.tsx`** — Remove V1 routes (lines 98–124), V2 routes (lines 127–138), and all corresponding imports. 23 routes to remove.
 

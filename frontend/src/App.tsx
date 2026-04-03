@@ -1,18 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import AILayout from './components/AILayout';
-import DashboardV2 from './pages/DashboardV2';
-import EnquiriesV2 from './pages/EnquiriesV2';
-import EnquiriesListV2 from './pages/EnquiriesListV2';
-import TenantsV2 from './pages/TenantsV2';
-import BDMV2 from './pages/BDMV2';
-import MaintenanceV2 from './pages/MaintenanceV2';
-import TasksV2 from './pages/TasksV2';
-import TransactionsV2 from './pages/TransactionsV2';
-import PropertiesV2 from './pages/PropertiesV2';
-import LandlordsV2 from './pages/LandlordsV2';
-
 // V3
 import LoginV3 from './pages/LoginV3';
 import DashboardV3 from './pages/DashboardV3';
@@ -75,18 +63,6 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<PublicRoute><LoginV3 /></PublicRoute>} />
       <Route path="/" element={<Navigate to="/v3" replace />} />
-
-      {/* V2 — AI-first design */}
-      <Route path="/v2" element={<ProtectedRoute><AILayout><DashboardV2 /></AILayout></ProtectedRoute>} />
-      <Route path="/v2/enquiries" element={<ProtectedRoute><AILayout><EnquiriesV2 /></AILayout></ProtectedRoute>} />
-      <Route path="/v2/enquiries/list" element={<ProtectedRoute><EnquiriesListV2 /></ProtectedRoute>} />
-      <Route path="/v2/tenants" element={<ProtectedRoute><TenantsV2 /></ProtectedRoute>} />
-      <Route path="/v2/bdm" element={<ProtectedRoute><AILayout><BDMV2 /></AILayout></ProtectedRoute>} />
-      <Route path="/v2/maintenance" element={<ProtectedRoute><AILayout><MaintenanceV2 /></AILayout></ProtectedRoute>} />
-      <Route path="/v2/tasks" element={<ProtectedRoute><AILayout><TasksV2 /></AILayout></ProtectedRoute>} />
-      <Route path="/v2/transactions" element={<ProtectedRoute><AILayout><TransactionsV2 /></AILayout></ProtectedRoute>} />
-      <Route path="/v2/properties" element={<ProtectedRoute><PropertiesV2 /></ProtectedRoute>} />
-      <Route path="/v2/landlords" element={<ProtectedRoute><LandlordsV2 /></ProtectedRoute>} />
 
       {/* V3 — Dark mode redesign */}
       <Route path="/v3" element={<ProtectedRoute><DashboardV3 /></ProtectedRoute>} />
