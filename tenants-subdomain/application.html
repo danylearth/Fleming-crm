@@ -793,9 +793,13 @@
                             <label>Years at Current Address *</label>
                             <input type="number" id="f_years_current" inputmode="numeric" min="0" max="50" required />
                         </div>
-                        <div class="input-group">
+                        <div class="input-group" style="display:flex;align-items:center;">
+                            <button type="button" id="btn_add_prev_address" onclick="togglePrevAddress()" style="background:none;border:1px dashed #ccc;border-radius:8px;padding:10px 16px;color:#d4af37;font-size:14px;font-weight:500;cursor:pointer;width:100%;text-align:center;transition:border-color 0.2s,color 0.2s;" onmouseover="this.style.borderColor='#d4af37'" onmouseout="this.style.borderColor='#ccc'">+ Add a previous address</button>
+                        </div>
+                        <div class="input-group" id="prev-address-group" style="display:none;">
                             <label>Previous Address</label>
-                            <input type="text" id="f_prev_address_1" placeholder="If less than 3 years at current" />
+                            <input type="text" id="f_prev_address_1" placeholder="Enter your previous address" />
+                            <button type="button" onclick="togglePrevAddress()" style="background:none;border:none;color:#999;font-size:12px;cursor:pointer;margin-top:4px;padding:0;" onmouseover="this.style.color='#e74c3c'" onmouseout="this.style.color='#999'">✕ Remove</button>
                         </div>
                     </div>
 
@@ -1376,6 +1380,20 @@
                 selfEmployed.style.display = 'block';
             } else if (status === 'Student' || status === 'Retired' || status === 'Unemployed') {
                 other.style.display = 'block';
+            }
+        }
+
+        function togglePrevAddress() {
+            const btn = document.getElementById('btn_add_prev_address');
+            const group = document.getElementById('prev-address-group');
+            const isVisible = group.style.display !== 'none';
+            if (isVisible) {
+                group.style.display = 'none';
+                btn.parentElement.style.display = 'flex';
+                document.getElementById('f_prev_address_1').value = '';
+            } else {
+                group.style.display = 'block';
+                btn.parentElement.style.display = 'none';
             }
         }
 
