@@ -82,9 +82,9 @@
 
 ### Onboarding Improvements (spec 1.9)
 
-- [ ] **Show detail content in completed onboarding steps** — Steps are already expandable (all clickable regardless of status). Issue: completed steps don't show meaningful details. For completed Application Form: show PDF/signature. For completed Holding Deposit: show date/amount/email sent. For completed ID Verification: show uploaded documents. Per spec 1.9.
+- [x] **Show detail content in completed onboarding steps** — Steps are already expandable (all clickable regardless of status). Issue: completed steps don't show meaningful details. For completed Application Form: show PDF/signature. For completed Holding Deposit: show date/amount/email sent. For completed ID Verification: show uploaded documents. Per spec 1.9.
 
-- [ ] **Add document upload to ID Verification step** — `OnboardingWizard.tsx` Step 4 (lines ~353–393) currently only has "Mark Verified" toggles. Add file upload input for ID documents using existing documents API. Per spec 1.9.
+- [x] **Add document upload to ID Verification step** — `OnboardingWizard.tsx` Step 4 (lines ~353–393) currently only has "Mark Verified" toggles. Add file upload input for ID documents using existing documents API. Per spec 1.9.
 
 - [ ] **Change Application Form step to progress tracker** — Step 3 partially done (shows "Waiting for tenant" and URL). Enhance: add visual progress states (not sent → sent/waiting → completed), show completion timestamp when done. Per spec 1.9.
 

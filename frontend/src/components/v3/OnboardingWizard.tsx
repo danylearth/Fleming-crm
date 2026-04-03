@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Input, Select, DatePicker, GlassCard } from './index';
@@ -6,7 +6,7 @@ import EmailPreviewModal from './EmailPreviewModal';
 import {
   CheckCircle, Circle, Clock, Mail, FileText, Shield, CreditCard,
   ChevronRight, ChevronDown, AlertTriangle, User, X, Phone, Send,
-  Download, Paperclip
+  Download, Upload, Trash2
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -52,9 +52,11 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
   // Documents for ID verification step
   const [enquiryDocs, setEnquiryDocs] = useState<{ id: number; doc_type: string; original_name: string; mime_type: string; size: number; uploaded_at: string }[]>([]);
+  const [uploading, setUploading] = useState<string | null>(null); // tracks which doc_type is uploading
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingDocType = useRef<string>('');
 
-  // Fetch documents for this enquiry
-  useEffect(() => {
+  const fetchDocs = () => {
     if (!token) return;
     fetch(`${API_URL}/api/documents/tenant_enquiry/${enquiryId}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -62,7 +64,52 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setEnquiryDocs(d); })
       .catch(() => {});
-  }, [enquiryId, token]);
+  };
+
+  // Fetch documents for this enquiry
+  useEffect(() => { fetchDocs(); }, [enquiryId, token]);
+
+  const handleUploadClick = (docType: string) => {
+    pendingDocType.current = docType;
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !token) return;
+    const docType = pendingDocType.current;
+    setUploading(docType);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('doc_type', docType);
+      const res = await fetch(`${API_URL}/api/documents/tenant_enquiry/${enquiryId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      fetchDocs();
+    } catch {
+      // silently fail — user sees no new doc appear
+    } finally {
+      setUploading(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteDoc = async (docId: number) => {
+    if (!token) return;
+    try {
+      await fetch(`${API_URL}/api/documents/${docId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchDocs();
+    } catch {
+      // silently fail
+    }
+  };
 
   // Initialize from enquiry data
   useEffect(() => {
@@ -593,66 +640,97 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           {/* Step 4: ID Verification */}
           <StepCard idx={3} step={steps[3]}>
             <div className="space-y-2">
-              {/* Show uploaded ID documents */}
-              {(() => {
-                const idDocs = enquiryDocs.filter(d => ['Primary ID', 'Address ID', 'Secondary ID'].includes(d.doc_type));
-                return idDocs.length > 0 && (
-                  <div className="bg-[var(--bg-subtle)] rounded-lg p-3 space-y-2">
-                    <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider flex items-center gap-1">
-                      <Paperclip size={10} /> Uploaded Documents
-                    </p>
-                    {idDocs.map(doc => (
-                      <div key={doc.id} className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
+              {/* Hidden file input shared across all upload buttons */}
+              <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onChange={handleFileSelected} />
+
+              {/* Applicant 1 */}
+              <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Applicant 1 — {enquiry.first_name_1}</p>
+              {[
+                { docType: 'Primary ID', verifiedKey: 'id_primary_verified_1' as const },
+                { docType: 'Secondary ID', verifiedKey: 'id_secondary_verified_1' as const },
+              ].map(({ docType, verifiedKey }) => {
+                const docs = enquiryDocs.filter(d => d.doc_type === docType);
+                return (
+                  <div key={verifiedKey} className="bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs">{docType}</span>
+                      <div className="flex gap-1">
+                        <button onClick={() => handleUploadClick(docType)} disabled={uploading === docType}
+                          className="px-2 py-1 rounded-lg text-[10px] font-medium bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1">
+                          <Upload size={10} /> {uploading === docType ? 'Uploading…' : 'Upload'}
+                        </button>
+                        <button onClick={() => updateField({ [verifiedKey]: enquiry[verifiedKey] ? 0 : 1 })} disabled={saving}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry[verifiedKey] ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
+                          {enquiry[verifiedKey] ? 'Verified' : 'Mark Verified'}
+                        </button>
+                      </div>
+                    </div>
+                    {docs.map(doc => (
+                      <div key={doc.id} className="flex items-center justify-between bg-[var(--bg-subtle)] rounded px-2 py-1">
                         <div className="flex items-center gap-2 min-w-0">
-                          <FileText size={14} className="text-[var(--text-muted)] shrink-0" />
+                          <FileText size={12} className="text-[var(--text-muted)] shrink-0" />
                           <div className="min-w-0">
-                            <p className="text-xs text-[var(--text-primary)] truncate">{doc.original_name}</p>
-                            <p className="text-[10px] text-[var(--text-muted)]">{doc.doc_type} · {new Date(doc.uploaded_at).toLocaleDateString('en-GB')}</p>
+                            <p className="text-[11px] text-[var(--text-primary)] truncate">{doc.original_name}</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">{new Date(doc.uploaded_at).toLocaleDateString('en-GB')}</p>
                           </div>
                         </div>
-                        <a href={`${API_URL}/api/documents/download/${doc.id}`} target="_blank" rel="noopener noreferrer"
-                          className="text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0">
-                          <Download size={14} />
-                        </a>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <a href={`${API_URL}/api/documents/download/${doc.id}`} target="_blank" rel="noopener noreferrer"
+                            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5"><Download size={12} /></a>
+                          <button onClick={() => handleDeleteDoc(doc.id)}
+                            className="text-[var(--text-muted)] hover:text-red-400 p-0.5"><Trash2 size={12} /></button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 );
-              })()}
-              <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Applicant 1 — {enquiry.first_name_1}</p>
-              <div className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
-                <span className="text-xs">Primary ID</span>
-                <div className="flex gap-1">
-                  <button onClick={() => updateField({ id_primary_verified_1: enquiry.id_primary_verified_1 ? 0 : 1 })} disabled={saving}
-                    className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry.id_primary_verified_1 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
-                    {enquiry.id_primary_verified_1 ? 'Verified' : 'Mark Verified'}
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
-                <span className="text-xs">Secondary ID</span>
-                <button onClick={() => updateField({ id_secondary_verified_1: enquiry.id_secondary_verified_1 ? 0 : 1 })} disabled={saving}
-                  className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry.id_secondary_verified_1 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
-                  {enquiry.id_secondary_verified_1 ? 'Verified' : 'Mark Verified'}
-                </button>
-              </div>
+              })}
+
+              {/* Applicant 2 (joint only) */}
               {isJoint && (
                 <>
                   <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mt-3">Applicant 2 — {enquiry.first_name_2 || 'Joint'}</p>
-                  <div className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
-                    <span className="text-xs">Primary ID</span>
-                    <button onClick={() => updateField({ id_primary_verified_2: enquiry.id_primary_verified_2 ? 0 : 1 })} disabled={saving}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry.id_primary_verified_2 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
-                      {enquiry.id_primary_verified_2 ? 'Verified' : 'Mark Verified'}
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
-                    <span className="text-xs">Secondary ID</span>
-                    <button onClick={() => updateField({ id_secondary_verified_2: enquiry.id_secondary_verified_2 ? 0 : 1 })} disabled={saving}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry.id_secondary_verified_2 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
-                      {enquiry.id_secondary_verified_2 ? 'Verified' : 'Mark Verified'}
-                    </button>
-                  </div>
+                  {[
+                    { docType: 'Primary ID', verifiedKey: 'id_primary_verified_2' as const },
+                    { docType: 'Secondary ID', verifiedKey: 'id_secondary_verified_2' as const },
+                  ].map(({ docType, verifiedKey }) => {
+                    const a2DocType = `${docType} (Applicant 2)`;
+                    const docs = enquiryDocs.filter(d => d.doc_type === a2DocType);
+                    return (
+                      <div key={verifiedKey} className="bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs">{docType}</span>
+                          <div className="flex gap-1">
+                            <button onClick={() => handleUploadClick(a2DocType)} disabled={uploading === a2DocType}
+                              className="px-2 py-1 rounded-lg text-[10px] font-medium bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1">
+                              <Upload size={10} /> {uploading === a2DocType ? 'Uploading…' : 'Upload'}
+                            </button>
+                            <button onClick={() => updateField({ [verifiedKey]: enquiry[verifiedKey] ? 0 : 1 })} disabled={saving}
+                              className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry[verifiedKey] ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
+                              {enquiry[verifiedKey] ? 'Verified' : 'Mark Verified'}
+                            </button>
+                          </div>
+                        </div>
+                        {docs.map(doc => (
+                          <div key={doc.id} className="flex items-center justify-between bg-[var(--bg-subtle)] rounded px-2 py-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText size={12} className="text-[var(--text-muted)] shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-[11px] text-[var(--text-primary)] truncate">{doc.original_name}</p>
+                                <p className="text-[10px] text-[var(--text-muted)]">{new Date(doc.uploaded_at).toLocaleDateString('en-GB')}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <a href={`${API_URL}/api/documents/download/${doc.id}`} target="_blank" rel="noopener noreferrer"
+                                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5"><Download size={12} /></a>
+                              <button onClick={() => handleDeleteDoc(doc.id)}
+                                className="text-[var(--text-muted)] hover:text-red-400 p-0.5"><Trash2 size={12} /></button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
                 </>
               )}
             </div>

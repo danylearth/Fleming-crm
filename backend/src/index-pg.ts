@@ -1915,6 +1915,7 @@ app.post('/api/maintenance/bulk-delete', authMiddleware, async (req: AuthRequest
 const DOC_TYPES: Record<string, string[]> = {
   landlord: ['Primary Identification', 'Address Identification', 'Proof of Funds', 'Proof of Ownership', 'Other'],
   tenant: ['Primary Identification', 'Address Identification', 'Application Form(s)', 'Bank Statements', 'Other'],
+  tenant_enquiry: ['Primary ID', 'Secondary ID', 'Address ID', 'Application Form(s)', 'Other'],
   property: ['Gas Safety Certificate', 'EPC', 'EICR', 'Proof of Ownership', 'Insurance', 'Other'],
 };
 
