@@ -265,6 +265,9 @@ app.delete('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) =
   try {
     const id = req.params.id as string;
     await run('UPDATE properties SET landlord_id = NULL WHERE landlord_id = $1', [id]);
+    await run('DELETE FROM property_landlords WHERE landlord_id = $1', [id]);
+    await run('DELETE FROM directors WHERE landlord_id = $1', [id]);
+    await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['landlord', id]);
     await run('DELETE FROM landlords WHERE id = $1', [id]);
     await logAudit(req.user?.id, req.user?.email, 'delete', 'landlord', parseInt(id));
     res.json({ success: true });
@@ -590,10 +593,12 @@ app.get('/api/landlords-bdm', authMiddleware, async (req: AuthRequest, res) => {
 app.post('/api/landlords-bdm', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { name, email, phone, address, status, follow_up_date, source, notes } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
     const id = await insert(
       'INSERT INTO landlords_bdm (name, email, phone, address, status, follow_up_date, source, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
       [name, email || null, phone || null, address || null, status || 'new', follow_up_date || null, source || null, notes || null]
     );
+    await logAudit(req.user?.id, req.user?.email, 'create', 'landlords_bdm', id, req.body);
     res.json({ id });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create landlord BDM' });
@@ -612,9 +617,22 @@ app.get('/api/landlords-bdm/:id', authMiddleware, async (req: AuthRequest, res) 
 
 app.put('/api/landlords-bdm/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { name, email, phone, address, status, follow_up_date, source, notes } = req.body;
-    await run('UPDATE landlords_bdm SET name=$1, email=$2, phone=$3, address=$4, status=$5, follow_up_date=$6, source=$7, notes=$8, updated_at=CURRENT_TIMESTAMP WHERE id=$9',
-      [name, email, phone, address, status, follow_up_date, source, notes, req.params.id]);
+    const d = req.body;
+    const allowed = ['name', 'email', 'phone', 'address', 'status', 'follow_up_date', 'source', 'notes'];
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    for (const key of allowed) {
+      if (key in d) {
+        fields.push(`${key}=$${idx++}`);
+        values.push(d[key]);
+      }
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    fields.push(`updated_at=CURRENT_TIMESTAMP`);
+    values.push(req.params.id);
+    await run(`UPDATE landlords_bdm SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'landlords_bdm', parseInt(req.params.id as string), d);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update prospect' });
@@ -625,6 +643,7 @@ app.post('/api/landlords-bdm/:id/convert', authMiddleware, async (req: AuthReque
   try {
     const prospect = await queryOne('SELECT * FROM landlords_bdm WHERE id = $1', [req.params.id as string]);
     if (!prospect) return res.status(404).json({ error: 'Prospect not found' });
+    if (prospect.status === 'onboarded') return res.status(400).json({ error: 'Prospect already converted' });
 
     const landlordId = await insert(
       'INSERT INTO landlords (name, email, phone, address, notes) VALUES ($1, $2, $3, $4, $5)',
@@ -1254,6 +1273,7 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
   try {
     const enquiry = await queryOne('SELECT * FROM tenant_enquiries WHERE id = $1', [req.params.id]);
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
+    if (enquiry.status === 'converted') return res.status(400).json({ error: 'Enquiry already converted' });
 
     const { property_id, tenancy_start_date, tenancy_type, monthly_rent } = req.body;
     const name = `${enquiry.first_name_1} ${enquiry.last_name_1}`;
@@ -1767,7 +1787,7 @@ app.get('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
     const properties = await query(`
       SELECT p.*, l.name as landlord_name,
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant
-      FROM properties p JOIN landlords l ON l.id = p.landlord_id ORDER BY p.address
+      FROM properties p LEFT JOIN landlords l ON l.id = p.landlord_id ORDER BY p.address
     `);
     res.json(properties);
   } catch (err) {
@@ -1824,7 +1844,7 @@ app.get('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
         (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id,
         (SELECT t.email FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_email,
         (SELECT t.phone FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_phone
-      FROM properties p JOIN landlords l ON l.id = p.landlord_id WHERE p.id = $1
+      FROM properties p LEFT JOIN landlords l ON l.id = p.landlord_id WHERE p.id = $1
     `, [req.params.id as string]);
     if (!property) return res.status(404).json({ error: 'Property not found' });
     await logAudit(req.user?.id, req.user?.email, 'view', 'property', parseInt(req.params.id as string));
@@ -1949,10 +1969,30 @@ app.post('/api/tasks', authMiddleware, async (req: AuthRequest, res) => {
 
 app.put('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { title, description, priority, status, assigned_to, due_date, notes } = req.body;
-    const completed_at = status === 'completed' ? new Date().toISOString() : null;
-    await run('UPDATE tasks SET title=$1, description=$2, priority=$3, status=$4, assigned_to=$5, due_date=$6, notes=$7, completed_at=$8, updated_at=CURRENT_TIMESTAMP WHERE id=$9',
-      [title, description, priority, status, assigned_to, due_date, notes, completed_at, req.params.id]);
+    const d = req.body;
+    const allowed = ['title', 'description', 'priority', 'status', 'assigned_to', 'due_date', 'notes', 'entity_type', 'entity_id'];
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    for (const key of allowed) {
+      if (key in d) {
+        fields.push(`${key}=$${idx++}`);
+        values.push(d[key]);
+      }
+    }
+    // Auto-set completed_at when status changes to completed
+    if (d.status === 'completed') {
+      fields.push(`completed_at=$${idx++}`);
+      values.push(new Date().toISOString());
+    } else if ('status' in d && d.status !== 'completed') {
+      fields.push(`completed_at=$${idx++}`);
+      values.push(null);
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    fields.push(`updated_at=CURRENT_TIMESTAMP`);
+    values.push(req.params.id);
+    await run(`UPDATE tasks SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'task', parseInt(req.params.id as string), d);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update task' });
@@ -2062,8 +2102,21 @@ app.get('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) =>
 app.put('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
-    await run('UPDATE maintenance SET status=$1, contractor=$2, cost=$3, resolution_notes=$4, updated_at=CURRENT_TIMESTAMP WHERE id=$5',
-      [d.status, d.contractor, d.cost, d.resolution_notes, req.params.id]);
+    const allowed = ['status', 'contractor', 'cost', 'resolution_notes', 'title', 'description', 'property_id', 'priority', 'reported_by', 'category'];
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    for (const key of allowed) {
+      if (key in d) {
+        fields.push(`${key}=$${idx++}`);
+        values.push(d[key]);
+      }
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    fields.push(`updated_at=CURRENT_TIMESTAMP`);
+    values.push(req.params.id);
+    await run(`UPDATE maintenance SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'maintenance', parseInt(req.params.id as string), d);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update maintenance' });
@@ -2385,8 +2438,20 @@ app.put('/api/auth/password', authMiddleware, async (req: AuthRequest, res) => {
 
 app.delete('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    await run('DELETE FROM tenants WHERE id = $1', [req.params.id]);
-    await logAudit(req.user?.id, req.user?.email, 'delete', 'tenant', parseInt(req.params.id as string));
+    const id = req.params.id;
+    // Clean up property references before deleting
+    await run('UPDATE properties SET has_live_tenancy = 0, tenancy_start_date = NULL, tenant_id = NULL WHERE tenant_id = $1', [id]);
+    // Delete associated documents
+    const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['tenant', id]);
+    for (const doc of documents) {
+      const filePath = path.join(uploadsDir, doc.filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+    await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['tenant', id]);
+    // Delete associated tasks
+    await run("DELETE FROM tasks WHERE entity_type = 'tenant' AND entity_id = $1", [id]);
+    await run('DELETE FROM tenants WHERE id = $1', [id]);
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'tenant', parseInt(id as string));
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete tenant' });
@@ -2402,6 +2467,7 @@ app.delete('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) 
     }
     await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['property', req.params.id]);
     await run('DELETE FROM tasks WHERE entity_type = $1 AND entity_id = $2', ['property', req.params.id]);
+    await run('DELETE FROM maintenance WHERE property_id = $1', [req.params.id]);
     await run('DELETE FROM rent_payments WHERE property_id = $1', [req.params.id]);
     await run('UPDATE tenants SET property_id = NULL WHERE property_id = $1', [req.params.id]);
     await run('DELETE FROM property_landlords WHERE property_id = $1', [req.params.id]);
