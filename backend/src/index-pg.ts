@@ -1513,6 +1513,11 @@ app.post('/api/public/application-form/:token', async (req, res) => {
       // Employment detail fields
       app_employer_address, app_employer_contact, app_years_of_service,
       app_pay_frequency, app_other_income, app_tax_years,
+      // Further information and individual declarations
+      app_further_info,
+      app_decl_holding_deposit, app_decl_info_accurate, app_decl_gdpr,
+      app_decl_enquiries, app_decl_documents, app_decl_credit_check,
+      app_decl_terms, app_decl_marketing,
     } = req.body;
 
     await run(`
@@ -1535,7 +1540,11 @@ app.post('/api/public/application-form/:token', async (req, res) => {
         employment_status_1=COALESCE($35, employment_status_1),
         app_employer_address=$37, app_employer_contact=$38,
         app_years_of_service=$39, app_pay_frequency=$40,
-        app_other_income=$41, app_tax_years=$42
+        app_other_income=$41, app_tax_years=$42,
+        app_further_info=$43,
+        app_decl_holding_deposit=$44, app_decl_info_accurate=$45, app_decl_gdpr=$46,
+        app_decl_enquiries=$47, app_decl_documents=$48, app_decl_credit_check=$49,
+        app_decl_terms=$50, app_decl_marketing=$51
       WHERE application_form_token=$36
     `, [
       app_ni_number || null, app_previous_address_1 || null, app_previous_address_2 || null,
@@ -1553,6 +1562,10 @@ app.post('/api/public/application-form/:token', async (req, res) => {
       app_employer_address || null, app_employer_contact || null,
       app_years_of_service || null, app_pay_frequency || null,
       app_other_income || null, app_tax_years || null,
+      app_further_info || null,
+      app_decl_holding_deposit ? 1 : 0, app_decl_info_accurate ? 1 : 0, app_decl_gdpr ? 1 : 0,
+      app_decl_enquiries ? 1 : 0, app_decl_documents ? 1 : 0, app_decl_credit_check ? 1 : 0,
+      app_decl_terms ? 1 : 0, app_decl_marketing ? 1 : 0,
     ]);
 
     // Log activity

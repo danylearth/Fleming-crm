@@ -474,6 +474,15 @@ export async function initDb() {
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_has_landlord_ref INTEGER DEFAULT 0;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_landlord_ref_property_address TEXT;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_landlord_ref_consent INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_further_info TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_holding_deposit INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_info_accurate INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_gdpr INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_enquiries INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_documents INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_credit_check INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_terms INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_marketing INTEGER DEFAULT 0;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `);

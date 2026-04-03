@@ -856,6 +856,16 @@ const onboardingCols = [
   'app_has_landlord_ref INTEGER DEFAULT 0',
   'app_landlord_ref_property_address TEXT',
   'app_landlord_ref_consent INTEGER DEFAULT 0',
+  // Further information and individual declarations
+  'app_further_info TEXT',
+  'app_decl_holding_deposit INTEGER DEFAULT 0',
+  'app_decl_info_accurate INTEGER DEFAULT 0',
+  'app_decl_gdpr INTEGER DEFAULT 0',
+  'app_decl_enquiries INTEGER DEFAULT 0',
+  'app_decl_documents INTEGER DEFAULT 0',
+  'app_decl_credit_check INTEGER DEFAULT 0',
+  'app_decl_terms INTEGER DEFAULT 0',
+  'app_decl_marketing INTEGER DEFAULT 0',
 ];
 for (const col of onboardingCols) {
   try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN ${col}`); } catch (e) {}

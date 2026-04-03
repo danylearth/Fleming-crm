@@ -972,7 +972,11 @@ app.post('/api/public/application-form/:token', (req, res) => {
         employment_status_1=COALESCE(?, employment_status_1),
         app_employer_address=?, app_employer_contact=?,
         app_years_of_service=?, app_pay_frequency=?,
-        app_other_income=?, app_tax_years=?
+        app_other_income=?, app_tax_years=?,
+        app_further_info=?,
+        app_decl_holding_deposit=?, app_decl_info_accurate=?, app_decl_gdpr=?,
+        app_decl_enquiries=?, app_decl_documents=?, app_decl_credit_check=?,
+        app_decl_terms=?, app_decl_marketing=?
       WHERE application_form_token=?
     `).run(
       d.app_ni_number || null, d.app_previous_address_1 || null, d.app_previous_address_2 || null,
@@ -990,6 +994,10 @@ app.post('/api/public/application-form/:token', (req, res) => {
       d.app_employer_address || null, d.app_employer_contact || null,
       d.app_years_of_service || null, d.app_pay_frequency || null,
       d.app_other_income || null, d.app_tax_years || null,
+      d.app_further_info || null,
+      d.app_decl_holding_deposit ? 1 : 0, d.app_decl_info_accurate ? 1 : 0, d.app_decl_gdpr ? 1 : 0,
+      d.app_decl_enquiries ? 1 : 0, d.app_decl_documents ? 1 : 0, d.app_decl_credit_check ? 1 : 0,
+      d.app_decl_terms ? 1 : 0, d.app_decl_marketing ? 1 : 0,
       req.params.token,
     );
 
