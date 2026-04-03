@@ -10,6 +10,7 @@ import { registerInventoryRoutes } from './inventory-routes';
 import { validateTwilioWebhook, normalizeUkPhone as normalizePhone } from './sms';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
+import { startScheduler } from './scheduler-pg';
 
 // Validate required environment variables
 if (!process.env.DATABASE_URL) {
@@ -3449,6 +3450,7 @@ async function start() {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Fleming CRM (PostgreSQL) running on port ${PORT}`);
       console.log(`Health check available at http://0.0.0.0:${PORT}/api/health`);
+      startScheduler();
     });
   } catch (err) {
     console.error('Failed to start:', err);
