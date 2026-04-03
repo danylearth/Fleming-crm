@@ -89,8 +89,12 @@ cd landlords-subdomain && vercel --prod
 **Key Backend Files:**
 - `src/auth.ts` - JWT authentication middleware and token generation
 - `src/email.ts` - Email service using Resend for notifications
+- `src/sms.ts` - Twilio SMS integration (simulates sends if Twilio env vars missing)
 - `src/scheduler.ts` - Background job scheduler for compliance reminders and automated task creation
 - `src/ai/chat.ts` - AI assistant router for natural language queries
+- `src/inventory-routes.ts` - Property inventory with photo upload and thumbnail generation (sharp)
+- `src/routes/public-tenant-enquiry.ts` - Public tenant enquiry endpoint (PostgreSQL version)
+- `src/db-inventory-migration.ts` / `src/run-migration.ts` - Database migration utilities
 
 **Scheduler System:**
 The scheduler (`src/scheduler.ts`) runs every hour and:
@@ -136,9 +140,9 @@ The codebase contains three iterations of the UI (V1, V2, V3). V3 is the current
 - V3: `PageNameV3.tsx` (current production)
 
 **Current V3 Pages:**
-- Dashboard, Properties, Landlords, Tenants, Enquiries (list + kanban), BDM, Maintenance, Tasks, Settings
-- Detail pages for each entity type
-- Enquiries have both list and kanban board views
+- List + Detail pages for: Properties, Landlords, Tenants, Enquiries, BDM, Maintenance, Tasks
+- Dashboard, Settings, Transactions, Users, Login
+- Enquiries have both list (`EnquiriesV3`) and kanban board (`EnquiriesKanbanV3`) views
 
 **Context Providers:**
 - `AuthContext.tsx` - User authentication state, login/logout, token management
@@ -358,6 +362,7 @@ Then configure DNS CNAME records:
 - `EPC_API_KEY` - Register at https://epc.opendatacommunities.org (FREE)
 - `COMPANIES_HOUSE_API_KEY` - Register at https://developer.company-information.service.gov.uk (FREE)
 - `COUNCIL_TAX_API_KEY` - Subscribe at https://www.counciltaxfinder.com (PAID - Monthly subscription)
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` - Twilio SMS (optional, simulates if missing)
 - Note: Land Registry and Postcodes.io require NO API keys
 
 **Deployment Configurations:**
@@ -422,25 +427,27 @@ logAudit(userId, userEmail, 'create', 'landlord', entityId, changesObject);
 
 ## Important Constraints
 
-1. **Database Flexibility:** Backend supports both SQLite (dev) and PostgreSQL (prod). Never hardcode SQL that's specific to one database type. The codebase uses different entry points (`index.ts` vs `index-pg.ts`) to handle this.
+1. **Express 5:** The backend uses Express 5 (`express@^5.2.1`), not Express 4. Route handlers return promises natively; error handling differs from Express 4 patterns.
 
-2. **Version Coexistence:** V1, V2, V3 pages coexist. When modifying functionality, check if changes need to propagate across versions or if V3 is the only active version.
+2. **Database Flexibility:** Backend supports both SQLite (dev) and PostgreSQL (prod). Never hardcode SQL that's specific to one database type. The codebase uses different entry points (`index.ts` vs `index-pg.ts`) to handle this.
 
-3. **Polymorphic Relationships:** Tasks and documents use `entity_type` + `entity_id` pattern. Always ensure both fields are set when creating these records.
+3. **Version Coexistence:** V1, V2, V3 pages coexist. When modifying functionality, check if changes need to propagate across versions or if V3 is the only active version.
 
-4. **Scheduler Dependencies:** The scheduler expects specific property fields (`gas_safety_expiry_date`, etc.) and task types. Don't rename these without updating the scheduler.
+4. **Polymorphic Relationships:** Tasks and documents use `entity_type` + `entity_id` pattern. Always ensure both fields are set when creating these records.
 
-5. **Multi-tenant Awareness:** Landlords have `landlord_type` (internal/external) for portfolio filtering. This affects UI filtering and reporting.
+5. **Scheduler Dependencies:** The scheduler expects specific property fields (`gas_safety_expiry_date`, etc.) and task types. Don't rename these without updating the scheduler.
 
-6. **Conversion Workflows:** BDM → Landlord and Enquiry → Tenant conversions copy data and update status. Never delete the source record, only mark as converted.
+6. **Multi-tenant Awareness:** Landlords have `landlord_type` (internal/external) for portfolio filtering. This affects UI filtering and reporting.
 
-7. **Demo Data:** Production databases can auto-seed. Be careful with `FORCE_RESEED` as it wipes all data.
+7. **Conversion Workflows:** BDM → Landlord and Enquiry → Tenant conversions copy data and update status. Never delete the source record, only mark as converted.
 
-8. **Public API Endpoints:** The `/api/public/*` routes are intentionally unauthenticated for the external enquiry forms (tenant and landlord). These should remain public but consider implementing rate limiting to prevent abuse.
+8. **Demo Data:** Production databases can auto-seed. Be careful with `FORCE_RESEED` as it wipes all data.
 
-9. **Mobile Development:** When testing the mobile app on physical devices, use your local network IP address in the API configuration (found in `mobile/src/services/api.ts`), not `localhost` or `127.0.0.1`. The app needs to connect to your development machine over the local network.
+9. **Public API Endpoints:** The `/api/public/*` routes are intentionally unauthenticated for the external enquiry forms (tenant and landlord). These should remain public but consider implementing rate limiting to prevent abuse.
 
-10. **Multi-Landlord Properties:** Properties can have multiple landlords. Always ensure one landlord is marked as primary (`is_primary = 1` in `property_landlords` table). The primary landlord ID is also stored on the `properties.landlord_id` field for backwards compatibility and simple queries.
+10. **Mobile Development:** When testing the mobile app on physical devices, use your local network IP address in the API configuration (found in `mobile/src/services/api.ts`), not `localhost` or `127.0.0.1`. The app needs to connect to your development machine over the local network.
+
+11. **Multi-Landlord Properties:** Properties can have multiple landlords. Always ensure one landlord is marked as primary (`is_primary = 1` in `property_landlords` table). The primary landlord ID is also stored on the `properties.landlord_id` field for backwards compatibility and simple queries.
 
 ## Deployment Troubleshooting
 

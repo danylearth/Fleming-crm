@@ -114,13 +114,13 @@
 
 ### Google Places Address Autocomplete (per specs/google-places-autocomplete.md)
 
-- [ ] **Implement Google Places in `AddressAutocomplete.tsx`** — Replace stub (29 lines, just a plain input with helper text) with working Google Places integration. Use `@googlemaps/js-api-loader`, legacy Autocomplete widget, `componentRestrictions: { country: 'gb' }`. Requires `VITE_GOOGLE_PLACES_API_KEY`.
+- [x] **Implement Google Places in `AddressAutocomplete.tsx`** — Replace stub (29 lines, just a plain input with helper text) with working Google Places integration. Use `@googlemaps/js-api-loader`, legacy Autocomplete widget, `componentRestrictions: { country: 'gb' }`. Requires `VITE_GOOGLE_PLACES_API_KEY`.
 
-- [ ] **Add Google Places to application form** — In `tenants-subdomain/application.html`, add Google Maps JS API script and autocomplete for address fields (current, previous, employer). Per spec 1.8.
+- [x] **Add Google Places to application form** — In `tenants-subdomain/application.html`, add Google Maps JS API script and autocomplete for address fields (current, previous, employer). Per spec 1.8.
 
 ### Viewing Booking Performance (spec 1.6)
 
-- [ ] **Investigate slow viewing booking submission** — `POST /api/property-viewings` (index-pg.ts line 2216) creates viewing, updates enquiry status, creates task, and optionally sends SMS synchronously. Profile to identify bottleneck — likely SMS send blocking response. Consider making SMS send fire-and-forget.
+- [x] **Investigate slow viewing booking submission** — `POST /api/property-viewings` (index-pg.ts line 2216) creates viewing, updates enquiry status, creates task, and optionally sends SMS synchronously. Profile to identify bottleneck — likely SMS send blocking response. Consider making SMS send fire-and-forget.
 
 ### V1/V2 Cleanup (spec Workstream 2)
 
