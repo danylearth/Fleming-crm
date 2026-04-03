@@ -134,7 +134,8 @@ export default function BDMDetail() {
     try {
       const result = await api.post(`/api/landlords-bdm/${id}/convert`, {});
       navigate(`/landlords/${result.landlord_id}`);
-    } catch (e) { console.error(e); }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) { alert(err?.response?.data?.error || err?.message || 'Failed to convert prospect'); }
     setConverting(false);
   };
 
@@ -307,7 +308,7 @@ export default function BDMDetail() {
             ))}
 
             {/* Convert to Landlord */}
-            {prospect.status === 'interested' && (
+            {['follow_up', 'interested'].includes(prospect.status) && (
               <>
                 <div className="h-px bg-[var(--border-subtle)] my-3" />
                 <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Convert</p>

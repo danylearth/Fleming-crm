@@ -344,12 +344,15 @@ export default function EnquiryDetail() {
           await api.post(`/api/tenant-enquiries/${id}/convert`, {
             property_id: form.linked_property_id,
             tenancy_start_date: wfDate || new Date().toISOString().split('T')[0],
+            tenancy_type: form.preferred_tenancy_type || null,
+            monthly_rent: form.monthly_rent_agreed || null,
           });
           await loadDetail();
           break;
       }
       setShowWorkflow(false);
-    } catch { /* workflow action failed */ }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) { alert(err?.response?.data?.error || err?.message || 'Workflow action failed'); }
     setWfLoading(false);
   };
 

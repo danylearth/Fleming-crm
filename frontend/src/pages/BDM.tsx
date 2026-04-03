@@ -142,7 +142,8 @@ export default function BDM() {
       await api.post(`/api/landlords-bdm/${workflowProspect.id}/convert`, {});
       setWorkflowProspect(null);
       await load();
-    } catch (e) { console.error(e); }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) { alert(err?.response?.data?.error || err?.message || 'Failed to convert prospect'); }
     setConverting(false);
   };
 

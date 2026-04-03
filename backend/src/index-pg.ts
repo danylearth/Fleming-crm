@@ -645,11 +645,16 @@ app.post('/api/landlords-bdm/:id/convert', authMiddleware, async (req: AuthReque
     if (!prospect) return res.status(404).json({ error: 'Prospect not found' });
     if (prospect.status === 'onboarded') return res.status(400).json({ error: 'Prospect already converted' });
 
+    const { landlord_type } = req.body || {};
+
     const landlordId = await insert(
-      'INSERT INTO landlords (name, email, phone, address, notes) VALUES ($1, $2, $3, $4, $5)',
-      [prospect.name, prospect.email, prospect.phone, prospect.address, prospect.notes]
+      'INSERT INTO landlords (name, email, phone, address, notes, landlord_type, referral_source) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [prospect.name, prospect.email, prospect.phone, prospect.address, prospect.notes, landlord_type || 'external', prospect.source]
     );
     await run("UPDATE landlords_bdm SET status = 'onboarded', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id as string]);
+
+    await logAudit(req.user?.id, req.user?.email, 'create', 'landlord', landlordId, { converted_from_bdm: parseInt(req.params.id as string) });
+    await logAudit(req.user?.id, req.user?.email, 'update', 'landlords_bdm', parseInt(req.params.id as string), { converted_to_landlord: landlordId });
 
     res.json({ landlord_id: landlordId });
   } catch (err) {
@@ -1279,19 +1284,28 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
     const name = `${enquiry.first_name_1} ${enquiry.last_name_1}`;
     const isJoint = !!enquiry.joint_partner_id;
 
-    // Create tenant record for this applicant
+    // Create tenant record for this applicant — copy onboarding data collected during pipeline
     const tenantId = await insert(`
       INSERT INTO tenants (
         title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
-        is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent,
+        holding_deposit_received, holding_deposit_amount, holding_deposit_date,
+        nok_name, nok_relationship, nok_phone, nok_address,
+        nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
+        notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
     `, [
       enquiry.title_1, enquiry.first_name_1, enquiry.last_name_1, name, enquiry.email_1, enquiry.phone_1,
       enquiry.date_of_birth_1, isJoint ? 1 : 0, enquiry.kyc_completed_1,
-      property_id, tenancy_start_date, tenancy_type, monthly_rent
+      property_id, tenancy_start_date, tenancy_type, monthly_rent || enquiry.monthly_rent_agreed,
+      enquiry.holding_deposit_received || 0, enquiry.holding_deposit_amount || null, enquiry.holding_deposit_received_date || null,
+      enquiry.app_next_of_kin_name || null, enquiry.app_next_of_kin_relationship || null, enquiry.app_next_of_kin_phone || null, enquiry.app_next_of_kin_address || null,
+      enquiry.app_next_of_kin_2_name || null, enquiry.app_next_of_kin_2_relationship || null, enquiry.app_next_of_kin_2_phone || null, enquiry.app_next_of_kin_2_address || null,
+      enquiry.notes || null
     ]);
 
     await run("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id]);
+    await logAudit(req.user?.id, req.user?.email, 'create', 'tenant', tenantId, { converted_from_enquiry: parseInt(req.params.id as string) });
     await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', parseInt(req.params.id as string), { converted_to_tenant: tenantId });
 
     // If joint application with linked partner, convert partner too
@@ -1303,15 +1317,24 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
         partnerTenantId = await insert(`
           INSERT INTO tenants (
             title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
-            is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent,
+            holding_deposit_received, holding_deposit_amount, holding_deposit_date,
+            nok_name, nok_relationship, nok_phone, nok_address,
+            nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
+            notes
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
         `, [
           partner.title_1, partner.first_name_1, partner.last_name_1, partnerName, partner.email_1, partner.phone_1,
           partner.date_of_birth_1, 1, partner.kyc_completed_1,
-          property_id, tenancy_start_date, tenancy_type, monthly_rent
+          property_id, tenancy_start_date, tenancy_type, monthly_rent || partner.monthly_rent_agreed,
+          partner.holding_deposit_received || 0, partner.holding_deposit_amount || null, partner.holding_deposit_received_date || null,
+          partner.app_next_of_kin_name || null, partner.app_next_of_kin_relationship || null, partner.app_next_of_kin_phone || null, partner.app_next_of_kin_address || null,
+          partner.app_next_of_kin_2_name || null, partner.app_next_of_kin_2_relationship || null, partner.app_next_of_kin_2_phone || null, partner.app_next_of_kin_2_address || null,
+          partner.notes || null
         ]);
 
         await run("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [enquiry.joint_partner_id]);
+        await logAudit(req.user?.id, req.user?.email, 'create', 'tenant', partnerTenantId!, { converted_from_enquiry: enquiry.joint_partner_id });
         await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiry.joint_partner_id, { converted_to_tenant: partnerTenantId });
       }
     }
