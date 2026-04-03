@@ -160,12 +160,12 @@
 
 ### Future Release (Out of Scope)
 
-- [ ] _Twilio webhook signature validation (`twilio.validateRequest()`) — security hardening_
-- [ ] _Inbound SMS handling — receiving texts from tenants/landlords_
-- [ ] _Resend webhook integration for email delivery tracking_
-- [ ] _SMS templates for non-viewing scenarios (rejections, follow-ups, rent reminders)_
-- [ ] _SMS character count / segment cost display in UI_
-- [ ] _Rate limiting on public API endpoints_
+- [x] _Twilio webhook signature validation (`twilio.validateRequest()`) — security hardening_
+- [x] _Inbound SMS handling — receiving texts from tenants/landlords_
+- [x] _Resend webhook integration for email delivery tracking_
+- [x] _SMS templates for non-viewing scenarios (rejections, follow-ups, rent reminders)_
+- [x] _SMS character count / segment cost display in UI_
+- [x] _Rate limiting on public API endpoints_
 - [ ] _Test framework setup and unit/integration tests_
 - [ ] _Mobile app (Expo) audit and feature parity_
 - [ ] _Next of kin data display in CRM enquiry/tenant detail pages_

@@ -87,13 +87,19 @@ cd backend && npm run dev:pg   # needs DATABASE_URL or falls back to SQLite with
 cd frontend && npm run dev     # http://localhost:5173
 
 # Key env vars:
-# Backend: DATABASE_URL, JWT_SECRET, UPLOADS_PATH, RESEND_API_KEY
+# Backend: DATABASE_URL, JWT_SECRET, UPLOADS_PATH, RESEND_API_KEY, RESEND_WEBHOOK_SECRET, BASE_URL
 # Frontend: VITE_API_URL (default http://localhost:3001)
 # Default creds: admin@fleming.com / admin123
 ```
 
 ## Patterns Discovered
 - **Joint applicants use linked records:** `tenant_enquiries.joint_partner_id` self-references to link two individual enquiry records. Each applicant has their own record, documents, and KYC. Shared fields (status, property, viewing) sync on update. Legacy records may still have `_2` suffix columns without `joint_partner_id` — UI handles both patterns.
+- **Webhook validation pattern:** Twilio webhooks validated via `validateTwilioWebhook` middleware (sms.ts) using `twilio.validateRequest()`. Resend webhooks validated via svix HMAC-SHA256 using `RESEND_WEBHOOK_SECRET` env var. Both skip validation in dev when secrets aren't configured.
+- **Email delivery tracking:** `email_messages` table stores all sent emails with `resend_id` for webhook status updates. Email send routes persist to this table. Resend webhook at `/api/email/webhook` updates status (delivered, bounced, opened, clicked, failed).
+- **Inbound SMS:** `/api/sms/inbound` receives Twilio webhooks for incoming messages, matches sender phone to `tenant_enquiries.phone_1`, stores with `direction='inbound'` in `sms_messages`. Returns empty TwiML.
+- **SMS templates pattern:** Templates defined as exported functions in `backend/src/sms.ts` (viewingConfirmationSms, followUpSms, rejectionSms, rentReminderSms). Frontend generates template text inline when workflow mode is selected (not imported from backend). Templates are pre-populated in smsBody state and editable by user before sending.
+- **SMS segment calculator:** `frontend/src/utils/sms.ts` exports `calculateSmsSegments(text)` → `{ charCount, encoding, segments, charsPerSegment, charsRemaining }`. Detects GSM-7 vs UCS-2 encoding. Used in all SMS textareas.
+- **Rate limiting:** `express-rate-limit` on all `/api/public/*` routes. POST endpoints: 10 req/15min. GET endpoints: 60 req/15min. Applied as per-route middleware in both `index.ts` and `index-pg.ts`.
 
 ## Gotchas
 - Express 5 is used (not 4) — route handlers return promises natively, error handling differs
