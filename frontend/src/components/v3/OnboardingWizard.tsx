@@ -5,8 +5,11 @@ import { Button, Input, Select, DatePicker, GlassCard } from './index';
 import EmailPreviewModal from './EmailPreviewModal';
 import {
   CheckCircle, Circle, Clock, Mail, FileText, Shield, CreditCard,
-  ChevronRight, ChevronDown, AlertTriangle, User, X, Phone, Send
+  ChevronRight, ChevronDown, AlertTriangle, User, X, Phone, Send,
+  Download, Paperclip
 } from 'lucide-react';
+
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 // Traffic light colours
 const STATUS = {
@@ -26,7 +29,7 @@ interface OnboardingWizardProps {
 
 export default function OnboardingWizard({ enquiryId, enquiry, properties, users, onClose, onUpdate }: OnboardingWizardProps) {
   const api = useApi();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [saving, setSaving] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
 
@@ -46,6 +49,20 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   // Application email modal
   const [showApplicationEmail, setShowApplicationEmail] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+
+  // Documents for ID verification step
+  const [enquiryDocs, setEnquiryDocs] = useState<{ id: number; doc_type: string; original_name: string; mime_type: string; size: number; uploaded_at: string }[]>([]);
+
+  // Fetch documents for this enquiry
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/api/documents/tenant_enquiry/${enquiryId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setEnquiryDocs(d); })
+      .catch(() => {});
+  }, [enquiryId, token]);
 
   // Initialize from enquiry data
   useEffect(() => {
@@ -363,8 +380,30 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           {/* Step 1: Request Holding Deposit */}
           <StepCard idx={0} step={steps[0]}>
             {enquiry.holding_deposit_requested ? (
-              <div className="text-xs text-emerald-400 flex items-center gap-2">
-                <CheckCircle size={14} /> Email sent to {enquiry.email_1} on {enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at).toLocaleDateString('en-GB') : 'N/A'}
+              <div className="space-y-2">
+                <div className="text-xs text-emerald-400 flex items-center gap-2">
+                  <CheckCircle size={14} /> Email sent to {enquiry.email_1} on {enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at).toLocaleDateString('en-GB') : 'N/A'}
+                </div>
+                <div className="bg-[var(--bg-subtle)] rounded-lg p-3 grid grid-cols-3 gap-3">
+                  {enquiry.monthly_rent_agreed && (
+                    <div>
+                      <p className="text-[10px] text-[var(--text-muted)]">Monthly Rent</p>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">£{Number(enquiry.monthly_rent_agreed).toLocaleString()}</p>
+                    </div>
+                  )}
+                  {enquiry.security_deposit_amount && (
+                    <div>
+                      <p className="text-[10px] text-[var(--text-muted)]">Security Deposit</p>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">£{Number(enquiry.security_deposit_amount).toLocaleString()}</p>
+                    </div>
+                  )}
+                  {enquiry.holding_deposit_amount && (
+                    <div>
+                      <p className="text-[10px] text-[var(--text-muted)]">Holding Deposit</p>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">£{Number(enquiry.holding_deposit_amount).toLocaleString()}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <>
@@ -403,9 +442,33 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           {/* Step 2: Holding Deposit Received */}
           <StepCard idx={1} step={steps[1]}>
             {enquiry.holding_deposit_received ? (
-              <div className="text-xs text-emerald-400 flex items-center gap-2">
-                <CheckCircle size={14} /> £{Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount).toLocaleString()} received
-                {enquiry.holding_deposit_received_date && ` on ${new Date(enquiry.holding_deposit_received_date).toLocaleDateString('en-GB')}`}
+              <div className="space-y-2">
+                <div className="text-xs text-emerald-400 flex items-center gap-2">
+                  <CheckCircle size={14} /> £{Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount).toLocaleString()} received
+                  {enquiry.holding_deposit_received_date && ` on ${new Date(enquiry.holding_deposit_received_date).toLocaleDateString('en-GB')}`}
+                </div>
+                <div className="bg-[var(--bg-subtle)] rounded-lg p-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[10px] text-[var(--text-muted)]">Amount Received</p>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">£{Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[var(--text-muted)]">Date Received</p>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">{enquiry.holding_deposit_received_date ? new Date(enquiry.holding_deposit_received_date).toLocaleDateString('en-GB') : '—'}</p>
+                  </div>
+                  {enquiry.onboarding_email_sent_at && (
+                    <div>
+                      <p className="text-[10px] text-[var(--text-muted)]">Email Sent</p>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">{new Date(enquiry.onboarding_email_sent_at).toLocaleDateString('en-GB')}</p>
+                    </div>
+                  )}
+                  {enquiry.email_1 && (
+                    <div>
+                      <p className="text-[10px] text-[var(--text-muted)]">Sent To</p>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">{enquiry.email_1}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <>
@@ -433,10 +496,74 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   {enquiry.app_signed_at && ` on ${new Date(enquiry.app_signed_at).toLocaleDateString('en-GB')}`}
                 </div>
                 {enquiry.app_signature && (
-                  <div className="bg-white rounded-lg p-2 inline-block">
-                    <img src={enquiry.app_signature} alt="Signature" className="h-12" />
+                  <div>
+                    <p className="text-[10px] text-[var(--text-muted)] mb-1">Signature</p>
+                    <div className="bg-white rounded-lg p-2 inline-block">
+                      <img src={enquiry.app_signature} alt="Signature" className="h-12" />
+                    </div>
                   </div>
                 )}
+                <div className="bg-[var(--bg-subtle)] rounded-lg p-3 space-y-2">
+                  <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Application Details</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {enquiry.app_ni_number && (
+                      <div>
+                        <p className="text-[10px] text-[var(--text-muted)]">NI Number</p>
+                        <p className="text-xs text-[var(--text-primary)]">{enquiry.app_ni_number}</p>
+                      </div>
+                    )}
+                    {enquiry.employer_1 && (
+                      <div>
+                        <p className="text-[10px] text-[var(--text-muted)]">Employer</p>
+                        <p className="text-xs text-[var(--text-primary)]">{enquiry.employer_1}</p>
+                      </div>
+                    )}
+                    {enquiry.income_1 && (
+                      <div>
+                        <p className="text-[10px] text-[var(--text-muted)]">Income</p>
+                        <p className="text-xs text-[var(--text-primary)]">£{Number(enquiry.income_1).toLocaleString()}</p>
+                      </div>
+                    )}
+                    {enquiry.app_bank_name && (
+                      <div>
+                        <p className="text-[10px] text-[var(--text-muted)]">Bank</p>
+                        <p className="text-xs text-[var(--text-primary)]">{enquiry.app_bank_name}</p>
+                      </div>
+                    )}
+                  </div>
+                  {(enquiry.app_has_landlord_ref || enquiry.app_has_employer_ref) && (
+                    <>
+                      <div className="h-px bg-[var(--border-subtle)]" />
+                      <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">References</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {enquiry.app_landlord_ref_name && (
+                          <div>
+                            <p className="text-[10px] text-[var(--text-muted)]">Landlord Ref</p>
+                            <p className="text-xs text-[var(--text-primary)]">{enquiry.app_landlord_ref_name}</p>
+                            {enquiry.app_landlord_ref_phone && <p className="text-[10px] text-[var(--text-muted)]">{enquiry.app_landlord_ref_phone}</p>}
+                          </div>
+                        )}
+                        {enquiry.app_employer_ref_name && (
+                          <div>
+                            <p className="text-[10px] text-[var(--text-muted)]">Employer Ref</p>
+                            <p className="text-xs text-[var(--text-primary)]">{enquiry.app_employer_ref_name}</p>
+                            {enquiry.app_employer_ref_phone && <p className="text-[10px] text-[var(--text-muted)]">{enquiry.app_employer_ref_phone}</p>}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {enquiry.app_next_of_kin_name && (
+                    <>
+                      <div className="h-px bg-[var(--border-subtle)]" />
+                      <div>
+                        <p className="text-[10px] text-[var(--text-muted)]">Next of Kin</p>
+                        <p className="text-xs text-[var(--text-primary)]">{enquiry.app_next_of_kin_name} ({enquiry.app_next_of_kin_relationship || 'N/A'})</p>
+                        {enquiry.app_next_of_kin_phone && <p className="text-[10px] text-[var(--text-muted)]">{enquiry.app_next_of_kin_phone}</p>}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             ) : enquiry.application_form_sent ? (
               <div className="space-y-3">
@@ -466,6 +593,32 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           {/* Step 4: ID Verification */}
           <StepCard idx={3} step={steps[3]}>
             <div className="space-y-2">
+              {/* Show uploaded ID documents */}
+              {(() => {
+                const idDocs = enquiryDocs.filter(d => ['Primary ID', 'Address ID', 'Secondary ID'].includes(d.doc_type));
+                return idDocs.length > 0 && (
+                  <div className="bg-[var(--bg-subtle)] rounded-lg p-3 space-y-2">
+                    <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider flex items-center gap-1">
+                      <Paperclip size={10} /> Uploaded Documents
+                    </p>
+                    {idDocs.map(doc => (
+                      <div key={doc.id} className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText size={14} className="text-[var(--text-muted)] shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-xs text-[var(--text-primary)] truncate">{doc.original_name}</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">{doc.doc_type} · {new Date(doc.uploaded_at).toLocaleDateString('en-GB')}</p>
+                          </div>
+                        </div>
+                        <a href={`${API_URL}/api/documents/download/${doc.id}`} target="_blank" rel="noopener noreferrer"
+                          className="text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0">
+                          <Download size={14} />
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
               <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Applicant 1 — {enquiry.first_name_1}</p>
               <div className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
                 <span className="text-xs">Primary ID</span>
