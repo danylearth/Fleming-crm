@@ -34,7 +34,7 @@ export default function Users() {
   // Redirect if not admin
   useEffect(() => {
     if (!canManageUsers()) {
-      navigate('/v3');
+      navigate('/');
     }
   }, [canManageUsers, navigate]);
 

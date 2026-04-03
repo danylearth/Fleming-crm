@@ -309,7 +309,7 @@ export default function TenantDetail() {
   const isEditing = (section: string) => editingSection === section;
 
   return (
-    <Layout breadcrumb={[{ label: 'Tenants', to: '/v3/tenants' }, { label: displayName }]}>
+    <Layout breadcrumb={[{ label: 'Tenants', to: '/tenants' }, { label: displayName }]}>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* ==================== HEADER ==================== */}
         <GlassCard className="p-6">
@@ -327,7 +327,7 @@ export default function TenantDetail() {
                 )}
               </div>
               {tenant.property_id ? (
-                <button onClick={() => navigate(`/v3/properties/${tenant.property_id}`)}
+                <button onClick={() => navigate(`/properties/${tenant.property_id}`)}
                   className="flex items-center gap-2 mt-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group">
                   <div className="w-7 h-7 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center group-hover:bg-[var(--accent-orange)]/20 transition-colors">
                     <Building2 size={14} className="text-[var(--text-muted)] group-hover:text-[var(--accent-orange)] transition-colors" />
@@ -479,7 +479,7 @@ export default function TenantDetail() {
                   {tenant?.property_id ? (
                     <div>
                       <p className="text-xs text-[var(--text-muted)]">Property</p>
-                      <button onClick={() => navigate(`/v3/properties/${tenant.property_id}`)}
+                      <button onClick={() => navigate(`/properties/${tenant.property_id}`)}
                         className="text-sm mt-0.5 text-[var(--accent-orange)] hover:underline flex items-center gap-1">
                         <Building2 size={13} /> {tenant.property_address || `Property #${tenant.property_id}`}
                       </button>

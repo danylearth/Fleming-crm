@@ -386,7 +386,7 @@ export default function EnquiryDetail() {
 
   if (loading) {
     return (
-      <Layout title="Enquiry" breadcrumb={[{ label: 'Tenant Enquiries', to: '/v3/enquiries' }, { label: 'Loading...' }]}>
+      <Layout title="Enquiry" breadcrumb={[{ label: 'Tenant Enquiries', to: '/enquiries' }, { label: 'Loading...' }]}>
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-2 border-[var(--border-input)] border-t-orange-500 rounded-full animate-spin" />
         </div>
@@ -396,7 +396,7 @@ export default function EnquiryDetail() {
 
   if (!data) {
     return (
-      <Layout title="Enquiry" breadcrumb={[{ label: 'Tenant Enquiries', to: '/v3/enquiries' }, { label: 'Not Found' }]}>
+      <Layout title="Enquiry" breadcrumb={[{ label: 'Tenant Enquiries', to: '/enquiries' }, { label: 'Not Found' }]}>
         <EmptyState message="Enquiry not found" />
       </Layout>
     );
@@ -416,7 +416,7 @@ export default function EnquiryDetail() {
   return (
     <Layout
       title=""
-      breadcrumb={[{ label: 'Tenant Enquiries', to: '/v3/enquiries' }, { label: name }]}
+      breadcrumb={[{ label: 'Tenant Enquiries', to: '/enquiries' }, { label: name }]}
     >
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* ==================== HEADER ==================== */}
@@ -436,7 +436,7 @@ export default function EnquiryDetail() {
                 )}
               </div>
               {hasLinkedPartner && partnerName && (
-                <button onClick={() => navigate(`/v3/enquiries/${data.joint_partner_id}`)}
+                <button onClick={() => navigate(`/enquiries/${data.joint_partner_id}`)}
                   className="flex items-center gap-2 mt-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group">
                   <div className="w-7 h-7 rounded-lg bg-pink-500/15 flex items-center justify-center group-hover:bg-pink-500/25 transition-colors">
                     <Users size={14} className="text-pink-400" />
@@ -446,7 +446,7 @@ export default function EnquiryDetail() {
                 </button>
               )}
               {selectedProp ? (
-                <button onClick={() => navigate(`/v3/properties/${selectedProp.id}`)}
+                <button onClick={() => navigate(`/properties/${selectedProp.id}`)}
                   className="flex items-center gap-2 mt-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group">
                   <div className="w-7 h-7 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center group-hover:bg-[var(--accent-orange)]/20 transition-colors">
                     <Building2 size={14} className="text-[var(--text-muted)] group-hover:text-[var(--accent-orange)] transition-colors" />
@@ -509,7 +509,7 @@ export default function EnquiryDetail() {
                     </div>
                   )}
                   {hasLinkedPartner && (
-                    <button onClick={() => navigate(`/v3/enquiries/${data.joint_partner_id}`)}
+                    <button onClick={() => navigate(`/enquiries/${data.joint_partner_id}`)}
                       className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-pink-500/10 border border-pink-500/20 hover:bg-pink-500/20 transition-colors w-fit text-sm">
                       <Users size={14} className="text-pink-400" />
                       <span className="text-pink-400">View joint applicant: <span className="font-medium">{partnerName}</span></span>
@@ -551,7 +551,7 @@ export default function EnquiryDetail() {
                   {hasLinkedPartner && partnerName && (
                     <>
                       <div className="h-px bg-[var(--border-subtle)] my-2" />
-                      <button onClick={() => navigate(`/v3/enquiries/${data.joint_partner_id}`)}
+                      <button onClick={() => navigate(`/enquiries/${data.joint_partner_id}`)}
                         className="flex items-center gap-2 px-3 py-2 rounded-lg bg-pink-500/10 border border-pink-500/20 hover:bg-pink-500/20 transition-colors w-fit text-sm">
                         <Users size={14} className="text-pink-400" />
                         <span className="text-pink-400">Joint applicant: <span className="font-medium">{partnerName}</span></span>
@@ -688,7 +688,7 @@ export default function EnquiryDetail() {
                   ]}
                 />
               ) : selectedProp ? (
-                <div onClick={() => navigate(`/v3/properties/${selectedProp.id}`)}
+                <div onClick={() => navigate(`/properties/${selectedProp.id}`)}
                   className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
                   <Building2 size={14} className="text-[var(--text-muted)]" />
                   <span className="text-sm font-medium flex-1">{selectedProp.address}{selectedProp.postcode ? `, ${selectedProp.postcode}` : ''}</span>

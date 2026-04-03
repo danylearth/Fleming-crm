@@ -521,7 +521,7 @@ export default function Tenants() {
             ]}
             data={filtered}
             rowKey={(t) => t.id}
-            onRowClick={(t) => !editMode && navigate(`/v3/tenants/${t.id}`)}
+            onRowClick={(t) => !editMode && navigate(`/tenants/${t.id}`)}
             />
           </>
         ) : (
@@ -534,7 +534,7 @@ export default function Tenants() {
                 return (
                   <GlassCard
                     key={t.id}
-                    onClick={() => navigate(`/v3/tenants/${t.id}`)}
+                    onClick={() => navigate(`/tenants/${t.id}`)}
                     onMouseEnter={() => setHoveredTenantId(t.id)}
                     onMouseLeave={() => setHoveredTenantId(null)}
                     className={`p-4 ${isHov ? 'outline outline-1 outline-offset-1 outline-white/40' : ''}`}

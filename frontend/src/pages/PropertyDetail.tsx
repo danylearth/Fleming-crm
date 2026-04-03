@@ -526,7 +526,7 @@ export default function PropertyDetail() {
 
   if (loading) {
     return (
-      <Layout title="Property" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: 'Loading...' }]}>
+      <Layout title="Property" breadcrumb={[{ label: 'Properties', to: '/properties' }, { label: 'Loading...' }]}>
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-2 border-[var(--border-input)] border-t-orange-500 rounded-full animate-spin" />
         </div>
@@ -536,7 +536,7 @@ export default function PropertyDetail() {
 
   if (!property) {
     return (
-      <Layout title="Property" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: 'Not Found' }]}>
+      <Layout title="Property" breadcrumb={[{ label: 'Properties', to: '/properties' }, { label: 'Not Found' }]}>
         <EmptyState message="Property not found" />
       </Layout>
     );
@@ -559,7 +559,7 @@ export default function PropertyDetail() {
   }
 
   return (
-    <Layout title="" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: property.address }]}>
+    <Layout title="" breadcrumb={[{ label: 'Properties', to: '/properties' }, { label: property.address }]}>
       <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         {/* Hero */}
         <div className="relative h-48 sm:h-56 md:h-64 rounded-xl sm:rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
@@ -618,7 +618,7 @@ export default function PropertyDetail() {
           )}
           <div className="shrink-0 flex gap-2">
             {property.current_tenant ? (
-              <Button variant="outline" size="sm" onClick={() => (property.current_tenant_id || property.tenant_id) && navigate(`/v3/tenants/${property.current_tenant_id || property.tenant_id}`)}>
+              <Button variant="outline" size="sm" onClick={() => (property.current_tenant_id || property.tenant_id) && navigate(`/tenants/${property.current_tenant_id || property.tenant_id}`)}>
                 View Tenant <ChevronRight size={14} className="ml-1" />
               </Button>
             ) : (
@@ -860,7 +860,7 @@ export default function PropertyDetail() {
                         <p className="text-xs text-[var(--text-muted)]">Current Tenant</p>
                       </div>
                       <button
-                        onClick={() => (property.current_tenant_id || property.tenant_id) && navigate(`/v3/tenants/${property.current_tenant_id || property.tenant_id}`)}
+                        onClick={() => (property.current_tenant_id || property.tenant_id) && navigate(`/tenants/${property.current_tenant_id || property.tenant_id}`)}
                         className="text-xs text-[var(--accent-orange)] hover:underline"
                       >
                         View
@@ -946,7 +946,7 @@ export default function PropertyDetail() {
                   {maintenance.slice(0, 5).map(m => (
                     <div
                       key={m.id}
-                      onClick={() => navigate(`/v3/maintenance/${m.id}`)}
+                      onClick={() => navigate(`/maintenance/${m.id}`)}
                       className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
                     >
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
@@ -1088,7 +1088,7 @@ export default function PropertyDetail() {
                     <div key={landlord.link_id}>
                       <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors group">
                         <div
-                          onClick={() => navigate(`/v3/landlords/${landlord.id}`)}
+                          onClick={() => navigate(`/landlords/${landlord.id}`)}
                           className="flex items-center gap-3 flex-1 cursor-pointer">
                           <Avatar name={landlord.name} size="md" />
                           <div className="flex-1 min-w-0">
@@ -1423,7 +1423,7 @@ export default function PropertyDetail() {
 
               <div className="flex gap-3 pt-4 mt-4 border-t border-[var(--border-subtle)]">
                 <Button variant="ghost" onClick={() => setSelectedTask(null)}>Close</Button>
-                <Button variant="outline" size="sm" onClick={() => { setSelectedTask(null); navigate(`/v3/tasks/${selectedTask.id}`); }}>
+                <Button variant="outline" size="sm" onClick={() => { setSelectedTask(null); navigate(`/tasks/${selectedTask.id}`); }}>
                   Open Full Page <ChevronRight size={14} className="ml-1" />
                 </Button>
               </div>

@@ -379,7 +379,7 @@ export default function Tasks() {
                 const overdue = isOverdue(task);
                 const taskPct = task.status === 'completed' ? 100 : task.status === 'in_progress' ? 50 : 0;
                 return (
-                  <Card key={task.id} className={`p-4 md:p-5 ${overdue ? 'border-red-500/40' : ''} ${!editMode ? 'cursor-pointer' : ''}`} hover onClick={() => !editMode && navigate(`/v3/tasks/${task.id}`)}>
+                  <Card key={task.id} className={`p-4 md:p-5 ${overdue ? 'border-red-500/40' : ''} ${!editMode ? 'cursor-pointer' : ''}`} hover onClick={() => !editMode && navigate(`/tasks/${task.id}`)}>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         {editMode && (
@@ -471,7 +471,7 @@ export default function Tasks() {
             };
             const c = colorMap[task.priority] || colorMap.low;
             return (
-              <div onClick={() => navigate(`/v3/tasks/${task.id}`)} className={`${c.bg} border-l-[3px] ${c.border} rounded-xl p-2.5 cursor-pointer hover:brightness-110 transition-all`}>
+              <div onClick={() => navigate(`/tasks/${task.id}`)} className={`${c.bg} border-l-[3px] ${c.border} rounded-xl p-2.5 cursor-pointer hover:brightness-110 transition-all`}>
                 <p className={`text-xs font-medium truncate ${task.status === 'completed' ? 'line-through text-[var(--text-muted)]' : ''}`}>{task.title}</p>
                 <div className="flex items-center gap-1.5 mt-1.5">
                   {task.assigned_to && (
@@ -652,7 +652,7 @@ export default function Tasks() {
                                 };
                                 const c = colorMap[task.priority] || colorMap.low;
                                 return (
-                                  <div key={task.id} onClick={() => navigate(`/v3/tasks/${task.id}`)} className={`${c.bg} border-l-[3px] ${c.border} rounded-xl p-3 cursor-pointer hover:brightness-110 transition-all`}>
+                                  <div key={task.id} onClick={() => navigate(`/tasks/${task.id}`)} className={`${c.bg} border-l-[3px] ${c.border} rounded-xl p-3 cursor-pointer hover:brightness-110 transition-all`}>
                                     <div className="flex items-start justify-between">
                                       <div>
                                         <p className="text-[10px] text-[var(--text-muted)] mb-1">{timeLabel} - {endHourLabel(hour+1)}</p>

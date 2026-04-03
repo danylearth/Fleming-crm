@@ -8,55 +8,55 @@ const now = () => new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minu
 
 // Context-aware suggestions per page
 const pageSuggestions: Record<string, string[]> = {
-  '/v3': [
+  '/': [
     'Prioritise my day',
     'Compliance alerts summary',
     'What needs attention?',
     'Show overdue tasks',
   ],
-  '/v3/enquiries': [
+  '/enquiries': [
     'Draft a response to the latest enquiry',
     'Which enquiries need follow-up?',
     'Chase pending references',
     'Show new enquiries',
   ],
-  '/v3/properties': [
+  '/properties': [
     'Which properties need cert renewal?',
     'Show vacant properties',
     'Compliance overview',
     'Properties with rent review due',
   ],
-  '/v3/landlords': [
+  '/landlords': [
     'Email a landlord update',
     'Who has the most properties?',
     'Landlords needing KYC renewal',
     'Draft landlord update email',
   ],
-  '/v3/tenants': [
+  '/tenants': [
     'Tenants with rent arrears',
     'Upcoming lease renewals',
     'Send rent reminders',
     'Show tenancy expiry dates',
   ],
-  '/v3/bdm': [
+  '/bdm': [
     'Pipeline conversion rate',
     'Prospects needing follow-up',
     'Draft outreach email',
     'Show new leads',
   ],
-  '/v3/maintenance': [
+  '/maintenance': [
     'Urgent open issues',
     'Which properties have most issues?',
     'Show open maintenance',
     'Schedule contractor for open jobs',
   ],
-  '/v3/tasks': [
+  '/tasks': [
     'What\'s overdue?',
     'Show my completed tasks this week',
     'Create a new task',
     'Prioritise my tasks',
   ],
-  '/v3/financials': [
+  '/financials': [
     'Monthly rent collection summary',
     'Who\'s in arrears?',
     'Send rent reminders',
@@ -66,7 +66,7 @@ const pageSuggestions: Record<string, string[]> = {
 
 // Get greeting based on page
 function getGreeting(pathname: string): string {
-  if (pathname === '/v3') return "Hi. I can help you manage your day — compliance checks, emails, rent reminders, and more. What do you need?";
+  if (pathname === '/') return "Hi. I can help you manage your day — compliance checks, emails, rent reminders, and more. What do you need?";
   if (pathname.includes('enquir')) return "Viewing enquiries. I can email applicants, chase references, or move enquiries. What would you like?";
   if (pathname.includes('properties')) return "Property portfolio. I can check compliance, show voids, or help with rent reviews. Need anything?";
   if (pathname.includes('landlord')) return "Landlord overview. I can draft update emails or check KYC status. What do you need?";
@@ -82,7 +82,7 @@ function getGreeting(pathname: string): string {
 function getPageContext(pathname: string): { page: string; entityType?: string; entityId?: number } {
   const context: { page: string; entityType?: string; entityId?: number } = { page: pathname };
 
-  const detailMatch = pathname.match(/\/v3\/(properties|tenants|landlords|enquiries|bdm|tasks|maintenance)\/(\d+)/);
+  const detailMatch = pathname.match(/\/(properties|tenants|landlords|enquiries|bdm|tasks|maintenance)\/(\d+)/);
   if (detailMatch) {
     const typeMap: Record<string, string> = {
       properties: 'property', tenants: 'tenant', landlords: 'landlord',
@@ -147,7 +147,7 @@ export default function FloatingAI() {
     executeAction(action.id, action);
   };
 
-  const suggestions = pageSuggestions[location.pathname] || pageSuggestions['/v3'] || [];
+  const suggestions = pageSuggestions[location.pathname] || pageSuggestions['/'] || [];
 
   return (
     <>

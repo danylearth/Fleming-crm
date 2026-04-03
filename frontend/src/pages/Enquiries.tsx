@@ -609,7 +609,7 @@ export default function Enquiries() {
                                 <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
                                   style={provided.draggableProps.style}>
                                   <GlassCard className={`p-4 cursor-grab active:cursor-grabbing hover:border-[var(--accent-orange)]/30 transition-colors ${snapshot.isDragging ? 'ring-2 ring-[var(--accent-orange)]/40 shadow-lg' : ''}`}
-                                    onClick={() => !snapshot.isDragging && navigate(`/v3/enquiries/${e.id}`)}>
+                                    onClick={() => !snapshot.isDragging && navigate(`/enquiries/${e.id}`)}>
                                     <div className="flex items-start gap-3">
                                       <Avatar name={e.name} size="sm" />
                                       <div className="flex-1 min-w-0">
@@ -745,7 +745,7 @@ export default function Enquiries() {
             ]}
             data={filtered}
             rowKey={(e) => e.id}
-            onRowClick={(e) => !editMode && navigate(`/v3/enquiries/${e.id}`)}
+            onRowClick={(e) => !editMode && navigate(`/enquiries/${e.id}`)}
             />
           </>
         )}

@@ -20,7 +20,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/v3');
+      navigate('/');
     } catch (err: any) {
       setError(err.message || 'Invalid credentials');
     } finally {

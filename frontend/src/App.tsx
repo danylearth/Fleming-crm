@@ -51,7 +51,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (user) {
-    return <Navigate to="/v3" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
@@ -61,27 +61,25 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-      <Route path="/" element={<Navigate to="/v3" replace />} />
 
-      {/* V3 — Dark mode redesign */}
-      <Route path="/v3" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/v3/properties" element={<ProtectedRoute><Properties /></ProtectedRoute>} />
-      <Route path="/v3/properties/:id" element={<ProtectedRoute><PropertyDetail /></ProtectedRoute>} />
-      <Route path="/v3/landlords" element={<ProtectedRoute><Landlords /></ProtectedRoute>} />
-      <Route path="/v3/landlords/:id" element={<ProtectedRoute><LandlordDetail /></ProtectedRoute>} />
-      <Route path="/v3/tenants" element={<ProtectedRoute><Tenants /></ProtectedRoute>} />
-      <Route path="/v3/tenants/:id" element={<ProtectedRoute><TenantDetail /></ProtectedRoute>} />
-      <Route path="/v3/enquiries" element={<ProtectedRoute><Enquiries /></ProtectedRoute>} />
-      <Route path="/v3/enquiries/kanban" element={<ProtectedRoute><EnquiriesKanban /></ProtectedRoute>} />
-      <Route path="/v3/enquiries/:id" element={<ProtectedRoute><EnquiryDetail /></ProtectedRoute>} />
-      <Route path="/v3/bdm" element={<ProtectedRoute><BDM /></ProtectedRoute>} />
-      <Route path="/v3/bdm/:id" element={<ProtectedRoute><BDMDetail /></ProtectedRoute>} />
-      <Route path="/v3/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
-      <Route path="/v3/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
-      <Route path="/v3/tasks/:id" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
-      <Route path="/v3/financials" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
-      <Route path="/v3/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
-      <Route path="/v3/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+      <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/properties" element={<ProtectedRoute><Properties /></ProtectedRoute>} />
+      <Route path="/properties/:id" element={<ProtectedRoute><PropertyDetail /></ProtectedRoute>} />
+      <Route path="/landlords" element={<ProtectedRoute><Landlords /></ProtectedRoute>} />
+      <Route path="/landlords/:id" element={<ProtectedRoute><LandlordDetail /></ProtectedRoute>} />
+      <Route path="/tenants" element={<ProtectedRoute><Tenants /></ProtectedRoute>} />
+      <Route path="/tenants/:id" element={<ProtectedRoute><TenantDetail /></ProtectedRoute>} />
+      <Route path="/enquiries" element={<ProtectedRoute><Enquiries /></ProtectedRoute>} />
+      <Route path="/enquiries/kanban" element={<ProtectedRoute><EnquiriesKanban /></ProtectedRoute>} />
+      <Route path="/enquiries/:id" element={<ProtectedRoute><EnquiryDetail /></ProtectedRoute>} />
+      <Route path="/bdm" element={<ProtectedRoute><BDM /></ProtectedRoute>} />
+      <Route path="/bdm/:id" element={<ProtectedRoute><BDMDetail /></ProtectedRoute>} />
+      <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
+      <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
+      <Route path="/tasks/:id" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
+      <Route path="/financials" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
+      <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
     </Routes>
   );
 }

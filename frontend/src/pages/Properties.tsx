@@ -242,7 +242,7 @@ export default function Properties() {
                     <div
                       key={p.id}
                       onMouseEnter={() => setHoveredPropertyId(p.id)}
-                      onClick={() => navigate(`/v3/properties/${p.id}`)}
+                      onClick={() => navigate(`/properties/${p.id}`)}
                       className={`bg-[var(--bg-card)] border rounded-xl p-4 hover:border-[var(--accent-orange)]/40 hover:shadow-lg transition-all cursor-pointer group ${
                         isHovered ? 'border-[var(--accent-orange)]/40 shadow-lg scale-[1.02] z-10' :
                         isOtherHovered ? 'opacity-40 border-[var(--border-subtle)]' :
@@ -278,7 +278,7 @@ export default function Properties() {
             <div className="flex-1 relative">
               <PropertyMap
                 properties={filtered}
-                onPropertyClick={(id) => navigate(`/v3/properties/${id}`)}
+                onPropertyClick={(id) => navigate(`/properties/${id}`)}
                 highlightedPropertyId={hoveredPropertyId}
               />
             </div>
@@ -316,7 +316,7 @@ export default function Properties() {
               <tbody>
                 {filtered.map(p => (
                   <tr key={p.id}
-                    onClick={() => !editMode && navigate(`/v3/properties/${p.id}`)}
+                    onClick={() => !editMode && navigate(`/properties/${p.id}`)}
                     className={`border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] transition-colors ${!editMode ? 'cursor-pointer' : ''}`}>
                     {editMode && (
                       <td className="py-3 px-4">
@@ -388,7 +388,7 @@ export default function Properties() {
               });
               setShowAdd(false);
               resetForm();
-              navigate(`/v3/properties/${res.id}`);
+              navigate(`/properties/${res.id}`);
             } catch (e) { console.error(e); }
             setSaving(false);
           }}

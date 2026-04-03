@@ -309,7 +309,7 @@ export default function BDM() {
                                 <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
                                   style={provided.draggableProps.style}>
                                   <GlassCard className={`p-4 cursor-grab active:cursor-grabbing hover:border-[var(--accent-orange)]/30 transition-colors ${snapshot.isDragging ? 'ring-2 ring-[var(--accent-orange)]/40 shadow-lg' : ''}`}
-                                    onClick={() => !snapshot.isDragging && navigate(`/v3/bdm/${p.id}`)}>
+                                    onClick={() => !snapshot.isDragging && navigate(`/bdm/${p.id}`)}>
                                     <div className="flex items-start gap-3">
                                       <Avatar name={p.name} size="sm" />
                                       <div className="flex-1 min-w-0">
@@ -387,7 +387,7 @@ export default function BDM() {
               <tbody>
                 {filtered.map(p => (
                   <tr key={p.id}
-                    onClick={() => !editMode && navigate(`/v3/bdm/${p.id}`)}
+                    onClick={() => !editMode && navigate(`/bdm/${p.id}`)}
                     className={`border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] ${!editMode ? 'cursor-pointer' : ''} transition-colors`}>
                     {editMode && (
                       <td className="py-3 px-4">

@@ -595,7 +595,7 @@ export default function EnquiriesKanban() {
           </button>
 
           <div className="flex items-center gap-1 ml-auto">
-            <button onClick={() => navigate('/v3/enquiries')}
+            <button onClick={() => navigate('/enquiries')}
               className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors" title="List view">
               <List size={18} />
             </button>

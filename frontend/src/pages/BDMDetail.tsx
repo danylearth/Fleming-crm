@@ -138,7 +138,7 @@ export default function BDMDetail() {
     setConverting(true);
     try {
       const result = await api.post(`/api/landlords-bdm/${id}/convert`, {});
-      navigate(`/v3/landlords/${result.landlord_id}`);
+      navigate(`/landlords/${result.landlord_id}`);
     } catch (e) { console.error(e); }
     setConverting(false);
   };
@@ -155,7 +155,7 @@ export default function BDMDetail() {
   const isOnboarded = prospect.status === 'onboarded';
 
   return (
-    <Layout breadcrumb={[{ label: 'Landlord Enquiries', to: '/v3/bdm' }, { label: prospect.name }]}>
+    <Layout breadcrumb={[{ label: 'Landlord Enquiries', to: '/bdm' }, { label: prospect.name }]}>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Header */}
         <GlassCard className="p-6">

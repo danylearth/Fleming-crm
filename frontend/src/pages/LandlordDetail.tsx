@@ -259,7 +259,7 @@ export default function LandlordDetail() {
   if (!landlord) return <Layout title="Not Found"><div className="p-8 text-[var(--text-muted)]">Landlord not found</div></Layout>;
 
   return (
-    <Layout breadcrumb={[{ label: 'Landlords', to: '/v3/landlords' }, { label: landlord.name }]}>
+    <Layout breadcrumb={[{ label: 'Landlords', to: '/landlords' }, { label: landlord.name }]}>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Hero */}
         <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-orange-500/20 via-pink-500/20 to-purple-500/20 border border-[var(--border-color)]">
@@ -376,7 +376,7 @@ export default function LandlordDetail() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {properties.map(p => (
-                    <Card key={p.id} hover onClick={() => navigate(`/v3/properties/${p.id}`)} className="overflow-hidden">
+                    <Card key={p.id} hover onClick={() => navigate(`/properties/${p.id}`)} className="overflow-hidden">
                       <img src={getPropertyImage(p.id, 400, 160)} alt={p.address} className="h-24 w-full object-cover" loading="lazy" />
                       <div className="p-3">
                         <p className="text-sm font-medium truncate">{p.address}</p>
@@ -542,7 +542,7 @@ export default function LandlordDetail() {
                   {directorOf.map(company => (
                     <div
                       key={company.id}
-                      onClick={() => navigate(`/v3/landlords/${company.id}`)}
+                      onClick={() => navigate(`/landlords/${company.id}`)}
                       className="flex items-center justify-between p-4 bg-[var(--bg-hover)] rounded-lg cursor-pointer hover:bg-[var(--bg-subtle)] transition-colors group">
                       <div className="flex items-center gap-3 flex-1">
                         <div className="w-10 h-10 rounded-xl bg-[var(--accent-orange)]/10 flex items-center justify-center shrink-0">
@@ -901,7 +901,7 @@ export default function LandlordDetail() {
                         has_gas: propForm.has_gas,
                       });
                       setShowAddProp(false);
-                      navigate(`/v3/properties/${res.id}`);
+                      navigate(`/properties/${res.id}`);
                     } catch (e) { console.error(e); }
                     setPropSaving(false);
                   }}>

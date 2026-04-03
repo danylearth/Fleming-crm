@@ -118,7 +118,7 @@ export default function TaskDetail() {
     if (!task || !confirm('Delete this task? This will also delete all attached files.')) return;
     try {
       await api.delete(`/api/tasks/${task.id}`);
-      navigate('/v3/tasks');
+      navigate('/tasks');
     } catch (e) {
       console.error(e);
       alert('Failed to delete task');
@@ -184,7 +184,7 @@ export default function TaskDetail() {
         <div className="p-8">
           <EmptyState message="Task not found" />
           <div className="text-center mt-4">
-            <Button variant="ghost" onClick={() => navigate('/v3/tasks')}>
+            <Button variant="ghost" onClick={() => navigate('/tasks')}>
               <ArrowLeft size={14} className="mr-2" /> Back to Tasks
             </Button>
           </div>
@@ -202,7 +202,7 @@ export default function TaskDetail() {
     <Layout title="Task">
       <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
         {/* Back button */}
-        <button onClick={() => navigate('/v3/tasks')} className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+        <button onClick={() => navigate('/tasks')} className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
           <ArrowLeft size={16} /> Back to Tasks
         </button>
 
@@ -595,7 +595,7 @@ export default function TaskDetail() {
                     const base = task.entity_type === 'property' ? 'properties' :
                                  task.entity_type === 'landlord' ? 'landlords' :
                                  task.entity_type === 'tenant' ? 'tenants' : '';
-                    if (base) navigate(`/v3/${base}/${task.entity_id}`);
+                    if (base) navigate(`/${base}/${task.entity_id}`);
                   }}
                   className="flex items-center gap-3 w-full p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors"
                 >

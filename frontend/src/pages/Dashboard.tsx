@@ -131,7 +131,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Compliance Alerts */}
           <Card className="p-6">
-            <SectionHeader title="Compliance Alerts" action={() => navigate('/v3/properties')} actionLabel="View All" />
+            <SectionHeader title="Compliance Alerts" action={() => navigate('/properties')} actionLabel="View All" />
             {dashboard?.complianceAlerts?.length ? (
               <div className="space-y-3">
                 {dashboard.complianceAlerts.slice(0, 5).map((alert, i) => (
@@ -161,7 +161,7 @@ export default function Dashboard() {
 
           {/* Pipeline */}
           <Card className="p-6">
-            <SectionHeader title="Enquiry Pipeline" action={() => navigate('/v3/enquiries')} actionLabel="View All" />
+            <SectionHeader title="Enquiry Pipeline" action={() => navigate('/enquiries')} actionLabel="View All" />
             {enquiries.length ? (
               <div className="space-y-3">
                 {enquiries.slice(0, 5).map((enq) => {
@@ -183,7 +183,7 @@ export default function Dashboard() {
                   return (
                     <div
                       key={enq.id}
-                      onClick={() => navigate('/v3/enquiries')}
+                      onClick={() => navigate('/enquiries')}
                       className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -220,7 +220,7 @@ export default function Dashboard() {
 
         {/* Recent Tasks */}
         <Card className="p-6">
-          <SectionHeader title="Recent Tasks" action={() => navigate('/v3/tasks')} actionLabel="View All" />
+          <SectionHeader title="Recent Tasks" action={() => navigate('/tasks')} actionLabel="View All" />
           {tasks.length ? (
             <div className="space-y-2">
               {tasks.slice(0, 5).map(task => (
@@ -254,13 +254,13 @@ export default function Dashboard() {
 
         {/* My Properties Carousel */}
         <div>
-          <SectionHeader title="My Properties" action={() => navigate('/v3/properties')} actionLabel="View All" />
+          <SectionHeader title="My Properties" action={() => navigate('/properties')} actionLabel="View All" />
           {properties.length ? (
             <div className="flex gap-4 overflow-x-auto pb-4 -mx-2 px-2 scrollbar-hide">
               {properties.map(prop => (
                 <GlassCard
                   key={prop.id}
-                  onClick={() => navigate(`/v3/properties/${prop.id}`)}
+                  onClick={() => navigate(`/properties/${prop.id}`)}
                   className="min-w-[280px] max-w-[280px] shrink-0 overflow-hidden"
                 >
                   <img

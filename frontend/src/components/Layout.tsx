@@ -11,17 +11,17 @@ import FloatingAI from './v3/FloatingAI';
 import { useTheme } from '../context/ThemeContext';
 
 const navItems = [
-  { to: '/v3', icon: DashboardIcon, label: 'Dashboard', roles: null },
-  { to: '/v3/properties', icon: PropertiesIcon, label: 'Properties', roles: null },
-  { to: '/v3/landlords', icon: LandlordsIcon, label: 'Landlords', roles: null },
-  { to: '/v3/tenants', icon: TenantsIcon, label: 'Tenants', roles: null },
-  { to: '/v3/enquiries', icon: EnquiriesIcon, label: 'Tenant Enquiries', roles: null },
-  { to: '/v3/bdm', icon: BdmIcon, label: 'Landlord Enquiries', roles: null },
-  { to: '/v3/maintenance', icon: MaintenanceIcon, label: 'Maintenance', roles: null },
-  { to: '/v3/tasks', icon: TasksIcon, label: 'Tasks', roles: null },
-  { to: '/v3/financials', icon: FinancialsIcon, label: 'Financials', roles: null },
-  { to: '/v3/users', icon: Users, label: 'Team', roles: ['admin'] }, // Admin only
-  { to: '/v3/settings', icon: SettingsIcon, label: 'Settings', roles: null },
+  { to: '/', icon: DashboardIcon, label: 'Dashboard', roles: null },
+  { to: '/properties', icon: PropertiesIcon, label: 'Properties', roles: null },
+  { to: '/landlords', icon: LandlordsIcon, label: 'Landlords', roles: null },
+  { to: '/tenants', icon: TenantsIcon, label: 'Tenants', roles: null },
+  { to: '/enquiries', icon: EnquiriesIcon, label: 'Tenant Enquiries', roles: null },
+  { to: '/bdm', icon: BdmIcon, label: 'Landlord Enquiries', roles: null },
+  { to: '/maintenance', icon: MaintenanceIcon, label: 'Maintenance', roles: null },
+  { to: '/tasks', icon: TasksIcon, label: 'Tasks', roles: null },
+  { to: '/financials', icon: FinancialsIcon, label: 'Financials', roles: null },
+  { to: '/users', icon: Users, label: 'Team', roles: ['admin'] }, // Admin only
+  { to: '/settings', icon: SettingsIcon, label: 'Settings', roles: null },
 ];
 
 const PORTFOLIO_OPTIONS = [
@@ -101,7 +101,7 @@ export default function Layout({ children, title, breadcrumb, hideTopBar }: Layo
               <NavLink
                 key={item.to}
                 to={item.to}
-                end={item.to === '/v3'}
+                end={item.to === '/'}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${isActive
                     ? 'bg-[var(--bg-input)] text-[var(--text-primary)]'

@@ -426,7 +426,7 @@ export default function Landlords() {
             ]}
             data={filtered.map(l => ({ ...l, _props: landlordProperties[l.id] || [] }))}
             rowKey={(l) => l.id}
-            onRowClick={(l) => navigate(`/v3/landlords/${l.id}`)}
+            onRowClick={(l) => navigate(`/landlords/${l.id}`)}
           />
           </>
         ) : (
@@ -435,7 +435,7 @@ export default function Landlords() {
               const lProps = landlordProperties[l.id] || [];
               const matchedDirector = getMatchedDirector(l.id);
               return (
-                <GlassCard key={l.id} onClick={() => navigate(`/v3/landlords/${l.id}`)} className="p-5">
+                <GlassCard key={l.id} onClick={() => navigate(`/landlords/${l.id}`)} className="p-5">
                   <div className="flex items-start gap-4">
                     <Avatar name={l.name} size="lg" />
                     <div className="flex-1 min-w-0">
