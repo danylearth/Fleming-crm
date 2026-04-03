@@ -53,7 +53,6 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     const rent = enquiry.monthly_rent_agreed || prop?.rent_amount || 0;
     setHdMonthlyRent(String(rent || ''));
     if (rent) {
-      setHdSecurityDeposit(String(Math.round(rent * 5 / 4.33)));
       setHdHoldingDeposit(String(Math.round(rent * 12 / 52)));
     }
     setHdReceivedAmount(enquiry.holding_deposit_received_amount ? String(enquiry.holding_deposit_received_amount) : '');
@@ -375,7 +374,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     <input type="number" value={hdMonthlyRent} onChange={e => {
                       setHdMonthlyRent(e.target.value);
                       const r = Number(e.target.value);
-                      if (r > 0) { setHdHoldingDeposit(String(Math.round(r * 12 / 52))); setHdSecurityDeposit(String(Math.round(r * 5 / 4.33))); }
+                      if (r > 0) { setHdHoldingDeposit(String(Math.round(r * 12 / 52))); }
                     }} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
                   </div>
                   <div>

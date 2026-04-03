@@ -762,7 +762,6 @@ export default function EnquiryDetailV3() {
                     const prop = properties.find(p => p.id === Number(form.linked_property_id));
                     const rent = prop?.rent_amount || 0;
                     setHdMonthlyRent(String(rent));
-                    setHdSecurityDeposit(String(Math.round(rent * 5 / 4.33)));
                     setHdHoldingDeposit(String(Math.round(rent * 12 / 52)));
                     setHdFollowUpDate('');
                     setShowHoldingDeposit(true);
@@ -1040,7 +1039,6 @@ export default function EnquiryDetailV3() {
               const r = Number(e.target.value);
               if (r > 0) {
                 setHdHoldingDeposit(String(Math.round(r * 12 / 52)));
-                setHdSecurityDeposit(String(Math.round(r * 5 / 4.33)));
               }
             }}
               className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />

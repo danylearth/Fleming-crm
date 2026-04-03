@@ -68,11 +68,11 @@
 
 - [x] **Add free-text box** — "Is there any further information you would like to submit?" textarea before declarations. Per spec 1.8.
 
-- [ ] **Update `POST /api/public/application-form/:token` to accept new fields** — Backend must accept expanded employment, references, next of kin (2 entries), and declaration fields. Update both `index.ts` and `index-pg.ts`.
+- [x] **Update `POST /api/public/application-form/:token` to accept new fields** — Backend must accept expanded employment, references, next of kin (2 entries), and declaration fields. Update both `index.ts` and `index-pg.ts`.
 
 ### UI Bug Fixes (spec 1.6)
 
-- [ ] **Fix security deposit pre-population** — Remove `Math.round(rent * 5 / 4.33)` auto-calculation in `OnboardingWizard.tsx` line 50 and `EnquiryDetailV3.tsx` line 705. Leave security deposit field empty for manual entry. Keep holding deposit auto-calc. Per spec 1.6.
+- [x] **Fix security deposit pre-population** — Remove `Math.round(rent * 5 / 4.33)` auto-calculation in `OnboardingWizard.tsx` line 50 and `EnquiryDetailV3.tsx` line 705. Leave security deposit field empty for manual entry. Keep holding deposit auto-calc. Per spec 1.6.
 
 - [ ] **Fix holding deposit input for full number entry** — Change from `type="number"` to `type="text" inputmode="numeric"` with validation pattern, allowing paste and full number entry. In both `EnquiryDetailV3.tsx` and `OnboardingWizard.tsx`. Per spec 1.6.
 
