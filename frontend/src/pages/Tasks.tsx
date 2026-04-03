@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { Card, GlassCard, Button, Input, Select, Avatar, ProgressRing, EmptyState, DatePicker } from '../components/v3';
 import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
@@ -270,7 +270,7 @@ export default function Tasks() {
   const isSelectedToday = selectedDate === todayStr;
 
   return (
-    <V3Layout title="Tasks" breadcrumb={[{ label: 'Tasks' }]}>
+    <Layout title="Tasks" breadcrumb={[{ label: 'Tasks' }]}>
       <div className="p-4 md:p-8 space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
@@ -874,6 +874,6 @@ export default function Tasks() {
           </div>
         )}
       </div>
-    </V3Layout>
+    </Layout>
   );
 }

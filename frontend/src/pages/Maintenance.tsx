@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Tag, SearchBar, EmptyState, DataTable, SearchDropdown } from '../components/v3';
 import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
@@ -162,7 +162,7 @@ export default function Maintenance() {
   };
 
   return (
-    <V3Layout title="Maintenance" breadcrumb={[{ label: 'Maintenance' }]}>
+    <Layout title="Maintenance" breadcrumb={[{ label: 'Maintenance' }]}>
       <div className="p-4 md:p-8 space-y-6">
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -419,6 +419,6 @@ export default function Maintenance() {
           </div>
         )}
       </div>
-    </V3Layout>
+    </Layout>
   );
 }

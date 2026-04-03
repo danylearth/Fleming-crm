@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Avatar, SectionHeader } from '../components/v3';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
@@ -87,7 +87,7 @@ export default function Settings() {
   };
 
   return (
-    <V3Layout title="Settings" breadcrumb={[{ label: 'Settings' }]}>
+    <Layout title="Settings" breadcrumb={[{ label: 'Settings' }]}>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-2xl">
         {/* Profile */}
         <GlassCard className="p-6">
@@ -208,6 +208,6 @@ export default function Settings() {
           </div>
         </GlassCard>
       </div>
-    </V3Layout>
+    </Layout>
   );
 }

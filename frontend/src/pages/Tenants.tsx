@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable, type Column } from '../components/v3';
 import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
@@ -230,7 +230,7 @@ export default function Tenants() {
   };
 
   return (
-    <V3Layout title="Tenants" breadcrumb={[{ label: 'Tenants' }]}>
+    <Layout title="Tenants" breadcrumb={[{ label: 'Tenants' }]}>
       <div className="p-4 md:p-8 space-y-6">
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -671,6 +671,6 @@ export default function Tenants() {
           </div>
         </div>
       )}
-    </V3Layout>
+    </Layout>
   );
 }

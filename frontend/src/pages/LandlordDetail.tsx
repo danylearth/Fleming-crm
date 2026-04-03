@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, SectionHeader, EmptyState, Card, DatePicker } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import ActivityTimeline from '../components/v3/ActivityTimeline';
@@ -255,11 +255,11 @@ export default function LandlordDetail() {
 
   const filteredNotes = getFilteredNotes();
 
-  if (loading) return <V3Layout title="Loading..."><div className="p-8 text-[var(--text-muted)] text-sm">Loading...</div></V3Layout>;
-  if (!landlord) return <V3Layout title="Not Found"><div className="p-8 text-[var(--text-muted)]">Landlord not found</div></V3Layout>;
+  if (loading) return <Layout title="Loading..."><div className="p-8 text-[var(--text-muted)] text-sm">Loading...</div></Layout>;
+  if (!landlord) return <Layout title="Not Found"><div className="p-8 text-[var(--text-muted)]">Landlord not found</div></Layout>;
 
   return (
-    <V3Layout breadcrumb={[{ label: 'Landlords', to: '/v3/landlords' }, { label: landlord.name }]}>
+    <Layout breadcrumb={[{ label: 'Landlords', to: '/v3/landlords' }, { label: landlord.name }]}>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Hero */}
         <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-orange-500/20 via-pink-500/20 to-purple-500/20 border border-[var(--border-color)]">
@@ -1007,6 +1007,6 @@ export default function LandlordDetail() {
           </div>
         )}
       </div>
-    </V3Layout>
+    </Layout>
   );
 }

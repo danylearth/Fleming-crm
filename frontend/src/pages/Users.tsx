@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, EmptyState, DataTable, type Column } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { usePermissions } from '../hooks/usePermissions';
@@ -244,7 +244,7 @@ export default function Users() {
   }
 
   return (
-    <V3Layout title="Team Management" breadcrumb={[{ label: 'Team' }]}>
+    <Layout title="Team Management" breadcrumb={[{ label: 'Team' }]}>
       <div className="p-4 md:p-8 space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -390,6 +390,6 @@ export default function Users() {
           </div>
         </div>
       )}
-    </V3Layout>
+    </Layout>
   );
 }

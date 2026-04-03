@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, Avatar, SearchDropdown, PostcodeAutocomplete } from '../components/v3';
 import AddressAutocomplete from '../components/v3/AddressAutocomplete';
 import BulkActions from '../components/v3/BulkActions';
@@ -136,7 +136,7 @@ export default function Properties() {
   };
 
   return (
-    <V3Layout title="Properties" breadcrumb={[{ label: 'Properties' }]}>
+    <Layout title="Properties" breadcrumb={[{ label: 'Properties' }]}>
       <div className="p-4 md:p-8 space-y-6">
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -394,7 +394,7 @@ export default function Properties() {
           }}
         />}
       </div>
-    </V3Layout>
+    </Layout>
   );
 
   function resetForm() {

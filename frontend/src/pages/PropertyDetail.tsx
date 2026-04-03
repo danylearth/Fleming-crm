@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { Card, GlassCard, Button, ProgressRing, SectionHeader, EmptyState, Avatar, Tag, Input, Select, DatePicker, PricePaidData } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import ActivityTimeline from '../components/v3/ActivityTimeline';
@@ -526,19 +526,19 @@ export default function PropertyDetail() {
 
   if (loading) {
     return (
-      <V3Layout title="Property" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: 'Loading...' }]}>
+      <Layout title="Property" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: 'Loading...' }]}>
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-2 border-[var(--border-input)] border-t-orange-500 rounded-full animate-spin" />
         </div>
-      </V3Layout>
+      </Layout>
     );
   }
 
   if (!property) {
     return (
-      <V3Layout title="Property" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: 'Not Found' }]}>
+      <Layout title="Property" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: 'Not Found' }]}>
         <EmptyState message="Property not found" />
-      </V3Layout>
+      </Layout>
     );
   }
 
@@ -559,7 +559,7 @@ export default function PropertyDetail() {
   }
 
   return (
-    <V3Layout title="" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: property.address }]}>
+    <Layout title="" breadcrumb={[{ label: 'Properties', to: '/v3/properties' }, { label: property.address }]}>
       <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         {/* Hero */}
         <div className="relative h-48 sm:h-56 md:h-64 rounded-xl sm:rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
@@ -1686,7 +1686,7 @@ export default function PropertyDetail() {
           </div>
         )}
       </div>
-    </V3Layout>
+    </Layout>
   );
 }
 

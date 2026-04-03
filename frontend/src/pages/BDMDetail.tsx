@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, SectionHeader, DatePicker } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import ActivityTimeline from '../components/v3/ActivityTimeline';
@@ -148,14 +148,14 @@ export default function BDMDetail() {
     if (prospect) setForm({ name: prospect.name || '', email: prospect.email || '', phone: prospect.phone || '', address: prospect.address || '', source: prospect.source || '', follow_up_date: prospect.follow_up_date || '', status: prospect.status || 'new' });
   };
 
-  if (loading) return <V3Layout title="Loading..."><div className="p-8 text-[var(--text-muted)] text-sm">Loading...</div></V3Layout>;
-  if (!prospect) return <V3Layout title="Not Found"><div className="p-8 text-[var(--text-muted)]">Prospect not found</div></V3Layout>;
+  if (loading) return <Layout title="Loading..."><div className="p-8 text-[var(--text-muted)] text-sm">Loading...</div></Layout>;
+  if (!prospect) return <Layout title="Not Found"><div className="p-8 text-[var(--text-muted)]">Prospect not found</div></Layout>;
 
   const isOverdue = prospect.follow_up_date && new Date(prospect.follow_up_date) < new Date(new Date().toDateString());
   const isOnboarded = prospect.status === 'onboarded';
 
   return (
-    <V3Layout breadcrumb={[{ label: 'Landlord Enquiries', to: '/v3/bdm' }, { label: prospect.name }]}>
+    <Layout breadcrumb={[{ label: 'Landlord Enquiries', to: '/v3/bdm' }, { label: prospect.name }]}>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Header */}
         <GlassCard className="p-6">
@@ -343,6 +343,6 @@ export default function BDMDetail() {
           </div>
         </div>
       )}
-    </V3Layout>
+    </Layout>
   );
 }

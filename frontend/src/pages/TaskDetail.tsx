@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { Card, GlassCard, Button, Input, Select, Avatar, EmptyState, DatePicker } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import {
@@ -170,17 +170,17 @@ export default function TaskDetail() {
 
   if (loading) {
     return (
-      <V3Layout title="Task">
+      <Layout title="Task">
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-2 border-[var(--border-input)] border-t-orange-500 rounded-full animate-spin" />
         </div>
-      </V3Layout>
+      </Layout>
     );
   }
 
   if (!task) {
     return (
-      <V3Layout title="Task">
+      <Layout title="Task">
         <div className="p-8">
           <EmptyState message="Task not found" />
           <div className="text-center mt-4">
@@ -189,7 +189,7 @@ export default function TaskDetail() {
             </Button>
           </div>
         </div>
-      </V3Layout>
+      </Layout>
     );
   }
 
@@ -199,7 +199,7 @@ export default function TaskDetail() {
   const isOverdue = task.status !== 'completed' && task.due_date && new Date(task.due_date) < new Date();
 
   return (
-    <V3Layout title="Task">
+    <Layout title="Task">
       <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
         {/* Back button */}
         <button onClick={() => navigate('/v3/tasks')} className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
@@ -629,6 +629,6 @@ export default function TaskDetail() {
           </div>
         </div>
       </div>
-    </V3Layout>
+    </Layout>
   );
 }

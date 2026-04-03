@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, EmptyState, DatePicker } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import RentPayments from '../components/v3/RentPayments';
@@ -302,14 +302,14 @@ export default function TenantDetail() {
     setAddingNote(false);
   };
 
-  if (loading) return <V3Layout title="Loading..."><div className="p-8 text-[var(--text-muted)] text-sm">Loading...</div></V3Layout>;
-  if (!tenant) return <V3Layout title="Not Found"><div className="p-8 text-[var(--text-muted)]">Tenant not found</div></V3Layout>;
+  if (loading) return <Layout title="Loading..."><div className="p-8 text-[var(--text-muted)] text-sm">Loading...</div></Layout>;
+  if (!tenant) return <Layout title="Not Found"><div className="p-8 text-[var(--text-muted)]">Tenant not found</div></Layout>;
 
   const displayName = form.first_name_1 && form.last_name_1 ? `${form.first_name_1} ${form.last_name_1}` : tenant.name;
   const isEditing = (section: string) => editingSection === section;
 
   return (
-    <V3Layout breadcrumb={[{ label: 'Tenants', to: '/v3/tenants' }, { label: displayName }]}>
+    <Layout breadcrumb={[{ label: 'Tenants', to: '/v3/tenants' }, { label: displayName }]}>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* ==================== HEADER ==================== */}
         <GlassCard className="p-6">
@@ -696,6 +696,6 @@ export default function TenantDetail() {
           </div>
         </div>
       </div>
-    </V3Layout>
+    </Layout>
   );
 }

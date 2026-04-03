@@ -30,14 +30,14 @@ const PORTFOLIO_OPTIONS = [
   { key: 'external' as const, label: 'My Clients' },
 ];
 
-interface V3LayoutProps {
+interface LayoutProps {
   children: React.ReactNode;
   title?: string;
   breadcrumb?: { label: string; to?: string }[];
   hideTopBar?: boolean;
 }
 
-export default function V3Layout({ children, title, breadcrumb, hideTopBar }: V3LayoutProps) {
+export default function Layout({ children, title, breadcrumb, hideTopBar }: LayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useAuth();

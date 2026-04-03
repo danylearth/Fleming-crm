@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { Button, Avatar, SearchBar, EmptyState, Input, Select, DatePicker } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { getPropertyImage } from '../utils/propertyImages';
@@ -560,7 +560,7 @@ export default function EnquiriesKanban() {
   }, [enquiries]);
 
   return (
-    <V3Layout title="Enquiries" breadcrumb={[{ label: 'Enquiries' }]}>
+    <Layout title="Enquiries" breadcrumb={[{ label: 'Enquiries' }]}>
       <div className="flex flex-col h-full">
         {/* Top Bar */}
         <div className="flex items-center gap-3 px-4 md:px-6 py-3 border-b border-[var(--border-subtle)] shrink-0 flex-wrap">
@@ -742,6 +742,6 @@ export default function EnquiriesKanban() {
           </div>
         )}
       </div>
-    </V3Layout>
+    </Layout>
   );
 }

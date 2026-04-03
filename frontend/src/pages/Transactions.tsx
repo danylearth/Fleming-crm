@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { Card, GlassCard, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { PoundSterling, TrendingUp, TrendingDown, Home, ArrowUpRight, ArrowDownRight } from 'lucide-react';
@@ -77,7 +77,7 @@ export default function Transactions() {
   }, {});
 
   return (
-    <V3Layout title="Financials" breadcrumb={[{ label: 'Financials' }]}>
+    <Layout title="Financials" breadcrumb={[{ label: 'Financials' }]}>
       <div className="p-4 md:p-8">
         {loading ? (
           <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
@@ -171,6 +171,6 @@ export default function Transactions() {
           </>
         )}
       </div>
-    </V3Layout>
+    </Layout>
   );
 }

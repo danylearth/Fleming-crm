@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState, DataTable, DatePicker } from '../components/v3';
 import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
@@ -491,7 +491,7 @@ export default function Enquiries() {
   };
 
   return (
-    <V3Layout title="Tenant Enquiries" breadcrumb={[{ label: 'Tenant Enquiries' }]}>
+    <Layout title="Tenant Enquiries" breadcrumb={[{ label: 'Tenant Enquiries' }]}>
       <div className="p-4 md:p-8 space-y-6">
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -987,6 +987,6 @@ export default function Enquiries() {
           }}
         />
       )}
-    </V3Layout>
+    </Layout>
   );
 }

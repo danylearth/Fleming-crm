@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DatePicker } from '../components/v3';
 import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
@@ -201,7 +201,7 @@ export default function BDM() {
   };
 
   return (
-    <V3Layout title="Landlord Enquiries" breadcrumb={[{ label: 'Landlord Enquiries' }]}>
+    <Layout title="Landlord Enquiries" breadcrumb={[{ label: 'Landlord Enquiries' }]}>
       <div className="p-4 md:p-8 space-y-6">
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -617,6 +617,6 @@ export default function BDM() {
           </div>
         </div>
       )}
-    </V3Layout>
+    </Layout>
   );
 }

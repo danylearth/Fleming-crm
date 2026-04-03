@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { Card, GlassCard, SectionHeader, StatusDot, EmptyState, Tag } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
@@ -88,16 +88,16 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <V3Layout hideTopBar>
+      <Layout hideTopBar>
         <div className="flex items-center justify-center h-full">
           <div className="w-8 h-8 border-2 border-[var(--border-input)] border-t-orange-500 rounded-full animate-spin" />
         </div>
-      </V3Layout>
+      </Layout>
     );
   }
 
   return (
-    <V3Layout hideTopBar>
+    <Layout hideTopBar>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Greeting */}
         <div className="pt-10 md:pt-0">
@@ -291,6 +291,6 @@ export default function Dashboard() {
           )}
         </div>
       </div>
-    </V3Layout>
+    </Layout>
   );
 }

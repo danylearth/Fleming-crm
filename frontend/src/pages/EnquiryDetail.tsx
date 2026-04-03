@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import V3Layout from '../components/V3Layout';
+import Layout from '../components/Layout';
 import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker, StatusDot, SectionHeader } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import ActivityTimeline from '../components/v3/ActivityTimeline';
@@ -386,19 +386,19 @@ export default function EnquiryDetail() {
 
   if (loading) {
     return (
-      <V3Layout title="Enquiry" breadcrumb={[{ label: 'Tenant Enquiries', to: '/v3/enquiries' }, { label: 'Loading...' }]}>
+      <Layout title="Enquiry" breadcrumb={[{ label: 'Tenant Enquiries', to: '/v3/enquiries' }, { label: 'Loading...' }]}>
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-2 border-[var(--border-input)] border-t-orange-500 rounded-full animate-spin" />
         </div>
-      </V3Layout>
+      </Layout>
     );
   }
 
   if (!data) {
     return (
-      <V3Layout title="Enquiry" breadcrumb={[{ label: 'Tenant Enquiries', to: '/v3/enquiries' }, { label: 'Not Found' }]}>
+      <Layout title="Enquiry" breadcrumb={[{ label: 'Tenant Enquiries', to: '/v3/enquiries' }, { label: 'Not Found' }]}>
         <EmptyState message="Enquiry not found" />
-      </V3Layout>
+      </Layout>
     );
   }
 
@@ -414,7 +414,7 @@ export default function EnquiryDetail() {
   try { rentingReqs = form.renting_requirements ? JSON.parse(form.renting_requirements) : []; } catch {}
 
   return (
-    <V3Layout
+    <Layout
       title=""
       breadcrumb={[{ label: 'Tenant Enquiries', to: '/v3/enquiries' }, { label: name }]}
     >
@@ -1109,6 +1109,6 @@ export default function EnquiryDetail() {
           onUpdate={async () => { await loadDetail(); }}
         />
       )}
-    </V3Layout>
+    </Layout>
   );
 }
