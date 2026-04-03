@@ -13,6 +13,7 @@ import {
   MessageSquare, Plus, ShieldCheck, AlertTriangle, Send
 } from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
+import { calculateSmsSegments } from '../utils/sms';
 import OnboardingWizard from '../components/v3/OnboardingWizard';
 import EmailPreviewModal from '../components/v3/EmailPreviewModal';
 
@@ -332,13 +333,23 @@ export default function EnquiryDetail() {
           }
           break;
         case 'follow_up':
-          if (wfDate) await saveSection({ status: 'awaiting_response', follow_up_date: wfDate });
+          if (wfDate) {
+            await saveSection({ status: 'awaiting_response', follow_up_date: wfDate });
+            if (smsEnabled && form.phone_1 && smsBody) {
+              await api.post('/api/sms/send', { enquiry_id: Number(id), to_phone: form.phone_1, message_body: smsBody }).catch(() => {});
+              await loadSmsHistory();
+            }
+          }
           break;
         case 'onboarding':
           await saveSection({ status: 'onboarding', follow_up_date: wfDate || null });
           break;
         case 'reject':
           await saveSection({ status: 'rejected', rejection_reason: wfReason });
+          if (smsEnabled && form.phone_1 && smsBody) {
+            await api.post('/api/sms/send', { enquiry_id: Number(id), to_phone: form.phone_1, message_body: smsBody }).catch(() => {});
+            await loadSmsHistory();
+          }
           break;
         case 'convert':
           await api.post(`/api/tenant-enquiries/${id}/convert`, {
@@ -888,6 +899,9 @@ export default function EnquiryDetail() {
                       <span>Send</span>
                     </Button>
                   </div>
+                  {smsCompose.trim() && (
+                    <p className="text-[10px] text-[var(--text-muted)] mt-1">{(() => { const s = calculateSmsSegments(smsCompose); return `${s.charCount} chars · ${s.segments} segment${s.segments !== 1 ? 's' : ''} · ${s.encoding}`; })()}</p>
+                  )}
                 </div>
               )}
             </GlassCard>
@@ -924,7 +938,7 @@ export default function EnquiryDetail() {
                   <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <button onClick={() => setWorkflowMode('follow_up')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                <button onClick={() => { setWorkflowMode('follow_up'); setSmsEnabled(false); const fn = form.first_name_1 || '[name]'; setSmsBody(`Hi ${fn}, just following up on your property enquiry with Fleming Lettings. Are you still looking? Please let us know if you'd like to arrange a viewing or have any questions. Call us on 01902 212 415. - Fleming Lettings`); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><AwaitingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
@@ -945,7 +959,7 @@ export default function EnquiryDetail() {
                   </>
                 )}
                 <div className="h-px bg-[var(--border-subtle)] my-3" />
-                <button onClick={() => setWorkflowMode('reject')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left">
+                <button onClick={() => { setWorkflowMode('reject'); setSmsEnabled(false); const fn = form.first_name_1 || '[name]'; setSmsBody(`Hi ${fn}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time. We wish you the best in your property search. - Fleming Lettings`); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center"><XCircle size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium text-red-400">Reject & Archive</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
@@ -1003,7 +1017,7 @@ export default function EnquiryDetail() {
                               <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Message Preview</label>
                               <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={4}
                                 className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-none transition-colors" />
-                              <p className="text-[10px] text-[var(--text-muted)] mt-1">{smsBody.length} characters</p>
+                              <p className="text-[10px] text-[var(--text-muted)] mt-1">{(() => { const s = calculateSmsSegments(smsBody); return `${s.charCount} chars · ${s.segments} segment${s.segments !== 1 ? 's' : ''} · ${s.encoding}`; })()}</p>
                             </div>
                           )}
                         </div>
@@ -1015,7 +1029,44 @@ export default function EnquiryDetail() {
                     </>
                   );
                 })()}
-                {workflowMode === 'follow_up' && <DatePicker label="Follow-up Date" value={wfDate} onChange={setWfDate} />}
+                {workflowMode === 'follow_up' && (
+                  <>
+                    <DatePicker label="Follow-up Date *" value={wfDate} onChange={setWfDate} />
+
+                    {/* SMS */}
+                    <div className="h-px bg-[var(--border-subtle)] my-1" />
+                    {form.phone_1 ? (
+                      <div className="space-y-3">
+                        <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                          <input type="checkbox" checked={smsEnabled} onChange={e => {
+                            setSmsEnabled(e.target.checked);
+                            if (e.target.checked && !smsBody) {
+                              const fn = form.first_name_1 || '[name]';
+                              setSmsBody(`Hi ${fn}, just following up on your property enquiry with Fleming Lettings. Are you still looking? Please let us know if you'd like to arrange a viewing or have any questions. Call us on 01902 212 415. - Fleming Lettings`);
+                            }
+                          }} className="w-4 h-4 rounded accent-orange-500" />
+                          <Phone size={14} className="text-teal-400" />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-[var(--text-primary)]">Send follow-up SMS</span>
+                            <p className="text-[10px] text-[var(--text-muted)]">{form.phone_1}</p>
+                          </div>
+                        </label>
+                        {smsEnabled && (
+                          <div>
+                            <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Message Preview</label>
+                            <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={4}
+                              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-none transition-colors" />
+                            <p className="text-[10px] text-[var(--text-muted)] mt-1">{(() => { const s = calculateSmsSegments(smsBody); return `${s.charCount} chars · ${s.segments} segment${s.segments !== 1 ? 's' : ''} · ${s.encoding}`; })()}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                        <p className="text-xs text-amber-400">No phone number on record — SMS cannot be sent</p>
+                      </div>
+                    )}
+                  </>
+                )}
                 {workflowMode === 'onboarding' && (
                   <div className="space-y-3">
                     <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
@@ -1024,13 +1075,60 @@ export default function EnquiryDetail() {
                     </div>
                   </div>
                 )}
-                {workflowMode === 'reject' && (
-                  <div>
-                    <label className="block text-xs text-[var(--text-secondary)] mb-1.5">Reason (optional)</label>
-                    <textarea value={wfReason} onChange={e => setWfReason(e.target.value)} rows={3}
-                      className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none" />
-                  </div>
-                )}
+                {workflowMode === 'reject' && (() => {
+                  const firstName = form.first_name_1 || '[name]';
+                  return (
+                    <>
+                      <div>
+                        <label className="block text-xs text-[var(--text-secondary)] mb-1.5">Reason (optional)</label>
+                        <textarea value={wfReason} onChange={e => {
+                          setWfReason(e.target.value);
+                          if (smsEnabled) {
+                            const base = `Hi ${firstName}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time.`;
+                            const reasonLine = e.target.value ? ` Reason: ${e.target.value}.` : '';
+                            setSmsBody(`${base}${reasonLine} We wish you the best in your property search. - Fleming Lettings`);
+                          }
+                        }} rows={3}
+                          className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none"
+                          placeholder="Reason for rejection..." />
+                      </div>
+
+                      {/* SMS */}
+                      <div className="h-px bg-[var(--border-subtle)] my-1" />
+                      {form.phone_1 ? (
+                        <div className="space-y-3">
+                          <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                            <input type="checkbox" checked={smsEnabled} onChange={e => {
+                              setSmsEnabled(e.target.checked);
+                              if (e.target.checked && !smsBody) {
+                                const base = `Hi ${firstName}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time.`;
+                                const reasonLine = wfReason ? ` Reason: ${wfReason}.` : '';
+                                setSmsBody(`${base}${reasonLine} We wish you the best in your property search. - Fleming Lettings`);
+                              }
+                            }} className="w-4 h-4 rounded accent-orange-500" />
+                            <Phone size={14} className="text-teal-400" />
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-[var(--text-primary)]">Send rejection SMS</span>
+                              <p className="text-[10px] text-[var(--text-muted)]">{form.phone_1}</p>
+                            </div>
+                          </label>
+                          {smsEnabled && (
+                            <div>
+                              <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Message Preview</label>
+                              <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={4}
+                                className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-none transition-colors" />
+                              <p className="text-[10px] text-[var(--text-muted)] mt-1">{(() => { const s = calculateSmsSegments(smsBody); return `${s.charCount} chars · ${s.segments} segment${s.segments !== 1 ? 's' : ''} · ${s.encoding}`; })()}</p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                          <p className="text-xs text-amber-400">No phone number on record — SMS cannot be sent</p>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 {workflowMode === 'convert' && <DatePicker label="Tenancy Start Date" value={wfDate} onChange={setWfDate} />}
                 <div className="flex gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setShowWorkflow(false)}>Cancel</Button>

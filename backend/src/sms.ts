@@ -101,6 +101,20 @@ export function viewingConfirmationSms(name: string, address: string, date: stri
   return `Hi ${name}, your property viewing at ${address} has been confirmed for ${date}${time ? ' at ' + time : ''}. Please arrive on time. If you need to reschedule, please call us. - Fleming Lettings`;
 }
 
+export function followUpSms(name: string): string {
+  return `Hi ${name}, just following up on your property enquiry with Fleming Lettings. Are you still looking? Please let us know if you'd like to arrange a viewing or have any questions. Call us on 01902 212 415. - Fleming Lettings`;
+}
+
+export function rejectionSms(name: string, reason?: string): string {
+  const base = `Hi ${name}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time.`;
+  const reasonLine = reason ? ` Reason: ${reason}.` : '';
+  return `${base}${reasonLine} We wish you the best in your property search. - Fleming Lettings`;
+}
+
+export function rentReminderSms(name: string, amount: string, dueDate: string): string {
+  return `Hi ${name}, this is a reminder that your rent payment of £${amount} is due on ${dueDate}. Please ensure payment is made on time. If you have already paid, please disregard this message. - Fleming Lettings`;
+}
+
 export function genericSms(name: string, message: string): string {
   return `Hi ${name}, ${message} - Fleming Lettings`;
 }

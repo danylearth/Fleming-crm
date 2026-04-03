@@ -9,6 +9,7 @@ import { generateToken, authMiddleware, AuthRequest, requireRole } from './auth'
 import { registerInventoryRoutes } from './inventory-routes';
 import { validateTwilioWebhook, normalizeUkPhone as normalizePhone } from './sms';
 import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
 
 // Validate required environment variables
 if (!process.env.DATABASE_URL) {
@@ -54,6 +55,23 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ extended: false }));
+
+// Rate limiters for public (unauthenticated) endpoints
+const publicSubmitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 submissions per 15 min per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many submissions from this IP, please try again later' },
+});
+
+const publicReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60, // 60 reads per 15 min per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests from this IP, please try again later' },
+});
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
@@ -708,7 +726,7 @@ app.get('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) =
 });
 
 // Public endpoint for landlord enquiry form submissions (no auth required)
-app.post('/api/public/landlord-enquiries', async (req, res) => {
+app.post('/api/public/landlord-enquiries', publicSubmitLimiter, async (req, res) => {
   try {
     const {
       // Registration type
@@ -918,7 +936,7 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
 });
 
 // Public endpoint for external form submissions (no auth required)
-app.post('/api/public/tenant-enquiries', async (req, res) => {
+app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) => {
   try {
     const {
       // Registration type
@@ -1117,7 +1135,7 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
 });
 
 // PUBLIC ENDPOINT - Upload documents for a tenant enquiry (no auth)
-app.post('/api/public/tenant-enquiries/:id/documents', upload.array('documents', 10), async (req, res) => {
+app.post('/api/public/tenant-enquiries/:id/documents', publicSubmitLimiter, upload.array('documents', 10), async (req, res) => {
   try {
     const enquiryId = req.params.id;
     const enquiry = await queryOne('SELECT id FROM tenant_enquiries WHERE id = $1', [enquiryId]);
@@ -1650,7 +1668,7 @@ app.post('/api/tenants/bulk-delete', authMiddleware, async (req: AuthRequest, re
 
 // Public endpoint to get available properties for enquiry form
 // Public duplicate check for enquiry forms
-app.get('/api/public/check-duplicates', async (req, res) => {
+app.get('/api/public/check-duplicates', publicReadLimiter, async (req, res) => {
   try {
     const { email, phone } = req.query;
     if (!email && !phone) {
@@ -1691,7 +1709,7 @@ app.get('/api/public/check-duplicates', async (req, res) => {
   }
 });
 
-app.get('/api/public/properties', async (req, res) => {
+app.get('/api/public/properties', publicReadLimiter, async (req, res) => {
   try {
     console.log('[Public Properties] Fetching properties with status: to_let, available');
     // First get ALL properties to debug
@@ -1715,7 +1733,7 @@ app.get('/api/public/properties', async (req, res) => {
 // ============ PUBLIC APPLICATION FORM (DocuSign-lite) ============
 
 // GET form data by token (public - no auth)
-app.get('/api/public/application-form/:token', async (req, res) => {
+app.get('/api/public/application-form/:token', publicReadLimiter, async (req, res) => {
   try {
     const enquiry = await queryOne(`
       SELECT te.*, p.address as property_address, p.postcode as property_postcode, p.rent_amount
@@ -1743,7 +1761,7 @@ app.get('/api/public/application-form/:token', async (req, res) => {
 });
 
 // POST submit completed form (public - no auth)
-app.post('/api/public/application-form/:token', async (req, res) => {
+app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req, res) => {
   try {
     const enquiry = await queryOne('SELECT id, application_form_completed FROM tenant_enquiries WHERE application_form_token = $1', [req.params.token]);
     if (!enquiry) return res.status(404).json({ error: 'Form not found' });

@@ -12,6 +12,7 @@ import aiRouter from './ai/chat';
 import { startScheduler } from './scheduler';
 import { validateTwilioWebhook, normalizeUkPhone as normalizePhone } from './sms';
 import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -56,6 +57,23 @@ app.use(express.urlencoded({ extended: false }));
 
 // Serve static files from frontend build
 app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+
+// Rate limiters for public (unauthenticated) endpoints
+const publicSubmitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many submissions from this IP, please try again later' },
+});
+
+const publicReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests from this IP, please try again later' },
+});
 
 // ============ AUDIT LOGGING ============
 
@@ -912,7 +930,7 @@ app.post('/api/landlords-bdm/bulk-delete', authMiddleware, (req: AuthRequest, re
 // ============ TENANT ENQUIRIES ============
 
 // PUBLIC ENDPOINT - Get available properties for tenant enquiry form
-app.get('/api/public/properties', (req, res) => {
+app.get('/api/public/properties', publicReadLimiter, (req, res) => {
   try {
     const properties = db.prepare(`
       SELECT id, address, postcode, property_type, bedrooms, rent_amount, status
@@ -928,7 +946,7 @@ app.get('/api/public/properties', (req, res) => {
 });
 
 // PUBLIC ENDPOINT - Check for duplicate enquiries (no auth)
-app.get('/api/public/check-duplicates', (req, res) => {
+app.get('/api/public/check-duplicates', publicReadLimiter, (req, res) => {
   try {
     const { email, phone } = req.query;
     if (!email && !phone) {
@@ -961,7 +979,7 @@ app.get('/api/public/check-duplicates', (req, res) => {
 
 // ============ PUBLIC APPLICATION FORM (DocuSign-lite) ============
 
-app.get('/api/public/application-form/:token', (req, res) => {
+app.get('/api/public/application-form/:token', publicReadLimiter, (req, res) => {
   try {
     const enquiry = db.prepare(`
       SELECT te.*, p.address as property_address, p.postcode as property_postcode, p.rent_amount
@@ -987,7 +1005,7 @@ app.get('/api/public/application-form/:token', (req, res) => {
   }
 });
 
-app.post('/api/public/application-form/:token', (req, res) => {
+app.post('/api/public/application-form/:token', publicSubmitLimiter, (req, res) => {
   try {
     const enquiry = db.prepare('SELECT id, application_form_completed FROM tenant_enquiries WHERE application_form_token = ?').get(req.params.token) as any;
     if (!enquiry) return res.status(404).json({ error: 'Form not found' });
@@ -1053,7 +1071,7 @@ app.post('/api/public/application-form/:token', (req, res) => {
 
 // PUBLIC ENDPOINT - No authentication required
 // This endpoint receives submissions from the Fleming Lettings public landlord enquiry form
-app.post('/api/public/landlord-enquiries', async (req, res) => {
+app.post('/api/public/landlord-enquiries', publicSubmitLimiter, async (req, res) => {
   try {
     const {
       // Registration type
@@ -1263,7 +1281,7 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
 
 // PUBLIC ENDPOINT - No authentication required
 // This endpoint receives submissions from the Fleming Lettings public tenant enquiry form
-app.post('/api/public/tenant-enquiries', async (req, res) => {
+app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) => {
   try {
     const {
       // Registration type
@@ -1445,7 +1463,7 @@ app.post('/api/public/tenant-enquiries', async (req, res) => {
 });
 
 // PUBLIC ENDPOINT - Upload documents for a tenant enquiry (no auth)
-app.post('/api/public/tenant-enquiries/:id/documents', upload.array('documents', 10), (req, res) => {
+app.post('/api/public/tenant-enquiries/:id/documents', publicSubmitLimiter, upload.array('documents', 10), (req, res) => {
   try {
     const enquiryId = req.params.id;
     const enquiry = db.prepare('SELECT id FROM tenant_enquiries WHERE id = ?').get(enquiryId);
