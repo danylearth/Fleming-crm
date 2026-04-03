@@ -627,8 +627,13 @@ export default function EnquiryDetailV3() {
               )}
             </GlassCard>
 
-            {/* Documents */}
-            <DocumentUpload entityType="tenant_enquiry" entityId={Number(id)} />
+            {/* Documents — Applicant 1 */}
+            <DocumentUpload entityType="tenant_enquiry" entityId={Number(id)} applicantNumber={1} title={jointApp ? "Documents — Applicant 1" : "Documents"} />
+
+            {/* Documents — Applicant 2 (joint applications only) */}
+            {jointApp && (
+              <DocumentUpload entityType="tenant_enquiry" entityId={Number(id)} applicantNumber={2} title="Documents — Applicant 2" />
+            )}
           </div>
 
           {/* ==================== RIGHT COLUMN ==================== */}

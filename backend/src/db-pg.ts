@@ -323,7 +323,8 @@ export async function initDb() {
         mime_type TEXT,
         size INTEGER,
         uploaded_by INTEGER REFERENCES users(id),
-        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        applicant_number INTEGER DEFAULT 1
       );
 
       -- PROPERTY EXPENSES
@@ -491,6 +492,14 @@ export async function initDb() {
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE property_viewings ADD COLUMN IF NOT EXISTS assigned_to TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Sprint 6: Add applicant_number to documents for joint applicant support
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE documents ADD COLUMN IF NOT EXISTS applicant_number INTEGER DEFAULT 1;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `);

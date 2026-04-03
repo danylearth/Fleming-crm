@@ -300,7 +300,8 @@ export async function initDb() {
         mime_type TEXT,
         size INTEGER,
         uploaded_by INTEGER REFERENCES users(id),
-        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        applicant_number INTEGER DEFAULT 1
       );
 
       -- Create indexes

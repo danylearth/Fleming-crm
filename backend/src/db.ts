@@ -468,9 +468,10 @@ db.exec(`
     size INTEGER,
     uploaded_by INTEGER,
     uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    applicant_number INTEGER DEFAULT 1,
     FOREIGN KEY (uploaded_by) REFERENCES users(id)
   );
-  
+
   CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_type, entity_id);
 
   -- ============================================
@@ -913,6 +914,9 @@ db.exec(`
     FOREIGN KEY (property_id) REFERENCES properties(id)
   );
 `);
+
+// Sprint 6: Add applicant_number to documents for joint applicant support
+try { db.exec(`ALTER TABLE documents ADD COLUMN applicant_number INTEGER DEFAULT 1`); } catch (e) {}
 
 // ============ SEED DATA (only on empty database or FORCE_RESEED) ============
 if (process.env.FORCE_RESEED === 'true') {

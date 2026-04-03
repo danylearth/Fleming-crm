@@ -17,6 +17,8 @@ interface Doc {
 interface Props {
   entityType: string;
   entityId: number;
+  applicantNumber?: number;
+  title?: string;
 }
 
 function formatBytes(bytes: number) {
@@ -25,7 +27,7 @@ function formatBytes(bytes: number) {
   return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
-export default function DocumentUpload({ entityType, entityId }: Props) {
+export default function DocumentUpload({ entityType, entityId, applicantNumber, title }: Props) {
   const { token } = useAuth();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [docTypes, setDocTypes] = useState<string[]>([]);
@@ -38,9 +40,11 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
 
   const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
+  const appQuery = applicantNumber !== undefined ? `?applicant_number=${applicantNumber}` : '';
+
   useEffect(() => {
     Promise.all([
-      fetch(`${API_URL}/api/documents/${entityType}/${entityId}`, { headers }).then(r => r.json()),
+      fetch(`${API_URL}/api/documents/${entityType}/${entityId}${appQuery}`, { headers }).then(r => r.json()),
       fetch(`${API_URL}/api/documents/types/${entityType}`, { headers }).then(r => r.json()),
     ]).then(([d, t]) => {
       setDocs(Array.isArray(d) ? d : []);
@@ -48,7 +52,7 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
       if (Array.isArray(t) && t.length) setSelectedType(t[0]);
     }).catch(() => { })
       .finally(() => setLoading(false));
-  }, [entityType, entityId]);
+  }, [entityType, entityId, applicantNumber]);
 
   const handleUpload = async (file: File) => {
     if (!selectedType) {
@@ -66,6 +70,9 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
       // Use custom name if "Other" is selected, otherwise use selectedType
       const docType = selectedType === 'Other' ? customTypeName.trim() : selectedType;
       fd.append('doc_type', docType);
+      if (applicantNumber !== undefined) {
+        fd.append('applicant_number', String(applicantNumber));
+      }
       const res = await fetch(`${API_URL}/api/documents/${entityType}/${entityId}`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -115,7 +122,7 @@ export default function DocumentUpload({ entityType, entityId }: Props) {
   return (
     <Card className="p-6">
       <SectionHeader
-        title="Documents"
+        title={title || "Documents"}
         action={() => setShowUpload(!showUpload)}
         actionLabel={showUpload ? 'Cancel' : 'Upload'}
       />

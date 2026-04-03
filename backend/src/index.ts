@@ -2701,10 +2701,15 @@ app.get('/api/documents/types/:entityType', authMiddleware, (req: AuthRequest, r
 app.get('/api/documents/:entityType/:entityId', authMiddleware, (req: AuthRequest, res) => {
   try {
     const { entityType, entityId } = req.params;
-    const docs = db.prepare(`
-      SELECT id, doc_type, original_name, mime_type, size, uploaded_at 
-      FROM documents WHERE entity_type = ? AND entity_id = ? ORDER BY uploaded_at DESC
-    `).all(entityType, entityId);
+    const applicantNumber = req.query.applicant_number ? parseInt(req.query.applicant_number as string) : undefined;
+    let sql = 'SELECT id, doc_type, original_name, mime_type, size, uploaded_at FROM documents WHERE entity_type = ? AND entity_id = ?';
+    const params: any[] = [entityType, entityId];
+    if (applicantNumber !== undefined) {
+      sql += ' AND applicant_number = ?';
+      params.push(applicantNumber);
+    }
+    sql += ' ORDER BY uploaded_at DESC';
+    const docs = db.prepare(sql).all(...params);
     res.json(docs);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch documents' });
@@ -2714,19 +2719,20 @@ app.get('/api/documents/:entityType/:entityId', authMiddleware, (req: AuthReques
 app.post('/api/documents/:entityType/:entityId', authMiddleware, upload.single('file'), (req: AuthRequest, res) => {
   try {
     const { entityType, entityId } = req.params;
-    const { doc_type } = req.body;
+    const { doc_type, applicant_number } = req.body;
+    const appNum = applicant_number ? parseInt(applicant_number) : 1;
     const file = req.file;
 
     if (!file) return res.status(400).json({ error: 'No file uploaded' });
     if (!doc_type) return res.status(400).json({ error: 'Document type required' });
 
     const stmt = db.prepare(`
-      INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by, applicant_number)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(entityType, entityId, doc_type, file.filename, file.originalname, file.mimetype, file.size, req.user?.id);
+    const result = stmt.run(entityType, entityId, doc_type, file.filename, file.originalname, file.mimetype, file.size, req.user?.id, appNum);
 
-    logAudit(req.user?.id, req.user?.email, 'create', 'document', result.lastInsertRowid as number, { entity_type: entityType, entity_id: entityId });
+    logAudit(req.user?.id, req.user?.email, 'create', 'document', result.lastInsertRowid as number, { entity_type: entityType, entity_id: entityId, applicant_number: appNum });
     res.json({ id: result.lastInsertRowid, doc_type, original_name: file.originalname, mime_type: file.mimetype, size: file.size });
   } catch (err) {
     res.status(500).json({ error: 'Failed to upload document' });
