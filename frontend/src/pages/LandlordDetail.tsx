@@ -7,7 +7,7 @@ import ActivityTimeline from '../components/v3/ActivityTimeline';
 import AddressAutocomplete from '../components/v3/AddressAutocomplete';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
-import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Search, ChevronDown, Briefcase, Trash2, RotateCcw } from 'lucide-react';
+import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Briefcase, Trash2, RotateCcw } from 'lucide-react';
 import { getPropertyImage } from '../utils/propertyImages';
 
 interface Landlord {
@@ -29,7 +29,7 @@ interface DirectorOf {
   id: number; name: string; email: string; phone: string; role: string; director_id: number;
 }
 
-function ReadField({ icon: Icon, label, value }: { icon?: any; label: string; value: string | React.ReactNode }) {
+function ReadField({ icon: Icon, label, value }: { icon?: React.ComponentType<{ size?: number; className?: string }>; label: string; value: string | React.ReactNode }) {
   return (
     <div className="flex items-center gap-3">
       {Icon && (
@@ -138,7 +138,7 @@ export default function LandlordDetail() {
       setDirectorOf(dirOf);
 
       // Parse property notes
-      const propNotesMap: Record<number, any[]> = {};
+      const propNotesMap: Record<number, { id: string; text: string; author: string; created_at: string }[]> = {};
       props.forEach((p: Property) => {
         propNotesMap[p.id] = parseNotes(p.notes || '');
       });
@@ -151,6 +151,7 @@ export default function LandlordDetail() {
       await loadDetail();
       setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleSave = async () => {
@@ -719,7 +720,7 @@ export default function LandlordDetail() {
 
               <div className="space-y-3">
                 {filteredNotes.length === 0 && <p className="text-sm text-[var(--text-muted)]">No notes yet</p>}
-                {filteredNotes.map((n: any) => (
+                {filteredNotes.map((n: { id: string; text: string; author: string; created_at: string; source?: string; propertyId?: number }) => (
                   <div key={n.id + '-' + n.source} className="flex gap-3">
                     <div className="w-8 h-8 rounded-full bg-[var(--bg-hover)] flex items-center justify-center shrink-0 mt-0.5">
                       <StickyNote size={14} className="text-[var(--text-muted)]" />

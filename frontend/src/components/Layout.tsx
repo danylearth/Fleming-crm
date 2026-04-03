@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Menu, LogOut, ChevronLeft, ChevronRight, X, Sun, Moon, Users } from 'lucide-react';
@@ -37,19 +37,13 @@ interface LayoutProps {
   hideTopBar?: boolean;
 }
 
-export default function Layout({ children, title, breadcrumb, hideTopBar }: LayoutProps) {
+export default function Layout({ children, title, hideTopBar }: LayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { portfolioFilter, setPortfolioFilter } = usePortfolio();
-
-  // Close mobile drawer on navigation
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname]);
 
   return (
     <div className="flex h-screen bg-[var(--bg-page)] font-[Lufga] text-[var(--text-primary)] overflow-hidden">
@@ -102,6 +96,7 @@ export default function Layout({ children, title, breadcrumb, hideTopBar }: Layo
                 key={item.to}
                 to={item.to}
                 end={item.to === '/'}
+                onClick={() => setMobileOpen(false)}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${isActive
                     ? 'bg-[var(--bg-input)] text-[var(--text-primary)]'

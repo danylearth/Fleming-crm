@@ -4,7 +4,7 @@ import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, EmptyState, DataTable, type Column } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import { usePermissions } from '../hooks/usePermissions';
-import { Plus, X, Users as UsersIcon, Mail, Shield, ShieldAlert, Eye, Key, CheckCircle, XCircle, Copy } from 'lucide-react';
+import { Plus, X, Users as UsersIcon, Shield, ShieldAlert, Eye, Key, CheckCircle, XCircle, Copy, type LucideIcon } from 'lucide-react';
 
 interface User {
   id: number;
@@ -97,8 +97,8 @@ export default function Users() {
         // Don't close modal yet - show temp password
       }
       await load();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save user');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save user');
     } finally {
       setSaving(false);
     }
@@ -112,8 +112,8 @@ export default function Users() {
       setTempPassword(result.tempPassword);
       setEditUser(users.find(u => u.id === userId) || null);
       setShowModal(true);
-    } catch (err: any) {
-      alert(err.message || 'Failed to reset password');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to reset password');
     }
   };
 
@@ -126,19 +126,8 @@ export default function Users() {
     try {
       await api.put(`/api/users/${user.id}`, { is_active: newStatus });
       await load();
-    } catch (err: any) {
-      alert(err.message || `Failed to ${action} user`);
-    }
-  };
-
-  const handleDelete = async (user: User) => {
-    if (!confirm(`Deactivate ${user.name}? This will prevent them from logging in.`)) return;
-
-    try {
-      await api.delete(`/api/users/${user.id}`);
-      await load();
-    } catch (err: any) {
-      alert(err.message || 'Failed to deactivate user');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : `Failed to ${action} user`);
     }
   };
 
@@ -154,7 +143,7 @@ export default function Users() {
     viewer: 'bg-gray-500/20 text-gray-400'
   };
 
-  const roleIcons: Record<string, any> = {
+  const roleIcons: Record<string, LucideIcon> = {
     admin: ShieldAlert,
     manager: Shield,
     staff: UsersIcon,

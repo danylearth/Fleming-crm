@@ -5,7 +5,7 @@ export interface AIMessage {
   role: 'user' | 'assistant' | 'system';
   text: string;
   actions?: AIAction[];
-  data?: any;
+  data?: Record<string, unknown>;
   status?: 'pending' | 'done' | 'error';
 }
 
@@ -14,7 +14,7 @@ export interface AIAction {
   label: string;
   type: 'confirm' | 'link' | 'dismiss';
   href?: string;
-  payload?: any;
+  payload?: Record<string, unknown>;
   done?: boolean;
 }
 
@@ -42,9 +42,10 @@ export function useAIChat() {
       const result = await api.post('/api/ai/execute', { actionId, payload: action.payload });
       setTyping(false);
       addMessage({ role: 'assistant', text: result.text || 'Done.', status: 'done' });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTyping(false);
-      addMessage({ role: 'assistant', text: `Failed: ${err.message || 'Something went wrong'}. Try again?`, status: 'error' });
+      const message = err instanceof Error ? err.message : 'Something went wrong';
+      addMessage({ role: 'assistant', text: `Failed: ${message}. Try again?`, status: 'error' });
     }
   }, [api]);
 
@@ -62,11 +63,12 @@ export function useAIChat() {
         data: result.data,
         status: 'done',
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTyping(false);
+      const message = err instanceof Error ? err.message : 'Please try again.';
       addMessage({
         role: 'assistant',
-        text: `Something went wrong: ${err.message || 'Please try again.'}`,
+        text: `Something went wrong: ${message}`,
         status: 'error',
       });
     }

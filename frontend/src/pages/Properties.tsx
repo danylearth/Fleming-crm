@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, Avatar, SearchDropdown, PostcodeAutocomplete } from '../components/v3';
+import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, SearchDropdown, PostcodeAutocomplete } from '../components/v3';
 import AddressAutocomplete from '../components/v3/AddressAutocomplete';
 import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
@@ -21,6 +21,12 @@ interface LandlordOption {
 
 interface TenantOption {
   id: number; name: string; property_id: number;
+}
+
+interface PropertyForm {
+  landlord_id: string; address: string; postcode: string; property_type: string;
+  bedrooms: string; rent_amount: string; status: string; service_type: string;
+  council_tax_band: string; has_gas: boolean;
 }
 
 const STATUSES = [
@@ -66,18 +72,18 @@ export default function Properties() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
-  const load = () => {
+  const load = useCallback(() => {
     Promise.all([api.get('/api/properties'), api.get('/api/landlords'), api.get('/api/tenants')])
       .then(([data, lls, tns]) => {
         setProperties(Array.isArray(data) ? data : []);
-        setLandlords(Array.isArray(lls) ? lls.map((l: any) => ({ id: l.id, name: l.name })) : []);
-        setTenants(Array.isArray(tns) ? tns.map((t: any) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
+        setLandlords(Array.isArray(lls) ? lls.map((l: { id: number; name: string }) => ({ id: l.id, name: l.name })) : []);
+        setTenants(Array.isArray(tns) ? tns.map((t: { id: number; name: string; property_id: number }) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
       })
       .catch(() => setProperties([]))
       .finally(() => setLoading(false));
-  };
+  }, [api]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const portfolioFiltered = filterByPortfolio(properties, portfolioFilter);
   const filtered = portfolioFiltered.filter(p => {
@@ -169,7 +175,7 @@ export default function Properties() {
             </button>
           </div>
           <Button
-            variant={editMode ? "outline" : "secondary"}
+            variant={editMode ? "outline" : "ghost"}
             onClick={() => {
               setEditMode(!editMode);
               if (editMode) setSelectedIds([]);
@@ -406,7 +412,7 @@ export default function Properties() {
 
 function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen, llSearch, setLlSearch, saving, onClose, onSubmit, lockedLandlord }: {
   landlords: LandlordOption[];
-  form: any; setForm: (fn: any) => void;
+  form: PropertyForm; setForm: (fn: (prev: PropertyForm) => PropertyForm) => void;
   llDropOpen: boolean; setLlDropOpen: (v: boolean) => void;
   llSearch: string; setLlSearch: (v: string) => void;
   saving: boolean; onClose: () => void; onSubmit: () => void;
@@ -420,9 +426,9 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
   // Auto-populate Fleming verandas when My Portfolio is selected
   useEffect(() => {
     if (portfolioType === 'internal' && flemingLandlord) {
-      setForm((f: any) => ({ ...f, landlord_id: String(flemingLandlord.id) }));
+      setForm((f: PropertyForm) => ({ ...f, landlord_id: String(flemingLandlord.id) }));
     }
-  }, [portfolioType, flemingLandlord]);
+  }, [portfolioType, flemingLandlord, setForm]);
 
   const selectedLl = lockedLandlord || landlords.find(l => l.id === Number(form.landlord_id));
   const isMyPortfolio = portfolioType === 'internal';
@@ -493,7 +499,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
                 </div>
                 <div className="max-h-48 overflow-y-auto">
                   {landlords.filter(l => l.name.toLowerCase().includes(llSearch.toLowerCase())).map(l => (
-                    <button key={l.id} onClick={() => { setForm((f: any) => ({ ...f, landlord_id: String(l.id) })); setLlDropOpen(false); setLlSearch(''); }}
+                    <button key={l.id} onClick={() => { setForm((f: PropertyForm) => ({ ...f, landlord_id: String(l.id) })); setLlDropOpen(false); setLlSearch(''); }}
                       className="w-full text-left px-3 py-2.5 text-sm hover:bg-[var(--bg-hover)] transition-colors truncate text-[var(--text-secondary)]">
                       {l.name}
                     </button>
@@ -508,9 +514,9 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
           <AddressAutocomplete
             label="Address *"
             value={form.address}
-            onChange={(v: string) => setForm((f: any) => ({ ...f, address: v }))}
+            onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, address: v }))}
             onSelect={(place) => {
-              setForm((f: any) => ({
+              setForm((f: PropertyForm) => ({
                 ...f,
                 address: place.address,
                 postcode: place.postcode || f.postcode
@@ -523,21 +529,21 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
           <PostcodeAutocomplete
             label="Postcode"
             value={form.postcode}
-            onChange={(v: string) => setForm((f: any) => ({ ...f, postcode: v }))}
-            onAddressSelect={(address: string) => setForm((f: any) => ({ ...f, address: address }))}
+            onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, postcode: v }))}
+            onAddressSelect={(address: string) => setForm((f: PropertyForm) => ({ ...f, address: address }))}
             placeholder="e.g. SW1A 1AA"
             showDropdownOnAddress={true}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Select label="Type" value={form.property_type} onChange={(v: string) => setForm((f: any) => ({ ...f, property_type: v }))}
+          <Select label="Type" value={form.property_type} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, property_type: v }))}
             options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
-          <Input label="Bedrooms" value={form.bedrooms} onChange={(v: string) => setForm((f: any) => ({ ...f, bedrooms: v }))} placeholder="1" />
+          <Input label="Bedrooms" value={form.bedrooms} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, bedrooms: v }))} placeholder="1" />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Select label="Status *" value={form.status} onChange={(v: string) => setForm((f: any) => ({ ...f, status: v }))}
+          <Select label="Status *" value={form.status} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, status: v }))}
             options={[{ value: 'tbc', label: 'TBC' }, { value: 'active', label: 'Active' }, { value: 'closed', label: 'Closed' }]} />
-          <Select label="Service Type" value={form.service_type} onChange={(v: string) => setForm((f: any) => ({ ...f, service_type: v }))}
+          <Select label="Service Type" value={form.service_type} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, service_type: v }))}
             options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
         </div>
 

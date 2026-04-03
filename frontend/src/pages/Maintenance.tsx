@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Tag, SearchBar, EmptyState, DataTable, SearchDropdown } from '../components/v3';
 import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, AlertCircle, Clock, CheckCircle2, Wrench, MapPin, ChevronDown, ChevronUp, Search, Building2, User } from 'lucide-react';
+import { Plus, X, Wrench, MapPin, ChevronDown, ChevronUp, Search, Building2, User } from 'lucide-react';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 
 interface MaintenanceItem {
@@ -71,7 +71,7 @@ export default function Maintenance() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [data, props, tns, lls] = await Promise.all([
         api.get('/api/maintenance'),
@@ -81,12 +81,32 @@ export default function Maintenance() {
       ]);
       setItems(Array.isArray(data) ? data : data.items || []);
       setProperties(props);
-      setTenants(Array.isArray(tns) ? tns.map((t: any) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
-      setLandlords(Array.isArray(lls) ? lls.map((l: any) => ({ id: l.id, name: l.name })) : []);
-    } catch { setItems([]); }
+      setTenants(Array.isArray(tns) ? tns.map((t: { id: number; name: string; property_id: number }) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
+      setLandlords(Array.isArray(lls) ? lls.map((l: { id: number; name: string }) => ({ id: l.id, name: l.name })) : []);
+    } catch { /* Silently ignore */ setItems([]); }
     setLoading(false);
-  };
-  useEffect(() => { load(); }, []);
+  }, [api]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [data, props, tns, lls] = await Promise.all([
+          api.get('/api/maintenance'),
+          api.get('/api/properties'),
+          api.get('/api/tenants'),
+          api.get('/api/landlords'),
+        ]);
+        if (!cancelled) {
+          setItems(Array.isArray(data) ? data : data.items || []);
+          setProperties(props);
+          setTenants(Array.isArray(tns) ? tns.map((t: { id: number; name: string; property_id: number }) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
+          setLandlords(Array.isArray(lls) ? lls.map((l: { id: number; name: string }) => ({ id: l.id, name: l.name })) : []);
+        }
+      } catch { /* Silently ignore */ if (!cancelled) setItems([]); }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [api]);
 
   const statusCounts = items.reduce((acc, i) => {
     acc[i.status] = (acc[i.status] || 0) + 1;
@@ -104,13 +124,13 @@ export default function Maintenance() {
     }
     if (landlordFilter) {
       const prop = properties.find(p => p.id === i.property_id);
-      if (prop && (prop as any).landlord_id !== landlordFilter) return false;
+      if (prop && (prop as { landlord_id?: number }).landlord_id !== landlordFilter) return false;
     }
     return true;
   });
 
   const updateStatus = async (id: number, status: string) => {
-    try { await api.put(`/api/maintenance/${id}`, { status }); await load(); } catch { }
+    try { await api.put(`/api/maintenance/${id}`, { status }); await load(); } catch { /* Silently ignore */ }
   };
 
   const addItem = async () => {
@@ -120,7 +140,7 @@ export default function Maintenance() {
       setShowAdd(false);
       setForm({ title: '', description: '', priority: 'medium', property_id: '' });
       await load();
-    } catch { }
+    } catch { /* Silently ignore */ }
   };
 
   const selectedProp = properties.find(p => p.id === Number(form.property_id));
@@ -185,7 +205,7 @@ export default function Maintenance() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="flex-1"><SearchBar value={search} onChange={setSearch} placeholder="Search maintenance..." /></div>
           <Button
-            variant={editMode ? "outline" : "secondary"}
+            variant={editMode ? "outline" : "ghost"}
             onClick={() => {
               setEditMode(!editMode);
               if (editMode) setSelectedIds([]);
@@ -347,10 +367,10 @@ export default function Maintenance() {
                 {item.resolved_date && <p className="text-xs text-emerald-400">Resolved: {formatDate(item.resolved_date)}</p>}
                 <div className="flex gap-2">
                   {item.status !== 'in_progress' && item.status !== 'completed' && item.status !== 'closed' && (
-                    <Button variant="outline" size="sm" onClick={(e: any) => { e.stopPropagation(); updateStatus(item.id, 'in_progress'); }}>Mark In Progress</Button>
+                    <Button variant="outline" size="sm" onClick={(e?: React.MouseEvent) => { e?.stopPropagation(); updateStatus(item.id, 'in_progress'); }}>Mark In Progress</Button>
                   )}
                   {item.status !== 'completed' && item.status !== 'closed' && (
-                    <Button variant="outline" size="sm" onClick={(e: any) => { e.stopPropagation(); updateStatus(item.id, 'completed'); }}>Mark Completed</Button>
+                    <Button variant="outline" size="sm" onClick={(e?: React.MouseEvent) => { e?.stopPropagation(); updateStatus(item.id, 'completed'); }}>Mark Completed</Button>
                   )}
                 </div>
               </div>

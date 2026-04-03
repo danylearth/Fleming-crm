@@ -36,7 +36,7 @@ export function GlassCard({ children, className = '', onClick, onMouseEnter, onM
 
 // ─── Button ───
 export function Button({ children, onClick, variant = 'primary', size = 'md', className = '', disabled, type = 'button' }: {
-  children: ReactNode; onClick?: (e?: any) => void; variant?: 'primary' | 'ghost' | 'gradient' | 'outline';
+  children: ReactNode; onClick?: (e?: React.MouseEvent) => void; variant?: 'primary' | 'ghost' | 'gradient' | 'outline';
   size?: 'sm' | 'md' | 'lg'; className?: string; disabled?: boolean; type?: 'button' | 'submit';
 }) {
   const base = 'inline-flex items-center justify-center font-medium transition-all rounded-full';
@@ -227,7 +227,7 @@ export function ProgressRing({ value, size = 64, strokeWidth = 5, gradient = tru
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (value / 100) * circumference;
-  const gradientId = `ring-${Math.random().toString(36).slice(2)}`;
+  const [gradientId] = useState(() => `ring-${Math.random().toString(36).slice(2)}`);
 
   return (
     <div className="flex flex-col items-center gap-1">

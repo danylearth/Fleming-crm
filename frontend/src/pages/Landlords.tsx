@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable, SearchDropdown } from '../components/v3';
+import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState, DataTable, SearchDropdown } from '../components/v3';
 import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Building2, Phone, Mail, Search, Check, LayoutGrid, List, User, AlertCircle, Briefcase } from 'lucide-react';
@@ -26,7 +26,7 @@ export default function Landlords() {
   const api = useApi();
   const [landlords, setLandlords] = useState<Landlord[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
-  const [directors, setDirectors] = useState<any[]>([]);
+  const [directors, setDirectors] = useState<{ id: number; landlord_id: number; name?: string; email?: string; phone?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
@@ -60,11 +60,12 @@ export default function Landlords() {
       ]);
       setLandlords(data);
       setProperties(props);
-      setTenants(Array.isArray(tns) ? tns.map((t: any) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
+      setTenants(Array.isArray(tns) ? tns.map((t: { id: number; name: string; property_id: number }) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
       setDirectors(Array.isArray(dirs) ? dirs : []);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
 
   const landlordProperties = properties.reduce((acc, p) => {
@@ -76,7 +77,7 @@ export default function Landlords() {
   }, {} as Record<number, Property[]>);
 
   // Helper to check if a landlord matches via director
-  const getMatchedDirector = (landlordId: number): any => {
+  const getMatchedDirector = (landlordId: number) => {
     if (!search) return null;
     const landlordDirectors = directors.filter(d => d.landlord_id === landlordId);
     return landlordDirectors.find(d =>
@@ -149,7 +150,7 @@ export default function Landlords() {
         const duplicates = await api.get(`/api/landlords/check-duplicates?${params}`);
 
         if (duplicates && duplicates.length > 0) {
-          const msg = duplicates.map((d: any) =>
+          const msg = duplicates.map((d: { match_type: string; source: string; name: string }) =>
             `${d.match_type === 'email' ? 'Email' : 'Phone'} already exists in ${d.source} (${d.name})`
           ).join(', ');
           setDuplicateWarning(`This user data already exists: ${msg}`);
@@ -196,9 +197,10 @@ export default function Landlords() {
 
       // Force reload landlords list
       await load();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Save error:', e);
-      const errorMsg = e?.response?.data?.error || e?.message || 'Failed to save landlord. Please try again.';
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      const errorMsg = err?.response?.data?.error || err?.message || 'Failed to save landlord. Please try again.';
       setDuplicateWarning(errorMsg);
     } finally {
       setSaving(false);
@@ -458,8 +460,8 @@ export default function Landlords() {
                     </div>
                   </div>
                   <div className="mt-3 flex items-center gap-2 flex-wrap">
-                    <Tag className="shrink-0">{lProps.length} {lProps.length === 1 ? 'property' : 'properties'}</Tag>
-                    {l.phone && <Tag className="shrink-0"><Phone size={11} className="mr-1" />{l.phone}</Tag>}
+                    <Tag>{lProps.length} {lProps.length === 1 ? 'property' : 'properties'}</Tag>
+                    {l.phone && <Tag><Phone size={11} className="mr-1" />{l.phone}</Tag>}
                   </div>
                 </GlassCard>
               );

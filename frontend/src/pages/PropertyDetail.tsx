@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Card, GlassCard, Button, ProgressRing, SectionHeader, EmptyState, Avatar, Tag, Input, Select, DatePicker, PricePaidData } from '../components/v3';
@@ -10,9 +10,9 @@ import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { getPropertyImage } from '../utils/propertyImages';
 import {
-  Building2, Bed, PoundSterling, MapPin, User, Users,
+  PoundSterling, User,
   CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
-  AlertTriangle, ShieldCheck, FileText, Plus, Wrench, Trash2, StickyNote
+  AlertTriangle, Plus, Wrench, Trash2, StickyNote
 } from 'lucide-react';
 
 interface PropertyDetail {
@@ -42,7 +42,8 @@ interface PropertyDetail {
 
 interface Task {
   id: number; title: string; status: string; priority: string; due_date: string;
-  property_id?: number;
+  property_id?: number; description?: string; task_type?: string;
+  assigned_to?: number; assigned_to_name?: string; notes?: string;
 }
 
 interface MaintenanceRecord {
@@ -134,6 +135,7 @@ export default function PropertyDetail() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form, setForm] = useState<Record<string, any>>({});
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [expenseForm, setExpenseForm] = useState({ description: '', amount: '', category: 'maintenance', expense_date: '' });
@@ -148,8 +150,8 @@ export default function PropertyDetail() {
   });
 
   // Task detail modal state
-  const [selectedTask, setSelectedTask] = useState<any>(null);
-  const [taskDetailLoading, setTaskDetailLoading] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [, setTaskDetailLoading] = useState(false);
 
   // Maintenance creation state
   const [showAddMaintenance, setShowAddMaintenance] = useState(false);
@@ -162,9 +164,9 @@ export default function PropertyDetail() {
   const [allLandlords, setAllLandlords] = useState<Landlord[]>([]);
   const [showAddLandlord, setShowAddLandlord] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{ type: 'add' | 'remove' | 'setPrimary'; data: any } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ type: 'add' | 'remove' | 'setPrimary'; data: Record<string, unknown> } | null>(null);
   const [landlordSearch, setLandlordSearch] = useState('');
-  const [selectedLandlordId, setSelectedLandlordId] = useState<number | null>(null);
+  const [, setSelectedLandlordId] = useState<number | null>(null);
   const [ownershipEntityType, setOwnershipEntityType] = useState<'individual' | 'company'>('individual');
 
   // Directors state (for company landlords)
@@ -177,7 +179,7 @@ export default function PropertyDetail() {
   const [notesInput, setNotesInput] = useState('');
 
   // Tenant state
-  const [allTenants, setAllTenants] = useState<any[]>([]);
+  const [allTenants, setAllTenants] = useState<{ id: number; name: string; email?: string; phone?: string; first_name_1?: string; last_name_1?: string; email_1?: string; phone_1?: string }[]>([]);
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [tenantModalMode, setTenantModalMode] = useState<'select' | 'create'>('select');
   const [tenantSearch, setTenantSearch] = useState('');
@@ -255,15 +257,16 @@ export default function PropertyDetail() {
         try {
           const landlord = await api.get(`/api/landlords/${prop.landlord_id}`);
           setLandlordNotes(parseNotes(landlord.notes));
-        } catch (e) {
+        } catch {
           setLandlordNotes([]);
         }
       }
-    } catch {}
+    } catch { /* Silently ignore */ }
   };
 
   useEffect(() => {
     loadDetail().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleSave = async () => {
@@ -297,9 +300,10 @@ export default function PropertyDetail() {
       setProperty(updated);
       populateForm(updated);
       setEditing(false);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Save error:', e);
-      alert(`Failed to save: ${e.response?.data?.error || e.message || 'Unknown error'}`);
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      alert(`Failed to save: ${err.response?.data?.error || err.message || 'Unknown error'}`);
     }
     setSaving(false);
   };
@@ -358,7 +362,8 @@ export default function PropertyDetail() {
         task_type: 'manual'
       });
       setShowAddTask(false);
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
       console.error('Failed to create task:', err);
       console.error('Error response:', err.response?.data);
       alert(`Failed to create task: ${err.response?.data?.error || err.message || 'Unknown error'}`);
@@ -380,7 +385,7 @@ export default function PropertyDetail() {
   const updateTaskStatus = async (taskId: number, newStatus: string) => {
     try {
       await api.put(`/api/tasks/${taskId}`, { status: newStatus });
-      setSelectedTask((prev: any) => prev ? { ...prev, status: newStatus } : prev);
+      setSelectedTask((prev: Task | null) => prev ? { ...prev, status: newStatus } : prev);
       await loadDetail();
     } catch {
       alert('Failed to update task status');
@@ -401,7 +406,8 @@ export default function PropertyDetail() {
       await loadDetail();
       setMaintenanceForm({ title: '', description: '', category: 'other', priority: 'medium' });
       setShowAddMaintenance(false);
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
       alert(`Failed to report issue: ${err.response?.data?.error || err.message || 'Unknown error'}`);
     }
   };
@@ -469,7 +475,8 @@ export default function PropertyDetail() {
       setSelectedLandlordId(null);
       setLandlordSearch('');
       setOwnershipEntityType('individual'); // Reset to default
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
       console.error('Failed to manage landlord:', err);
       alert(err.response?.data?.error || 'Failed to update property landlords');
     }
@@ -484,7 +491,8 @@ export default function PropertyDetail() {
       await loadDetail();
       setShowTenantModal(false);
       setTenantSearch('');
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
       console.error('Failed to link tenant:', err);
       alert(err.response?.data?.error || 'Failed to link tenant to property');
     }
@@ -506,7 +514,8 @@ export default function PropertyDetail() {
         email_1: '',
         phone_1: '',
       });
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
       console.error('Failed to create tenant:', err);
       alert(err.response?.data?.error || 'Failed to create tenant');
     }
@@ -518,7 +527,8 @@ export default function PropertyDetail() {
         tenant_id: null
       });
       await loadDetail();
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
       console.error('Failed to remove tenant:', err);
       alert(err.response?.data?.error || 'Failed to remove tenant');
     }
@@ -736,13 +746,13 @@ export default function PropertyDetail() {
 
                           if (data && data.length > 0) {
                             // Try to match by address, or use first result
-                            const match = data.find((cert: any) =>
+                            const match = data.find((cert: { address?: string; current_rating?: string; lodgement_date?: string }) =>
                               cert.address?.toLowerCase().includes(form.address.toLowerCase())
                             ) || data[0];
 
                             console.log('Using EPC certificate:', match);
 
-                            const updates: any = {};
+                            const updates: Record<string, string> = {};
 
                             // Set EPC grade
                             if (match.current_rating) {
@@ -774,7 +784,7 @@ export default function PropertyDetail() {
                         try {
                           const data = await api.get(`/api/council-tax-lookup?postcode=${encodeURIComponent(form.postcode)}`);
                           if (data.length > 0 && data[0].band) setForm(f => ({ ...f, council_tax_band: data[0].band }));
-                        } catch {}
+                        } catch { /* Silently ignore */ }
                       }} className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-colors">
                         Auto-fetch Council Tax
                       </button>
@@ -996,7 +1006,7 @@ export default function PropertyDetail() {
                         setExpenses(Array.isArray(exps) ? exps : []);
                         setExpenseForm({ description: '', amount: '', category: 'maintenance', expense_date: '' });
                         setShowExpenseForm(false);
-                      } catch {}
+                      } catch { /* Silently ignore */ }
                     }}>Save</Button>
                   </div>
                 </div>
@@ -1017,7 +1027,7 @@ export default function PropertyDetail() {
                         try {
                           await api.delete(`/api/property-expenses/${e.id}`);
                           setExpenses(prev => prev.filter(x => x.id !== e.id));
-                        } catch {}
+                        } catch { /* Silently ignore */ }
                       }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors">
                         <Trash2 size={12} />
                       </button>
@@ -1691,7 +1701,8 @@ export default function PropertyDetail() {
 }
 
 function ComplianceRow({ label, expiry, grade }: { label: string; expiry: string | null; grade?: string | null }) {
-  const days = expiry ? Math.ceil((new Date(expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+  // eslint-disable-next-line react-hooks/purity
+  const days = useMemo(() => expiry ? Math.ceil((new Date(expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null, [expiry]);
   const color = days === null ? 'text-red-400' : days < 0 ? 'text-red-400' : days < 30 ? 'text-amber-400' : 'text-emerald-400';
   const formatD = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not set';
 

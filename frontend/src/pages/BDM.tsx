@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DatePicker } from '../components/v3';
+import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState, DatePicker } from '../components/v3';
 import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Mail, Phone, MapPin, Calendar, ChevronDown, Search, ArrowRight, UserPlus, XCircle, LayoutGrid, List } from 'lucide-react';
+import { Plus, X, Mail, Phone, Calendar, ArrowRight, UserPlus, XCircle, LayoutGrid, List } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 
 interface Prospect {
@@ -53,7 +53,7 @@ export default function BDM() {
   const [workflowProspect, setWorkflowProspect] = useState<Prospect | null>(null);
   const [workflowMode, setWorkflowMode] = useState<'choose' | 'follow_up' | 'reject' | 'confirm_drag'>('choose');
   const [workflowDate, setWorkflowDate] = useState('');
-  const [workflowReason, setWorkflowReason] = useState('');
+  const [, setWorkflowReason] = useState('');
   const [workflowLoading, setWorkflowLoading] = useState(false);
   const [converting, setConverting] = useState(false);
   const [dragTargetStatus, setDragTargetStatus] = useState('');
@@ -62,14 +62,17 @@ export default function BDM() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const data = await api.get('/api/landlords-bdm');
       setProspects(Array.isArray(data) ? data : []);
-    } catch { setProspects([]); }
+    } catch { /* failed to load prospects */ setProspects([]); }
     setLoading(false);
-  };
-  useEffect(() => { load(); }, []);
+  }, [api]);
+  useEffect(() => {
+    const fetchData = async () => { await load(); };
+    fetchData();
+  }, [load]);
 
   const filtered = prospects.filter(p => {
     const matchSearch = !search || [p.name, p.email, p.phone, p.address, p.source]
@@ -95,8 +98,9 @@ export default function BDM() {
       setShowModal(false);
       setForm({ name: '', email: '', phone: '', address: '', source: '', follow_up_date: '', notes: '' });
       await load();
-    } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Failed to add';
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      const msg = err?.response?.data?.error || err?.message || 'Failed to add';
       if (msg.includes('Duplicate')) setError('A prospect with this email or phone already exists');
       else setError(msg);
     }
@@ -112,7 +116,7 @@ export default function BDM() {
     setDragTargetStatus('');
   };
 
-  const doWorkflowAction = async (status: string, extra?: Record<string, any>) => {
+  const doWorkflowAction = async (status: string, extra?: Record<string, string>) => {
     if (!workflowProspect) return;
     setWorkflowLoading(true);
     try {
@@ -233,7 +237,7 @@ export default function BDM() {
             </button>
           </div>
           <Button
-            variant={editMode ? "outline" : "secondary"}
+            variant={editMode ? "outline" : "ghost"}
             onClick={() => {
               setEditMode(!editMode);
               if (editMode) setSelectedIds([]);

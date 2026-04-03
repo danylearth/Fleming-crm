@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, EmptyState, DatePicker } from '../components/v3';
+import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, DatePicker } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import RentPayments from '../components/v3/RentPayments';
 import ActivityTimeline from '../components/v3/ActivityTimeline';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import {
-  Pencil, Save, X, Mail, Phone, Building2, Calendar, MessageSquare, Clock,
-  Wrench, AlertTriangle, ChevronRight, Plus, User, CheckCircle,
+  Pencil, Mail, Phone, Building2, Calendar, MessageSquare, Clock,
+  AlertTriangle, ChevronRight, Plus, User, CheckCircle,
   ChevronDown, ShieldCheck
 } from 'lucide-react';
 
@@ -62,10 +62,6 @@ function TimeAgo({ date }: { date: string }) {
   else if (mins > 0) label = `${mins}m ago`;
   else label = 'Just now';
   return <span className="text-[10px] text-[var(--text-muted)]">{label}</span>;
-}
-
-function statusLabel(s: string) {
-  return s?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '';
 }
 
 function YesNo({ value, onChange, disabled }: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
@@ -141,6 +137,7 @@ export default function TenantDetail() {
   const [loading, setLoading] = useState(true);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form, setForm] = useState<Record<string, any>>({});
 
   // Notes
@@ -152,42 +149,9 @@ export default function TenantDetail() {
   const [guarantorExpanded, setGuarantorExpanded] = useState(false);
 
   // Properties list for selector
-  const [allProperties, setAllProperties] = useState<any[]>([]);
+  const [allProperties, setAllProperties] = useState<{ id: number; address: string; postcode: string }[]>([]);
 
-  const loadDetail = async () => {
-    try {
-      const t = await api.get(`/api/tenants/${id}`);
-      setTenant(t);
-      setForm(tenantToForm(t));
-    } catch (e) { console.error(e); }
-  };
-
-  useEffect(() => {
-    (async () => {
-      try { setAllProperties(await api.get('/api/properties')); } catch {}
-    })();
-  }, []);
-
-  // Load tenant
-  useEffect(() => {
-    (async () => {
-      await loadDetail();
-      setLoading(false);
-    })();
-  }, [id]);
-
-  // Load notes
-  useEffect(() => {
-    if (tenant?.notes) {
-      try {
-        const parsed = JSON.parse(tenant.notes);
-        if (Array.isArray(parsed)) { setNotes(parsed); return; }
-      } catch { }
-      if (tenant.notes.trim()) setNotes([{ id: '1', text: tenant.notes, author: 'System', created_at: new Date().toISOString() }]);
-    }
-  }, [tenant?.notes]);
-
-  function tenantToForm(t: Tenant) {
+  const tenantToForm = (t: Tenant) => {
     return {
       name: t.name || '', email: t.email || '', phone: t.phone || '',
       title_1: t.title_1 || '', first_name_1: t.first_name_1 || '', last_name_1: t.last_name_1 || '',
@@ -214,7 +178,42 @@ export default function TenantDetail() {
       tenancy_type: t.tenancy_type || '', has_end_date: !!t.has_end_date, tenancy_end_date: t.tenancy_end_date || '',
       monthly_rent: t.monthly_rent || '', status: t.status || 'active',
     };
-  }
+  };
+
+  const loadDetail = async () => {
+    try {
+      const t = await api.get(`/api/tenants/${id}`);
+      setTenant(t);
+      setForm(tenantToForm(t));
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => {
+    (async () => {
+      try { setAllProperties(await api.get('/api/properties')); } catch { /* Silently ignore */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load tenant
+  useEffect(() => {
+    (async () => {
+      await loadDetail();
+      setLoading(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Load notes
+  useEffect(() => {
+    if (tenant?.notes) {
+      try {
+        const parsed = JSON.parse(tenant.notes);
+        if (Array.isArray(parsed)) { setNotes(parsed); return; }
+      } catch { /* Silently ignore */ }
+      if (tenant.notes.trim()) setNotes([{ id: '1', text: tenant.notes, author: 'System', created_at: new Date().toISOString() }]);
+    }
+  }, [tenant?.notes]);
 
   // Restructured checklist: Authority → KYC → Application Forms → Proof of Income
   function getChecklistItems() {
@@ -256,6 +255,7 @@ export default function TenantDetail() {
   const saveSection = async () => {
     setSaving(true);
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const payload: Record<string, any> = {
         ...form,
         name: form.first_name_1 && form.last_name_1 ? `${form.first_name_1} ${form.last_name_1}` : form.name,
@@ -453,7 +453,7 @@ export default function TenantDetail() {
               {isEditing('tenancy') ? (
                 <div className="space-y-3">
                   <Select label="Property" value={form.property_id || ''} onChange={v => setForm({ ...form, property_id: v ? Number(v) : null })}
-                    options={[{ value: '', label: 'No property linked' }, ...allProperties.map((p: any) => ({ value: String(p.id), label: `${p.address}, ${p.postcode}` }))]} />
+                    options={[{ value: '', label: 'No property linked' }, ...allProperties.map((p) => ({ value: String(p.id), label: `${p.address}, ${p.postcode}` }))]} />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <DatePicker label="Tenancy Start Date" value={form.tenancy_start_date} onChange={v => setForm({ ...form, tenancy_start_date: v })} />
                     <Select label="Tenancy Type" value={form.tenancy_type} onChange={v => setForm({ ...form, tenancy_type: v })}

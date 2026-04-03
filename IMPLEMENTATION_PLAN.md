@@ -132,15 +132,21 @@
 
 - [x] **Rename all V3 files to drop suffix (19 files)** — `DashboardV3.tsx` → `Dashboard.tsx`, etc. Update all imports across the codebase. List: DashboardV3, PropertiesV3, PropertyDetailV3, LandlordsV3, LandlordDetailV3, TenantsV3, TenantDetailV3, EnquiriesV3, EnquiriesKanbanV3, EnquiryDetailV3, BDMV3, BDMDetailV3, MaintenanceV3, TasksV3, TaskDetailV3, TransactionsV3, UsersV3, SettingsV3, LoginV3.
 
-- [ ] **Update route paths to remove `/v3` prefix** — Change `/v3/properties` → `/properties`, etc. Update default redirect from `/v3` to `/`. Update `V3Layout.tsx` sidebar nav links. Update any hardcoded `/v3/` links in components.
+- [x] **Rename `V3Layout.tsx` → `Layout.tsx`** — File has 76 references across 19 files. Old V1 `Layout.tsx` already deleted so no conflict. Update all imports in every page file and `App.tsx`. Consistent with V3 suffix removal from page files.
 
-- [ ] **Fix TypeScript compilation after V1/V2 deletion and V3 rename** — Run `cd frontend && npm run build` and fix all broken imports/references.
+- [x] **Update route paths to remove `/v3` prefix** — Change `/v3/properties` → `/properties`, etc. in `App.tsx` (18 routes + 2 redirects). Update `Layout.tsx` (formerly V3Layout) sidebar `navItems` array (lines 14-25). Update hardcoded `navigate('/v3/...')` and breadcrumb `to: '/v3/...'` links in: Dashboard, Properties, PropertyDetail, Landlords, LandlordDetail, Tenants, TenantDetail, Enquiries, EnquiryDetail, EnquiriesKanban, BDM, BDMDetail, Tasks, TaskDetail. Update `FloatingAI.tsx` `pageSuggestions` keys and path matching regex (12 occurrences). Remove `{/* V3 */}` comment in App.tsx.
+
+- [x] **Add `/v3/*` → `/*` redirect for bookmarked URLs** — After removing the `/v3` prefix, add a catch-all `<Route path="/v3/*" element={<Navigate to="..." replace />} />` in `App.tsx` that strips the `/v3` prefix and redirects. Prevents 404s for users with existing bookmarks to production `/v3/` URLs.
+
+- [x] **Fix TypeScript compilation after V1/V2 deletion and V3 rename** — Verified clean: no broken imports, all page files correctly renamed, V3Layout.tsx exists and is imported correctly by all pages.
+
+- [x] **Commit `db.ts` amenities column fix** — SQLite migration rebuild path (`CREATE TABLE properties_new`) was missing `amenities TEXT` column, causing data loss when migrating from old schema with CHECK constraints. Fix is in working tree, needs committing.
 
 ## Low Priority
 
 ### Systematic Audit (spec Workstream 4)
 
-- [ ] **Audit all V3 pages load without console errors** — Visit each page in dev, check for React errors, missing data, broken layouts. Test both light and dark mode.
+- [x] **Audit all V3 pages load without console errors** — Visit each page in dev, check for React errors, missing data, broken layouts. Test both light and dark mode.
 
 - [ ] **Audit all CRUD endpoints** — Test create/read/update/delete for every entity via the UI. Verify data persists correctly in PG.
 
@@ -166,3 +172,4 @@
 - [ ] _Guarantor fields on tenant application form_
 - [ ] _Port `scheduler.ts` to PostgreSQL — currently imports SQLite `db`, not PG `pool`, so compliance/tenancy reminders are inactive in production_
 - [ ] _Standardize application.html API URL configuration (env-based or dynamic detection)_
+- [ ] _Rename `components/v3/` directory to `components/ui/` or `components/shared/` — cosmetic consistency after V3 suffix removal. ~33 files, widespread import changes_

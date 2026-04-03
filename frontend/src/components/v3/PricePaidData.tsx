@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useGovernmentAPIs } from '../../hooks/useGovernmentAPIs';
 import { Card, Button } from './index';
 import { PoundSterling, TrendingUp, Calendar, Home, Loader2, AlertCircle } from 'lucide-react';
@@ -9,7 +9,7 @@ interface PricePaidDataProps {
 
 export default function PricePaidData({ postcode }: PricePaidDataProps) {
   const [showData, setShowData] = useState(false);
-  const [priceData, setPriceData] = useState<any[]>([]);
+  const [priceData, setPriceData] = useState<{ address: string; price: number; date: string; property_type?: string; estate_type?: string }[]>([]);
   const { loading, error, fetchPricePaid } = useGovernmentAPIs();
 
   const loadPriceData = async () => {

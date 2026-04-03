@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker, StatusDot, SectionHeader } from '../components/v3';
+import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker, SectionHeader } from '../components/v3';
 import DocumentUpload from '../components/v3/DocumentUpload';
 import ActivityTimeline from '../components/v3/ActivityTimeline';
 import AddressAutocomplete from '../components/v3/AddressAutocomplete';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import {
-  Save, Pencil, X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle,
+  Pencil, X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle,
   Calendar, ExternalLink, CheckCircle, Clock, Mail, Phone, ChevronRight,
-  ChevronDown, MessageSquare, Plus, ShieldCheck, AlertTriangle, Send
+  MessageSquare, Plus, ShieldCheck, AlertTriangle, Send
 } from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/v3/icons/FlemingIcons';
 import OnboardingWizard from '../components/v3/OnboardingWizard';
@@ -191,7 +191,9 @@ export default function EnquiryDetail() {
   const navigate = useNavigate();
   const api = useApi();
   const { user } = useAuth();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<Record<string, any> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form, setForm] = useState<Record<string, any>>({});
   const [properties, setProperties] = useState<{ id: number; address: string; postcode?: string; rent_amount?: number }[]>([]);
   const [users, setUsers] = useState<{ id: number; name: string; email: string }[]>([]);
@@ -218,6 +220,7 @@ export default function EnquiryDetail() {
   // SMS
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [smsBody, setSmsBody] = useState('');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [smsHistory, setSmsHistory] = useState<any[]>([]);
   const [smsCompose, setSmsCompose] = useState('');
   const [smsSending, setSmsSending] = useState(false);
@@ -249,15 +252,16 @@ export default function EnquiryDetail() {
         try {
           const parsed = JSON.parse(d.notes);
           if (Array.isArray(parsed)) { setNotes(parsed); return; }
-        } catch {}
+        } catch { /* notes not valid JSON */ }
         if (d.notes.trim()) setNotes([{ id: '1', text: d.notes, author: 'System', created_at: new Date().toISOString() }]);
       } else {
         setNotes([]);
       }
-    } catch {}
+    } catch { /* fetch failed */ }
     setLoading(false);
   }, [id, api]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadDetail(); }, [loadDetail]);
 
   // Load SMS history
@@ -265,8 +269,9 @@ export default function EnquiryDetail() {
     try {
       const msgs = await api.get(`/api/sms/enquiry/${id}`);
       setSmsHistory(Array.isArray(msgs) ? msgs : []);
-    } catch {}
+    } catch { /* SMS history fetch failed */ }
   }, [id, api]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadSmsHistory(); }, [loadSmsHistory]);
 
   const sendStandaloneSms = async () => {
@@ -277,13 +282,15 @@ export default function EnquiryDetail() {
       setSmsCompose('');
       await loadSmsHistory();
       await loadDetail();
-    } catch {}
+    } catch { /* SMS send failed */ }
     setSmsSending(false);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const setField = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
   const isEditing = (section: string) => editingSection === section;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const saveSection = async (extra?: Record<string, any>) => {
     setSaving(true);
     try {
@@ -297,7 +304,7 @@ export default function EnquiryDetail() {
       });
       await loadDetail();
       setEditingSection(null);
-    } catch {}
+    } catch { /* save failed */ }
     setSaving(false);
   };
 
@@ -342,7 +349,7 @@ export default function EnquiryDetail() {
           break;
       }
       setShowWorkflow(false);
-    } catch {}
+    } catch { /* workflow action failed */ }
     setWfLoading(false);
   };
 
@@ -357,7 +364,7 @@ export default function EnquiryDetail() {
       await api.put(`/api/tenant-enquiries/${id}`, { ...form, notes: JSON.stringify(updated) });
       api.post('/api/activity', { action: 'note_added', entity_type: 'tenant_enquiry', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
       await loadDetail();
-    } catch {}
+    } catch { /* note save failed */ }
     setAddingNote(false);
   };
 
@@ -411,7 +418,7 @@ export default function EnquiryDetail() {
 
   // Renting requirements
   let rentingReqs: string[] = [];
-  try { rentingReqs = form.renting_requirements ? JSON.parse(form.renting_requirements) : []; } catch {}
+  try { rentingReqs = form.renting_requirements ? JSON.parse(form.renting_requirements) : []; } catch { /* invalid JSON */ }
 
   return (
     <Layout
@@ -842,6 +849,7 @@ export default function EnquiryDetail() {
               <SectionHeader title="SMS History" icon={<Phone size={16} />} action={loadSmsHistory} actionLabel="Refresh" />
               <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                 {smsHistory.length === 0 && <p className="text-xs text-[var(--text-muted)]">No messages sent yet</p>}
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 {smsHistory.map((sms: any) => (
                   <div key={sms.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
                     <div className="flex items-center gap-2 mb-1">

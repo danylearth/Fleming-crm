@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Card, GlassCard, Button, Input, Select, Avatar, EmptyState, DatePicker } from '../components/v3';
+import { Card, GlassCard, Button, Select, Avatar, EmptyState, DatePicker } from '../components/v3';
 import { useApi } from '../hooks/useApi';
 import {
   ArrowLeft, Pencil, Save, X, Calendar, Clock, User, Building2,
-  CheckCircle2, AlertTriangle, Inbox, Plus, Trash2, FileText, Download,
-  Upload, Link as LinkIcon, UserCircle, Users, Home
+  CheckCircle2, AlertTriangle, Inbox, Trash2, FileText, Download,
+  Upload, Link as LinkIcon, UserCircle, Users
 } from 'lucide-react';
 
 interface Task {
@@ -23,7 +23,7 @@ interface Task {
   entity_type?: string;
   entity_id?: number;
   task_type?: string;
-  relatedEntity?: any;
+  relatedEntity?: { address?: string; name?: string; first_name_1?: string; last_name_1?: string };
   documents?: Document[];
 }
 
@@ -42,7 +42,7 @@ const PRIORITY_COLORS: Record<string, { bg: string; text: string; border: string
   high: { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/30' },
 };
 
-const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
+const STATUS_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ size: number; className?: string }>; color: string; bg: string }> = {
   pending: { label: 'Pending', icon: Inbox, color: 'text-blue-400', bg: 'bg-blue-500/10' },
   in_progress: { label: 'In Progress', icon: Clock, color: 'text-amber-400', bg: 'bg-amber-500/10' },
   completed: { label: 'Completed', icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
@@ -62,12 +62,12 @@ export default function TaskDetail() {
   const [uploading, setUploading] = useState(false);
 
   // Entity options for linking
-  const [properties, setProperties] = useState<any[]>([]);
-  const [landlords, setLandlords] = useState<any[]>([]);
-  const [tenants, setTenants] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
+  const [properties, setProperties] = useState<{ id: number; address: string }[]>([]);
+  const [landlords, setLandlords] = useState<{ id: number; name: string }[]>([]);
+  const [tenants, setTenants] = useState<{ id: number; name: string }[]>([]);
+  const [users, setUsers] = useState<{ id: number; name: string; role: string }[]>([]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [taskData, props, lands, tens, usrs] = await Promise.all([
         api.get(`/api/tasks/${id}`),
@@ -86,9 +86,9 @@ export default function TaskDetail() {
       console.error(e);
     }
     setLoading(false);
-  };
+  }, [api, id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   const save = async () => {
     if (!task) return;
@@ -153,7 +153,7 @@ export default function TaskDetail() {
     e.target.value = ''; // Reset input
   };
 
-  const downloadDocument = (docId: number, filename: string) => {
+  const downloadDocument = (docId: number) => {
     window.open(`/api/documents/download/${docId}`, '_blank');
   };
 
@@ -380,7 +380,7 @@ export default function TaskDetail() {
                       </div>
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => downloadDocument(doc.id, doc.original_name)}
+                          onClick={() => downloadDocument(doc.id)}
                           className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                         >
                           <Download size={14} />

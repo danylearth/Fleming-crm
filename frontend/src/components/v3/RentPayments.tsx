@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Card, Button, SectionHeader, EmptyState, Tag, Input, Select, DatePicker } from './index';
+import { Card, Button, SectionHeader, EmptyState, Input, DatePicker } from './index';
 import { useApi } from '../../hooks/useApi';
-import { PoundSterling, CheckCircle2, Clock, AlertCircle, Plus, X } from 'lucide-react';
+import { PoundSterling, CheckCircle2, Clock, AlertCircle, Plus } from 'lucide-react';
 
 interface Payment {
   id: number;
@@ -27,7 +27,6 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [payingId, setPayingId] = useState<number | null>(null);
   const [form, setForm] = useState({ due_date: '', amount_due: '' });
 
   useEffect(() => {
@@ -40,7 +39,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
       })
       .catch(() => { })
       .finally(() => setLoading(false));
-  }, [propertyId, tenantId]);
+  }, [propertyId, tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAdd = async () => {
     if (!form.due_date || !form.amount_due) {
@@ -70,9 +69,10 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
       } else {
         alert('Failed to create payment: Invalid response from server');
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Payment creation error:', e);
-      alert(`Failed to create payment: ${e.response?.data?.error || e.message || 'Unknown error'}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      alert(`Failed to create payment: ${message}`);
     }
   };
 
@@ -86,10 +86,10 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
       setPayments(prev => prev.map(p =>
         p.id === payment.id ? { ...p, status: 'paid', amount_paid: p.amount_due, payment_date: new Date().toISOString().split('T')[0] } : p
       ));
-      setPayingId(null);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Failed to mark payment as paid:', e);
-      alert(`Failed to mark as paid: ${e.response?.data?.error || e.message || 'Unknown error'}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      alert(`Failed to mark as paid: ${message}`);
     }
   };
 

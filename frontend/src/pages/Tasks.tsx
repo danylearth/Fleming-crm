@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Card, GlassCard, Button, Input, Select, Avatar, ProgressRing, EmptyState, DatePicker } from '../components/v3';
@@ -7,7 +7,7 @@ import { useApi } from '../hooks/useApi';
 import {
   Plus, X, CheckCircle2, Clock, Inbox, Calendar, Search, ChevronDown,
   ChevronLeft, ChevronRight, Building2, Users, UserCircle, Tag,
-  List, CalendarDays, MoreVertical
+  List, MoreVertical
 } from 'lucide-react';
 
 interface Task {
@@ -21,7 +21,6 @@ const PRIORITY_COLORS: Record<string, string> = {
   medium: 'bg-amber-500/20 text-amber-400',
   high: 'bg-red-500/20 text-red-400',
 };
-const STATUS_LABELS: Record<string, string> = { pending: 'Pending', in_progress: 'In Progress', completed: 'Completed' };
 const PRIORITY_LABELS: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High' };
 const TASK_TYPES = ['manual', 'viewing', 'follow_up', 'document', 'maintenance', 'onboarding', 'compliance', 'other'];
 
@@ -56,8 +55,8 @@ function isOverdue(task: Task) {
 
 /* ========== Filter Dropdown ========== */
 function FilterDropdown({ icon: Icon, label, value, displayValue, onClear, items, onSelect }: {
-  icon: any; label: string; value: number | string | null; displayValue?: string;
-  onClear: () => void; items: { id: number | string; label: string }[]; onSelect: (id: any) => void;
+  icon: React.ComponentType<{ size: number }>; label: string; value: number | string | null; displayValue?: string;
+  onClear: () => void; items: { id: number | string; label: string }[]; onSelect: (id: number | string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -112,7 +111,7 @@ export default function Tasks() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [filterPriority, setFilterPriority] = useState('all');
+  const [filterPriority] = useState('all');
   const [filterProperty, setFilterProperty] = useState<number | null>(null);
   const [filterLandlord, setFilterLandlord] = useState<number | null>(null);
   const [filterTenant, setFilterTenant] = useState<number | null>(null);
@@ -139,7 +138,7 @@ export default function Tasks() {
   const [selectedMember, setSelectedMember] = useState('all');
   const [calViewMode, setCalViewMode] = useState<'day' | 'week' | 'month'>('day');
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [data, props, lands, tens, usrs] = await Promise.all([
         api.get('/api/tasks'), api.get('/api/properties'), api.get('/api/landlords'),
@@ -147,10 +146,26 @@ export default function Tasks() {
       ]);
       setTasks(Array.isArray(data) ? data : data.tasks || []);
       setProperties(props); setLandlords(lands); setTenants(tens); setUsers(usrs);
-    } catch { setTasks([]); }
+    } catch { /* Silently ignore */ setTasks([]); }
     setLoading(false);
-  };
-  useEffect(() => { load(); }, []);
+  }, [api]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [data, props, lands, tens, usrs] = await Promise.all([
+          api.get('/api/tasks'), api.get('/api/properties'), api.get('/api/landlords'),
+          api.get('/api/tenants'), api.get('/api/users'),
+        ]);
+        if (!cancelled) {
+          setTasks(Array.isArray(data) ? data : data.tasks || []);
+          setProperties(props); setLandlords(lands); setTenants(tens); setUsers(usrs);
+        }
+      } catch { /* Silently ignore */ if (!cancelled) setTasks([]); }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [api]);
 
   const counts = {
     completed: tasks.filter(t => t.status === 'completed').length,
@@ -188,11 +203,11 @@ export default function Tasks() {
   });
 
   const updateStatus = async (id: number, status: string) => {
-    try { await api.put(`/api/tasks/${id}`, { status }); await load(); } catch {}
+    try { await api.put(`/api/tasks/${id}`, { status }); await load(); } catch { /* Silently ignore */ }
   };
   const addTask = async () => {
     try {
-      const payload: any = { ...form };
+      const payload: Record<string, unknown> = { ...form };
       // Only include entity fields if entity_type is set
       if (!form.entity_type) {
         delete payload.entity_type;
@@ -260,11 +275,11 @@ export default function Tasks() {
   // Tasks for selected day
   const dayTasks = filtered.filter(t => t.due_date?.slice(0,10) === selectedDate);
   // Tasks by date for dots
-  const tasksByDate = useMemo(() => {
+  const tasksByDate = (() => {
     const m: Record<string, Task[]> = {};
     filtered.forEach(t => { if (t.due_date) { const d = t.due_date.slice(0,10); if (!m[d]) m[d] = []; m[d].push(t); } });
     return m;
-  }, [filtered]);
+  })();
 
   const dayInfo = (() => { const d = new Date(selectedDate+'T00:00:00'); return { weekday: d.toLocaleDateString('en-GB',{weekday:'long'}), day: d.getDate() }; })();
   const isSelectedToday = selectedDate === todayStr;
@@ -317,18 +332,18 @@ export default function Tasks() {
               </div>
               <FilterDropdown icon={Building2} label="Property" value={filterProperty}
                 displayValue={properties.find(p => p.id === filterProperty)?.address} onClear={() => setFilterProperty(null)}
-                items={properties.map(p => ({ id: p.id, label: p.address }))} onSelect={id => setFilterProperty(id)} />
+                items={properties.map(p => ({ id: p.id, label: p.address }))} onSelect={id => setFilterProperty(id as number)} />
               <FilterDropdown icon={UserCircle} label="Landlord" value={filterLandlord}
                 displayValue={landlords.find(l => l.id === filterLandlord)?.name} onClear={() => setFilterLandlord(null)}
-                items={landlords.map(l => ({ id: l.id, label: l.name }))} onSelect={id => setFilterLandlord(id)} />
+                items={landlords.map(l => ({ id: l.id, label: l.name }))} onSelect={id => setFilterLandlord(id as number)} />
               <FilterDropdown icon={Users} label="Tenant" value={filterTenant}
                 displayValue={tenants.find(t => t.id === filterTenant)?.name} onClear={() => setFilterTenant(null)}
-                items={tenants.map(t => ({ id: t.id, label: t.name }))} onSelect={id => setFilterTenant(id)} />
+                items={tenants.map(t => ({ id: t.id, label: t.name }))} onSelect={id => setFilterTenant(id as number)} />
               <FilterDropdown icon={Tag} label="Type" value={filterType}
                 displayValue={filterType ? filterType.replace('_',' ') : undefined} onClear={() => setFilterType(null)}
-                items={TASK_TYPES.map(t => ({ id: t, label: t.replace('_',' ').replace(/^\w/,c=>c.toUpperCase()) }))} onSelect={id => setFilterType(id)} />
+                items={TASK_TYPES.map(t => ({ id: t, label: t.replace('_',' ').replace(/^\w/,c=>c.toUpperCase()) }))} onSelect={id => setFilterType(id as string)} />
               <Button
-                variant={editMode ? "outline" : "secondary"}
+                variant={editMode ? "outline" : "ghost"}
                 onClick={() => {
                   setEditMode(!editMode);
                   if (editMode) setSelectedIds([]);

@@ -3,15 +3,31 @@ import { useGovernmentAPIs } from '../../hooks/useGovernmentAPIs';
 import { Card, Button } from './index';
 import { Building2, Search, Loader2, AlertCircle, CheckCircle2, MapPin, Calendar, Info } from 'lucide-react';
 
+interface CompanyData {
+  company_number: string;
+  company_name: string;
+  company_status: string;
+  company_type?: string;
+  date_of_creation: string;
+  jurisdiction?: string;
+  registered_office_address?: Record<string, string>;
+  sic_codes?: string[];
+  address?: {
+    line_1?: string;
+    locality?: string;
+    postal_code?: string;
+  };
+}
+
 interface CompaniesHouseLookupProps {
-  onSelect?: (company: any) => void;
+  onSelect?: (company: CompanyData) => void;
   initialQuery?: string;
 }
 
 export default function CompaniesHouseLookup({ onSelect, initialQuery = '' }: CompaniesHouseLookupProps) {
   const [query, setQuery] = useState(initialQuery);
-  const [results, setResults] = useState<any[]>([]);
-  const [selectedCompany, setSelectedCompany] = useState<any>(null);
+  const [results, setResults] = useState<CompanyData[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<CompanyData | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const { loading, error, searchCompanies, getCompanyDetails } = useGovernmentAPIs();
 
@@ -23,7 +39,7 @@ export default function CompaniesHouseLookup({ onSelect, initialQuery = '' }: Co
     setShowDetails(false);
   };
 
-  const handleSelectCompany = async (company: any) => {
+  const handleSelectCompany = async (company: CompanyData) => {
     setSelectedCompany(company);
     const details = await getCompanyDetails(company.company_number);
     if (details) {

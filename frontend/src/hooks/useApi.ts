@@ -22,9 +22,9 @@ export function useApi() {
 
   return {
     get: (endpoint: string) => request(endpoint),
-    post: (endpoint: string, body: any) => request(endpoint, { method: 'POST', body: JSON.stringify(body) }),
-    put: (endpoint: string, body: any) => request(endpoint, { method: 'PUT', body: JSON.stringify(body) }),
-    patch: (endpoint: string, body: any) => request(endpoint, { method: 'PATCH', body: JSON.stringify(body) }),
+    post: (endpoint: string, body: Record<string, unknown>) => request(endpoint, { method: 'POST', body: JSON.stringify(body) }),
+    put: (endpoint: string, body: Record<string, unknown>) => request(endpoint, { method: 'PUT', body: JSON.stringify(body) }),
+    patch: (endpoint: string, body: Record<string, unknown>) => request(endpoint, { method: 'PATCH', body: JSON.stringify(body) }),
     delete: (endpoint: string) => request(endpoint, { method: 'DELETE' }),
   };
 }

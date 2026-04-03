@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Avatar, SectionHeader } from '../components/v3';
 import { useAuth } from '../context/AuthContext';
@@ -21,11 +21,7 @@ export default function Settings() {
   const [configMsg, setConfigMsg] = useState('');
   const [configLoading, setConfigLoading] = useState(false);
 
-  useEffect(() => {
-    loadConfig();
-  }, []);
-
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     try {
       const config = await api.get('/api/ai/config');
       setResendApiKey(config.resend_api_key || '');
@@ -34,7 +30,11 @@ export default function Settings() {
     } catch {
       // Config not set yet
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
 
   const handlePasswordChange = async () => {
     if (!oldPassword || !newPassword || !confirmPassword) {
@@ -60,8 +60,8 @@ export default function Settings() {
       setNewPassword('');
       setConfirmPassword('');
       setTimeout(() => setPasswordMsg(''), 3000);
-    } catch (err: any) {
-      setPasswordMsg(err.message || 'Failed to update password');
+    } catch (err: unknown) {
+      setPasswordMsg(err instanceof Error ? err.message : 'Failed to update password');
     } finally {
       setPasswordLoading(false);
     }
@@ -79,8 +79,8 @@ export default function Settings() {
       setConfigMsg('Configuration saved');
       setTimeout(() => setConfigMsg(''), 3000);
       loadConfig();
-    } catch (err: any) {
-      setConfigMsg(err.message || 'Failed to save');
+    } catch (err: unknown) {
+      setConfigMsg(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setConfigLoading(false);
     }

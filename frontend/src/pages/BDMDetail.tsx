@@ -7,7 +7,7 @@ import ActivityTimeline from '../components/v3/ActivityTimeline';
 import { useApi } from '../hooks/useApi';
 import {
   Pencil, Save, X, Mail, Phone, MapPin, Calendar, MessageSquare, Clock,
-  Plus, User, ArrowRight, UserPlus, XCircle, ChevronRight, AlertTriangle
+  Plus, User, ArrowRight, UserPlus, XCircle, AlertTriangle
 } from 'lucide-react';
 
 interface Prospect {
@@ -54,10 +54,6 @@ function TimeAgo({ date }: { date: string }) {
   return <span className="text-[10px] text-[var(--text-muted)]">Just now</span>;
 }
 
-function ReadField({ label, value }: { label: string; value?: string | null }) {
-  return <div><p className="text-xs text-[var(--text-muted)]">{label}</p><p className="text-sm mt-0.5">{value || '—'}</p></div>;
-}
-
 export default function BDMDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -66,7 +62,7 @@ export default function BDMDetail() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<Record<string, any>>({});
+  const [form, setForm] = useState<Record<string, string>>({});
 
   // Notes
   const [notes, setNotes] = useState<ProspectNote[]>([]);
@@ -83,21 +79,20 @@ export default function BDMDetail() {
         const p = await api.get(`/api/landlords-bdm/${id}`);
         setProspect(p);
         setForm({ name: p.name || '', email: p.email || '', phone: p.phone || '', address: p.address || '', source: p.source || '', follow_up_date: p.follow_up_date || '', status: p.status || 'new' });
+        // Parse notes from prospect data directly to avoid a separate setState-in-effect
+        if (p.notes) {
+          try {
+            const parsed = JSON.parse(p.notes);
+            if (Array.isArray(parsed)) { setNotes(parsed); }
+            else if (p.notes.trim()) { setNotes([{ id: '1', text: p.notes, author: 'System', created_at: p.created_at || new Date().toISOString() }]); }
+          } catch { /* notes field is not valid JSON, treat as plain text */
+            if (p.notes.trim()) setNotes([{ id: '1', text: p.notes, author: 'System', created_at: p.created_at || new Date().toISOString() }]);
+          }
+        }
       } catch (e) { console.error(e); }
       setLoading(false);
     })();
-  }, [id]);
-
-  // Load notes from prospect.notes (JSON array)
-  useEffect(() => {
-    if (prospect?.notes) {
-      try {
-        const parsed = JSON.parse(prospect.notes);
-        if (Array.isArray(parsed)) { setNotes(parsed); return; }
-      } catch {}
-      if (prospect.notes.trim()) setNotes([{ id: '1', text: prospect.notes, author: 'System', created_at: prospect.created_at || new Date().toISOString() }]);
-    }
-  }, [prospect?.notes]);
+  }, [id, api]);
 
   const handleSave = async () => {
     setSaving(true);

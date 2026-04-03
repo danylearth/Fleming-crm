@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import {
-  NewIcon, ViewedIcon, BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon
+  NewIcon, BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon
 } from '../components/v3/icons/FlemingIcons';
 
 interface EnquiryRaw {
@@ -61,6 +61,7 @@ function isFuture(d?: string | null) {
   return date > today;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function isPastOrToday(d?: string | null) {
   if (!d) return true;
   const date = new Date(d);
@@ -74,7 +75,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
   enquiry: EnquiryRaw;
   properties: Property[];
   onClose: () => void;
-  onAction: (id: number, action: string, data: any) => Promise<void>;
+  onAction: (id: number, action: string, data: Record<string, string | number | null>) => Promise<void>;
 }) {
   const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ') || 'Unknown';
   const [mode, setMode] = useState<'choose' | 'viewing' | 'awaiting' | 'onboarding' | 'reject'>('choose');
@@ -106,7 +107,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
           break;
       }
       onClose();
-    } catch { }
+    } catch { /* action failed */ }
     setLoading(false);
   };
 
@@ -338,6 +339,7 @@ function EnquiryCard({ enquiry, property, onAction }: {
 }
 
 // ─── Property Dropdown ───
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function PropertyDropdown({ properties, value, onChange, enquiries, linkedPropertyIds, propMap }: {
   properties: Property[];
   value: string;
@@ -473,16 +475,17 @@ export default function EnquiriesKanban() {
       ]);
       setEnquiries(Array.isArray(enq) ? enq : []);
       setProperties(Array.isArray(props) ? props : []);
-    } catch { }
+    } catch { /* fetch failed */ }
     setLoading(false);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
 
   const propMap = useMemo(() => new Map(properties.map(p => [p.id, p])), [properties]);
 
-  const handleAction = async (id: number, status: string, data: any) => {
-    const payload: any = { status, ...data };
+  const handleAction = async (id: number, status: string, data: Record<string, string | number | null>) => {
+    const payload: Record<string, string | number | null> = { status, ...data };
 
     // If booking a viewing, also create a property viewing record
     if (status === 'viewing_booked' && data.linked_property_id && data.viewing_date) {
@@ -516,7 +519,7 @@ export default function EnquiriesKanban() {
       setShowAdd(false);
       setAddForm({ name: '', email: '', phone: '' });
       await load();
-    } catch { }
+    } catch { /* add enquiry failed */ }
   };
 
   // Filter logic:

@@ -61,9 +61,9 @@ export default function ActivityTimeline({ entityType, entityId }: { entityType:
   useEffect(() => {
     api.get(`/api/activity/${entityType}/${entityId}?limit=20`)
       .then(data => setEntries(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch(() => { /* Silently ignore */ })
       .finally(() => setLoading(false));
-  }, [entityType, entityId]);
+  }, [entityType, entityId, api]);
 
   if (loading) return <p className="text-xs text-[var(--text-muted)]">Loading...</p>;
   if (entries.length === 0) return <p className="text-xs text-[var(--text-muted)]">No activity yet</p>;

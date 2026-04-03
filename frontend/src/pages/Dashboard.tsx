@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Card, GlassCard, SectionHeader, StatusDot, EmptyState, Tag } from '../components/v3';
@@ -7,14 +7,22 @@ import { useAuth } from '../context/AuthContext';
 import { getPropertyImage } from '../utils/propertyImages';
 import {
   Building2, Users, Wrench, MessageSquare, AlertTriangle,
-  ChevronRight, Clock, CheckCircle2, ArrowRight
+  Clock, CheckCircle2, ArrowRight
 } from 'lucide-react';
+
+interface MaintenanceItem {
+  id: number; property_address: string; description: string; status: string; priority: string;
+}
+
+interface OverdueTask {
+  id: number; title: string; status: string; priority: string; due_date: string;
+}
 
 interface DashboardData {
   stats: { properties: number; active_tenancies: number; open_maintenance: number; active_enquiries: number };
   complianceAlerts: { id: number; property_address: string; type: string; expiry_date: string }[];
-  upcomingMaintenance: any[];
-  overdueTasks: any[];
+  upcomingMaintenance: MaintenanceItem[];
+  overdueTasks: OverdueTask[];
 }
 
 interface Property {
@@ -56,6 +64,7 @@ export default function Dashboard() {
       setTasks(Array.isArray(tks) ? tks : []);
       setEnquiries(Array.isArray(enqs) ? enqs : []);
     }).finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const firstName = user?.name?.split(' ')[0] || 'there';
@@ -67,8 +76,10 @@ export default function Dashboard() {
     active_enquiries: enquiries.length,
   };
 
+  const now = useMemo(() => Date.now(), []);
+
   const daysUntil = (date: string) => {
-    const diff = (new Date(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    const diff = (new Date(date).getTime() - now) / (1000 * 60 * 60 * 24);
     return Math.ceil(diff);
   };
 
@@ -77,13 +88,6 @@ export default function Dashboard() {
     if (d < 0) return 'text-red-400';
     if (d < 30) return 'text-amber-400';
     return 'text-emerald-400';
-  };
-
-  // Pipeline stats
-  const pipelineCounts = {
-    new: enquiries.filter(e => e.status === 'new').length,
-    in_progress: enquiries.filter(e => e.status === 'in_progress').length,
-    completed: enquiries.filter(e => e.status === 'completed' || e.status === 'closed').length,
   };
 
   if (loading) {
@@ -178,7 +182,7 @@ export default function Dashboard() {
                     closed: { label: 'Closed', color: 'text-gray-400', bg: 'bg-gray-500/20' },
                   };
                   const cfg = statusConfig[enq.status] || { label: enq.status, color: 'text-gray-400', bg: 'bg-gray-500/20' };
-                  const daysAgo = enq.created_at ? Math.floor((Date.now() - new Date(enq.created_at).getTime()) / (1000 * 60 * 60 * 24)) : null;
+                  const daysAgo = enq.created_at ? Math.floor((now - new Date(enq.created_at).getTime()) / (1000 * 60 * 60 * 24)) : null;
 
                   return (
                     <div

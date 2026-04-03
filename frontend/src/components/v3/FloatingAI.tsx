@@ -103,12 +103,12 @@ export default function FloatingAI() {
   const inputRef = useRef<HTMLInputElement>(null);
   const location = useLocation();
   const prevPath = useRef(location.pathname);
-  const { messages, typing, send, executeAction, setMessages, addMessage } = useAIChat();
+  const { messages, typing, send, executeAction, setMessages } = useAIChat();
 
   // Initial greeting
   useEffect(() => {
     setMessages([{ role: 'assistant', text: getGreeting(location.pathname), status: 'done' }]);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset greeting when page changes
   useEffect(() => {
@@ -116,20 +116,19 @@ export default function FloatingAI() {
       prevPath.current = location.pathname;
       // Only reset if chat has been idle (no user messages in last set)
       setMessages([{ role: 'assistant', text: getGreeting(location.pathname), status: 'done' }]);
-      setHasUnread(!open);
+      if (!open) queueMicrotask(() => setHasUnread(true));
     }
-  }, [location.pathname, open]);
+  }, [location.pathname, open, setMessages]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typing]);
 
-  useEffect(() => {
-    if (open) {
-      setHasUnread(false);
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [open]);
+  const handleOpen = () => {
+    setOpen(true);
+    setHasUnread(false);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
 
   const handleSend = (text?: string) => {
     const msg = (text || input).trim();
@@ -141,7 +140,7 @@ export default function FloatingAI() {
 
   const handleAction = (action: AIAction) => {
     if (action.type === 'link' && action.href) {
-      window.location.href = action.href;
+      globalThis.location.assign(action.href);
       return;
     }
     executeAction(action.id, action);
@@ -154,7 +153,7 @@ export default function FloatingAI() {
       {/* Floating Button */}
       {!open && (
         <button
-          onClick={() => setOpen(true)}
+          onClick={handleOpen}
           className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-50 w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center shadow-lg shadow-pink-500/20 hover:shadow-pink-500/40 hover:scale-105 transition-all group"
         >
           <Sparkles size={22} className="text-white" />

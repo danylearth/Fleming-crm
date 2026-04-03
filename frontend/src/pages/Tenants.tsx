@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable, type Column } from '../components/v3';
+import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable } from '../components/v3';
 import BulkActions from '../components/v3/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Mail, Phone, Building2, Calendar, Search, ChevronDown, LayoutGrid, List, User, MapPin } from 'lucide-react';
@@ -13,7 +13,7 @@ import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 interface Tenant {
   id: number; name: string; email: string; phone: string; property_id: number;
   property_address: string; tenancy_end_date: string; monthly_rent: number;
-  status: string; nok_name: string; landlord_type?: string;
+  status: string; nok_name: string; landlord_type?: string; created_at?: string;
 }
 
 interface Property {
@@ -25,8 +25,8 @@ interface Landlord {
 }
 
 // Helper component to auto-fit map bounds to markers
-function MapAutoFit({ tenants, coords, properties }: {
-  tenants: Tenant[]; coords: Record<number, [number, number]>; properties: Property[];
+function MapAutoFit({ tenants, coords }: {
+  tenants: Tenant[]; coords: Record<number, [number, number]>;
 }) {
   const map = useMap();
   useEffect(() => {
@@ -71,6 +71,7 @@ export default function Tenants() {
   const [coords, setCoords] = useState<Record<number, [number, number]>>({});
   const [hoveredTenantId, setHoveredTenantId] = useState<number | null>(null);
   const { portfolioFilter } = usePortfolio();
+  const [now] = useState(() => Date.now());
   // Bulk actions state
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -89,17 +90,20 @@ export default function Tenants() {
     } catch (e) { console.error(e); }
     setLoading(false);
   };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
 
   // Auto-open modal when navigated from property page
   useEffect(() => {
     const createFor = searchParams.get('createFor');
     if (createFor && properties.length > 0) {
-      setForm(f => ({ ...f, property_id: createFor }));
-      setShowModal(true);
+      queueMicrotask(() => {
+        setForm(f => ({ ...f, property_id: createFor }));
+        setShowModal(true);
+      });
       setSearchParams({}, { replace: true });
     }
-  }, [searchParams, properties]);
+  }, [searchParams, properties]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -149,7 +153,7 @@ export default function Tenants() {
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
     const tStatus = t.status || 'active';
     if (statusFilter === 'new') {
-      const createdDays = (Date.now() - new Date((t as any).created_at || 0).getTime()) / 86400000;
+      const createdDays = (now - new Date(t.created_at || 0).getTime()) / 86400000;
       if (createdDays > 30 || tStatus !== 'active') return false;
     } else if (statusFilter !== 'all' && tStatus !== statusFilter) return false;
     if (landlordPropertyIds && !landlordPropertyIds.has(t.property_id)) return false;
@@ -165,7 +169,7 @@ export default function Tenants() {
 
   const endingSoon = tenants.filter(t => {
     if (!t.tenancy_end_date) return false;
-    const days = Math.ceil((new Date(t.tenancy_end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    const days = Math.ceil((new Date(t.tenancy_end_date).getTime() - now) / (1000 * 60 * 60 * 24));
     return days > 0 && days <= 60;
   }).length;
 
@@ -263,7 +267,7 @@ export default function Tenants() {
             </button>
           </div>
           <Button
-            variant={editMode ? "outline" : "secondary"}
+            variant={editMode ? "outline" : "ghost"}
             onClick={() => {
               setEditMode(!editMode);
               if (editMode) setSelectedIds([]);
@@ -398,7 +402,7 @@ export default function Tenants() {
           {/* Status filter tags */}
           {[
             { key: 'all', label: `All (${tenants.length})` },
-            { key: 'new', label: `New (${tenants.filter(t => { const d = new Date(t.tenancy_end_date || ''); const days = (Date.now() - new Date((t as any).created_at || 0).getTime()) / 86400000; return days <= 30 && (t.status || 'active') === 'active'; }).length})` },
+            { key: 'new', label: `New (${tenants.filter(t => { const days = (now - new Date(t.created_at || 0).getTime()) / 86400000; return days <= 30 && (t.status || 'active') === 'active'; }).length})` },
             { key: 'active', label: `Active (${statusCounts['active'] || 0})` },
             { key: 'onboarding', label: `Onboarding (${statusCounts['onboarding'] || 0})` },
             { key: 'inactive', label: `Archived (${statusCounts['inactive'] || 0})` },
@@ -574,7 +578,7 @@ export default function Tenants() {
                 attributionControl={false}
               >
                 <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-                <MapAutoFit tenants={filtered} coords={coords} properties={properties} />
+                <MapAutoFit tenants={filtered} coords={coords} />
                 {filtered.map(t => {
                   const c = coords[t.property_id];
                   if (!c) return null;

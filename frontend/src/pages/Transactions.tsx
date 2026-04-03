@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { Card, GlassCard, EmptyState } from '../components/v3';
 import { useApi } from '../hooks/useApi';
-import { PoundSterling, TrendingUp, TrendingDown, Home, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { PoundSterling, TrendingUp, TrendingDown, Home } from 'lucide-react';
 
 interface RentPayment {
   id: number;
@@ -48,7 +48,9 @@ export default function Transactions() {
         setPayments(Array.isArray(pay) ? pay : pay?.payments || []);
         setProperties(Array.isArray(prop) ? prop : prop?.properties || []);
         setTenancies(Array.isArray(ten) ? ten : ten?.tenancies || []);
-      } catch {}
+      } catch {
+        // Errors already handled by individual .catch() calls above
+      }
       setLoading(false);
     };
     load();

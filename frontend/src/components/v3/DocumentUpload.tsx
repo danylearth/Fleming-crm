@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Button, SectionHeader, EmptyState, Select, Input } from './index';
-import { Upload, FileText, Trash2, Download, X, Plus } from 'lucide-react';
+import { Upload, FileText, Trash2, Download } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -52,7 +52,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
       if (Array.isArray(t) && t.length) setSelectedType(t[0]);
     }).catch(() => { })
       .finally(() => setLoading(false));
-  }, [entityType, entityId, applicantNumber]);
+  }, [entityType, entityId, applicantNumber]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUpload = async (file: File) => {
     if (!selectedType) {

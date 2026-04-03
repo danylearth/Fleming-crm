@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Input, Select, DatePicker, GlassCard } from './index';
+import { Button, DatePicker } from './index';
 import EmailPreviewModal from './EmailPreviewModal';
 import {
   CheckCircle, Circle, Clock, Mail, FileText, Shield, CreditCard,
-  ChevronRight, ChevronDown, AlertTriangle, User, X, Phone, Send,
+  ChevronDown, AlertTriangle, User, X, Send,
   Download, Upload, Trash2, Eye, Paperclip
 } from 'lucide-react';
 
@@ -20,6 +20,7 @@ const STATUS = {
 
 interface OnboardingWizardProps {
   enquiryId: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   enquiry: Record<string, any>;
   properties: { id: number; address: string; postcode?: string; rent_amount?: number }[];
   users: { id: number; name: string; email: string }[];
@@ -27,9 +28,9 @@ interface OnboardingWizardProps {
   onUpdate: () => void;
 }
 
-export default function OnboardingWizard({ enquiryId, enquiry, properties, users, onClose, onUpdate }: OnboardingWizardProps) {
+export default function OnboardingWizard({ enquiryId, enquiry, properties, onClose, onUpdate }: OnboardingWizardProps) {
   const api = useApi();
-  const { user, token } = useAuth();
+  const { token } = useAuth();
   const [saving, setSaving] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
 
@@ -70,7 +71,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   };
 
   // Fetch documents for this enquiry
-  useEffect(() => { fetchDocs(); }, [enquiryId, token]);
+  useEffect(() => { fetchDocs(); }, [enquiryId, token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUploadClick = (docType: string) => {
     pendingDocType.current = docType;
@@ -131,7 +132,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     else if (!enquiry.id_primary_verified_1 || !enquiry.id_secondary_verified_1) setActiveStep(3);
     else if (!enquiry.bank_statements_received || !enquiry.credit_check_completed) setActiveStep(4);
     else setActiveStep(5);
-  }, [enquiry]);
+  }, [enquiry, properties]);
 
   const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
   const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
@@ -231,7 +232,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     setSaving(false);
   };
 
-  const updateField = async (fields: Record<string, any>) => {
+  const updateField = async (fields: Record<string, string | number | boolean | null>) => {
     setSaving(true);
     try {
       await api.put(`/api/tenant-enquiries/${enquiryId}`, {
@@ -433,7 +434,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               <div className="space-y-3">
                 {/* Email sent confirmation */}
                 <div className="text-xs text-emerald-400 flex items-center gap-2">
-                  <CheckCircle size={14} /> Email sent to {enquiry.email_1} on {enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at).toLocaleDateString('en-GB') : 'N/A'}
+                  <CheckCircle size={14} /> Email sent to {enquiry.email_1} on {enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at as string | number).toLocaleDateString('en-GB') : 'N/A'}
                 </div>
 
                 {/* Financial summary */}
@@ -476,7 +477,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     </div>
                     <div>
                       <p className="text-[10px] text-[var(--text-muted)]">Sent</p>
-                      <p className="text-xs text-[var(--text-primary)]">{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</p>
+                      <p className="text-xs text-[var(--text-primary)]">{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at as string | number).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</p>
                     </div>
                   </div>
                   <div className="h-px bg-[var(--border-subtle)]" />
@@ -571,7 +572,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       </div>
                       <div className="pb-2">
                         <p className="text-xs text-[var(--text-primary)] font-medium">Email sent to {enquiry.email_1}</p>
-                        <p className="text-[10px] text-[var(--text-muted)]">{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</p>
+                        <p className="text-[10px] text-[var(--text-muted)]">{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at as string | number).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</p>
                       </div>
                     </div>
                     {/* Deposit received row */}
@@ -596,7 +597,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   <div className="bg-[var(--bg-subtle)] rounded-lg p-3 space-y-2">
                     <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                       <Mail size={12} className="text-amber-400" />
-                      <span>Deposit request sent to <strong>{enquiry.email_1}</strong> on {new Date(enquiry.onboarding_email_sent_at).toLocaleDateString('en-GB')}</span>
+                      <span>Deposit request sent to <strong>{enquiry.email_1}</strong> on {new Date(enquiry.onboarding_email_sent_at as string | number).toLocaleDateString('en-GB')}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                       <CreditCard size={12} className="text-amber-400" />
@@ -760,7 +761,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                           </p>
                         </div>
                       )}
-                      <Button variant="secondary" onClick={() => setShowApplicationEmail(true)} disabled={!enquiry.email_1} className="flex items-center gap-2">
+                      <Button variant="ghost" onClick={() => setShowApplicationEmail(true)} disabled={!enquiry.email_1} className="flex items-center gap-2">
                         <Send size={14} /> Send Application Email
                       </Button>
                     </div>
@@ -962,7 +963,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">To:</span><span>{enquiry.email_1}</span></div>
               <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">From:</span><span>accounts@fleminglettings.co.uk</span></div>
               <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">Subject:</span><span className="font-medium">Tenancy Application – {propertyAddress || 'Property'}</span></div>
-              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">Sent:</span><span>{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span></div>
+              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">Sent:</span><span>{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at as string | number).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span></div>
             </div>
             <div className="flex-1 overflow-y-auto px-4 pb-4">
               <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden bg-white">

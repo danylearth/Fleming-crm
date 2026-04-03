@@ -1,11 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGovernmentAPIs } from '../../hooks/useGovernmentAPIs';
-import { Search, MapPin, Loader2, CheckCircle2 } from 'lucide-react';
+import { MapPin, Loader2, CheckCircle2 } from 'lucide-react';
+
+interface PostcodeData {
+  postcode: string;
+  latitude: number;
+  longitude: number;
+  admin_district: string;
+  admin_ward: string;
+  region: string;
+  country: string;
+}
 
 interface PostcodeAutocompleteProps {
   value: string;
   onChange: (postcode: string) => void;
-  onSelect?: (postcodeData: any) => void;
+  onSelect?: (postcodeData: PostcodeData) => void;
   onAddressSelect?: (address: string) => void;
   showDropdownOnAddress?: boolean;
   label?: string;
@@ -53,15 +63,11 @@ export default function PostcodeAutocomplete({
     }
 
     if (value.length >= 2) {
-      setValidated(false);
       debounceTimer.current = setTimeout(async () => {
         const results = await autocompletePostcode(value);
         setSuggestions(results);
         setShowSuggestions(results.length > 0);
       }, 300);
-    } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
     }
 
     return () => {
@@ -69,7 +75,7 @@ export default function PostcodeAutocomplete({
         clearTimeout(debounceTimer.current);
       }
     };
-  }, [value]);
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelect = async (postcode: string) => {
     onChange(postcode);
@@ -92,7 +98,7 @@ export default function PostcodeAutocomplete({
       console.log('Land Registry data:', priceData);
       if (priceData && priceData.length > 0) {
         // Get unique addresses
-        const uniqueAddresses = [...new Set(priceData.map((item: any) => item.address))];
+        const uniqueAddresses = [...new Set(priceData.map((item: { address: string }) => item.address))];
         console.log('Unique addresses:', uniqueAddresses);
         setAddresses(uniqueAddresses);
         setShowAddresses(true);
@@ -114,7 +120,13 @@ export default function PostcodeAutocomplete({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(e.target.value.toUpperCase());
+    const newValue = e.target.value.toUpperCase();
+    setValidated(false);
+    if (newValue.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+    onChange(newValue);
   };
 
   return (
