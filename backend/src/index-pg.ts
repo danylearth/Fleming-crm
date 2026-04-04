@@ -1749,18 +1749,12 @@ app.get('/api/public/companies-house/search', publicReadLimiter, async (req, res
 
 app.get('/api/public/properties', publicReadLimiter, async (req, res) => {
   try {
-    console.log('[Public Properties] Fetching properties with status: to_let, available');
-    // First get ALL properties to debug
-    const allProps = await query(`SELECT p.id, p.address, p.status FROM properties p`);
-    console.log(`[Public Properties] Total properties in DB: ${allProps.length}`, allProps);
-
     const properties = await query(`
       SELECT p.id, p.address, p.postcode, p.property_type, p.bedrooms, p.rent_amount, p.status
       FROM properties p
-      WHERE LOWER(REPLACE(p.status, ' ', '_')) IN ('to_let', 'available') OR LOWER(p.status) IN ('to let', 'to_let', 'available')
+      WHERE p.status IN ($1, $2, $3)
       ORDER BY p.address
-    `);
-    console.log(`[Public Properties] Found ${properties.length} properties with status filter`);
+    `, ['to_let', 'To Let', 'available']);
     res.json(properties);
   } catch (err) {
     console.error('[Public Properties] Error:', err);

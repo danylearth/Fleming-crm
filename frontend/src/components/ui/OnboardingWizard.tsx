@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
 import { Button, DatePicker } from './index';
@@ -17,6 +17,50 @@ const STATUS = {
   amber: { bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400', dot: 'bg-amber-500' },
   green: { bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-500' },
 };
+
+function StatusDot({ status }: { status: string }) {
+  return <div className={`w-3 h-3 rounded-full ${STATUS[status as keyof typeof STATUS]?.dot || STATUS.red.dot}`} />;
+}
+
+function StepCard({ idx, step, children, activeStep, setActiveStep }: {
+  idx: number;
+  step: { label: string; icon: React.ElementType; getStatus: () => string; desc: string };
+  children: React.ReactNode;
+  activeStep: number;
+  setActiveStep: (v: number) => void;
+}) {
+  const status = step.getStatus();
+  const s = STATUS[status as keyof typeof STATUS] || STATUS.red;
+  const isActive = activeStep === idx;
+
+  return (
+    <div className={`rounded-xl border transition-all ${isActive ? s.border + ' ' + s.bg : 'border-[var(--border-subtle)] bg-[var(--bg-subtle)]/50'}`}>
+      <button
+        onClick={() => setActiveStep(isActive ? -1 : idx)}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left"
+      >
+        <StatusDot status={status} />
+        <step.icon size={16} className={s.text} />
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-medium ${isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+            {step.label}
+          </p>
+          <p className="text-[10px] text-[var(--text-muted)] truncate">{step.desc}</p>
+        </div>
+        <span className={`text-[10px] font-medium uppercase tracking-wider ${s.text}`}>
+          {status === 'green' ? 'Done' : status === 'amber' ? 'Pending' : 'To Do'}
+        </span>
+        <ChevronDown size={14} className={`text-[var(--text-muted)] transition-transform ${isActive ? 'rotate-180' : ''}`} />
+      </button>
+      {isActive && (
+        <div className="px-4 pb-4 space-y-3">
+          <div className="h-px bg-[var(--border-subtle)]" />
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface OnboardingWizardProps {
   enquiryId: number;
@@ -363,43 +407,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
     setSendingEmail(false);
   };
 
-  const StatusDot = ({ status }: { status: string }) => (
-    <div className={`w-3 h-3 rounded-full ${STATUS[status as keyof typeof STATUS]?.dot || STATUS.red.dot}`} />
-  );
-
-  const StepCard = ({ idx, step, children }: { idx: number; step: typeof steps[0]; children: React.ReactNode }) => {
-    const status = step.getStatus();
-    const s = STATUS[status as keyof typeof STATUS] || STATUS.red;
-    const isActive = activeStep === idx;
-
-    return (
-      <div className={`rounded-xl border transition-all ${isActive ? s.border + ' ' + s.bg : 'border-[var(--border-subtle)] bg-[var(--bg-subtle)]/50'}`}>
-        <button
-          onClick={() => setActiveStep(isActive ? -1 : idx)}
-          className="w-full flex items-center gap-3 px-4 py-3 text-left"
-        >
-          <StatusDot status={status} />
-          <step.icon size={16} className={s.text} />
-          <div className="flex-1 min-w-0">
-            <p className={`text-sm font-medium ${isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
-              {step.label}
-            </p>
-            <p className="text-[10px] text-[var(--text-muted)] truncate">{step.desc}</p>
-          </div>
-          <span className={`text-[10px] font-medium uppercase tracking-wider ${s.text}`}>
-            {status === 'green' ? 'Done' : status === 'amber' ? 'Pending' : 'To Do'}
-          </span>
-          <ChevronDown size={14} className={`text-[var(--text-muted)] transition-transform ${isActive ? 'rotate-180' : ''}`} />
-        </button>
-        {isActive && (
-          <div className="px-4 pb-4 space-y-3">
-            <div className="h-px bg-[var(--border-subtle)]" />
-            {children}
-          </div>
-        )}
-      </div>
-    );
-  };
+  const stepCardProps = { activeStep, setActiveStep };
 
   return (
     <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -429,7 +437,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
 
           {/* Step 1: Request Holding Deposit */}
-          <StepCard idx={0} step={steps[0]}>
+          <StepCard idx={0} step={steps[0]} {...stepCardProps}>
             {enquiry.holding_deposit_requested ? (
               <div className="space-y-3">
                 {/* Email sent confirmation */}
@@ -551,7 +559,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
           </StepCard>
 
           {/* Step 2: Holding Deposit Received */}
-          <StepCard idx={1} step={steps[1]}>
+          <StepCard idx={1} step={steps[1]} {...stepCardProps}>
             {enquiry.holding_deposit_received ? (
               <div className="space-y-3">
                 <div className="text-xs text-emerald-400 flex items-center gap-2">
@@ -626,7 +634,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
           </StepCard>
 
           {/* Step 3: Application Form */}
-          <StepCard idx={2} step={steps[2]}>
+          <StepCard idx={2} step={steps[2]} {...stepCardProps}>
             {/* Progress tracker — three milestones */}
             {(() => {
               const sent = !!enquiry.application_form_sent;
@@ -777,7 +785,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
           </StepCard>
 
           {/* Step 4: ID Verification */}
-          <StepCard idx={3} step={steps[3]}>
+          <StepCard idx={3} step={steps[3]} {...stepCardProps}>
             <div className="space-y-2">
               {/* Hidden file input shared across all upload buttons */}
               <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onChange={handleFileSelected} />
@@ -876,7 +884,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
           </StepCard>
 
           {/* Step 5: Financial Checks */}
-          <StepCard idx={4} step={steps[4]}>
+          <StepCard idx={4} step={steps[4]} {...stepCardProps}>
             <div className="space-y-2">
               {[
                 { key: 'bank_statements_received', label: '3 Months Bank Statements' },
@@ -917,7 +925,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
           </StepCard>
 
           {/* Step 6: Convert to Tenant */}
-          <StepCard idx={5} step={steps[5]}>
+          <StepCard idx={5} step={steps[5]} {...stepCardProps}>
             {allPreviousComplete(5) ? (
               <div className="space-y-3">
                 <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
