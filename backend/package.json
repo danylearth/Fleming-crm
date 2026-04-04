@@ -9,7 +9,11 @@
     "build": "tsc",
     "start": "node dist/index-pg.js",
     "start:sqlite": "tsx src/index.ts",
-    "seed:pg": "tsx seed-pg.ts"
+    "seed:pg": "tsx seed-pg.ts",
+    "migrate:fix-properties": "tsx fix-properties-schema.ts",
+    "migrate:production": "tsx run-production-migration.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
@@ -18,25 +22,29 @@
     "@types/multer": "^2.0.0",
     "@types/pg": "^8.16.0",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.6.2",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.3.2",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.0.2",
     "pg": "^8.18.0",
     "resend": "^6.9.3",
     "sharp": "^0.34.5",
+    "twilio": "^5.5.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@rolldown/binding-darwin-arm64": "^1.0.0-rc.13",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.2.1",
+    "better-sqlite3": "^12.6.2",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.2"
   }
 }

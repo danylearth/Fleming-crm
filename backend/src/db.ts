@@ -200,6 +200,12 @@ db.exec(`
     nok_relationship TEXT,
     nok_phone TEXT,
     nok_email TEXT,
+    nok_address TEXT,
+    nok_2_name TEXT,
+    nok_2_relationship TEXT,
+    nok_2_phone TEXT,
+    nok_2_email TEXT,
+    nok_2_address TEXT,
     -- KYC
     kyc_completed_1 INTEGER DEFAULT 0,
     kyc_completed_2 INTEGER DEFAULT 0,
@@ -462,9 +468,10 @@ db.exec(`
     size INTEGER,
     uploaded_by INTEGER,
     uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    applicant_number INTEGER DEFAULT 1,
     FOREIGN KEY (uploaded_by) REFERENCES users(id)
   );
-  
+
   CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_type, entity_id);
 
   -- ============================================
@@ -689,6 +696,7 @@ if (propSchema && propSchema.sql && propSchema.sql.includes('CHECK')) {
       status TEXT DEFAULT 'to_let',
       onboarded_date DATE,
       notes TEXT,
+      amenities TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (landlord_id) REFERENCES landlords(id)
@@ -760,6 +768,172 @@ try { db.exec(`ALTER TABLE landlords ADD COLUMN referral_source TEXT`); } catch 
 try { db.exec(`ALTER TABLE users ADD COLUMN department TEXT`); } catch (e) {}
 try { db.exec(`ALTER TABLE users ADD COLUMN last_password_change DATETIME`); } catch (e) {}
 
+// Sprint 4: Add assigned_to to property_viewings
+try { db.exec(`ALTER TABLE property_viewings ADD COLUMN assigned_to TEXT`); } catch (e) {}
+
+// Sprint 4: SMS messages table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sms_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    enquiry_id INTEGER,
+    to_phone TEXT NOT NULL,
+    from_phone TEXT,
+    message_body TEXT NOT NULL,
+    direction TEXT DEFAULT 'outbound',
+    status TEXT DEFAULT 'queued',
+    twilio_sid TEXT,
+    error_message TEXT,
+    sent_by INTEGER,
+    sent_by_email TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (enquiry_id) REFERENCES tenant_enquiries(id),
+    FOREIGN KEY (sent_by) REFERENCES users(id)
+  );
+`);
+
+// Email messages table (delivery tracking via Resend webhooks)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS email_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    resend_id TEXT,
+    entity_type TEXT,
+    entity_id INTEGER,
+    to_email TEXT NOT NULL,
+    from_email TEXT,
+    subject TEXT,
+    template TEXT,
+    status TEXT DEFAULT 'sent',
+    sent_by INTEGER,
+    sent_by_email TEXT,
+    opened_at DATETIME,
+    clicked_at DATETIME,
+    bounced_at DATETIME,
+    error_message TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sent_by) REFERENCES users(id)
+  );
+`);
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_email_messages_resend_id ON email_messages(resend_id)'); } catch (e) {}
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_email_messages_entity ON email_messages(entity_type, entity_id)'); } catch (e) {}
+
+// Sprint 5: Onboarding & application form fields
+const onboardingCols = [
+  'holding_deposit_requested INTEGER DEFAULT 0',
+  'holding_deposit_received INTEGER DEFAULT 0',
+  'holding_deposit_amount REAL',
+  'security_deposit_amount REAL',
+  'monthly_rent_agreed REAL',
+  'application_form_token TEXT',
+  'application_form_sent INTEGER DEFAULT 0',
+  'application_form_completed INTEGER DEFAULT 0',
+  'onboarding_email_sent_at DATETIME',
+  // Application form data
+  'app_ni_number TEXT',
+  'app_previous_address_1 TEXT',
+  'app_previous_address_2 TEXT',
+  'app_years_at_current INTEGER',
+  'app_years_at_previous INTEGER',
+  'app_landlord_ref_name TEXT',
+  'app_landlord_ref_phone TEXT',
+  'app_landlord_ref_email TEXT',
+  'app_employer_ref_name TEXT',
+  'app_employer_ref_phone TEXT',
+  'app_employer_ref_email TEXT',
+  'app_bank_name TEXT',
+  'app_bank_sort_code TEXT',
+  'app_bank_account_number TEXT',
+  'app_next_of_kin_name TEXT',
+  'app_next_of_kin_phone TEXT',
+  'app_next_of_kin_relationship TEXT',
+  'app_next_of_kin_address TEXT',
+  'app_next_of_kin_2_name TEXT',
+  'app_next_of_kin_2_phone TEXT',
+  'app_next_of_kin_2_relationship TEXT',
+  'app_next_of_kin_2_address TEXT',
+  'app_signature TEXT',
+  'app_signed_at DATETIME',
+  'app_declaration_agreed INTEGER DEFAULT 0',
+  // Holding deposit tracking
+  'holding_deposit_received_date TEXT',
+  'holding_deposit_received_amount REAL',
+  // ID Verification
+  'id_primary_verified_1 INTEGER DEFAULT 0',
+  'id_secondary_verified_1 INTEGER DEFAULT 0',
+  'id_primary_verified_2 INTEGER DEFAULT 0',
+  'id_secondary_verified_2 INTEGER DEFAULT 0',
+  // Financial checks
+  'bank_statements_received INTEGER DEFAULT 0',
+  'source_of_funds_verified INTEGER DEFAULT 0',
+  'employment_check_completed INTEGER DEFAULT 0',
+  'app_employer_address TEXT',
+  'app_employer_contact TEXT',
+  'app_years_of_service TEXT',
+  'app_pay_frequency TEXT',
+  'app_other_income REAL',
+  'app_tax_years TEXT',
+  'credit_check_completed INTEGER DEFAULT 0',
+  'credit_score TEXT',
+  'credit_check_date TEXT',
+  // Onboarding step tracking
+  'onboarding_step INTEGER DEFAULT 0',
+  // References expansion
+  'app_has_employer_ref INTEGER DEFAULT 0',
+  'app_employer_ref_employee_id TEXT',
+  'app_employer_ref_consent INTEGER DEFAULT 0',
+  'app_has_landlord_ref INTEGER DEFAULT 0',
+  'app_landlord_ref_property_address TEXT',
+  'app_landlord_ref_consent INTEGER DEFAULT 0',
+  // Further information and individual declarations
+  'app_further_info TEXT',
+  'app_decl_holding_deposit INTEGER DEFAULT 0',
+  'app_decl_info_accurate INTEGER DEFAULT 0',
+  'app_decl_gdpr INTEGER DEFAULT 0',
+  'app_decl_enquiries INTEGER DEFAULT 0',
+  'app_decl_documents INTEGER DEFAULT 0',
+  'app_decl_credit_check INTEGER DEFAULT 0',
+  'app_decl_terms INTEGER DEFAULT 0',
+  'app_decl_marketing INTEGER DEFAULT 0',
+  'app_guarantor_name TEXT',
+  'app_guarantor_phone TEXT',
+  'app_guarantor_email TEXT',
+  'app_guarantor_address TEXT',
+];
+for (const col of onboardingCols) {
+  try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN ${col}`); } catch (e) {}
+}
+
+// Public form columns (match PG schema for parity)
+const publicFormCols = [
+  'postcode_1 TEXT',
+  'years_at_address_1 TEXT',
+  'nationality_1 TEXT',
+  'contract_type_1 TEXT',
+  'job_title_1 TEXT',
+  'annual_salary_1 REAL',
+  'postcode_2 TEXT',
+  'years_at_address_2 TEXT',
+  'nationality_2 TEXT',
+  'contract_type_2 TEXT',
+  'job_title_2 TEXT',
+  'annual_salary_2 REAL',
+  'preferred_tenancy_type TEXT',
+  'reason_for_renting TEXT',
+  'preferred_property_type TEXT',
+  'preferred_bedrooms TEXT',
+  'preferred_parking TEXT',
+  'max_rent REAL',
+  'monthly_rent_budget REAL',
+  'marketing_preferences TEXT',
+  'form_submission_ip TEXT',
+  'form_version TEXT',
+];
+for (const col of publicFormCols) {
+  try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN ${col}`); } catch (e) {}
+}
+
+// Joint applicant: add self-referencing partner link column
+try { db.exec(`ALTER TABLE tenant_enquiries ADD COLUMN joint_partner_id INTEGER REFERENCES tenant_enquiries(id)`); } catch (e) {}
+
 // Sprint 3: Property expenses table
 db.exec(`
   CREATE TABLE IF NOT EXISTS property_expenses (
@@ -773,6 +947,9 @@ db.exec(`
     FOREIGN KEY (property_id) REFERENCES properties(id)
   );
 `);
+
+// Sprint 6: Add applicant_number to documents for joint applicant support
+try { db.exec(`ALTER TABLE documents ADD COLUMN applicant_number INTEGER DEFAULT 1`); } catch (e) {}
 
 // ============ SEED DATA (only on empty database or FORCE_RESEED) ============
 if (process.env.FORCE_RESEED === 'true') {

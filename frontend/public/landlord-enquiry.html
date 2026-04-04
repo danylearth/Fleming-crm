@@ -961,6 +961,13 @@
     </div>
 
     <script>
+        // API Configuration — override by setting window.FLEMING_API_URL before this script
+        const API_BASE_URL = window.FLEMING_API_URL || (
+            window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                ? 'http://localhost:3001'
+                : 'https://fleming-crm-api-production-7e58.up.railway.app'
+        );
+
         let currentStep = 1;
         const totalSteps = 4;
 
@@ -1116,13 +1123,8 @@
             const formData = new FormData(this);
             const data = Object.fromEntries(formData.entries());
 
-            // Determine API URL - change this to your backend URL
-            const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                ? 'http://localhost:3001'
-                : 'https://fleming-crm-api-production-7e58.up.railway.app';
-
             try {
-                const response = await fetch(`${API_URL}/api/public/landlord-enquiries`, {
+                const response = await fetch(`${API_BASE_URL}/api/public/landlord-enquiries`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

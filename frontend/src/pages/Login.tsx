@@ -1,136 +1,106 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Home, Mail, Lock, User, ArrowRight } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || '';
+import { useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isSetup, setIsSetup] = useState(false);
-  const [checkingSetup, setCheckingSetup] = useState(true);
-  
   const { login } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    fetch(`${API_URL}/api/auth/me`)
-      .then(res => {
-        if (res.status === 401) {
-          return fetch(`${API_URL}/api/auth/setup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-        }
-        return res;
-      })
-      .then(res => {
-        if (res.status === 400) setIsSetup(false);
-        else if (res.status === 500 || res.status === 200) setIsSetup(true);
-      })
-      .catch(() => setIsSetup(false))
-      .finally(() => setCheckingSetup(false));
-  }, []);
+  const { theme } = useTheme();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      if (isSetup) {
-        const res = await fetch(`${API_URL}/api/auth/setup`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, name })
-        });
-        if (!res.ok) throw new Error('Setup failed');
-        setIsSetup(false);
-      }
       await login(email, password);
       navigate('/');
-    } catch (err: any) { setError(err.message || 'Login failed'); }
-    finally { setLoading(false); }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Invalid credentials');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (checkingSetup) return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-gray-600 border-t-white rounded-full animate-spin" />
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-[var(--bg-page)] font-[Lufga] flex items-center justify-center px-4">
+      {/* Background gradient orbs */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 -left-32 w-96 h-96 bg-orange-500/10 rounded-full blur-[128px]" />
+        <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-pink-500/10 rounded-full blur-[128px]" />
+      </div>
+
+      <div className="relative w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center">
-              <Home className="w-7 h-7 text-gray-900" />
-            </div>
-            <div className="text-left">
-              <h1 className="text-2xl font-bold text-white">Fleming Lettings</h1>
-              <p className="text-gray-400 text-sm">Property Management System</p>
-            </div>
-          </div>
+        <div className="flex flex-col items-center mb-10">
+          <img
+            src={theme === 'dark' ? '/logo-light.png' : '/logo-dark.png'}
+            alt="Fleming Lettings"
+            className="h-14 w-auto object-contain mb-3"
+          />
+          <p className="text-[var(--text-muted)] text-sm">Property management, simplified</p>
         </div>
 
-        {/* Form Card */}
-        <div className="bg-white rounded-lg p-8">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-gray-900">
-              {isSetup ? 'Create Admin Account' : 'Staff Login'}
-            </h2>
-            <p className="text-gray-500 text-sm mt-1">
-              {isSetup ? 'Set up your first admin account to get started' : 'Sign in to access the management portal'}
-            </p>
-          </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6 text-sm">{error}</div>
-          )}
+        {/* Card */}
+        <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] p-8">
+          <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-1">Welcome back</h2>
+          <p className="text-sm text-[var(--text-muted)] mb-6">Sign in to your account</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {isSetup && (
-              <div>
-                <label className="block text-xs text-gray-500 mb-1.5">Full Name</label>
-                <div className="relative">
-                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input type="text" placeholder="Your name" value={name} onChange={e => setName(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-200 focus:outline-none focus:bg-white transition-all text-sm" required />
-                </div>
-              </div>
-            )}
-            
             <div>
-              <label className="block text-xs text-gray-500 mb-1.5">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input type="email" placeholder="you@fleminglettings.co.uk" value={email} onChange={e => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-200 focus:outline-none focus:bg-white transition-all text-sm" required />
-              </div>
+              <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors"
+                required
+              />
             </div>
-            
+
             <div>
-              <label className="block text-xs text-gray-500 mb-1.5">Password</label>
+              <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-200 focus:outline-none focus:bg-white transition-all text-sm" required />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 pr-11 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
-            <button type="submit" disabled={loading}
-              className="w-full bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3 rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-6">
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>{isSetup ? 'Create Account' : 'Sign In'}<ArrowRight className="w-4 h-4" /></>
-              )}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5 text-sm text-red-400">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] font-medium py-3 rounded-full hover:opacity-90 transition-colors disabled:opacity-40 text-sm"
+            >
+              {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
         </div>
-        
-        <p className="text-center text-gray-500 text-sm mt-6">Internal use only • © 2026 Fleming Lettings</p>
       </div>
     </div>
   );

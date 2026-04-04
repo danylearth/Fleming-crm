@@ -1,271 +1,559 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Layout from '../components/Layout';
+import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, SearchDropdown, PostcodeAutocomplete } from '../components/ui';
+import AddressAutocomplete from '../components/ui/AddressAutocomplete';
+import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
-import { Building2, Plus, X, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Building2, Plus, List, Map, X, Search, ChevronDown, User } from 'lucide-react';
+import PropertyMap from '../components/ui/PropertyMap';
+import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 
 interface Property {
-  id: number;
-  landlord_id: number;
-  landlord_name: string;
-  address: string;
-  postcode: string;
-  property_type: string;
-  bedrooms: number;
-  rent_amount: number;
-  status: string;
-  current_tenant: string | null;
-  notes: string;
+  id: number; address: string; postcode: string; rent_amount: number;
+  status: string; landlord_name: string; current_tenant: string | null;
+  bedrooms: number; property_type: string; landlord_type?: string;
 }
 
-interface Landlord {
-  id: number;
-  name: string;
+interface LandlordOption {
+  id: number; name: string;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; border: string; text: string }> = {
-  available:   { label: 'Available',   border: 'border-emerald-300', text: 'text-emerald-700' },
-  let:         { label: 'Let',         border: 'border-sky-300',     text: 'text-sky-700' },
-  maintenance: { label: 'Maintenance', border: 'border-amber-300',   text: 'text-amber-700' },
-};
+interface TenantOption {
+  id: number; name: string; property_id: number;
+}
+
+interface PropertyForm {
+  landlord_id: string; address: string; postcode: string; property_type: string;
+  bedrooms: string; rent_amount: string; status: string; service_type: string;
+  council_tax_band: string; has_gas: boolean;
+}
+
+const STATUSES = [
+  { key: 'to_let', label: 'To Let', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  { key: 'let_agreed', label: 'Let Agreed', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  { key: 'full_management', label: 'Full Management', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  { key: 'rent_collection', label: 'Rent Collection', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+];
+
+function statusStyle(s: string) {
+  return STATUSES.find(st => st.key === s)?.color || 'bg-[var(--bg-hover)] text-[var(--text-muted)]';
+}
+function statusLabel(s: string) {
+  return STATUSES.find(st => st.key === s)?.label || s;
+}
 
 export default function Properties() {
   const api = useApi();
+  const navigate = useNavigate();
   const [properties, setProperties] = useState<Property[]>([]);
-  const [landlords, setLandlords] = useState<Landlord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState('');
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
-  const perPage = 10;
-  const [formData, setFormData] = useState({
-    landlord_id: '', address: '', postcode: '', property_type: 'house', 
-    bedrooms: '2', rent_amount: '', status: 'available', notes: ''
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [landlords, setLandlords] = useState<LandlordOption[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
+    rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: false,
+  });
+  const [llDropOpen, setLlDropOpen] = useState(false);
+  const [llSearch, setLlSearch] = useState('');
+  const [tenants, setTenants] = useState<TenantOption[]>([]);
+  // Filter state
+  const [landlordFilter, setLandlordFilter] = useState<number | null>(null);
+  const [tenantFilter, setTenantFilter] = useState<number | null>(null);
+  const { portfolioFilter } = usePortfolio();
+  // Map hover state
+  const [hoveredPropertyId, setHoveredPropertyId] = useState<number | null>(null);
+  // Bulk actions state
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+
+  const load = useCallback(() => {
+    Promise.all([api.get('/api/properties'), api.get('/api/landlords'), api.get('/api/tenants')])
+      .then(([data, lls, tns]) => {
+        setProperties(Array.isArray(data) ? data : []);
+        setLandlords(Array.isArray(lls) ? lls.map((l: { id: number; name: string }) => ({ id: l.id, name: l.name })) : []);
+        setTenants(Array.isArray(tns) ? tns.map((t: { id: number; name: string; property_id: number }) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
+      })
+      .catch(() => setProperties([]))
+      .finally(() => setLoading(false));
+  }, [api]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const portfolioFiltered = filterByPortfolio(properties, portfolioFilter);
+  const filtered = portfolioFiltered.filter(p => {
+    const matchSearch = !search || [p.address, p.postcode, p.landlord_name, p.current_tenant]
+      .some(v => v?.toLowerCase().includes(search.toLowerCase()));
+    if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+    if (landlordFilter) {
+      const ll = landlords.find(l => l.id === landlordFilter);
+      if (ll && p.landlord_name !== ll.name) return false;
+    }
+    if (tenantFilter) {
+      const tn = tenants.find(t => t.id === tenantFilter);
+      if (tn && tn.property_id !== p.id) return false;
+    }
+    return matchSearch;
   });
 
-  useEffect(() => { loadData(); }, []);
+  const statusCounts = properties.reduce((acc, p) => {
+    acc[p.status] = (acc[p.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
-  const loadData = async () => {
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedIds.length} ${selectedIds.length !== 1 ? 'properties' : 'property'}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
     try {
-      const [props, lands] = await Promise.all([api.get('/api/properties'), api.get('/api/landlords')]);
-      setProperties(props);
-      setLandlords(lands);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+      await api.post('/api/properties/bulk-delete', { ids: selectedIds });
+      setSelectedIds([]);
+      await load();
+    } catch (e) {
+      console.error('Bulk delete error:', e);
+      alert('Failed to delete properties. Please try again.');
+    }
+    setIsDeleting(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await api.post('/api/properties', {
-        ...formData, landlord_id: parseInt(formData.landlord_id),
-        bedrooms: parseInt(formData.bedrooms), rent_amount: parseFloat(formData.rent_amount)
-      });
-      setShowModal(false);
-      setFormData({ landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '2', rent_amount: '', status: 'available', notes: '' });
-      loadData();
-    } catch (err: any) { alert(err.message); }
+  const toggleSelectProperty = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
   };
 
-  const filtered = properties.filter(p => 
-    p.address.toLowerCase().includes(search.toLowerCase()) ||
-    p.postcode.toLowerCase().includes(search.toLowerCase()) ||
-    p.landlord_name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const totalPages = Math.ceil(filtered.length / perPage);
-  const paged = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
-
-  const toggleSelect = (id: number) => {
-    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
-  };
   const toggleSelectAll = () => {
-    if (selectedIds.size === paged.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(paged.map(p => p.id)));
+    if (selectedIds.length === filtered.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map(p => p.id));
+    }
   };
-
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
-    </div>
-  );
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <p className="text-xs text-gray-400 mb-0.5">Portfolio</p>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">Properties</h1>
-            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-              {filtered.length} Properties
-            </span>
+    <Layout title="Properties" breadcrumb={[{ label: 'Properties' }]}>
+      <div className="p-4 md:p-8 space-y-6">
+        {/* Stats row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: 'Total Properties', value: properties.length, accent: true },
+            { label: 'To Let', value: statusCounts['to_let'] || 0 },
+            { label: 'Let Agreed', value: statusCounts['let_agreed'] || 0 },
+            { label: 'Managed', value: (statusCounts['full_management'] || 0) + (statusCounts['rent_collection'] || 0) },
+          ].map(s => (
+            <GlassCard key={s.label} className="p-4">
+              <p className="text-xs text-[var(--text-muted)]">{s.label}</p>
+              <p className={`text-2xl font-bold mt-1 ${s.accent ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                {s.value}
+              </p>
+            </GlassCard>
+          ))}
+        </div>
+
+        {/* Search + View Toggle + Edit + Add */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex-1"><SearchBar value={search} onChange={setSearch} placeholder="Search properties..." /></div>
+          <div className="flex items-center gap-1 bg-[var(--bg-input)] rounded-xl p-1 border border-[var(--border-input)]">
+            <button onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+              <List size={16} />
+            </button>
+            <button onClick={() => setViewMode('map')}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'map' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+              <Map size={16} />
+            </button>
           </div>
+          <Button
+            variant={editMode ? "outline" : "ghost"}
+            onClick={() => {
+              setEditMode(!editMode);
+              if (editMode) setSelectedIds([]);
+            }}
+          >
+            {editMode ? 'Cancel' : 'Edit'}
+          </Button>
+          <Button variant="gradient" onClick={() => setShowAdd(true)}>
+            <Plus size={16} className="mr-2" /> Add Property
+          </Button>
         </div>
-        <button onClick={() => setShowModal(true)}
-          className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
-          + Add Property
-        </button>
-      </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input type="text" placeholder="Search..." value={search}
-            onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-            className="w-full pl-10 pr-4 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200" />
+        {/* Dropdown filters + Status filter */}
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchDropdown
+            icon={<User size={14} />}
+            placeholder="Landlord"
+            searchPlaceholder="Search landlords..."
+            options={landlords.map(l => ({ id: l.id, label: l.name, subtitle: `${properties.filter(p => p.landlord_name === l.name).length} properties` }))}
+            value={landlordFilter}
+            onChange={setLandlordFilter}
+          />
+          <SearchDropdown
+            icon={<User size={14} />}
+            placeholder="Tenant"
+            searchPlaceholder="Search tenants..."
+            options={tenants.map(t => ({ id: t.id, label: t.name, subtitle: properties.find(p => p.id === t.property_id)?.address }))}
+            value={tenantFilter}
+            onChange={setTenantFilter}
+          />
+
+          <div className="h-5 w-px bg-[var(--border-subtle)] hidden sm:block" />
+
+          {[
+            { key: 'all', label: `All (${properties.length})` },
+            ...STATUSES.map(s => ({ key: s.key, label: `${s.label} (${statusCounts[s.key] || 0})` })),
+          ].map(f => (
+            <Tag key={f.key} active={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>
+              {f.label}
+            </Tag>
+          ))}
         </div>
-      </div>
 
-      {/* Table */}
-      <div className="flex-1 flex flex-col">
-        <div className="border border-gray-200 rounded-lg overflow-hidden flex-1">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50/50">
-                <th className="w-10 px-3 py-3">
-                  <input type="checkbox" checked={paged.length > 0 && selectedIds.size === paged.length}
-                    onChange={toggleSelectAll} className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500" />
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Address</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Landlord</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Type / Beds</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Rent</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Tenant</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paged.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-16">
-                    <Building2 className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm font-medium text-gray-500">No properties found</p>
-                    <p className="text-xs text-gray-400 mt-1">Try adjusting your search</p>
-                  </td>
+        {/* Bulk Actions */}
+        {editMode && (
+          <BulkActions
+            selectedIds={selectedIds}
+            onClearSelection={() => setSelectedIds([])}
+            onBulkDelete={handleBulkDelete}
+            entityName="property"
+            isDeleting={isDeleting}
+          />
+        )}
+
+        {/* Content */}
+        {loading ? (
+          <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
+        ) : viewMode === 'map' ? (
+          <div className="h-[calc(100vh-320px)] rounded-2xl overflow-hidden border border-[var(--border-subtle)] flex">
+            {/* Property List Sidebar */}
+            <div
+              className="w-full sm:w-80 md:w-96 shrink-0 border-r border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 overflow-y-auto"
+              onMouseLeave={() => setHoveredPropertyId(null)}
+            >
+              <div className="p-4 space-y-2">
+                {filtered.map(p => {
+                  const isHovered = hoveredPropertyId === p.id;
+                  const isOtherHovered = hoveredPropertyId !== null && hoveredPropertyId !== p.id;
+                  return (
+                    <div
+                      key={p.id}
+                      onMouseEnter={() => setHoveredPropertyId(p.id)}
+                      onClick={() => navigate(`/properties/${p.id}`)}
+                      className={`bg-[var(--bg-card)] border rounded-xl p-4 hover:border-[var(--accent-orange)]/40 hover:shadow-lg transition-all cursor-pointer group ${
+                        isHovered ? 'border-[var(--accent-orange)]/40 shadow-lg scale-[1.02] z-10' :
+                        isOtherHovered ? 'opacity-40 border-[var(--border-subtle)]' :
+                        'border-[var(--border-subtle)]'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center shrink-0 transition-all ${
+                          isOtherHovered ? 'opacity-50' : ''
+                        }`}>
+                          <Building2 size={18} className="text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-semibold text-sm truncate transition-colors ${
+                            isHovered ? 'text-[var(--accent-orange)]' : ''
+                          }`}>{p.address}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{p.postcode}</p>
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <span className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${statusStyle(p.status)}`}>
+                              {statusLabel(p.status)}
+                            </span>
+                            <span className="text-xs text-[var(--text-muted)]">{p.bedrooms} bed</span>
+                            <span className="text-xs font-semibold text-[var(--text-primary)]">£{p.rent_amount?.toLocaleString()}/mo</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Map */}
+            <div className="flex-1 relative">
+              <PropertyMap
+                properties={filtered}
+                onPropertyClick={(id) => navigate(`/properties/${id}`)}
+                highlightedPropertyId={hoveredPropertyId}
+              />
+            </div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState message={search || statusFilter !== 'all' ? 'No properties match your filters' : 'No properties yet — add your first one'} />
+        ) : (
+          <div className="overflow-x-auto">
+            {editMode && (
+              <div className="flex items-center gap-2 mb-2 px-4">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length === filtered.length && filtered.length > 0}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+                />
+                <span className="text-sm text-[var(--text-secondary)]">
+                  {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
+                </span>
+              </div>
+            )}
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
+                  {editMode && <th className="text-left py-3 px-4 font-medium w-12"></th>}
+                  <th className="text-left py-3 px-4 font-medium">Address</th>
+                  <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Postcode</th>
+                  <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Landlord</th>
+                  <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Tenant</th>
+                  <th className="text-left py-3 px-4 font-medium">Status</th>
+                  <th className="text-right py-3 px-4 font-medium hidden sm:table-cell">Rent</th>
+                  <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Type</th>
                 </tr>
-              ) : paged.map(property => {
-                const status = STATUS_CONFIG[property.status] || STATUS_CONFIG.available;
-                return (
-                  <tr key={property.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                    <td className="w-10 px-3 py-3">
-                      <input type="checkbox" checked={selectedIds.has(property.id)}
-                        onChange={() => toggleSelect(property.id)}
-                        className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500" />
+              </thead>
+              <tbody>
+                {filtered.map(p => (
+                  <tr key={p.id}
+                    onClick={() => !editMode && navigate(`/properties/${p.id}`)}
+                    className={`border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] transition-colors ${!editMode ? 'cursor-pointer' : ''}`}>
+                    {editMode && (
+                      <td className="py-3 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(p.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            toggleSelectProperty(p.id);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+                        />
+                      </td>
+                    )}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center shrink-0">
+                          <Building2 size={15} className="text-[var(--text-muted)]" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{p.address}</p>
+                          <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{p.postcode}</p>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <Link to={`/properties/${property.id}`} className="group">
-                        <p className="text-sm font-semibold text-gray-900 group-hover:text-gray-600">{property.address}</p>
-                        <p className="text-xs text-gray-400">{property.postcode}</p>
-                      </Link>
+                    <td className="py-3 px-4 hidden md:table-cell">
+                      <span className="text-xs text-[var(--text-muted)]">{p.postcode}</span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{property.landlord_name}</td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm text-gray-700 capitalize">{property.property_type}</p>
-                      <p className="text-xs text-gray-400">{property.bedrooms} bed</p>
+                    <td className="py-3 px-4 hidden lg:table-cell">
+                      <span className="text-xs text-[var(--text-secondary)]">{p.landlord_name || '—'}</span>
                     </td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">£{property.rent_amount?.toLocaleString()}/mo</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border ${status.border} ${status.text} bg-white`}>
-                        {status.label}
+                    <td className="py-3 px-4 hidden lg:table-cell">
+                      <span className="text-xs text-[var(--text-secondary)]">{p.current_tenant || '—'}</span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusStyle(p.status)}`}>
+                        {statusLabel(p.status)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {property.current_tenant || <span className="text-gray-300">—</span>}
+                    <td className="py-3 px-4 text-right hidden sm:table-cell">
+                      <span className="text-sm font-semibold">£{p.rent_amount?.toLocaleString()}</span>
+                    </td>
+                    <td className="py-3 px-4 hidden md:table-cell">
+                      <span className="text-xs text-[var(--text-muted)] capitalize">{p.bedrooms} bed • {p.property_type}</span>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-4">
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
-              <ChevronLeft className="w-4 h-4" /> Previous
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-              <button key={page} onClick={() => setCurrentPage(page)}
-                className={`w-8 h-8 text-sm font-medium rounded-lg ${page === currentPage ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-                {page}
-              </button>
-            ))}
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
-              Next <ChevronRight className="w-4 h-4" />
-            </button>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
+        {/* Add Property Modal */}
+        {showAdd && <PropertyAddModal
+          landlords={landlords} form={form} setForm={setForm}
+          llDropOpen={llDropOpen} setLlDropOpen={setLlDropOpen}
+          llSearch={llSearch} setLlSearch={setLlSearch}
+          saving={saving}
+          onClose={() => { setShowAdd(false); resetForm(); }}
+          onSubmit={async () => {
+            setSaving(true);
+            try {
+              const res = await api.post('/api/properties', {
+                ...form,
+                landlord_id: Number(form.landlord_id),
+                bedrooms: Number(form.bedrooms),
+                rent_amount: Number(form.rent_amount) || 0,
+                has_gas: form.has_gas,
+              });
+              setShowAdd(false);
+              resetForm();
+              navigate(`/properties/${res.id}`);
+            } catch (e) { console.error(e); }
+            setSaving(false);
+          }}
+        />}
       </div>
+    </Layout>
+  );
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">Add Property</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Landlord *</label>
-                <select value={formData.landlord_id} onChange={e => setFormData({ ...formData, landlord_id: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-200 focus:outline-none" required>
-                  <option value="">Select landlord...</option>
-                  {landlords.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Address *</label>
-                <input type="text" value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-200 focus:outline-none" required />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Postcode *</label>
-                  <input type="text" value={formData.postcode} onChange={e => setFormData({ ...formData, postcode: e.target.value })}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-200 focus:outline-none" required />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Type</label>
-                  <select value={formData.property_type} onChange={e => setFormData({ ...formData, property_type: e.target.value })}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-200 focus:outline-none">
-                    <option value="house">House</option><option value="flat">Flat</option>
-                    <option value="bungalow">Bungalow</option><option value="studio">Studio</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Bedrooms</label>
-                  <input type="number" value={formData.bedrooms} onChange={e => setFormData({ ...formData, bedrooms: e.target.value })}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-200 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Rent (£/month) *</label>
-                  <input type="number" value={formData.rent_amount} onChange={e => setFormData({ ...formData, rent_amount: e.target.value })}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-200 focus:outline-none" required />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Notes</label>
-                <textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} rows={3}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-200 focus:outline-none" />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium">Cancel</button>
-                <button type="submit"
-                  className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm font-medium">Add Property</button>
-              </div>
-            </form>
+  function resetForm() {
+    setForm({ landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1', rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: false });
+    setLlSearch('');
+    setLlDropOpen(false);
+  }
+}
+
+function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen, llSearch, setLlSearch, saving, onClose, onSubmit, lockedLandlord }: {
+  landlords: LandlordOption[];
+  form: PropertyForm; setForm: (fn: (prev: PropertyForm) => PropertyForm) => void;
+  llDropOpen: boolean; setLlDropOpen: (v: boolean) => void;
+  llSearch: string; setLlSearch: (v: string) => void;
+  saving: boolean; onClose: () => void; onSubmit: () => void;
+  lockedLandlord?: { id: number; name: string };
+}) {
+  const [portfolioType, setPortfolioType] = useState<'internal' | 'external'>('internal');
+
+  // Find Fleming verandas landlord (internal portfolio)
+  const flemingLandlord = landlords.find(l => l.name.toLowerCase().includes('fleming'));
+
+  // Auto-populate Fleming verandas when My Portfolio is selected
+  useEffect(() => {
+    if (portfolioType === 'internal' && flemingLandlord) {
+      setForm((f: PropertyForm) => ({ ...f, landlord_id: String(flemingLandlord.id) }));
+    }
+  }, [portfolioType, flemingLandlord, setForm]);
+
+  const selectedLl = lockedLandlord || landlords.find(l => l.id === Number(form.landlord_id));
+  const isMyPortfolio = portfolioType === 'internal';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-lg space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Add Property</h2>
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+        </div>
+
+        {/* Portfolio Type Selector */}
+        <div>
+          <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Portfolio Type *</label>
+          <div className="flex items-center gap-0.5 bg-[var(--bg-input)] rounded-xl p-0.5 border border-[var(--border-input)]">
+            <button
+              type="button"
+              onClick={() => setPortfolioType('internal')}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                portfolioType === 'internal'
+                  ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+              }`}
+            >
+              My Portfolio
+            </button>
+            <button
+              type="button"
+              onClick={() => setPortfolioType('external')}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                portfolioType === 'external'
+                  ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+              }`}
+            >
+              My Client
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Landlord selector */}
+        {lockedLandlord || isMyPortfolio ? (
+          <div>
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Landlord</label>
+            <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] opacity-70">
+              {lockedLandlord ? lockedLandlord.name : 'Fleming Lettings'}
+            </div>
+          </div>
+        ) : (
+          <div className="relative">
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Landlord *</label>
+            <button type="button" onClick={() => setLlDropOpen(!llDropOpen)}
+              className="w-full flex items-center justify-between bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-left hover:border-[var(--accent-orange)]/40 transition-colors">
+              <span className={selectedLl ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}>
+                {selectedLl ? selectedLl.name : 'Select landlord...'}
+              </span>
+              <ChevronDown size={14} className="text-[var(--text-muted)]" />
+            </button>
+            {llDropOpen && (
+              <div className="absolute z-50 mt-1 w-full bg-[var(--bg-card)] border border-[var(--border-input)] rounded-xl shadow-2xl overflow-hidden">
+                <div className="p-2 border-b border-[var(--border-subtle)]">
+                  <div className="flex items-center gap-2 bg-[var(--bg-input)] rounded-lg px-3 py-2">
+                    <Search size={14} className="text-[var(--text-muted)]" />
+                    <input value={llSearch} onChange={e => setLlSearch(e.target.value)} placeholder="Search landlords..."
+                      className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none" autoFocus />
+                  </div>
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {landlords.filter(l => l.name.toLowerCase().includes(llSearch.toLowerCase())).map(l => (
+                    <button key={l.id} onClick={() => { setForm((f: PropertyForm) => ({ ...f, landlord_id: String(l.id) })); setLlDropOpen(false); setLlSearch(''); }}
+                      className="w-full text-left px-3 py-2.5 text-sm hover:bg-[var(--bg-hover)] transition-colors truncate text-[var(--text-secondary)]">
+                      {l.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="relative">
+          <AddressAutocomplete
+            label="Address *"
+            value={form.address}
+            onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, address: v }))}
+            onSelect={(place) => {
+              setForm((f: PropertyForm) => ({
+                ...f,
+                address: place.address,
+                postcode: place.postcode || f.postcode
+              }));
+            }}
+            placeholder="Start typing an address..."
+          />
+        </div>
+        <div>
+          <PostcodeAutocomplete
+            label="Postcode"
+            value={form.postcode}
+            onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, postcode: v }))}
+            onAddressSelect={(address: string) => setForm((f: PropertyForm) => ({ ...f, address: address }))}
+            placeholder="e.g. SW1A 1AA"
+            showDropdownOnAddress={true}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Select label="Type" value={form.property_type} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, property_type: v }))}
+            options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
+          <Input label="Bedrooms" value={form.bedrooms} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, bedrooms: v }))} placeholder="1" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Select label="Status *" value={form.status} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, status: v }))}
+            options={[{ value: 'tbc', label: 'TBC' }, { value: 'active', label: 'Active' }, { value: 'closed', label: 'Closed' }]} />
+          <Select label="Service Type" value={form.service_type} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, service_type: v }))}
+            options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.address || !form.status}>
+            {saving ? 'Creating...' : 'Create Property'}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

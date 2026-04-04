@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm i:*)",
+      "Bash(vercel --version)",
+      "Read(//Users/danyl/.npm-global/lib/node_modules/vercel/dist/**)",
+      "Bash(~/.npm-global/bin/vercel --version)",
+      "Bash(vercel whoami:*)",
+      "Bash(vercel --prod --yes)",
+      "Bash(vercel --prod --yes --scope danyls-projects-1551df91)"
+    ]
+  }
+}

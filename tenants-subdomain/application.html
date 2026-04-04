@@ -1,0 +1,1728 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant Application - Fleming Lettings</title>
+    <style>
+        @font-face { font-family: 'Lufga'; font-weight: 400; src: url('fonts/Lufga-Regular.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 500; src: url('fonts/Lufga-Medium.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 600; src: url('fonts/Lufga-SemiBold.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 700; src: url('fonts/Lufga-Bold.otf') format('opentype'); }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Lufga', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #25073B 0%, #DC006D 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 700px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #25073B 0%, #DC006D 100%);
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            height: 50px;
+            object-fit: contain;
+        }
+
+        .back-button {
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            font-weight: 500;
+            font-family: inherit;
+        }
+        .back-button:hover { background: rgba(255,255,255,0.3); }
+
+        /* Progress Bar */
+        .progress-container {
+            background: #f0f0f0;
+            height: 4px;
+        }
+        .progress-bar {
+            background: linear-gradient(90deg, #DC006D 0%, #25073B 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.4s ease;
+        }
+
+        /* Form Container */
+        .form-wrapper {
+            padding: 40px 40px 30px;
+        }
+
+        /* Steps */
+        .step {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+        .step.active { display: block; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .step h2 {
+            color: #25073B;
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .step p.step-description {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #555; }
+        p { font-size: 14px; line-height: 1.6; color: #666; margin-bottom: 12px; }
+
+        /* Deadline notice */
+        .deadline-notice {
+            background: rgba(220,0,109,0.08);
+            border: 1px solid rgba(220,0,109,0.2);
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .deadline-notice .icon {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        .deadline-notice p {
+            margin: 0;
+            font-size: 14px;
+            color: #25073B;
+            font-weight: 500;
+        }
+        .deadline-notice strong {
+            color: #DC006D;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin: 20px 0;
+        }
+        .summary-item {
+            background: rgba(220,0,109,0.08);
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+        }
+        .summary-item .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #999; margin-bottom: 4px; }
+        .summary-item .value { font-size: 20px; font-weight: 700; color: #DC006D; }
+
+        .property-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(220,0,109,0.08);
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #DC006D;
+            margin-bottom: 16px;
+        }
+
+        /* Input Groups */
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .two-col.three { grid-template-columns: 1fr 1fr 1fr; }
+        .full-width { grid-column: 1 / -1; }
+
+        label {
+            display: block;
+            color: #333;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        input, select, textarea, button {
+            font-family: 'Lufga', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="tel"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s;
+            background: white;
+            color: #333;
+            -webkit-appearance: none;
+        }
+
+        /* Custom Date Picker */
+        .date-picker-wrapper {
+            position: relative;
+        }
+        .date-picker-wrapper input {
+            cursor: pointer;
+            padding-right: 45px;
+        }
+        .date-picker-wrapper .calendar-icon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            color: #DC006D;
+            font-size: 18px;
+        }
+        .date-picker-dropdown {
+            position: fixed;
+            z-index: 1000;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 20px;
+            width: 320px;
+            display: none;
+            font-family: 'Lufga', sans-serif;
+        }
+        .date-picker-dropdown.open { display: block; }
+        .dp-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .dp-header-center {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .dp-month-btn, .dp-year-btn {
+            background: #f5f5f5;
+            border: none;
+            font-family: 'Lufga', sans-serif;
+            font-weight: 700;
+            font-size: 15px;
+            color: #DC006D;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .dp-year-btn { color: #25073B; }
+        .dp-month-btn:hover, .dp-year-btn:hover {
+            background: #fdf2f7;
+            color: #DC006D;
+            text-decoration: underline;
+        }
+        .dp-nav {
+            background: none;
+            border: 2px solid #e0e0e0;
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #25073B;
+            transition: all 0.2s;
+        }
+        .dp-nav:hover { border-color: #DC006D; color: #DC006D; }
+        .dp-weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            margin-bottom: 6px;
+        }
+        .dp-weekday {
+            text-align: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: #999;
+            padding: 6px 0;
+            text-transform: uppercase;
+        }
+        .dp-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+        .dp-day {
+            text-align: center;
+            padding: 10px 0;
+            font-size: 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.15s;
+            color: #333;
+            font-weight: 500;
+            border: none;
+            background: none;
+            font-family: 'Lufga', sans-serif;
+        }
+        .dp-day:hover { background: #fdf2f7; color: #DC006D; }
+        .dp-day.today { border: 2px solid #DC006D; }
+        .dp-day.selected {
+            background: linear-gradient(135deg, #DC006D 0%, #25073B 100%);
+            color: white;
+            font-weight: 700;
+        }
+        .dp-day.other-month { color: #ccc; }
+        .dp-day.disabled { color: #ddd; cursor: not-allowed; }
+        .dp-day.disabled:hover { background: none; }
+        .dp-footer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #f0f0f0;
+        }
+        .dp-footer button {
+            background: none;
+            border: none;
+            font-family: 'Lufga', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .dp-clear { color: #999; }
+        .dp-clear:hover { background: #f5f5f5; color: #666; }
+        .dp-today-btn { color: #DC006D; }
+        .dp-today-btn:hover { background: #fdf2f7; }
+        .dp-selector { display: none; }
+        .dp-selector.open { display: block; }
+        .dp-selector h4 {
+            color: #25073B;
+            font-size: 15px;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+        .dp-selector-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        .dp-selector-item {
+            padding: 10px;
+            text-align: center;
+            border-radius: 10px;
+            border: none;
+            background: none;
+            font-family: 'Lufga', sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.15s;
+            color: #333;
+            font-weight: 500;
+        }
+        .dp-selector-item:hover { background: #fdf2f7; color: #DC006D; }
+        .dp-selector-item.active {
+            background: linear-gradient(135deg, #DC006D 0%, #25073B 100%);
+            color: white;
+            font-weight: 700;
+        }
+        .dp-year-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .dp-year-grid::-webkit-scrollbar { width: 4px; }
+        .dp-year-grid::-webkit-scrollbar-thumb { background: #DC006D; border-radius: 2px; }
+        .dp-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 999;
+        }
+        .dp-overlay.open { display: block; }
+        @media (max-width: 768px) {
+            .date-picker-dropdown {
+                width: 100%;
+                top: auto !important;
+                bottom: 0;
+                left: 0 !important;
+                right: 0;
+                border-radius: 20px 20px 0 0;
+                padding: 25px 20px;
+                box-shadow: 0 -10px 40px rgba(0,0,0,0.2);
+            }
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #DC006D;
+            box-shadow: 0 0 0 3px rgba(220, 0, 109, 0.1);
+        }
+
+        textarea { resize: vertical; min-height: 100px; }
+
+        .pre-filled { background: #f0f0f0; color: #888; }
+
+        .input-group-editable {
+            position: relative;
+        }
+        .input-group-editable input {
+            padding-right: 44px;
+        }
+        .edit-toggle-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(2px);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 6px;
+            color: #888;
+            transition: color 0.2s, background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 44px;
+            min-height: 44px;
+        }
+        .edit-toggle-btn:hover {
+            color: #DC006D;
+            background: rgba(220, 0, 109, 0.08);
+        }
+        .edit-toggle-btn.editing {
+            color: #DC006D;
+        }
+
+        .section-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 28px 0 20px;
+        }
+        .section-divider .dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #DC006D;
+        }
+        .section-divider .line { flex: 1; height: 1px; background: #eee; }
+
+        .terms-box {
+            background: #f8f8f8;
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 13px;
+            line-height: 1.7;
+            color: #555;
+            margin-bottom: 20px;
+            border: 1px solid #eee;
+        }
+        .terms-box h4 { font-size: 14px; font-weight: 600; color: #333; margin: 16px 0 8px; }
+        .terms-box ul { padding-left: 20px; margin: 8px 0; }
+        .terms-box li { margin-bottom: 6px; }
+
+        .signature-area {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            background: #fafafa;
+            position: relative;
+            height: 150px;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        .signature-area.signed { border-color: #DC006D; border-style: solid; }
+        .signature-hint {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            color: #ccc;
+            pointer-events: none;
+        }
+        .signature-area.signed .signature-hint { display: none; }
+        .clear-sig {
+            position: absolute;
+            top: 8px; right: 8px;
+            background: #ff4444;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        /* Checkbox Styles */
+        .checkbox-group {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            margin-top: 2px;
+            cursor: pointer;
+            accent-color: #DC006D;
+            flex-shrink: 0;
+        }
+        .checkbox-group label,
+        .checkbox-group span {
+            margin: 0;
+            font-size: 14px;
+            color: #555;
+            font-weight: 400;
+            line-height: 1.5;
+            cursor: pointer;
+        }
+
+        /* Buttons */
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 40px;
+        }
+
+        .btn {
+            padding: 15px 40px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Lufga', sans-serif;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #DC006D 0%, #25073B 100%);
+            color: white;
+            flex: 1;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(220, 0, 109, 0.3);
+        }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #666;
+            border: 2px solid #e0e0e0;
+            padding: 15px 30px;
+        }
+        .btn-secondary:hover {
+            border-color: #DC006D;
+            color: #DC006D;
+        }
+
+        /* Success */
+        .success-icon {
+            width: 80px; height: 80px;
+            background: linear-gradient(135deg, #DC006D 0%, #25073B 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 30px;
+            font-size: 40px;
+            color: #fff;
+        }
+        .success-message {
+            text-align: center;
+        }
+
+        .error-text { color: #ef4444; font-size: 13px; margin-top: 4px; }
+        .loading { opacity: 0.6; pointer-events: none; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body { padding: 0; align-items: flex-start; }
+            .container { border-radius: 0; max-width: 100%; min-height: 100vh; }
+            .form-wrapper { padding: 30px 20px; }
+            .header { padding: 15px 20px; }
+            .logo { height: 40px; }
+            .back-button { font-size: 13px; padding: 6px 16px; }
+            .step h2 { font-size: 24px; margin-bottom: 12px; }
+            .step p.step-description { font-size: 14px; margin-bottom: 20px; }
+            .two-col, .two-col.three, .summary-grid { grid-template-columns: 1fr; }
+            .two-col { gap: 12px; }
+            .section-divider { margin: 20px 0 14px; }
+            .signature-area { height: 120px; }
+            .clear-sig { padding: 6px 14px; font-size: 12px; min-height: 36px; }
+            .btn { width: 100%; padding: 16px 20px; font-size: 16px; }
+            .button-group { flex-direction: column-reverse; gap: 12px; margin-top: 30px; }
+        }
+
+        @media (max-width: 480px) {
+            .form-wrapper { padding: 25px 15px; }
+            .header { padding: 12px 15px; }
+            .step h2 { font-size: 22px; }
+            .logo { height: 35px; }
+            .back-button { font-size: 12px; padding: 5px 12px; }
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            .btn, .back-button { min-height: 48px; }
+            input[type="text"], input[type="email"], input[type="tel"],
+            input[type="number"], select, textarea { min-height: 48px; }
+            .checkbox-group input[type="checkbox"] { width: 24px; height: 24px; }
+        }
+        /* Google Places autocomplete dropdown */
+        .pac-container { z-index: 10000 !important; font-family: 'Lufga', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        .pac-item { padding: 8px 12px; font-size: 14px; cursor: pointer; }
+        .pac-item:hover { background: #f5f5f5; }
+    </style>
+</head>
+<body>
+    <div class="container" id="app">
+        <!-- Header -->
+        <div class="header">
+            <img src="logo-white.png" alt="Fleming Lettings" class="logo" />
+            <a href="https://www.fleminglettings.co.uk" class="back-button">Back to Website</a>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-container">
+            <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading-state" class="form-wrapper" style="text-align:center; padding:48px 40px;">
+            <p style="color:#DC006D; font-weight:600;">Loading your application...</p>
+        </div>
+
+        <!-- Error -->
+        <div id="error-state" class="form-wrapper" style="display:none; text-align:center; padding:48px 40px;">
+            <h2 style="color:#ef4444; font-size:22px; margin-bottom:12px;">Unable to load form</h2>
+            <p id="error-message">This link may have expired or already been used.</p>
+        </div>
+
+        <!-- Already Submitted -->
+        <div id="completed-state" class="form-wrapper success-message" style="display:none; padding:48px 40px;">
+            <div class="success-icon">&#10003;</div>
+            <h2 style="color:#25073B; font-size:28px; margin-bottom:15px;">Already Submitted</h2>
+            <p style="color:#666;">This application has already been completed. Thank you!</p>
+        </div>
+
+        <!-- Form -->
+        <form id="application-form" style="display:none;" onsubmit="return false;">
+
+            <!-- STEP 1: Holding Deposit Terms -->
+            <div id="step-1" class="step active">
+                <div class="form-wrapper">
+                    <h2>Your tenancy application form</h2>
+                    <p class="step-description">Please review the information below and complete all sections.</p>
+
+                    <div class="deadline-notice">
+                        <span class="icon">&#9200;</span>
+                        <p>Please complete this form within <strong>14 days</strong> of receiving it. Failure to do so may result in the property being re-marketed.</p>
+                    </div>
+
+                    <div class="property-badge" id="property-badge">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        <span id="property-display">Loading...</span>
+                    </div>
+
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <div class="label">Monthly Rent</div>
+                            <div class="value" id="rent-display">-</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="label">Holding Deposit</div>
+                            <div class="value" id="holding-display">-</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="label">Security Deposit</div>
+                            <div class="value" id="security-display">-</div>
+                        </div>
+                    </div>
+
+                    <h3>Holding Deposit Terms</h3>
+                    <div class="terms-box">
+                        <h4>Advisory Notice Regarding Initial Holding Deposit and Reservation Terms</h4>
+                        <p>We are writing to provide you with important information regarding the reservation of a rental property and the payment of an initial holding deposit. This letter is for advisory purposes only and is intended to ensure that you understand your rights and obligations before proceeding.</p>
+                        <p>By paying an initial holding deposit, you are requesting that the property be reserved for you while pre-tenancy checks are carried out. The amount requested must not exceed one week's rent (calculated as 1/52 of the annual rent total).</p>
+                        <p>Please be aware that this payment is not a tenancy deposit and does not create a tenancy. Its purpose is to secure the property temporarily while referencing and administrative processes take place. It is not protected under a Tenancy Deposit Protection Scheme.</p>
+
+                        <h4>The Initial Holding Deposit may be retained if:</h4>
+                        <ul>
+                            <li>Any prospective tenant provides false or misleading information which affects the landlord's decision to let the property.</li>
+                            <li>A tenant fails a Right to Rent check and is not legally entitled to rent property in England.</li>
+                            <li>The tenant withdraws from the application.</li>
+                            <li>The tenant fails to take reasonable steps to enter into the tenancy agreement by the agreed deadline.</li>
+                        </ul>
+
+                        <h4>Full refunds will be issued if:</h4>
+                        <ul>
+                            <li>The landlord or agent withdraws the property from the market.</li>
+                            <li>The landlord does not proceed for reasons unrelated to the tenant(s).</li>
+                            <li>All parties take reasonable steps, but a tenancy agreement is not signed by the deadline.</li>
+                            <li>The tenant(s) provide accurate information, but the landlord declines to proceed.</li>
+                        </ul>
+
+                        <p>The deadline for all parties to sign the tenancy agreement is <strong>15 days</strong> from the date the Initial Holding Deposit is received, unless a different date is mutually agreed in writing.</p>
+
+                        <h4>Important Notes:</h4>
+                        <ul>
+                            <li>Either party may cancel the reservation at any time and in writing.</li>
+                            <li>If one proposed tenant cancels, this will be treated as cancellation on behalf of all proposed tenants.</li>
+                            <li>Entering into this agreement does <strong>not oblige</strong> either party to proceed with a tenancy.</li>
+                        </ul>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="button" class="btn btn-primary" onclick="goToStep(2)">
+                            I've Read the Terms &mdash; Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 2: Application Details -->
+            <div id="step-2" class="step" style="display:none;">
+                <div class="form-wrapper">
+                    <h2>Your Details</h2>
+                    <p class="step-description">Please check your pre-filled details and complete any missing information.</p>
+
+                    <div class="two-col">
+                        <div class="input-group input-group-editable">
+                            <label>First Name</label>
+                            <input type="text" id="f_first_name" class="pre-filled" readonly />
+                            <button type="button" class="edit-toggle-btn" onclick="toggleEdit(this)" aria-label="Edit first name">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </button>
+                        </div>
+                        <div class="input-group input-group-editable">
+                            <label>Last Name</label>
+                            <input type="text" id="f_last_name" class="pre-filled" readonly />
+                            <button type="button" class="edit-toggle-btn" onclick="toggleEdit(this)" aria-label="Edit last name">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </button>
+                        </div>
+                        <div class="input-group input-group-editable">
+                            <label>Email</label>
+                            <input type="email" id="f_email" class="pre-filled" readonly />
+                            <button type="button" class="edit-toggle-btn" onclick="toggleEdit(this)" aria-label="Edit email">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </button>
+                        </div>
+                        <div class="input-group input-group-editable">
+                            <label>Phone</label>
+                            <input type="tel" id="f_phone" class="pre-filled" readonly />
+                            <button type="button" class="edit-toggle-btn" onclick="toggleEdit(this)" aria-label="Edit phone">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </button>
+                        </div>
+                        <div class="input-group">
+                            <label>Date of Birth *</label>
+                            <div class="date-picker-wrapper">
+                                <input type="text" id="f_dob" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_dob')" readonly>
+                                <span class="calendar-icon">&#x1F4C5;</span>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>National Insurance Number *</label>
+                            <input type="text" id="f_ni" placeholder="e.g. QQ 12 34 56 C" required />
+                        </div>
+                    </div>
+
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">ADDRESS HISTORY</span><div class="line"></div></div>
+
+                    <div class="two-col">
+                        <div class="input-group full-width">
+                            <label>Current Address *</label>
+                            <input type="text" id="f_address" placeholder="Start typing an address..." required />
+                        </div>
+                        <div class="input-group">
+                            <label>Years at Current Address *</label>
+                            <input type="number" id="f_years_current" inputmode="numeric" min="0" max="50" required />
+                        </div>
+                        <div class="input-group" style="display:flex;align-items:center;">
+                            <button type="button" id="btn_add_prev_address" onclick="togglePrevAddress()" style="background:none;border:1px dashed #ccc;border-radius:8px;padding:10px 16px;color:#d4af37;font-size:14px;font-weight:500;cursor:pointer;width:100%;text-align:center;transition:border-color 0.2s,color 0.2s;" onmouseover="this.style.borderColor='#d4af37'" onmouseout="this.style.borderColor='#ccc'">+ Add a previous address</button>
+                        </div>
+                        <div class="input-group" id="prev-address-group" style="display:none;">
+                            <label>Previous Address</label>
+                            <input type="text" id="f_prev_address_1" placeholder="Enter your previous address" />
+                            <button type="button" onclick="togglePrevAddress()" style="background:none;border:none;color:#999;font-size:12px;cursor:pointer;margin-top:4px;padding:0;" onmouseover="this.style.color='#e74c3c'" onmouseout="this.style.color='#999'">✕ Remove</button>
+                        </div>
+                    </div>
+
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">EMPLOYMENT</span><div class="line"></div></div>
+
+                    <div class="input-group">
+                        <label>Employment Status *</label>
+                        <select id="f_employment_status" required onchange="toggleEmploymentFields()">
+                            <option value="">Select...</option>
+                            <option value="Employed">Employed</option>
+                            <option value="Self-Employed">Self-Employed</option>
+                            <option value="Student">Student</option>
+                            <option value="Retired">Retired</option>
+                            <option value="Unemployed">Unemployed</option>
+                        </select>
+                    </div>
+
+                    <!-- Employed fields -->
+                    <div id="employment-employed" style="display:none;">
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>Employer Name *</label>
+                                <input type="text" id="f_employer" />
+                            </div>
+                            <div class="input-group">
+                                <label>Employer Address</label>
+                                <input type="text" id="f_employer_address" placeholder="Employer's address" />
+                            </div>
+                            <div class="input-group">
+                                <label>Employer Contact Number</label>
+                                <input type="tel" id="f_employer_contact" inputmode="tel" placeholder="Employer's phone number" />
+                            </div>
+                            <div class="input-group">
+                                <label>Years of Service</label>
+                                <input type="text" id="f_years_of_service" inputmode="numeric" placeholder="e.g. 3" />
+                            </div>
+                            <div class="input-group">
+                                <label>Pay Frequency</label>
+                                <select id="f_pay_frequency">
+                                    <option value="">Select...</option>
+                                    <option value="Weekly">Weekly</option>
+                                    <option value="Fortnightly">Fortnightly</option>
+                                    <option value="Monthly">Monthly</option>
+                                    <option value="Annually">Annually</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Annual Salary (&pound;)</label>
+                                <input type="text" id="f_income" inputmode="numeric" placeholder="e.g. 35000" />
+                            </div>
+                            <div class="input-group">
+                                <label>Other Income (&pound;)</label>
+                                <input type="text" id="f_other_income" inputmode="numeric" placeholder="e.g. 5000" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Self-Employed fields -->
+                    <div id="employment-self-employed" style="display:none;">
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>Business / Employer Name *</label>
+                                <input type="text" id="f_employer_se" />
+                            </div>
+                            <div class="input-group">
+                                <label>Business Address</label>
+                                <input type="text" id="f_employer_address_se" placeholder="Business address" />
+                            </div>
+                            <div class="input-group">
+                                <label>Business Contact Number</label>
+                                <input type="tel" id="f_employer_contact_se" inputmode="tel" placeholder="Business phone number" />
+                            </div>
+                            <div class="input-group">
+                                <label>Years of Service</label>
+                                <input type="text" id="f_years_of_service_se" inputmode="numeric" placeholder="e.g. 5" />
+                            </div>
+                            <div class="input-group">
+                                <label>Pay Frequency</label>
+                                <select id="f_pay_frequency_se">
+                                    <option value="">Select...</option>
+                                    <option value="Weekly">Weekly</option>
+                                    <option value="Fortnightly">Fortnightly</option>
+                                    <option value="Monthly">Monthly</option>
+                                    <option value="Annually">Annually</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Annual Salary (&pound;)</label>
+                                <input type="text" id="f_income_se" inputmode="numeric" placeholder="e.g. 45000" />
+                            </div>
+                            <div class="input-group">
+                                <label>Other Income (&pound;)</label>
+                                <input type="text" id="f_other_income_se" inputmode="numeric" placeholder="e.g. 5000" />
+                            </div>
+                            <div class="input-group">
+                                <label>Tax Years Completed</label>
+                                <input type="text" id="f_tax_years" inputmode="numeric" placeholder="e.g. 3" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Unemployed / Student / Retired fields -->
+                    <div id="employment-other" style="display:none;">
+                        <div class="two-col">
+                            <div class="input-group">
+                                <label>Annual Income (&pound;)</label>
+                                <input type="text" id="f_income_other" inputmode="numeric" placeholder="e.g. 12000" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">REFERENCES</span><div class="line"></div></div>
+
+                    <h3>Employer Reference</h3>
+                    <div class="checkbox-group" style="margin-bottom:12px;">
+                        <input type="checkbox" id="f_has_employer_ref" onchange="toggleRefSection('employer')" />
+                        <span>Do you have an employer's reference?</span>
+                    </div>
+                    <div id="employer-ref-fields" style="display:none;">
+                        <div class="two-col">
+                            <div class="input-group"><label>Name / Department *</label><input type="text" id="f_emp_ref_name" /></div>
+                            <div class="input-group"><label>Contact Number *</label><input type="tel" id="f_emp_ref_phone" inputmode="tel" /></div>
+                        </div>
+                        <div class="two-col">
+                            <div class="input-group"><label>Email *</label><input type="email" id="f_emp_ref_email" /></div>
+                            <div class="input-group"><label>Employee ID / Reference</label><input type="text" id="f_emp_ref_employee_id" /></div>
+                        </div>
+                        <div class="checkbox-group" style="margin-top:8px;">
+                            <input type="checkbox" id="f_emp_ref_consent" />
+                            <span>Please confirm we can contact this reference *</span>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top:16px;">Previous Landlord Reference</h3>
+                    <div class="checkbox-group" style="margin-bottom:12px;">
+                        <input type="checkbox" id="f_has_landlord_ref" onchange="toggleRefSection('landlord')" />
+                        <span>Do you have a previous landlord reference?</span>
+                    </div>
+                    <div id="landlord-ref-fields" style="display:none;">
+                        <div class="two-col">
+                            <div class="input-group"><label>Name / Department *</label><input type="text" id="f_ll_ref_name" /></div>
+                            <div class="input-group"><label>Contact Number *</label><input type="tel" id="f_ll_ref_phone" inputmode="tel" /></div>
+                        </div>
+                        <div class="two-col">
+                            <div class="input-group"><label>Email *</label><input type="email" id="f_ll_ref_email" /></div>
+                            <div class="input-group"><label>Property Address / Reference Number</label><input type="text" id="f_ll_ref_property_address" /></div>
+                        </div>
+                        <div class="checkbox-group" style="margin-top:8px;">
+                            <input type="checkbox" id="f_ll_ref_consent" />
+                            <span>Please confirm we can contact this reference *</span>
+                        </div>
+                    </div>
+
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">BANK DETAILS</span><div class="line"></div></div>
+
+                    <div class="two-col three">
+                        <div class="input-group"><label>Bank Name *</label><input type="text" id="f_bank_name" required /></div>
+                        <div class="input-group"><label>Sort Code *</label><input type="text" id="f_bank_sort" inputmode="numeric" placeholder="00-00-00" required /></div>
+                        <div class="input-group"><label>Account Number *</label><input type="text" id="f_bank_account" inputmode="numeric" placeholder="00000000" required /></div>
+                    </div>
+
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">NEXT OF KIN 1</span><div class="line"></div></div>
+
+                    <div class="two-col">
+                        <div class="input-group"><label>Full Name *</label><input type="text" id="f_nok_name" required /></div>
+                        <div class="input-group"><label>Relationship *</label><input type="text" id="f_nok_rel" placeholder="e.g. Parent, Partner" required /></div>
+                    </div>
+                    <div class="two-col">
+                        <div class="input-group"><label>Address *</label><input type="text" id="f_nok_address" required /></div>
+                        <div class="input-group"><label>Contact Number *</label><input type="tel" id="f_nok_phone" inputmode="tel" required /></div>
+                    </div>
+
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">NEXT OF KIN 2</span><div class="line"></div></div>
+
+                    <div class="two-col">
+                        <div class="input-group"><label>Full Name *</label><input type="text" id="f_nok2_name" required /></div>
+                        <div class="input-group"><label>Relationship *</label><input type="text" id="f_nok2_rel" placeholder="e.g. Sibling, Friend" required /></div>
+                    </div>
+                    <div class="two-col">
+                        <div class="input-group"><label>Address *</label><input type="text" id="f_nok2_address" required /></div>
+                        <div class="input-group"><label>Contact Number *</label><input type="tel" id="f_nok2_phone" inputmode="tel" required /></div>
+                    </div>
+
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">GUARANTOR</span><div class="line"></div></div>
+
+                    <div class="checkbox-group" style="margin-bottom:12px;">
+                        <input type="checkbox" id="f_has_guarantor" onchange="toggleGuarantorSection()" />
+                        <span>Will you have a guarantor for this tenancy?</span>
+                    </div>
+                    <div id="guarantor-fields" style="display:none;">
+                        <div class="two-col">
+                            <div class="input-group"><label>Full Name *</label><input type="text" id="f_guarantor_name" /></div>
+                            <div class="input-group"><label>Contact Number *</label><input type="tel" id="f_guarantor_phone" inputmode="tel" /></div>
+                        </div>
+                        <div class="two-col">
+                            <div class="input-group"><label>Email *</label><input type="email" id="f_guarantor_email" /></div>
+                            <div class="input-group"><label>Address *</label><input type="text" id="f_guarantor_address" /></div>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="goToStep(1)">Back</button>
+                        <button type="button" class="btn btn-primary" onclick="goToStep(3)">Continue to Signature</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 3: Signature & Declaration -->
+            <div id="step-3" class="step" style="display:none;">
+                <div class="form-wrapper">
+                    <h2>Declaration & Signature</h2>
+                    <p class="step-description">Please review and agree to the declarations below, then sign to confirm.</p>
+
+                    <div class="input-group">
+                        <label>Is there any further information you would like to submit?</label>
+                        <textarea id="f_further_info" rows="4" placeholder="Optional — include any additional details you feel are relevant to your application"></textarea>
+                    </div>
+
+                    <h3 style="margin-top: 24px; margin-bottom: 12px; font-size: 16px; font-weight: 600;">Declarations</h3>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_holding_deposit" required />
+                        <span>I have read and agree to the <strong>Holding Deposit Terms and Conditions</strong> as outlined above. I understand that the holding deposit may be retained in accordance with the Tenant Fees Act 2019.</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_info_accurate" required />
+                        <span>I confirm that all information provided in this application is <strong>true, complete, and accurate</strong> to the best of my knowledge. I understand that providing false or misleading information may result in the forfeiture of my holding deposit.</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_gdpr" required />
+                        <span>I consent to the collection and processing of my personal data in accordance with the <strong>Privacy Notice</strong> provided by Fleming Lettings &amp; Developments UK Limited, and in compliance with the UK General Data Protection Regulation (GDPR).</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_enquiries" required />
+                        <span>I authorise Fleming Lettings &amp; Developments UK Limited to make enquiries with my <strong>employer, bank, previous landlord, and any referees</strong> named in this application to verify the information provided.</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_documents" required />
+                        <span>I consent to receive the <strong>How to Rent guide, Energy Performance Certificate (EPC), Gas Safety Certificate, and Electrical Installation Condition Report (EICR)</strong> via email.</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_credit_check" required />
+                        <span>I authorise <strong>Fleming Lettings &amp; Developments UK Limited</strong> to carry out a credit check and referencing process in connection with this tenancy application.</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_terms" required />
+                        <span>I have read and accept the <strong>Terms and Conditions</strong> of Fleming Lettings &amp; Developments UK Limited.</span>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f_decl_marketing" required />
+                        <span>I accept the <strong>marketing and communications policies</strong> of Fleming Lettings &amp; Developments UK Limited and consent to receiving communications regarding my tenancy and related services.</span>
+                    </div>
+
+                    <div class="input-group" style="margin-top: 24px;">
+                        <label>Your Signature *</label>
+                        <p style="font-size:12px; color:#999; margin-bottom:8px;">Draw your signature below using your mouse or finger</p>
+                    </div>
+                    <div class="signature-area" id="sig-pad">
+                        <canvas id="sig-canvas"></canvas>
+                        <span class="signature-hint">Sign here</span>
+                        <button type="button" class="clear-sig" onclick="clearSignature()" style="display:none;" id="clear-btn">Clear</button>
+                    </div>
+
+                    <div class="input-group" style="margin-top: 16px;">
+                        <label>Typed Full Name *</label>
+                        <input type="text" id="f_typed_name" placeholder="Type your full legal name" required />
+                    </div>
+
+                    <div class="input-group">
+                        <label>Date</label>
+                        <input type="text" id="f_date" readonly class="pre-filled" />
+                    </div>
+
+                    <p id="submit-error" class="error-text" style="display:none;"></p>
+
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="goToStep(2)">Back</button>
+                        <button type="button" class="btn btn-primary" onclick="submitForm()" id="submit-btn">
+                            Submit Application
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Success -->
+            <div id="step-success" class="step" style="display:none;">
+                <div class="form-wrapper success-message">
+                    <div class="success-icon">&#10003;</div>
+                    <h2 style="margin-bottom:15px;">Application Submitted</h2>
+                    <p style="color:#666; max-width:400px; margin:12px auto;">Thank you! Your application has been received. Our team will review it and be in touch shortly.</p>
+                    <p style="color:#999; font-size:13px; margin-top:16px;">You can close this window now.</p>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Date Picker Overlay (mobile) -->
+    <div class="dp-overlay" id="dpOverlay" onclick="closeDatePicker()"></div>
+
+    <!-- Date Picker Dropdown -->
+    <div class="date-picker-dropdown" id="datePicker">
+        <div class="dp-header">
+            <button type="button" class="dp-nav" onclick="dpPrevMonth()">&#x2039;</button>
+            <div class="dp-header-center">
+                <button type="button" class="dp-month-btn" id="dpMonthBtn" onclick="showMonthSelector()">January</button>
+                <button type="button" class="dp-year-btn" id="dpYearBtn" onclick="showYearSelector()">2026</button>
+            </div>
+            <button type="button" class="dp-nav" onclick="dpNextMonth()">&#x203A;</button>
+        </div>
+        <div class="dp-weekdays">
+            <span class="dp-weekday">Mo</span>
+            <span class="dp-weekday">Tu</span>
+            <span class="dp-weekday">We</span>
+            <span class="dp-weekday">Th</span>
+            <span class="dp-weekday">Fr</span>
+            <span class="dp-weekday">Sa</span>
+            <span class="dp-weekday">Su</span>
+        </div>
+        <div class="dp-days" id="dpDays"></div>
+        <div class="dp-footer">
+            <button type="button" class="dp-clear" onclick="dpClear()">Clear</button>
+            <button type="button" class="dp-today-btn" onclick="dpSelectToday()">Today</button>
+        </div>
+        <div class="dp-selector" id="monthSelector">
+            <h4>Select Month</h4>
+            <div class="dp-selector-grid" id="monthGrid"></div>
+        </div>
+        <div class="dp-selector" id="yearSelector">
+            <h4>Select Year</h4>
+            <div class="dp-year-grid" id="yearGrid"></div>
+        </div>
+    </div>
+
+    <script>
+        // API Configuration — override by setting window.FLEMING_API_URL before this script
+        const API_BASE_URL = window.FLEMING_API_URL || (
+            window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                ? 'http://localhost:3001'
+                : 'https://fleming-crm-api-production-7e58.up.railway.app'
+        );
+
+        // Google Places API key — set this to enable address autocomplete
+        // Same key as VITE_GOOGLE_PLACES_API_KEY used in the React frontend
+        const GOOGLE_PLACES_API_KEY = 'AIzaSyAolxeq3QhpLfGKY8oI47TLlVaTgz_gnyk';
+
+        let formData = null;
+        let hasSigned = false;
+        let sigCtx = null;
+        let isDrawing = false;
+
+        // ===== CUSTOM DATE PICKER =====
+        const dpMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        let dpYear, dpMonth, dpTargetInput, dpSelectedDate;
+
+        function openDatePicker(inputId) {
+            dpTargetInput = document.getElementById(inputId);
+            const existing = parseDDMMYYYY(dpTargetInput.value);
+            const now = new Date();
+
+            if (existing) {
+                dpYear = existing.getFullYear();
+                dpMonth = existing.getMonth();
+                dpSelectedDate = existing;
+            } else {
+                dpYear = now.getFullYear();
+                dpMonth = now.getMonth();
+                dpSelectedDate = null;
+            }
+
+            const picker = document.getElementById('datePicker');
+            document.getElementById('dpOverlay').classList.add('open');
+
+            if (window.innerWidth > 768) {
+                const rect = dpTargetInput.getBoundingClientRect();
+                const pickerHeight = 380;
+                const spaceBelow = window.innerHeight - rect.bottom;
+                picker.style.left = rect.left + 'px';
+                picker.style.width = Math.min(320, rect.width) + 'px';
+                if (spaceBelow >= pickerHeight) {
+                    picker.style.top = (rect.bottom + 5) + 'px';
+                } else {
+                    picker.style.top = (rect.top - pickerHeight - 5) + 'px';
+                }
+            }
+
+            renderCalendar();
+            picker.classList.add('open');
+        }
+
+        function closeDatePicker() {
+            document.getElementById('datePicker').classList.remove('open');
+            document.getElementById('dpOverlay').classList.remove('open');
+            document.getElementById('monthSelector').classList.remove('open');
+            document.getElementById('yearSelector').classList.remove('open');
+        }
+
+        function renderCalendar() {
+            document.getElementById('dpMonthBtn').textContent = dpMonths[dpMonth];
+            document.getElementById('dpYearBtn').textContent = dpYear;
+
+            const firstDay = new Date(dpYear, dpMonth, 1);
+            const lastDay = new Date(dpYear, dpMonth + 1, 0);
+            const startDay = (firstDay.getDay() + 6) % 7;
+            const daysInMonth = lastDay.getDate();
+            const prevLastDay = new Date(dpYear, dpMonth, 0).getDate();
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            let html = '';
+            for (let i = startDay - 1; i >= 0; i--) {
+                const day = prevLastDay - i;
+                html += `<button type="button" class="dp-day other-month" onclick="dpSelectDay(${dpYear},${dpMonth - 1},${day})">${day}</button>`;
+            }
+            for (let d = 1; d <= daysInMonth; d++) {
+                const date = new Date(dpYear, dpMonth, d);
+                const isToday = date.getTime() === today.getTime();
+                const isSelected = dpSelectedDate && date.getTime() === dpSelectedDate.getTime();
+                let cls = 'dp-day';
+                if (isToday) cls += ' today';
+                if (isSelected) cls += ' selected';
+                html += `<button type="button" class="${cls}" onclick="dpSelectDay(${dpYear},${dpMonth},${d})">${d}</button>`;
+            }
+            const totalCells = startDay + daysInMonth;
+            const remaining = (7 - (totalCells % 7)) % 7;
+            for (let d = 1; d <= remaining; d++) {
+                html += `<button type="button" class="dp-day other-month" onclick="dpSelectDay(${dpYear},${dpMonth + 1},${d})">${d}</button>`;
+            }
+            document.getElementById('dpDays').innerHTML = html;
+        }
+
+        function dpSelectDay(year, month, day) {
+            const date = new Date(year, month, day);
+            dpSelectedDate = date;
+            dpYear = date.getFullYear();
+            dpMonth = date.getMonth();
+            const dd = String(date.getDate()).padStart(2, '0');
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const yyyy = date.getFullYear();
+            dpTargetInput.value = `${dd}/${mm}/${yyyy}`;
+            dpTargetInput.dispatchEvent(new Event('input', { bubbles: true }));
+            closeDatePicker();
+        }
+
+        function dpPrevMonth() {
+            dpMonth--;
+            if (dpMonth < 0) { dpMonth = 11; dpYear--; }
+            renderCalendar();
+        }
+
+        function dpNextMonth() {
+            dpMonth++;
+            if (dpMonth > 11) { dpMonth = 0; dpYear++; }
+            renderCalendar();
+        }
+
+        function dpSelectToday() {
+            const now = new Date();
+            dpSelectDay(now.getFullYear(), now.getMonth(), now.getDate());
+        }
+
+        function dpClear() {
+            dpTargetInput.value = '';
+            dpSelectedDate = null;
+            closeDatePicker();
+        }
+
+        function hideDpContent() {
+            document.getElementById('dpDays').style.display = 'none';
+            document.querySelector('#datePicker .dp-footer').style.display = 'none';
+            document.querySelector('#datePicker .dp-weekdays').style.display = 'none';
+        }
+
+        function showDpContent() {
+            document.getElementById('dpDays').style.display = '';
+            document.querySelector('#datePicker .dp-footer').style.display = '';
+            document.querySelector('#datePicker .dp-weekdays').style.display = '';
+        }
+
+        function showMonthSelector() {
+            const grid = document.getElementById('monthGrid');
+            grid.innerHTML = dpMonths.map((m, i) =>
+                `<button type="button" class="dp-selector-item${i === dpMonth ? ' active' : ''}" onclick="selectMonth(${i})">${m.substring(0, 3)}</button>`
+            ).join('');
+            document.getElementById('monthSelector').classList.add('open');
+            document.getElementById('yearSelector').classList.remove('open');
+            hideDpContent();
+        }
+
+        function selectMonth(m) {
+            dpMonth = m;
+            document.getElementById('monthSelector').classList.remove('open');
+            showDpContent();
+            renderCalendar();
+        }
+
+        function showYearSelector() {
+            const grid = document.getElementById('yearGrid');
+            const currentYear = new Date().getFullYear();
+            let html = '';
+            for (let y = currentYear; y >= 1920; y--) {
+                html += `<button type="button" class="dp-selector-item${y === dpYear ? ' active' : ''}" onclick="selectYear(${y})">${y}</button>`;
+            }
+            grid.innerHTML = html;
+            document.getElementById('yearSelector').classList.add('open');
+            document.getElementById('monthSelector').classList.remove('open');
+            hideDpContent();
+            setTimeout(() => {
+                const active = grid.querySelector('.active');
+                if (active) active.scrollIntoView({ block: 'center' });
+            }, 50);
+        }
+
+        function selectYear(y) {
+            dpYear = y;
+            document.getElementById('yearSelector').classList.remove('open');
+            showDpContent();
+            renderCalendar();
+        }
+
+        function formatDateInput(input) {
+            let value = input.value.replace(/[^\d]/g, '');
+            if (value.length > 8) value = value.substring(0, 8);
+            if (value.length >= 5) {
+                value = value.substring(0, 2) + '/' + value.substring(2, 4) + '/' + value.substring(4);
+            } else if (value.length >= 3) {
+                value = value.substring(0, 2) + '/' + value.substring(2);
+            }
+            input.value = value;
+        }
+
+        function parseDDMMYYYY(dateStr) {
+            if (!dateStr) return null;
+            const parts = dateStr.split('/');
+            if (parts.length !== 3) return null;
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const year = parseInt(parts[2], 10);
+            if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+            return new Date(year, month, day);
+        }
+
+        function isoToDDMMYYYY(isoStr) {
+            if (!isoStr) return '';
+            // Handle YYYY-MM-DD format
+            const parts = isoStr.split('-');
+            if (parts.length === 3 && parts[0].length === 4) {
+                return parts[2] + '/' + parts[1] + '/' + parts[0];
+            }
+            // Already in DD/MM/YYYY or other format, return as-is
+            return isoStr;
+        }
+
+        document.addEventListener('click', function(e) {
+            const picker = document.getElementById('datePicker');
+            if (!picker.classList.contains('open')) return;
+            if (e.target.closest('.date-picker-dropdown') || e.target.closest('.date-picker-wrapper')) return;
+            closeDatePicker();
+        });
+
+        // Extract token from URL
+        const pathParts = window.location.pathname.split('/');
+        const token = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
+
+        // Progress bar
+        function updateProgress(step) {
+            const pct = Math.round(((step - 1) / 3) * 100);
+            document.getElementById('progress-bar').style.width = pct + '%';
+        }
+
+        // Load form data
+        async function loadForm() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/public/application-form/${token}`);
+                if (res.status === 410) {
+                    document.getElementById('loading-state').style.display = 'none';
+                    document.getElementById('completed-state').style.display = 'block';
+                    return;
+                }
+                if (!res.ok) throw new Error('Not found');
+                formData = await res.json();
+                populateForm();
+                document.getElementById('loading-state').style.display = 'none';
+                document.getElementById('application-form').style.display = 'block';
+                updateProgress(1);
+            } catch (err) {
+                document.getElementById('loading-state').style.display = 'none';
+                document.getElementById('error-state').style.display = 'block';
+            }
+        }
+
+        function toggleEmploymentFields() {
+            const status = document.getElementById('f_employment_status').value;
+            const employed = document.getElementById('employment-employed');
+            const selfEmployed = document.getElementById('employment-self-employed');
+            const other = document.getElementById('employment-other');
+            employed.style.display = 'none';
+            selfEmployed.style.display = 'none';
+            other.style.display = 'none';
+            if (status === 'Employed') {
+                employed.style.display = 'block';
+            } else if (status === 'Self-Employed') {
+                selfEmployed.style.display = 'block';
+            } else if (status === 'Student' || status === 'Retired' || status === 'Unemployed') {
+                other.style.display = 'block';
+            }
+        }
+
+        function togglePrevAddress() {
+            const btn = document.getElementById('btn_add_prev_address');
+            const group = document.getElementById('prev-address-group');
+            const isVisible = group.style.display !== 'none';
+            if (isVisible) {
+                group.style.display = 'none';
+                btn.parentElement.style.display = 'flex';
+                document.getElementById('f_prev_address_1').value = '';
+            } else {
+                group.style.display = 'block';
+                btn.parentElement.style.display = 'none';
+            }
+        }
+
+        function toggleRefSection(type) {
+            if (type === 'employer') {
+                const checked = document.getElementById('f_has_employer_ref').checked;
+                const fields = document.getElementById('employer-ref-fields');
+                fields.style.display = checked ? 'block' : 'none';
+                // Toggle required attributes
+                ['f_emp_ref_name', 'f_emp_ref_phone', 'f_emp_ref_email', 'f_emp_ref_consent'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (checked) el.setAttribute('required', ''); else el.removeAttribute('required');
+                });
+            } else {
+                const checked = document.getElementById('f_has_landlord_ref').checked;
+                const fields = document.getElementById('landlord-ref-fields');
+                fields.style.display = checked ? 'block' : 'none';
+                ['f_ll_ref_name', 'f_ll_ref_phone', 'f_ll_ref_email', 'f_ll_ref_consent'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (checked) el.setAttribute('required', ''); else el.removeAttribute('required');
+                });
+            }
+        }
+
+        function toggleGuarantorSection() {
+            const checked = document.getElementById('f_has_guarantor').checked;
+            const fields = document.getElementById('guarantor-fields');
+            fields.style.display = checked ? 'block' : 'none';
+            ['f_guarantor_name', 'f_guarantor_phone', 'f_guarantor_email', 'f_guarantor_address'].forEach(id => {
+                const el = document.getElementById(id);
+                if (checked) el.setAttribute('required', ''); else el.removeAttribute('required');
+            });
+        }
+
+        function toggleEdit(btn) {
+            const input = btn.parentElement.querySelector('input');
+            const isReadonly = input.hasAttribute('readonly');
+            if (isReadonly) {
+                input.removeAttribute('readonly');
+                input.classList.remove('pre-filled');
+                btn.classList.add('editing');
+                input.focus();
+            } else {
+                input.setAttribute('readonly', '');
+                input.classList.add('pre-filled');
+                btn.classList.remove('editing');
+            }
+        }
+
+        function populateForm() {
+            document.getElementById('f_first_name').value = formData.first_name_1 || '';
+            document.getElementById('f_last_name').value = formData.last_name_1 || '';
+            document.getElementById('f_email').value = formData.email_1 || '';
+            document.getElementById('f_phone').value = formData.phone_1 || '';
+            document.getElementById('f_dob').value = isoToDDMMYYYY(formData.date_of_birth_1);
+            document.getElementById('f_address').value = formData.current_address_1 || '';
+
+            const addr = [formData.property_address, formData.property_postcode].filter(Boolean).join(', ');
+            document.getElementById('property-display').textContent = addr || 'Property details pending';
+            document.getElementById('property-badge').style.display = addr ? 'inline-flex' : 'none';
+
+            const rent = formData.monthly_rent_agreed;
+            const holding = formData.holding_deposit_amount;
+            const security = formData.security_deposit_amount;
+            document.getElementById('rent-display').textContent = rent ? `\u00A3${Number(rent).toLocaleString()}` : '-';
+            document.getElementById('holding-display').textContent = holding ? `\u00A3${Number(holding).toLocaleString()}` : '-';
+            document.getElementById('security-display').textContent = security ? `\u00A3${Number(security).toLocaleString()}` : '-';
+
+            // Today's date
+            const today = new Date();
+            document.getElementById('f_date').value = today.toLocaleDateString('en-GB');
+        }
+
+        function goToStep(n) {
+            [1, 2, 3].forEach(s => {
+                const el = document.getElementById(`step-${s}`);
+                if (s === n) {
+                    el.style.display = 'block';
+                    el.classList.add('active');
+                } else {
+                    el.style.display = 'none';
+                    el.classList.remove('active');
+                }
+            });
+            updateProgress(n);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (n === 3) initSignature();
+        }
+
+        // Signature pad
+        function initSignature() {
+            const canvas = document.getElementById('sig-canvas');
+            const pad = document.getElementById('sig-pad');
+            canvas.width = pad.offsetWidth;
+            canvas.height = pad.offsetHeight;
+            sigCtx = canvas.getContext('2d');
+            sigCtx.strokeStyle = '#1a1a2e';
+            sigCtx.lineWidth = 2.5;
+            sigCtx.lineCap = 'round';
+            sigCtx.lineJoin = 'round';
+
+            const getPos = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const t = e.touches ? e.touches[0] : e;
+                return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+            };
+
+            const start = (e) => { isDrawing = true; const p = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); e.preventDefault(); };
+            const move = (e) => { if (!isDrawing) return; const p = getPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); hasSigned = true; pad.classList.add('signed'); document.getElementById('clear-btn').style.display = 'block'; e.preventDefault(); };
+            const end = () => { isDrawing = false; };
+
+            canvas.addEventListener('mousedown', start);
+            canvas.addEventListener('mousemove', move);
+            canvas.addEventListener('mouseup', end);
+            canvas.addEventListener('mouseleave', end);
+            canvas.addEventListener('touchstart', start, { passive: false });
+            canvas.addEventListener('touchmove', move, { passive: false });
+            canvas.addEventListener('touchend', end);
+        }
+
+        function clearSignature() {
+            const canvas = document.getElementById('sig-canvas');
+            sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+            hasSigned = false;
+            document.getElementById('sig-pad').classList.remove('signed');
+            document.getElementById('clear-btn').style.display = 'none';
+        }
+
+        async function submitForm() {
+            const errEl = document.getElementById('submit-error');
+            errEl.style.display = 'none';
+
+            // Validate all 8 declaration checkboxes
+            const declIds = [
+                'f_decl_holding_deposit', 'f_decl_info_accurate', 'f_decl_gdpr',
+                'f_decl_enquiries', 'f_decl_documents', 'f_decl_credit_check',
+                'f_decl_terms', 'f_decl_marketing'
+            ];
+            const allChecked = declIds.every(id => document.getElementById(id).checked);
+            if (!allChecked) {
+                errEl.textContent = 'Please agree to all declarations before submitting.';
+                errEl.style.display = 'block';
+                return;
+            }
+            if (!hasSigned) {
+                errEl.textContent = 'Please provide your signature.';
+                errEl.style.display = 'block';
+                return;
+            }
+            if (!document.getElementById('f_typed_name').value.trim()) {
+                errEl.textContent = 'Please type your full name.';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            const canvas = document.getElementById('sig-canvas');
+            const sigData = canvas.toDataURL('image/png');
+
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Submitting...';
+
+            try {
+                const empStatus = document.getElementById('f_employment_status').value;
+                const gv = (id) => document.getElementById(id)?.value || null;
+                const toNum = (id) => { const v = document.getElementById(id)?.value; return v ? Number(v) : null; };
+
+                const payload = {
+                    current_address_1: document.getElementById('f_address').value,
+                    date_of_birth_1: document.getElementById('f_dob').value,
+                    employment_status_1: document.getElementById('f_employment_status').value,
+                    employer_1: empStatus === 'Employed' ? gv('f_employer') : empStatus === 'Self-Employed' ? gv('f_employer_se') : null,
+                    income_1: empStatus === 'Employed' ? toNum('f_income') : empStatus === 'Self-Employed' ? toNum('f_income_se') : toNum('f_income_other'),
+                    app_employer_address: empStatus === 'Employed' ? gv('f_employer_address') : empStatus === 'Self-Employed' ? gv('f_employer_address_se') : null,
+                    app_employer_contact: empStatus === 'Employed' ? gv('f_employer_contact') : empStatus === 'Self-Employed' ? gv('f_employer_contact_se') : null,
+                    app_years_of_service: empStatus === 'Employed' ? gv('f_years_of_service') : empStatus === 'Self-Employed' ? gv('f_years_of_service_se') : null,
+                    app_pay_frequency: empStatus === 'Employed' ? gv('f_pay_frequency') : empStatus === 'Self-Employed' ? gv('f_pay_frequency_se') : null,
+                    app_other_income: empStatus === 'Employed' ? toNum('f_other_income') : empStatus === 'Self-Employed' ? toNum('f_other_income_se') : null,
+                    app_tax_years: empStatus === 'Self-Employed' ? gv('f_tax_years') : null,
+                    app_ni_number: document.getElementById('f_ni').value,
+                    app_previous_address_1: document.getElementById('f_prev_address_1').value,
+                    app_years_at_current: document.getElementById('f_years_current').value ? Number(document.getElementById('f_years_current').value) : null,
+                    app_has_employer_ref: document.getElementById('f_has_employer_ref').checked ? 1 : 0,
+                    app_employer_ref_name: document.getElementById('f_emp_ref_name').value,
+                    app_employer_ref_phone: document.getElementById('f_emp_ref_phone').value,
+                    app_employer_ref_email: document.getElementById('f_emp_ref_email').value,
+                    app_employer_ref_employee_id: document.getElementById('f_emp_ref_employee_id').value,
+                    app_employer_ref_consent: document.getElementById('f_emp_ref_consent').checked ? 1 : 0,
+                    app_has_landlord_ref: document.getElementById('f_has_landlord_ref').checked ? 1 : 0,
+                    app_landlord_ref_name: document.getElementById('f_ll_ref_name').value,
+                    app_landlord_ref_phone: document.getElementById('f_ll_ref_phone').value,
+                    app_landlord_ref_email: document.getElementById('f_ll_ref_email').value,
+                    app_landlord_ref_property_address: document.getElementById('f_ll_ref_property_address').value,
+                    app_landlord_ref_consent: document.getElementById('f_ll_ref_consent').checked ? 1 : 0,
+                    app_bank_name: document.getElementById('f_bank_name').value,
+                    app_bank_sort_code: document.getElementById('f_bank_sort').value,
+                    app_bank_account_number: document.getElementById('f_bank_account').value,
+                    app_next_of_kin_name: document.getElementById('f_nok_name').value,
+                    app_next_of_kin_phone: document.getElementById('f_nok_phone').value,
+                    app_next_of_kin_relationship: document.getElementById('f_nok_rel').value,
+                    app_next_of_kin_address: document.getElementById('f_nok_address').value,
+                    app_next_of_kin_2_name: document.getElementById('f_nok2_name').value,
+                    app_next_of_kin_2_phone: document.getElementById('f_nok2_phone').value,
+                    app_next_of_kin_2_relationship: document.getElementById('f_nok2_rel').value,
+                    app_next_of_kin_2_address: document.getElementById('f_nok2_address').value,
+                    app_guarantor_name: document.getElementById('f_guarantor_name').value || null,
+                    app_guarantor_phone: document.getElementById('f_guarantor_phone').value || null,
+                    app_guarantor_email: document.getElementById('f_guarantor_email').value || null,
+                    app_guarantor_address: document.getElementById('f_guarantor_address').value || null,
+                    app_further_info: document.getElementById('f_further_info').value || null,
+                    app_signature: sigData,
+                    app_declaration_agreed: true,
+                    app_decl_holding_deposit: document.getElementById('f_decl_holding_deposit').checked,
+                    app_decl_info_accurate: document.getElementById('f_decl_info_accurate').checked,
+                    app_decl_gdpr: document.getElementById('f_decl_gdpr').checked,
+                    app_decl_enquiries: document.getElementById('f_decl_enquiries').checked,
+                    app_decl_documents: document.getElementById('f_decl_documents').checked,
+                    app_decl_credit_check: document.getElementById('f_decl_credit_check').checked,
+                    app_decl_terms: document.getElementById('f_decl_terms').checked,
+                    app_decl_marketing: document.getElementById('f_decl_marketing').checked,
+                };
+
+                const res = await fetch(`${API_BASE_URL}/api/public/application-form/${token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Submission failed');
+                }
+
+                // Show success
+                [1, 2, 3].forEach(s => document.getElementById(`step-${s}`).style.display = 'none');
+                document.getElementById('step-success').style.display = 'block';
+                updateProgress(4);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (err) {
+                errEl.textContent = err.message || 'Something went wrong. Please try again.';
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Submit Application';
+            }
+        }
+
+        // ===== GOOGLE PLACES AUTOCOMPLETE =====
+        const ADDRESS_FIELD_IDS = [
+            'f_address',
+            'f_prev_address_1',
+            'f_employer_address',
+            'f_employer_address_se',
+            'f_nok_address',
+            'f_nok2_address',
+            'f_guarantor_address'
+        ];
+
+        function loadGooglePlaces() {
+            if (!GOOGLE_PLACES_API_KEY) return;
+            const script = document.createElement('script');
+            script.src = 'https://maps.googleapis.com/maps/api/js?key=' + GOOGLE_PLACES_API_KEY + '&libraries=places&callback=initAddressAutocomplete';
+            script.async = true;
+            script.defer = true;
+            document.head.appendChild(script);
+        }
+
+        function initAddressAutocomplete() {
+            ADDRESS_FIELD_IDS.forEach(function(id) {
+                const input = document.getElementById(id);
+                if (!input) return;
+                const ac = new google.maps.places.Autocomplete(input, {
+                    componentRestrictions: { country: 'gb' },
+                    fields: ['address_components', 'formatted_address'],
+                    types: ['address']
+                });
+                ac.addListener('place_changed', function() {
+                    const place = ac.getPlace();
+                    if (place && place.formatted_address) {
+                        input.value = place.formatted_address;
+                    }
+                });
+            });
+        }
+
+        // Init
+        loadGooglePlaces();
+        if (token && token !== 'onboarding') {
+            loadForm();
+        } else {
+            document.getElementById('loading-state').style.display = 'none';
+            document.getElementById('error-state').style.display = 'block';
+            document.getElementById('error-message').textContent = 'Invalid link. Please use the link from your email.';
+        }
+    </script>
+</body>
+</html>

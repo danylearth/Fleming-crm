@@ -21,11 +21,13 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function usePortfolio() {
     return useContext(PortfolioContext);
 }
 
 // Helper: filter any array by landlord_type field
+// eslint-disable-next-line react-refresh/only-export-components
 export function filterByPortfolio<T extends { landlord_type?: string }>(items: T[], filter: PortfolioFilter): T[] {
     if (filter === 'all') return items;
     return items.filter(item => item.landlord_type === filter);

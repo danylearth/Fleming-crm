@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/onboarding/:token", "destination": "/application.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

@@ -45,11 +45,22 @@ export async function initDb() {
         name TEXT NOT NULL,
         email TEXT,
         phone TEXT,
+        alt_email TEXT,
+        date_of_birth DATE,
+        home_address TEXT,
         address TEXT,
-        notes TEXT,
         company_number TEXT,
+        entity_type TEXT DEFAULT 'individual' CHECK(entity_type IN ('individual', 'company', 'trust')),
+        marketing_post INTEGER DEFAULT 0,
+        marketing_email INTEGER DEFAULT 0,
+        marketing_phone INTEGER DEFAULT 0,
+        marketing_sms INTEGER DEFAULT 0,
+        kyc_completed INTEGER DEFAULT 0,
         landlord_type TEXT DEFAULT 'external' CHECK(landlord_type IN ('internal', 'external')),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        referral_source TEXT,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
       -- DIRECTORS (Company Directors/Contact Persons)
@@ -62,6 +73,7 @@ export async function initDb() {
         date_of_birth DATE,
         role TEXT,
         kyc_completed INTEGER DEFAULT 0,
+        archived INTEGER DEFAULT 0,
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -114,6 +126,7 @@ export async function initDb() {
         status TEXT DEFAULT 'new' CHECK(status IN ('new', 'viewing_booked', 'awaiting_response', 'onboarding', 'rejected', 'converted')),
         follow_up_date DATE,
         viewing_date DATE,
+        viewing_with TEXT,
         linked_property_id INTEGER,
         notes TEXT,
         rejection_reason TEXT,
@@ -150,10 +163,11 @@ export async function initDb() {
         epc_expiry_date DATE,
         has_gas INTEGER DEFAULT 0,
         gas_safety_expiry_date DATE,
-        status TEXT DEFAULT 'available' CHECK(status IN ('available', 'let', 'maintenance')),
+        status TEXT DEFAULT 'to_let' CHECK(status IN ('to_let', 'available', 'let', 'maintenance')),
         onboarded_date DATE,
         notes TEXT,
         amenities TEXT,
+        tenant_id INTEGER,
         image_url TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -195,6 +209,12 @@ export async function initDb() {
         nok_relationship TEXT,
         nok_phone TEXT,
         nok_email TEXT,
+        nok_address TEXT,
+        nok_2_name TEXT,
+        nok_2_relationship TEXT,
+        nok_2_phone TEXT,
+        nok_2_email TEXT,
+        nok_2_address TEXT,
         kyc_completed_1 INTEGER DEFAULT 0,
         kyc_completed_2 INTEGER DEFAULT 0,
         guarantor_required INTEGER DEFAULT 0,
@@ -280,12 +300,12 @@ export async function initDb() {
         description TEXT,
         priority TEXT DEFAULT 'medium' CHECK(priority IN ('low', 'medium', 'high')),
         status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'archived')),
-        assigned_to INTEGER REFERENCES users(id),
-        entity_type TEXT CHECK(entity_type IN ('property', 'tenant', 'landlord', 'enquiry', 'maintenance', 'general', NULL)),
+        assigned_to TEXT,
+        entity_type TEXT CHECK(entity_type IN ('property', 'tenant', 'landlord', 'enquiry', 'tenant_enquiry', 'landlord_bdm', 'maintenance', 'general', NULL)),
         entity_id INTEGER,
         due_date DATE,
         follow_up_date DATE,
-        task_type TEXT CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', NULL)),
+        task_type TEXT CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', 'viewing', NULL)),
         notes TEXT,
         completed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -303,7 +323,31 @@ export async function initDb() {
         mime_type TEXT,
         size INTEGER,
         uploaded_by INTEGER REFERENCES users(id),
-        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        applicant_number INTEGER DEFAULT 1
+      );
+
+      -- PROPERTY EXPENSES
+      CREATE TABLE IF NOT EXISTS property_expenses (
+        id SERIAL PRIMARY KEY,
+        property_id INTEGER NOT NULL REFERENCES properties(id),
+        description TEXT NOT NULL,
+        amount NUMERIC(10,2) NOT NULL,
+        category TEXT NOT NULL DEFAULT 'other',
+        expense_date DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- TRANSACTIONS
+      CREATE TABLE IF NOT EXISTS transactions (
+        id SERIAL PRIMARY KEY,
+        tenancy_id INTEGER NOT NULL REFERENCES tenancies(id),
+        type TEXT NOT NULL CHECK(type IN ('rent_due', 'payment', 'deposit', 'fee', 'refund')),
+        amount NUMERIC(10,2) NOT NULL,
+        description TEXT,
+        date DATE NOT NULL,
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
       -- PROPERTY VIEWINGS
@@ -323,9 +367,47 @@ export async function initDb() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- SMS MESSAGES
+      CREATE TABLE IF NOT EXISTS sms_messages (
+        id SERIAL PRIMARY KEY,
+        enquiry_id INTEGER REFERENCES tenant_enquiries(id),
+        to_phone TEXT NOT NULL,
+        from_phone TEXT,
+        message_body TEXT NOT NULL,
+        direction TEXT DEFAULT 'outbound',
+        status TEXT DEFAULT 'queued',
+        twilio_sid TEXT,
+        error_message TEXT,
+        sent_by INTEGER REFERENCES users(id),
+        sent_by_email TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- EMAIL MESSAGES (delivery tracking via Resend webhooks)
+      CREATE TABLE IF NOT EXISTS email_messages (
+        id SERIAL PRIMARY KEY,
+        resend_id TEXT,
+        entity_type TEXT,
+        entity_id INTEGER,
+        to_email TEXT NOT NULL,
+        from_email TEXT,
+        subject TEXT,
+        template TEXT,
+        status TEXT DEFAULT 'sent',
+        sent_by INTEGER REFERENCES users(id),
+        sent_by_email TEXT,
+        opened_at TIMESTAMP,
+        clicked_at TIMESTAMP,
+        bounced_at TIMESTAMP,
+        error_message TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Create indexes
       CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
       CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
+      CREATE INDEX IF NOT EXISTS idx_email_messages_resend_id ON email_messages(resend_id);
+      CREATE INDEX IF NOT EXISTS idx_email_messages_entity ON email_messages(entity_type, entity_id);
       CREATE INDEX IF NOT EXISTS idx_properties_landlord ON properties(landlord_id);
       CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(status);
       CREATE INDEX IF NOT EXISTS idx_tenants_property ON tenants(property_id);
@@ -343,21 +425,107 @@ export async function initDb() {
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS deposit_scheme TEXT;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS authority_to_contact INTEGER DEFAULT 0;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS proof_of_income INTEGER DEFAULT 0;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_address TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_name TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_relationship TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_phone TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_email TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_address TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `);
 
-    // Update properties status constraint to new values
+    // Sprint 5: Onboarding & application form fields
     await client.query(`
       DO $$ BEGIN
-        -- Update existing data to new status values
-        UPDATE properties SET status = 'to_let' WHERE status = 'available';
-        UPDATE properties SET status = 'full_management' WHERE status = 'maintenance';
-        UPDATE properties SET status = 'let_agreed' WHERE status = 'let';
-        -- Drop old constraint and add new one
-        ALTER TABLE properties DROP CONSTRAINT IF EXISTS properties_status_check;
-        ALTER TABLE properties ADD CONSTRAINT properties_status_check
-          CHECK(status IN ('to_let', 'let_agreed', 'full_management', 'rent_collection'));
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS holding_deposit_requested INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS holding_deposit_received INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS holding_deposit_amount REAL;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS security_deposit_amount REAL;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS monthly_rent_agreed REAL;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_token TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_sent INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_completed INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS onboarding_email_sent_at TIMESTAMP;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_ni_number TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_previous_address_1 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_previous_address_2 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_years_at_current INTEGER;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_years_at_previous INTEGER;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_landlord_ref_name TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_landlord_ref_phone TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_landlord_ref_email TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_employer_ref_name TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_employer_ref_phone TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_employer_ref_email TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_bank_name TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_bank_sort_code TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_bank_account_number TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_name TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_phone TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_relationship TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_address TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_2_name TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_2_phone TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_2_relationship TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_next_of_kin_2_address TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_signature TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_signed_at TIMESTAMP;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_declaration_agreed INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS holding_deposit_received_date TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS holding_deposit_received_amount REAL;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS id_primary_verified_1 INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS id_secondary_verified_1 INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS id_primary_verified_2 INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS id_secondary_verified_2 INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS bank_statements_received INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS source_of_funds_verified INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS employment_check_completed INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_employer_address TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_employer_contact TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_years_of_service TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_pay_frequency TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_other_income REAL;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_tax_years TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS credit_check_completed INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS credit_score TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS credit_check_date TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS onboarding_step INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_has_employer_ref INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_employer_ref_employee_id TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_employer_ref_consent INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_has_landlord_ref INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_landlord_ref_property_address TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_landlord_ref_consent INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_further_info TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_holding_deposit INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_info_accurate INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_gdpr INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_enquiries INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_documents INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_credit_check INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_terms INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_decl_marketing INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_guarantor_name TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_guarantor_phone TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_guarantor_email TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_guarantor_address TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Sprint 4: Add assigned_to to property_viewings
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE property_viewings ADD COLUMN IF NOT EXISTS assigned_to TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Sprint 6: Add applicant_number to documents for joint applicant support
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE documents ADD COLUMN IF NOT EXISTS applicant_number INTEGER DEFAULT 1;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `);
@@ -425,18 +593,17 @@ export async function initDb() {
       console.log(`[Migration] Extracted company numbers from ${landlordsWithCompanyInNotes.rows.length} landlord notes.`);
     }
 
-    // Add landlord_type column to landlords table if it doesn't exist
-    const landlordTypeCheck = await client.query(`
+    // Add tenant_id and image_url columns to properties table
+    const tenantIdCheck = await client.query(`
       SELECT column_name FROM information_schema.columns
-      WHERE table_name = 'landlords' AND column_name = 'landlord_type'
+      WHERE table_name = 'properties' AND column_name = 'tenant_id'
     `);
-    if (landlordTypeCheck.rows.length === 0) {
-      console.log('[Migration] Adding landlord_type column to landlords...');
-      await client.query(`ALTER TABLE landlords ADD COLUMN landlord_type TEXT DEFAULT 'external' CHECK(landlord_type IN ('internal', 'external'))`);
-      console.log('[Migration] landlord_type column added successfully.');
+    if (tenantIdCheck.rows.length === 0) {
+      console.log('[Migration] Adding tenant_id column to properties...');
+      await client.query(`ALTER TABLE properties ADD COLUMN tenant_id INTEGER REFERENCES tenants(id)`);
+      console.log('[Migration] tenant_id column added successfully.');
     }
 
-    // Add image_url column to properties table if it doesn't exist
     const imageUrlCheck = await client.query(`
       SELECT column_name FROM information_schema.columns
       WHERE table_name = 'properties' AND column_name = 'image_url'
@@ -446,6 +613,156 @@ export async function initDb() {
       await client.query(`ALTER TABLE properties ADD COLUMN image_url TEXT`);
       console.log('[Migration] image_url column added successfully.');
     }
+
+    // Fix properties status CHECK constraint to include 'to_let'
+    try {
+      console.log('[Migration] Updating properties status constraint to include "to_let"...');
+      await client.query(`ALTER TABLE properties DROP CONSTRAINT IF EXISTS properties_status_check`);
+      await client.query(`
+        ALTER TABLE properties
+        ADD CONSTRAINT properties_status_check
+        CHECK (status IN ('to_let', 'available', 'let', 'maintenance'))
+      `);
+      await client.query(`ALTER TABLE properties ALTER COLUMN status SET DEFAULT 'to_let'`);
+      console.log('[Migration] Properties status constraint updated successfully.');
+    } catch (err) {
+      console.log('[Migration] Status constraint may already be updated:', err);
+    }
+
+    // Add missing columns to landlords table
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS alt_email TEXT;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS home_address TEXT;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS entity_type TEXT DEFAULT 'individual';
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS marketing_post INTEGER DEFAULT 0;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS marketing_email INTEGER DEFAULT 0;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS marketing_phone INTEGER DEFAULT 0;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS marketing_sms INTEGER DEFAULT 0;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS kyc_completed INTEGER DEFAULT 0;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS landlord_type TEXT DEFAULT 'external';
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS referral_source TEXT;
+        ALTER TABLE landlords ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Add viewing_with column to tenant_enquiries if missing
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS viewing_with TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Add new form fields to tenant_enquiries
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS nationality_1 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS postcode_1 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS years_at_address_1 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS contract_type_1 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS nationality_2 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS contract_type_2 TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS preferred_tenancy_type TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS preferred_property_type TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS preferred_bedrooms TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS preferred_parking TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS max_rent REAL;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS marketing_preferences TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS joint_partner_id INTEGER REFERENCES tenant_enquiries(id);
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Migrate existing joint records: split _2 fields into separate linked enquiry records
+    await client.query(`
+      DO $$
+      DECLARE
+        rec RECORD;
+        new_id INTEGER;
+      BEGIN
+        FOR rec IN
+          SELECT * FROM tenant_enquiries
+          WHERE is_joint_application = 1
+            AND first_name_2 IS NOT NULL
+            AND first_name_2 != ''
+            AND joint_partner_id IS NULL
+        LOOP
+          INSERT INTO tenant_enquiries (
+            title_1, first_name_1, last_name_1, email_1, phone_1, date_of_birth_1,
+            current_address_1, employment_status_1, employer_1, income_1,
+            nationality_1, contract_type_1,
+            kyc_completed_1, id_primary_verified_1, id_secondary_verified_1,
+            is_joint_application, joint_partner_id,
+            linked_property_id, status, follow_up_date, viewing_date, viewing_with,
+            notes, rejection_reason, source,
+            holding_deposit_requested, holding_deposit_received, holding_deposit_amount,
+            security_deposit_amount, monthly_rent_agreed,
+            preferred_tenancy_type, preferred_property_type, preferred_bedrooms,
+            preferred_parking, max_rent,
+            created_at, updated_at
+          ) VALUES (
+            rec.title_2, rec.first_name_2, rec.last_name_2, rec.email_2, rec.phone_2, rec.date_of_birth_2,
+            rec.current_address_2, rec.employment_status_2, rec.employer_2, rec.income_2,
+            rec.nationality_2, rec.contract_type_2,
+            rec.kyc_completed_2, rec.id_primary_verified_2, rec.id_secondary_verified_2,
+            1, rec.id,
+            rec.linked_property_id, rec.status, rec.follow_up_date, rec.viewing_date, rec.viewing_with,
+            rec.notes, rec.rejection_reason, rec.source,
+            rec.holding_deposit_requested, rec.holding_deposit_received, rec.holding_deposit_amount,
+            rec.security_deposit_amount, rec.monthly_rent_agreed,
+            rec.preferred_tenancy_type, rec.preferred_property_type, rec.preferred_bedrooms,
+            rec.preferred_parking, rec.max_rent,
+            rec.created_at, CURRENT_TIMESTAMP
+          ) RETURNING id INTO new_id;
+
+          UPDATE tenant_enquiries SET joint_partner_id = new_id WHERE id = rec.id;
+        END LOOP;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Add archived column to directors if missing
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE directors ADD COLUMN IF NOT EXISTS archived INTEGER DEFAULT 0;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Fix tasks table: drop FK on assigned_to, change to TEXT, fix CHECK constraints
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_assigned_to_fkey;
+        ALTER TABLE tasks ALTER COLUMN assigned_to TYPE TEXT USING assigned_to::TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+    await client.query(`
+      ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_entity_type_check;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tasks ADD CONSTRAINT tasks_entity_type_check CHECK(entity_type IN ('property', 'tenant', 'landlord', 'enquiry', 'tenant_enquiry', 'landlord_bdm', 'maintenance', 'general', NULL));
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+    await client.query(`
+      ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_task_type_check;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tasks ADD CONSTRAINT tasks_task_type_check CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', 'viewing', NULL));
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
+    // Fix audit_log action CHECK constraint to include all actions
+    await client.query(`
+      ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_action_check;
+    `);
 
     // Run inventory migration
     await runInventoryMigration(pool);

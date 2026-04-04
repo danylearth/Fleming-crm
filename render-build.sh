@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== Building backend only (API) ==="
-cd backend
+echo "=== Building frontend ==="
+cd frontend
 npm install
-# tsc emits JS despite type errors (noEmitOnError: false in tsconfig.render.json)
-# We allow non-zero exit from tsc but verify the output exists
+VITE_API_URL="" npx vite build
+cd ..
+
+echo "=== Building backend ==="
+cd backend
+npm install --include=optional
+npm rebuild sharp
 npx tsc -p tsconfig.render.json || true
 
 if [ ! -f dist/index-pg.js ]; then
@@ -13,5 +18,4 @@ if [ ! -f dist/index-pg.js ]; then
   exit 1
 fi
 
-echo "=== Backend build complete ==="
-echo "Note: Frontend should be deployed separately (e.g., to Vercel)"
+echo "=== Build complete ==="

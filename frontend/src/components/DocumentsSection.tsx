@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Upload, FileText, Trash2, Download, X, AlertCircle } from 'lucide-react';
 
 interface Document {
@@ -27,21 +27,21 @@ export default function DocumentsSection({ entityType, entityId, title }: Props)
   const fileInputRef = useRef<HTMLInputElement>(null);
   const token = localStorage.getItem('token');
 
-  useEffect(() => { fetchDocuments(); fetchDocTypes(); }, [entityType, entityId]);
-
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     try {
       const res = await fetch(`/api/documents/${entityType}/${entityId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) setDocuments(await res.json());
-    } catch {} finally { setLoading(false); }
-  };
+    } catch { /* Silently ignore */ } finally { setLoading(false); }
+  }, [entityType, entityId, token]);
 
-  const fetchDocTypes = async () => {
+  const fetchDocTypes = useCallback(async () => {
     try {
       const res = await fetch(`/api/documents/types/${entityType}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) { const types = await res.json(); setDocTypes(types); if (types.length > 0) setSelectedType(types[0]); }
-    } catch {}
-  };
+    } catch { /* Silently ignore */ }
+  }, [entityType, token]);
+
+  useEffect(() => { fetchDocuments(); fetchDocTypes(); }, [fetchDocuments, fetchDocTypes]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -59,7 +59,7 @@ export default function DocumentsSection({ entityType, entityId, title }: Props)
 
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this document?')) return;
-    try { const res = await fetch(`/api/documents/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); if (res.ok) fetchDocuments(); } catch {}
+    try { const res = await fetch(`/api/documents/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); if (res.ok) fetchDocuments(); } catch { /* Silently ignore */ }
   };
 
   const handleDownload = (id: number) => { window.open(`/api/documents/download/${id}?token=${token}`, '_blank'); };

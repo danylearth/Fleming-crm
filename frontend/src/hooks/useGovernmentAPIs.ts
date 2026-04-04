@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api`;
 
 interface LandRegistryResult {
   address: string;
@@ -46,9 +46,9 @@ interface CompanyResult {
 
 interface CompanyDetails extends CompanyResult {
   jurisdiction?: string;
-  registered_office_address?: any;
-  accounts?: any;
-  confirmation_statement?: any;
+  registered_office_address?: Record<string, string>;
+  accounts?: Record<string, string>;
+  confirmation_statement?: Record<string, string>;
   sic_codes?: string[];
   has_insolvency_history?: boolean;
   has_charges?: boolean;
@@ -82,8 +82,8 @@ export function useGovernmentAPIs() {
 
       const data = await response.json();
       return data;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
       return [];
     } finally {
       setLoading(false);
@@ -107,8 +107,8 @@ export function useGovernmentAPIs() {
 
       const data = await response.json();
       return data;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
       return null;
     } finally {
       setLoading(false);
@@ -133,8 +133,8 @@ export function useGovernmentAPIs() {
 
       const data = await response.json();
       return data.result || [];
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
       return [];
     } finally {
       setLoading(false);
@@ -158,8 +158,8 @@ export function useGovernmentAPIs() {
 
       const data = await response.json();
       return data;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
       return [];
     } finally {
       setLoading(false);
@@ -183,8 +183,8 @@ export function useGovernmentAPIs() {
 
       const data = await response.json();
       return data;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
       return null;
     } finally {
       setLoading(false);
@@ -192,7 +192,7 @@ export function useGovernmentAPIs() {
   };
 
   // EPC Lookup (existing API)
-  const lookupEPC = async (postcode: string): Promise<any[]> => {
+  const lookupEPC = async (postcode: string): Promise<Record<string, unknown>[]> => {
     setLoading(true);
     setError(null);
     try {
@@ -208,8 +208,8 @@ export function useGovernmentAPIs() {
 
       const data = await response.json();
       return data;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
       return [];
     } finally {
       setLoading(false);

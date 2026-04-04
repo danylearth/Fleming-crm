@@ -45,7 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         .finally(() => setLoading(false));
     } else {
-      setLoading(false);
+      // No token present - immediately mark as not loading
+      queueMicrotask(() => setLoading(false));
     }
   }, [token]);
 
@@ -88,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within AuthProvider');

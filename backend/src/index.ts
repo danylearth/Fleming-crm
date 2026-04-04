@@ -10,6 +10,9 @@ import db from './db';
 import { generateToken, authMiddleware, AuthRequest, requireRole } from './auth';
 import aiRouter from './ai/chat';
 import { startScheduler } from './scheduler';
+import { validateTwilioWebhook, normalizeUkPhone as normalizePhone } from './sms';
+import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,10 +46,34 @@ const upload = multer({
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    if (req.originalUrl === '/api/email/webhook') {
+      req.rawBody = buf.toString();
+    }
+  }
+}));
+app.use(express.urlencoded({ extended: false }));
 
 // Serve static files from frontend build
 app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+
+// Rate limiters for public (unauthenticated) endpoints
+const publicSubmitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many submissions from this IP, please try again later' },
+});
+
+const publicReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests from this IP, please try again later' },
+});
 
 // ============ AUDIT LOGGING ============
 
@@ -857,20 +884,22 @@ app.post('/api/landlords-bdm/:id/convert', authMiddleware, (req: AuthRequest, re
   try {
     const prospect = db.prepare('SELECT * FROM landlords_bdm WHERE id = ?').get(req.params.id) as any;
     if (!prospect) return res.status(404).json({ error: 'Prospect not found' });
+    if (prospect.status === 'onboarded') return res.status(400).json({ error: 'Prospect already converted' });
 
     const { landlord_type } = req.body || {};
 
     // Create landlord
     const result = db.prepare(`
-      INSERT INTO landlords (name, email, phone, home_address, notes, landlord_type)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(prospect.name, prospect.email, prospect.phone, prospect.address, prospect.notes, landlord_type || 'external');
+      INSERT INTO landlords (name, email, phone, home_address, notes, landlord_type, referral_source)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(prospect.name, prospect.email, prospect.phone, prospect.address, prospect.notes, landlord_type || 'external', prospect.source);
 
     // Update BDM status
     db.prepare("UPDATE landlords_bdm SET status = 'onboarded', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
       .run(req.params.id);
 
-    logAudit(req.user?.id, req.user?.email, 'update', 'landlord_bdm', parseInt(req.params.id), { converted_to: result.lastInsertRowid });
+    logAudit(req.user?.id, req.user?.email, 'create', 'landlord', Number(result.lastInsertRowid), { converted_from_bdm: parseInt(req.params.id) });
+    logAudit(req.user?.id, req.user?.email, 'update', 'landlord_bdm', parseInt(req.params.id), { converted_to_landlord: result.lastInsertRowid });
     res.json({ landlord_id: result.lastInsertRowid });
   } catch (err) {
     res.status(500).json({ error: 'Failed to convert prospect' });
@@ -898,10 +927,42 @@ app.post('/api/landlords-bdm/bulk-delete', authMiddleware, (req: AuthRequest, re
   }
 });
 
+// PUBLIC ENDPOINT - Companies House search (for landlord enquiry form)
+app.get('/api/public/companies-house/search', publicReadLimiter, async (req, res) => {
+  try {
+    const query = (req.query.query as string || '').trim();
+    if (!query || query.length < 3) return res.status(400).json({ error: 'Query must be at least 3 characters' });
+
+    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
+    if (!apiKey) {
+      return res.status(501).json({ error: 'Companies House API key not configured' });
+    }
+
+    const url = `https://api.company-information.service.gov.uk/search/companies?q=${encodeURIComponent(query)}&items_per_page=10`;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(apiKey + ':').toString('base64')}`,
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Companies House API error' });
+    }
+
+    const data = await response.json();
+    // Return in the format the landlord form expects
+    res.json(data);
+  } catch (err) {
+    console.error('Public Companies House search error:', err);
+    res.status(500).json({ error: 'Failed to search Companies House' });
+  }
+});
+
 // ============ TENANT ENQUIRIES ============
 
 // PUBLIC ENDPOINT - Get available properties for tenant enquiry form
-app.get('/api/public/properties', (req, res) => {
+app.get('/api/public/properties', publicReadLimiter, (req, res) => {
   try {
     const properties = db.prepare(`
       SELECT id, address, postcode, property_type, bedrooms, rent_amount, status
@@ -916,9 +977,135 @@ app.get('/api/public/properties', (req, res) => {
   }
 });
 
+// PUBLIC ENDPOINT - Check for duplicate enquiries (no auth)
+app.get('/api/public/check-duplicates', publicReadLimiter, (req, res) => {
+  try {
+    const { email, phone } = req.query;
+    if (!email && !phone) {
+      return res.json({ duplicates: [] });
+    }
+    const duplicates: any[] = [];
+
+    if (email) {
+      const emailMatches = db.prepare(
+        `SELECT id, first_name_1, last_name_1, 'tenant_enquiry' as source, 'email' as match_type
+         FROM tenant_enquiries WHERE email_1 = ? AND created_at > datetime('now', '-24 hours')`
+      ).all(email);
+      duplicates.push(...emailMatches);
+    }
+
+    if (phone) {
+      const phoneMatches = db.prepare(
+        `SELECT id, first_name_1, last_name_1, 'tenant_enquiry' as source, 'phone' as match_type
+         FROM tenant_enquiries WHERE phone_1 = ? AND created_at > datetime('now', '-24 hours')`
+      ).all(phone);
+      duplicates.push(...phoneMatches);
+    }
+
+    res.json({ duplicates });
+  } catch (err) {
+    console.error('Error checking duplicates:', err);
+    res.json({ duplicates: [] }); // Fail open
+  }
+});
+
+// ============ PUBLIC APPLICATION FORM (DocuSign-lite) ============
+
+app.get('/api/public/application-form/:token', publicReadLimiter, (req, res) => {
+  try {
+    const enquiry = db.prepare(`
+      SELECT te.*, p.address as property_address, p.postcode as property_postcode, p.rent_amount
+      FROM tenant_enquiries te
+      LEFT JOIN properties p ON p.id = te.linked_property_id
+      WHERE te.application_form_token = ?
+    `).get(req.params.token) as any;
+    if (!enquiry) return res.status(404).json({ error: 'Form not found or link expired' });
+    if (enquiry.application_form_completed) return res.status(410).json({ error: 'This form has already been submitted', completed: true });
+    res.json({
+      first_name_1: enquiry.first_name_1, last_name_1: enquiry.last_name_1,
+      email_1: enquiry.email_1, phone_1: enquiry.phone_1, date_of_birth_1: enquiry.date_of_birth_1,
+      current_address_1: enquiry.current_address_1,
+      is_joint_application: enquiry.is_joint_application,
+      first_name_2: enquiry.first_name_2, last_name_2: enquiry.last_name_2,
+      email_2: enquiry.email_2, phone_2: enquiry.phone_2,
+      property_address: enquiry.property_address, property_postcode: enquiry.property_postcode,
+      monthly_rent_agreed: enquiry.monthly_rent_agreed, holding_deposit_amount: enquiry.holding_deposit_amount,
+      security_deposit_amount: enquiry.security_deposit_amount,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load form' });
+  }
+});
+
+app.post('/api/public/application-form/:token', publicSubmitLimiter, (req, res) => {
+  try {
+    const enquiry = db.prepare('SELECT id, application_form_completed FROM tenant_enquiries WHERE application_form_token = ?').get(req.params.token) as any;
+    if (!enquiry) return res.status(404).json({ error: 'Form not found' });
+    if (enquiry.application_form_completed) return res.status(410).json({ error: 'Already submitted' });
+
+    const d = req.body;
+    db.prepare(`
+      UPDATE tenant_enquiries SET
+        app_ni_number=?, app_previous_address_1=?, app_previous_address_2=?,
+        app_years_at_current=?, app_years_at_previous=?,
+        app_has_landlord_ref=?, app_landlord_ref_name=?, app_landlord_ref_phone=?, app_landlord_ref_email=?,
+        app_landlord_ref_property_address=?, app_landlord_ref_consent=?,
+        app_has_employer_ref=?, app_employer_ref_name=?, app_employer_ref_phone=?, app_employer_ref_email=?,
+        app_employer_ref_employee_id=?, app_employer_ref_consent=?,
+        app_bank_name=?, app_bank_sort_code=?, app_bank_account_number=?,
+        app_next_of_kin_name=?, app_next_of_kin_phone=?, app_next_of_kin_relationship=?, app_next_of_kin_address=?,
+        app_next_of_kin_2_name=?, app_next_of_kin_2_phone=?, app_next_of_kin_2_relationship=?, app_next_of_kin_2_address=?,
+        app_signature=?, app_signed_at=CURRENT_TIMESTAMP, app_declaration_agreed=?,
+        application_form_completed=1,
+        current_address_1=?,
+        date_of_birth_1=?,
+        employer_1=?,
+        income_1=?,
+        employment_status_1=?,
+        app_employer_address=?, app_employer_contact=?,
+        app_years_of_service=?, app_pay_frequency=?,
+        app_other_income=?, app_tax_years=?,
+        app_further_info=?,
+        app_decl_holding_deposit=?, app_decl_info_accurate=?, app_decl_gdpr=?,
+        app_decl_enquiries=?, app_decl_documents=?, app_decl_credit_check=?,
+        app_decl_terms=?, app_decl_marketing=?,
+        app_guarantor_name=?, app_guarantor_phone=?, app_guarantor_email=?, app_guarantor_address=?
+      WHERE application_form_token=?
+    `).run(
+      d.app_ni_number || null, d.app_previous_address_1 || null, d.app_previous_address_2 || null,
+      d.app_years_at_current || null, d.app_years_at_previous || null,
+      d.app_has_landlord_ref ? 1 : 0, d.app_landlord_ref_name || null, d.app_landlord_ref_phone || null, d.app_landlord_ref_email || null,
+      d.app_landlord_ref_property_address || null, d.app_landlord_ref_consent ? 1 : 0,
+      d.app_has_employer_ref ? 1 : 0, d.app_employer_ref_name || null, d.app_employer_ref_phone || null, d.app_employer_ref_email || null,
+      d.app_employer_ref_employee_id || null, d.app_employer_ref_consent ? 1 : 0,
+      d.app_bank_name || null, d.app_bank_sort_code || null, d.app_bank_account_number || null,
+      d.app_next_of_kin_name || null, d.app_next_of_kin_phone || null, d.app_next_of_kin_relationship || null, d.app_next_of_kin_address || null,
+      d.app_next_of_kin_2_name || null, d.app_next_of_kin_2_phone || null, d.app_next_of_kin_2_relationship || null, d.app_next_of_kin_2_address || null,
+      d.app_signature || null, d.app_declaration_agreed ? 1 : 0,
+      d.current_address_1 || null, d.date_of_birth_1 || null, d.employer_1 || null,
+      d.income_1 || null, d.employment_status_1 || null,
+      d.app_employer_address || null, d.app_employer_contact || null,
+      d.app_years_of_service || null, d.app_pay_frequency || null,
+      d.app_other_income || null, d.app_tax_years || null,
+      d.app_further_info || null,
+      d.app_decl_holding_deposit ? 1 : 0, d.app_decl_info_accurate ? 1 : 0, d.app_decl_gdpr ? 1 : 0,
+      d.app_decl_enquiries ? 1 : 0, d.app_decl_documents ? 1 : 0, d.app_decl_credit_check ? 1 : 0,
+      d.app_decl_terms ? 1 : 0, d.app_decl_marketing ? 1 : 0,
+      d.app_guarantor_name || null, d.app_guarantor_phone || null, d.app_guarantor_email || null, d.app_guarantor_address || null,
+      req.params.token,
+    );
+
+    logAudit(null, 'tenant-self-service', 'update', 'tenant_enquiry', enquiry.id, { action: 'application_form_completed' });
+    res.json({ success: true, message: 'Application submitted successfully' });
+  } catch (err) {
+    console.error('Error submitting application form:', err);
+    res.status(500).json({ error: 'Failed to submit form' });
+  }
+});
+
 // PUBLIC ENDPOINT - No authentication required
 // This endpoint receives submissions from the Fleming Lettings public landlord enquiry form
-app.post('/api/public/landlord-enquiries', async (req, res) => {
+app.post('/api/public/landlord-enquiries', publicSubmitLimiter, async (req, res) => {
   try {
     const {
       // Registration type
@@ -966,9 +1153,14 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
       epcCertificate,
       eicrCertificate,
       gasCertificate,
+      // Company details (if Limited Company)
+      company_name,
+      company_number,
+      company_address,
       // Additional
       additionalNotes,
-      marketingConsent
+      marketingConsent,
+      marketing_preferences
     } = req.body;
 
     // Validation
@@ -1019,6 +1211,14 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
     notes += `Nationality: ${nationality}\n`;
     notes += `Contact: ${email} | ${phone}\n\n`;
 
+    if (registration_type === 'Limited Company' && (company_name || company_number)) {
+      notes += `=== COMPANY DETAILS ===\n`;
+      notes += `Company Name: ${company_name || 'N/A'}\n`;
+      notes += `Company Number: ${company_number || 'N/A'}\n`;
+      if (company_address) notes += `Registered Address: ${company_address}\n`;
+      notes += `\n`;
+    }
+
     if (is_joint) {
       notes += `=== JOINT APPLICANT ===\n`;
       notes += `Name: ${firstName2} ${surname2}\n`;
@@ -1041,28 +1241,32 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
 
     if (alreadyLet === 'Yes') {
       notes += `=== CURRENT TENANCY ===\n`;
-      notes += `Tenancy Type: ${tenancyType}\n`;
-      notes += `Current Management: ${currentManagement}\n`;
-      notes += `Length of Let: ${lengthOfLet} months\n`;
-      notes += `Monthly Rental Income: £${monthlyRentalIncome}\n`;
-      notes += `Considering Rent Increase: ${consideringRentIncrease}\n`;
-      if (consideringRentIncrease === 'Yes' && newRentAmount) {
-        notes += `New Rent Amount: £${newRentAmount}\n`;
+      if (tenancyType) notes += `Tenancy Type: ${tenancyType}\n`;
+      if (currentManagement) notes += `Current Management: ${currentManagement}\n`;
+      if (lengthOfLet) notes += `Length of Let: ${lengthOfLet} months\n`;
+      if (monthlyRentalIncome) notes += `Monthly Rental Income: £${monthlyRentalIncome}\n`;
+      if (consideringRentIncrease) {
+        notes += `Considering Rent Increase: ${consideringRentIncrease}\n`;
+        if (consideringRentIncrease === 'Yes' && newRentAmount) {
+          notes += `New Rent Amount: £${newRentAmount}\n`;
+        }
       }
       notes += `\n`;
     }
 
-    notes += `=== TENANT SOURCING ===\n`;
-    notes += `Looking for New Tenant: ${lookingForNewTenant}\n`;
-    if (lookingForNewTenant === 'Yes' && newTenantReason) {
-      notes += `Reason: ${newTenantReason}\n`;
+    if (lookingForNewTenant) {
+      notes += `=== TENANT SOURCING ===\n`;
+      notes += `Looking for New Tenant: ${lookingForNewTenant}\n`;
+      if (lookingForNewTenant === 'Yes' && newTenantReason) {
+        notes += `Reason: ${newTenantReason}\n`;
+      }
+      notes += `\n`;
     }
-    notes += `\n`;
 
     notes += `=== COMPLIANCE CERTIFICATES ===\n`;
-    notes += `EPC: ${epcCertificate}\n`;
-    notes += `EICR: ${eicrCertificate}\n`;
-    notes += `Gas Safety: ${gasCertificate}\n\n`;
+    notes += `EPC: ${epcCertificate || 'Not provided'}\n`;
+    notes += `EICR: ${eicrCertificate || 'Not provided'}\n`;
+    notes += `Gas Safety: ${gasCertificate || 'Not provided'}\n\n`;
 
     if (additionalNotes) {
       notes += `=== ADDITIONAL NOTES ===\n`;
@@ -1070,7 +1274,7 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
     }
 
     notes += `=== MARKETING ===\n`;
-    notes += `Marketing Consent: ${marketingConsent === 'on' ? 'Yes' : 'No'}\n`;
+    notes += `Marketing Preferences: ${marketing_preferences || (marketingConsent === 'on' ? 'Yes' : 'None')}\n`;
 
     // Get client IP for audit
     const client_ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -1111,7 +1315,7 @@ app.post('/api/public/landlord-enquiries', async (req, res) => {
 
 // PUBLIC ENDPOINT - No authentication required
 // This endpoint receives submissions from the Fleming Lettings public tenant enquiry form
-app.post('/api/tenant-enquiries/public', async (req, res) => {
+app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) => {
   try {
     const {
       // Registration type
@@ -1152,7 +1356,13 @@ app.post('/api/tenant-enquiries/public', async (req, res) => {
       rent_min,
       rent_max,
       // Property selection
-      property_id
+      property_id,
+      // New fields from updated form
+      contract_type,
+      contract_type2,
+      additional_notes,
+      marketing_preferences,
+      has_property_interest
     } = req.body;
 
     // Validation
@@ -1193,70 +1403,72 @@ app.post('/api/tenant-enquiries/public', async (req, res) => {
     // Get client IP for audit
     const client_ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-    // Insert into database
-    const result = db.prepare(`
-      INSERT INTO tenant_enquiries (
-        first_name_1, last_name_1, email_1, phone_1, current_address_1, postcode_1,
-        years_at_address_1, date_of_birth_1, nationality_1, employment_status_1,
-        job_title_1, annual_salary_1, income_1,
-        is_joint_application,
-        first_name_2, last_name_2, email_2, phone_2, current_address_2, postcode_2,
-        years_at_address_2, date_of_birth_2, nationality_2, employment_status_2,
-        job_title_2, annual_salary_2, income_2,
-        preferred_tenancy_type, reason_for_renting, property_type, bedrooms,
-        parking_required, monthly_rent_budget,
-        linked_property_id, form_submission_ip, form_version, status, created_at
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
-      )
-    `).run(
-      // Applicant 1
-      FirstName,
-      Surname,
-      form_email,
-      contactNumber,
-      address || null,
-      Postcode || null,
-      yearofaddress || null,
-      dob || null,
-      Nationality || null,
-      EmploymentStatus || null,
-      job_title || null,
-      AnnualSalary ? parseFloat(AnnualSalary) : null,
-      AnnualSalary ? parseFloat(AnnualSalary) : null, // income_1 (same as annual_salary)
-      // Joint
-      is_joint,
-      // Applicant 2
-      FirstName2 || null,
-      Surname2 || null,
-      form_email2 || null,
-      contactNumber2 || null,
-      address2 || null,
-      Postcode2 || null,
-      yearofaddress2 || null,
-      dob2 || null,
-      Nationality2 || null,
-      EmploymentStatus2 || null,
-      job_title2 || null,
-      AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
-      AnnualSalary2 ? parseFloat(AnnualSalary2) : null, // income_2
-      // Property requirements
-      tenancylookingfor || null,
-      reasonforrenting || null,
-      typeofproperty || null,
-      noofbedrooms ? parseInt(noofbedrooms) : null,
-      roadparking || null,
-      rent_max ? parseFloat(rent_max) : null,
-      // Property linking
-      property_id ? parseInt(property_id) : null,
-      // Metadata
-      client_ip,
-      'v1',
-      'new'
-    );
+    // Only store user's additional notes - structured data goes into proper columns
+    let notes = '';
+    if (additional_notes) {
+      notes = additional_notes;
+    }
+    if (marketing_preferences) {
+      notes += (notes ? '\n\n' : '') + `Marketing preferences: ${marketing_preferences}`;
+    }
+
+    // Map form fields to database columns (matching PG schema)
+    const data: Record<string, any> = {
+      first_name_1: FirstName,
+      last_name_1: Surname,
+      email_1: form_email,
+      phone_1: contactNumber,
+      current_address_1: address || null,
+      postcode_1: Postcode || null,
+      years_at_address_1: yearofaddress || null,
+      nationality_1: Nationality || null,
+      date_of_birth_1: dob || null,
+      employment_status_1: EmploymentStatus || null,
+      employer_1: job_title || null,
+      income_1: AnnualSalary ? parseFloat(AnnualSalary) : null,
+      contract_type_1: contract_type || null,
+      is_joint_application: is_joint,
+      first_name_2: FirstName2 || null,
+      last_name_2: Surname2 || null,
+      email_2: form_email2 || null,
+      phone_2: contactNumber2 || null,
+      current_address_2: address2 || null,
+      postcode_2: Postcode2 || null,
+      years_at_address_2: yearofaddress2 || null,
+      date_of_birth_2: dob2 || null,
+      nationality_2: Nationality2 || null,
+      employment_status_2: EmploymentStatus2 || null,
+      employer_2: job_title2 || null,
+      income_2: AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
+      contract_type_2: contract_type2 || null,
+      preferred_tenancy_type: tenancylookingfor || null,
+      preferred_property_type: typeofproperty || null,
+      preferred_bedrooms: noofbedrooms || null,
+      preferred_parking: roadparking || null,
+      max_rent: rent_max ? parseFloat(rent_max) : null,
+      marketing_preferences: marketing_preferences || null,
+      linked_property_id: property_id ? parseInt(property_id) : null,
+      notes: notes || null,
+      form_submission_ip: client_ip,
+      form_version: 'v1',
+      status: 'new'
+    };
+
+    // Build dynamic INSERT (skip null/undefined/empty values)
+    const cols: string[] = [];
+    const placeholders: string[] = [];
+    const values: any[] = [];
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== null && value !== undefined && value !== '') {
+        cols.push(key);
+        placeholders.push('?');
+        values.push(value);
+      }
+    }
+
+    const result = db.prepare(
+      `INSERT INTO tenant_enquiries (${cols.join(', ')}) VALUES (${placeholders.join(', ')})`
+    ).run(...values);
 
     const enquiryId = result.lastInsertRowid;
 
@@ -1281,6 +1493,30 @@ app.post('/api/tenant-enquiries/public', async (req, res) => {
       success: false,
       error: 'An error occurred while submitting your enquiry. Please try again or contact us directly.'
     });
+  }
+});
+
+// PUBLIC ENDPOINT - Upload documents for a tenant enquiry (no auth)
+app.post('/api/public/tenant-enquiries/:id/documents', publicSubmitLimiter, upload.array('documents', 10), (req, res) => {
+  try {
+    const enquiryId = req.params.id;
+    const enquiry = db.prepare('SELECT id FROM tenant_enquiries WHERE id = ?').get(enquiryId);
+    if (!enquiry) {
+      return res.status(404).json({ error: 'Enquiry not found' });
+    }
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+    for (const file of files) {
+      db.prepare(
+        'INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run('tenant_enquiry', enquiryId, 'supporting_document', file.filename, file.originalname, file.mimetype, file.size, 'public_form');
+    }
+    res.json({ success: true, message: `${files.length} document(s) uploaded` });
+  } catch (err) {
+    console.error('Public document upload error:', err);
+    res.status(500).json({ error: 'Failed to upload document' });
   }
 });
 
@@ -1364,32 +1600,23 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
     const data = req.body;
     const enquiryId = parseInt(req.params.id);
 
-    // Get current enquiry to check for status change
-    const currentEnquiry = db.prepare('SELECT status, first_name_1, last_name_1 FROM tenant_enquiries WHERE id = ?').get(enquiryId) as any;
+    // Get current enquiry to check for status and onboarding field changes
+    const currentEnquiry = db.prepare('SELECT * FROM tenant_enquiries WHERE id = ?').get(enquiryId) as any;
     const statusChanged = currentEnquiry && currentEnquiry.status !== data.status;
 
-    db.prepare(`
-      UPDATE tenant_enquiries SET
-        title_1=?, first_name_1=?, last_name_1=?, email_1=?, phone_1=?, date_of_birth_1=?,
-        current_address_1=?, employment_status_1=?, employer_1=?, income_1=?,
-        is_joint_application=?, title_2=?, first_name_2=?, last_name_2=?, email_2=?, phone_2=?,
-        date_of_birth_2=?, current_address_2=?, employment_status_2=?, employer_2=?, income_2=?,
-        kyc_completed_1=?, kyc_completed_2=?, status=?, follow_up_date=?, viewing_date=?,
-        linked_property_id=?, notes=?, rejection_reason=?,
-        viewing_with=?, renting_requirements=?, is_permanent_address=?,
-        updated_at=CURRENT_TIMESTAMP
-      WHERE id=?
-    `).run(
-      data.title_1 || null, data.first_name_1, data.last_name_1, data.email_1, data.phone_1 || null,
-      data.date_of_birth_1 || null, data.current_address_1 || null, data.employment_status_1 || null, data.employer_1 || null, data.income_1 || null,
-      data.is_joint_application ? 1 : 0, data.title_2 || null, data.first_name_2 || null, data.last_name_2 || null,
-      data.email_2 || null, data.phone_2 || null, data.date_of_birth_2 || null, data.current_address_2 || null,
-      data.employment_status_2 || null, data.employer_2 || null, data.income_2 || null,
-      data.kyc_completed_1 ? 1 : 0, data.kyc_completed_2 ? 1 : 0, data.status || 'new', data.follow_up_date || null,
-      data.viewing_date || null, data.linked_property_id || null, data.notes || null, data.rejection_reason || null,
-      data.viewing_with || null, data.renting_requirements || null, data.is_permanent_address ? 1 : 0,
-      enquiryId
-    );
+    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','employment_status_1','employer_1','income_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason','renting_requirements','is_permanent_address','holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_token','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step'];
+    const setClauses: string[] = [];
+    const values: any[] = [];
+    for (const key of allowed) {
+      if (key in data) {
+        setClauses.push(`${key}=?`);
+        values.push(data[key] ?? null);
+      }
+    }
+    if (setClauses.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    setClauses.push('updated_at=CURRENT_TIMESTAMP');
+    values.push(enquiryId);
+    db.prepare(`UPDATE tenant_enquiries SET ${setClauses.join(', ')} WHERE id=?`).run(...values);
 
     // Create tasks based on status change
     if (statusChanged) {
@@ -1445,7 +1672,33 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, (req: AuthRequest, res) => 
       }
     }
 
-    logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, data);
+    // Audit logging: capture onboarding field changes with old/new values
+    if (currentEnquiry) {
+      const onboardingFields = ['holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step'];
+      const fieldChanges: Record<string, { from: any; to: any }> = {};
+      for (const key of onboardingFields) {
+        if (key in data) {
+          const oldVal = currentEnquiry[key] ?? null;
+          const newVal = data[key] ?? null;
+          if (String(oldVal) !== String(newVal)) {
+            fieldChanges[key] = { from: oldVal, to: newVal };
+          }
+        }
+      }
+      if (Object.keys(fieldChanges).length > 0) {
+        if (statusChanged) {
+          logAudit(req.user?.id, req.user?.email, 'status_changed', 'tenant_enquiry', enquiryId, { from: currentEnquiry.status, to: data.status });
+        }
+        logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, fieldChanges);
+      } else {
+        if (statusChanged) {
+          logAudit(req.user?.id, req.user?.email, 'status_changed', 'tenant_enquiry', enquiryId, { from: currentEnquiry.status, to: data.status });
+        }
+        logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, data);
+      }
+    } else {
+      logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, data);
+    }
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -1508,30 +1761,79 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, (req: AuthRequest,
   try {
     const enquiry = db.prepare('SELECT * FROM tenant_enquiries WHERE id = ?').get(req.params.id) as any;
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
+    if (enquiry.status === 'converted') return res.status(400).json({ error: 'Enquiry already converted' });
 
     const { property_id, tenancy_start_date, tenancy_type, monthly_rent } = req.body;
-
-    // Create tenant
     const name = `${enquiry.first_name_1} ${enquiry.last_name_1}`;
+    const isJoint = !!enquiry.joint_partner_id;
+
+    // Create tenant record — copy onboarding data collected during pipeline
+    const hasGuarantor = !!(enquiry.app_guarantor_name || enquiry.app_guarantor_phone || enquiry.app_guarantor_email);
     const result = db.prepare(`
       INSERT INTO tenants (
         title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
-        is_joint_tenancy, title_2, first_name_2, last_name_2, email_2, phone_2, date_of_birth_2,
-        kyc_completed_1, kyc_completed_2, property_id, tenancy_start_date, tenancy_type, monthly_rent
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent,
+        holding_deposit_received, holding_deposit_amount, holding_deposit_date,
+        nok_name, nok_relationship, nok_phone, nok_address,
+        nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
+        guarantor_required, guarantor_name, guarantor_phone, guarantor_email, guarantor_address,
+        notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       enquiry.title_1, enquiry.first_name_1, enquiry.last_name_1, name, enquiry.email_1, enquiry.phone_1,
-      enquiry.date_of_birth_1, enquiry.is_joint_application, enquiry.title_2, enquiry.first_name_2,
-      enquiry.last_name_2, enquiry.email_2, enquiry.phone_2, enquiry.date_of_birth_2,
-      enquiry.kyc_completed_1, enquiry.kyc_completed_2, property_id, tenancy_start_date, tenancy_type, monthly_rent
+      enquiry.date_of_birth_1, isJoint ? 1 : (enquiry.is_joint_application || 0), enquiry.kyc_completed_1,
+      property_id, tenancy_start_date, tenancy_type, monthly_rent || enquiry.monthly_rent_agreed,
+      enquiry.holding_deposit_received || 0, enquiry.holding_deposit_amount || null, enquiry.holding_deposit_received_date || null,
+      enquiry.app_next_of_kin_name || null, enquiry.app_next_of_kin_relationship || null, enquiry.app_next_of_kin_phone || null, enquiry.app_next_of_kin_address || null,
+      enquiry.app_next_of_kin_2_name || null, enquiry.app_next_of_kin_2_relationship || null, enquiry.app_next_of_kin_2_phone || null, enquiry.app_next_of_kin_2_address || null,
+      hasGuarantor ? 1 : 0, enquiry.app_guarantor_name || null, enquiry.app_guarantor_phone || null, enquiry.app_guarantor_email || null, enquiry.app_guarantor_address || null,
+      enquiry.notes || null
     );
 
     // Update enquiry status
     db.prepare("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
       .run(req.params.id);
 
+    logAudit(req.user?.id, req.user?.email, 'create', 'tenant', Number(result.lastInsertRowid), { converted_from_enquiry: parseInt(req.params.id) });
     logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', parseInt(req.params.id), { converted_to_tenant: result.lastInsertRowid });
-    res.json({ tenant_id: result.lastInsertRowid });
+
+    // If joint application with linked partner, convert partner too
+    let partnerTenantId: number | bigint | null = null;
+    if (isJoint) {
+      const partner = db.prepare('SELECT * FROM tenant_enquiries WHERE id = ?').get(enquiry.joint_partner_id) as any;
+      if (partner && partner.status !== 'converted') {
+        const partnerName = `${partner.first_name_1} ${partner.last_name_1}`;
+        const partnerHasGuarantor = !!(partner.app_guarantor_name || partner.app_guarantor_phone || partner.app_guarantor_email);
+        const partnerResult = db.prepare(`
+          INSERT INTO tenants (
+            title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
+            is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent,
+            holding_deposit_received, holding_deposit_amount, holding_deposit_date,
+            nok_name, nok_relationship, nok_phone, nok_address,
+            nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
+            guarantor_required, guarantor_name, guarantor_phone, guarantor_email, guarantor_address,
+            notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          partner.title_1, partner.first_name_1, partner.last_name_1, partnerName, partner.email_1, partner.phone_1,
+          partner.date_of_birth_1, 1, partner.kyc_completed_1,
+          property_id, tenancy_start_date, tenancy_type, monthly_rent || partner.monthly_rent_agreed,
+          partner.holding_deposit_received || 0, partner.holding_deposit_amount || null, partner.holding_deposit_received_date || null,
+          partner.app_next_of_kin_name || null, partner.app_next_of_kin_relationship || null, partner.app_next_of_kin_phone || null, partner.app_next_of_kin_address || null,
+          partner.app_next_of_kin_2_name || null, partner.app_next_of_kin_2_relationship || null, partner.app_next_of_kin_2_phone || null, partner.app_next_of_kin_2_address || null,
+          partnerHasGuarantor ? 1 : 0, partner.app_guarantor_name || null, partner.app_guarantor_phone || null, partner.app_guarantor_email || null, partner.app_guarantor_address || null,
+          partner.notes || null
+        );
+        partnerTenantId = partnerResult.lastInsertRowid;
+
+        db.prepare("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .run(enquiry.joint_partner_id);
+        logAudit(req.user?.id, req.user?.email, 'create', 'tenant', Number(partnerTenantId), { converted_from_enquiry: enquiry.joint_partner_id });
+        logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiry.joint_partner_id, { converted_to_tenant: partnerTenantId });
+      }
+    }
+
+    res.json({ tenant_id: result.lastInsertRowid, partner_tenant_id: partnerTenantId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to convert enquiry' });
@@ -1629,7 +1931,8 @@ app.put('/api/tenants/:id', authMiddleware, (req: AuthRequest, res) => {
       UPDATE tenants SET
         name=?, title_1=?, first_name_1=?, last_name_1=?, email=?, phone=?, date_of_birth_1=?,
         is_joint_tenancy=?, title_2=?, first_name_2=?, last_name_2=?, email_2=?, phone_2=?, date_of_birth_2=?,
-        nok_name=?, nok_relationship=?, nok_phone=?, nok_email=?,
+        nok_name=?, nok_relationship=?, nok_phone=?, nok_email=?, nok_address=?,
+        nok_2_name=?, nok_2_relationship=?, nok_2_phone=?, nok_2_email=?, nok_2_address=?,
         kyc_completed_1=?, kyc_completed_2=?,
         kyc_primary_id=?, kyc_secondary_id=?, kyc_address_verification=?, kyc_personal_verification=?,
         guarantor_required=?, guarantor_name=?, guarantor_address=?, guarantor_phone=?, guarantor_email=?,
@@ -1643,7 +1946,8 @@ app.put('/api/tenants/:id', authMiddleware, (req: AuthRequest, res) => {
     `).run(
       name, data.title_1 || null, data.first_name_1, data.last_name_1, data.email || null, data.phone || null, data.date_of_birth_1 || null,
       data.is_joint_tenancy ? 1 : 0, data.title_2 || null, data.first_name_2 || null, data.last_name_2 || null, data.email_2 || null, data.phone_2 || null, data.date_of_birth_2 || null,
-      data.nok_name || null, data.nok_relationship || null, data.nok_phone || null, data.nok_email || null,
+      data.nok_name || null, data.nok_relationship || null, data.nok_phone || null, data.nok_email || null, data.nok_address || null,
+      data.nok_2_name || null, data.nok_2_relationship || null, data.nok_2_phone || null, data.nok_2_email || null, data.nok_2_address || null,
       data.kyc_completed_1 ? 1 : 0, data.kyc_completed_2 ? 1 : 0,
       data.kyc_primary_id ? 1 : 0, data.kyc_secondary_id ? 1 : 0, data.kyc_address_verification ? 1 : 0, data.kyc_personal_verification ? 1 : 0,
       data.guarantor_required ? 1 : 0, data.guarantor_name, data.guarantor_address, data.guarantor_phone, data.guarantor_email,
@@ -1793,7 +2097,9 @@ app.get('/api/properties/:id', authMiddleware, (req: AuthRequest, res) => {
     const property = db.prepare(`
       SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email, l.landlord_type,
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant,
-        (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id
+        (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id,
+        (SELECT t.email FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_email,
+        (SELECT t.phone FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_phone
       FROM properties p
       LEFT JOIN landlords l ON l.id = p.landlord_id
       WHERE p.id = ?
@@ -1958,6 +2264,7 @@ app.get('/api/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
       ORDER BY uploaded_at DESC
     `).all(task.id);
 
+    logAudit(req.user?.id, req.user?.email, 'view', 'task', parseInt(req.params.id));
     res.json({ ...task, relatedEntity, documents });
   } catch (err) {
     console.error('Failed to fetch task:', err);
@@ -2233,14 +2540,14 @@ app.get('/api/property-viewings', authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
-app.post('/api/property-viewings', authMiddleware, (req: AuthRequest, res) => {
+app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to } = req.body;
+    const { property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to, send_sms, sms_message } = req.body;
     const stmt = db.prepare(`
-      INSERT INTO property_viewings (property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO property_viewings (property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes);
+    const result = stmt.run(property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to || null);
 
     // If linked to enquiry, update enquiry status
     if (enquiry_id) {
@@ -2261,6 +2568,29 @@ app.post('/api/property-viewings', authMiddleware, (req: AuthRequest, res) => {
     logAudit(req.user?.id, req.user?.email, 'create', 'property_viewing', Number(result.lastInsertRowid), { viewer_name, viewing_date, property_id });
 
     res.json({ id: result.lastInsertRowid });
+
+    // Send SMS fire-and-forget after response — Twilio API call is slow and shouldn't block the user
+    if (send_sms && viewer_phone && sms_message) {
+      const { sendSms, normalizeUkPhone } = require('./sms');
+      const normalizedPhone = normalizeUkPhone(viewer_phone);
+      sendSms({ to: normalizedPhone, body: sms_message })
+        .then((smsResult: { success: boolean; sid?: string; error?: string }) => {
+          try {
+            db.prepare(`
+              INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
+              sms_message, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
+              smsResult.error || null, req.user?.id || null, req.user?.email || null
+            );
+            logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id || 0, { to_phone: normalizedPhone, message: sms_message.substring(0, 100) });
+          } catch (dbErr) {
+            console.error('[SMS] Failed to log SMS to database:', dbErr);
+          }
+        })
+        .catch((err: any) => console.error('[SMS] Fire-and-forget SMS failed:', err));
+    }
   } catch (err) {
     console.error('Error creating viewing:', err);
     res.status(500).json({ error: 'Failed to create viewing' });
@@ -2276,6 +2606,295 @@ app.put('/api/property-viewings/:id', authMiddleware, (req: AuthRequest, res) =>
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update viewing' });
+  }
+});
+
+// ============ HOLDING DEPOSIT / ONBOARDING ============
+
+app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { monthly_rent, security_deposit, holding_deposit, follow_up_date } = req.body;
+    const enquiryId = Number(req.params.id);
+
+    const token = require('crypto').randomBytes(24).toString('hex');
+    const applicationFormUrl = `https://apply.fleminglettings.co.uk/onboarding/${token}`;
+
+    db.prepare(`
+      UPDATE tenant_enquiries SET
+        monthly_rent_agreed=?, security_deposit_amount=?, holding_deposit_amount=?,
+        application_form_token=?, application_form_sent=1, holding_deposit_requested=1,
+        onboarding_email_sent_at=CURRENT_TIMESTAMP, status='onboarding'
+      WHERE id=?
+    `).run(monthly_rent, security_deposit, holding_deposit, token, enquiryId);
+
+    const enquiry = db.prepare(`
+      SELECT te.*, p.address as property_address, p.postcode as property_postcode
+      FROM tenant_enquiries te
+      LEFT JOIN properties p ON p.id = te.linked_property_id
+      WHERE te.id = ?
+    `).get(enquiryId) as any;
+
+    if (enquiry) {
+      const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
+      const address = [enquiry.property_address, enquiry.property_postcode].filter(Boolean).join(', ');
+
+      const { sendEmail, holdingDepositRequestEmail } = require('./email');
+      const emailContent = holdingDepositRequestEmail(name, address, monthly_rent, security_deposit, holding_deposit, applicationFormUrl);
+      const emailResult = await sendEmail({
+        to: enquiry.email_1,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        from: 'Fleming Lettings Accounts <accounts@fleminglettings.co.uk>',
+      });
+      db.prepare(`
+        INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
+        VALUES (?, 'tenant_enquiry', ?, ?, ?, ?, 'holding_deposit_request', ?, ?, ?)
+      `).run(emailResult.id || null, enquiryId, enquiry.email_1, 'accounts@fleminglettings.co.uk', emailContent.subject, emailResult.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null);
+
+      if (follow_up_date) {
+        db.prepare(`
+          INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, task_type, due_date, assigned_to)
+          VALUES (?, ?, 'pending', 'high', 'tenant_enquiry', ?, 'follow_up', ?, ?)
+        `).run(
+          `Holding deposit follow-up: ${name}`,
+          `Check if holding deposit of £${holding_deposit} has been received for ${address}`,
+          enquiryId, follow_up_date, req.user?.name || null,
+        );
+      }
+
+      logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, {
+        action: 'holding_deposit_requested', monthly_rent, security_deposit, holding_deposit, email_sent_to: enquiry.email_1,
+      });
+    }
+
+    res.json({ success: true, token, applicationFormUrl });
+  } catch (err) {
+    console.error('Error requesting holding deposit:', err);
+    res.status(500).json({ error: 'Failed to send holding deposit request' });
+  }
+});
+
+// Send tenancy application email (editable preview)
+app.post('/api/tenant-enquiries/:id/send-application-email', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const enquiryId = Number(req.params.id);
+    const { subject, body_html } = req.body;
+    if (!subject || !body_html) return res.status(400).json({ error: 'subject and body_html required' });
+
+    const enquiry = db.prepare(`SELECT email_1, first_name_1, last_name_1 FROM tenant_enquiries WHERE id = ?`).get(enquiryId) as any;
+    if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
+    if (!enquiry.email_1) return res.status(400).json({ error: 'Enquiry has no email address' });
+
+    const { sendEmail } = require('./email');
+    const emailResult = await sendEmail({
+      to: enquiry.email_1,
+      subject,
+      html: body_html,
+      from: 'Fleming Lettings Accounts <accounts@fleminglettings.co.uk>',
+    });
+    db.prepare(`
+      INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
+      VALUES (?, 'tenant_enquiry', ?, ?, ?, ?, 'tenancy_application', ?, ?, ?)
+    `).run(emailResult.id || null, enquiryId, enquiry.email_1, 'accounts@fleminglettings.co.uk', subject, emailResult.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null);
+
+    logAudit(req.user?.id, req.user?.email, 'email_sent', 'tenant_enquiry', enquiryId, {
+      to: enquiry.email_1, subject, template: 'tenancy_application',
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error sending application email:', err);
+    res.status(500).json({ error: 'Failed to send application email' });
+  }
+});
+
+// ============ SMS ============
+
+app.post('/api/sms/send', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { enquiry_id, to_phone, message_body } = req.body;
+    if (!to_phone || !message_body) return res.status(400).json({ error: 'to_phone and message_body required' });
+    const { sendSms, normalizeUkPhone } = require('./sms');
+    const normalizedPhone = normalizeUkPhone(to_phone);
+    const smsResult = await sendSms({ to: normalizedPhone, body: message_body });
+    const stmt = db.prepare(`
+      INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
+      message_body, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
+      smsResult.error || null, req.user?.id || null, req.user?.email || null
+    );
+    if (enquiry_id) {
+      logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id, { to_phone: normalizedPhone, message: message_body.substring(0, 100) });
+    }
+    res.json({ id: result.lastInsertRowid, success: smsResult.success, twilio_sid: smsResult.sid });
+  } catch (err) {
+    console.error('Error sending SMS:', err);
+    res.status(500).json({ error: 'Failed to send SMS' });
+  }
+});
+
+// Twilio delivery status webhook (validated via X-Twilio-Signature)
+app.post('/api/sms/status', validateTwilioWebhook, (req, res) => {
+  try {
+    const { MessageSid, MessageStatus, ErrorCode } = req.body;
+    if (!MessageSid || !MessageStatus) {
+      return res.status(400).send('Missing MessageSid or MessageStatus');
+    }
+    const errorSuffix = ErrorCode && ErrorCode !== '0' ? ` ErrorCode:${ErrorCode}` : '';
+    db.prepare(
+      'UPDATE sms_messages SET status = ?, error_message = CASE WHEN ? != \'\' THEN COALESCE(error_message, \'\') || ? ELSE error_message END WHERE twilio_sid = ?'
+    ).run(MessageStatus, errorSuffix, errorSuffix, MessageSid);
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('Error processing SMS status webhook:', err);
+    res.sendStatus(500);
+  }
+});
+
+// Twilio inbound SMS webhook (validated via X-Twilio-Signature)
+app.post('/api/sms/inbound', validateTwilioWebhook, (req, res) => {
+  try {
+    const { From, Body, MessageSid } = req.body;
+    if (!From || !Body) {
+      return res.status(400).send('Missing From or Body');
+    }
+
+    const normalizedFrom = normalizePhone(From);
+    let enquiryId: number | null = null;
+
+    // Try to match sender phone to an existing enquiry
+    const enquiry = db.prepare(
+      `SELECT id FROM tenant_enquiries WHERE phone_1 = ? OR phone_1 = ? ORDER BY created_at DESC LIMIT 1`
+    ).get(From, normalizedFrom) as any;
+    if (enquiry) {
+      enquiryId = enquiry.id;
+    }
+
+    const result = db.prepare(`
+      INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, direction, status, twilio_sid)
+      VALUES (?, ?, ?, ?, 'inbound', 'received', ?)
+    `).run(enquiryId, process.env.TWILIO_PHONE_NUMBER || null, From, Body, MessageSid || null);
+
+    if (enquiryId) {
+      logAudit(undefined, undefined, 'sms_received', 'tenant_enquiry', enquiryId, {
+        from_phone: From, message: Body.substring(0, 100)
+      });
+    }
+
+    res.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+  } catch (err) {
+    console.error('Error processing inbound SMS:', err);
+    res.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+  }
+});
+
+app.get('/api/sms/enquiry/:enquiryId', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const messages = db.prepare('SELECT * FROM sms_messages WHERE enquiry_id = ? ORDER BY created_at DESC').all(req.params.enquiryId);
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch SMS history' });
+  }
+});
+
+// ============ EMAIL DELIVERY TRACKING ============
+
+// Resend webhook for email delivery events (validated via svix signature)
+app.post('/api/email/webhook', (req: any, res) => {
+  try {
+    const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+
+    if (webhookSecret && req.rawBody) {
+      const svixId = req.headers['svix-id'] as string;
+      const svixTimestamp = req.headers['svix-timestamp'] as string;
+      const svixSignature = req.headers['svix-signature'] as string;
+
+      if (!svixId || !svixTimestamp || !svixSignature) {
+        return res.status(403).json({ error: 'Missing svix headers' });
+      }
+
+      const timestamp = parseInt(svixTimestamp, 10);
+      const now = Math.floor(Date.now() / 1000);
+      if (Math.abs(now - timestamp) > 300) {
+        return res.status(403).json({ error: 'Webhook timestamp too old' });
+      }
+
+      const secretBytes = Buffer.from(webhookSecret.replace('whsec_', ''), 'base64');
+      const signaturePayload = `${svixId}.${svixTimestamp}.${req.rawBody}`;
+      const expectedSignature = crypto
+        .createHmac('sha256', secretBytes)
+        .update(signaturePayload)
+        .digest('base64');
+
+      const signatures = svixSignature.split(' ');
+      const isValid = signatures.some((sig: string) => {
+        const parts = sig.split(',');
+        return parts[0] === 'v1' && parts[1] === expectedSignature;
+      });
+
+      if (!isValid) {
+        console.warn('[RESEND] Invalid webhook signature');
+        return res.status(403).json({ error: 'Invalid signature' });
+      }
+    }
+
+    const { type, data } = req.body;
+    if (!type || !data?.email_id) {
+      return res.status(400).json({ error: 'Missing type or email_id' });
+    }
+
+    const resendId = data.email_id;
+
+    switch (type) {
+      case 'email.sent':
+        db.prepare('UPDATE email_messages SET status = ? WHERE resend_id = ?').run('sent', resendId);
+        break;
+      case 'email.delivered':
+        db.prepare('UPDATE email_messages SET status = ? WHERE resend_id = ?').run('delivered', resendId);
+        break;
+      case 'email.delivery_delayed':
+        db.prepare('UPDATE email_messages SET status = ? WHERE resend_id = ?').run('delayed', resendId);
+        break;
+      case 'email.bounced':
+        db.prepare('UPDATE email_messages SET status = ?, bounced_at = datetime(\'now\'), error_message = ? WHERE resend_id = ?')
+          .run('bounced', data.bounce?.message || 'Hard bounce', resendId);
+        break;
+      case 'email.complained':
+        db.prepare('UPDATE email_messages SET status = ?, error_message = ? WHERE resend_id = ?')
+          .run('complained', 'Marked as spam by recipient', resendId);
+        break;
+      case 'email.opened':
+        db.prepare('UPDATE email_messages SET opened_at = COALESCE(opened_at, datetime(\'now\')) WHERE resend_id = ?').run(resendId);
+        break;
+      case 'email.clicked':
+        db.prepare('UPDATE email_messages SET clicked_at = COALESCE(clicked_at, datetime(\'now\')) WHERE resend_id = ?').run(resendId);
+        break;
+      case 'email.failed':
+        db.prepare('UPDATE email_messages SET status = ?, error_message = ? WHERE resend_id = ?')
+          .run('failed', data.reason || 'Send failed', resendId);
+        break;
+    }
+
+    res.json({ received: true });
+  } catch (err) {
+    console.error('Error processing email webhook:', err);
+    res.sendStatus(500);
+  }
+});
+
+// Get email history for an entity
+app.get('/api/email/entity/:entityType/:entityId', authMiddleware, (req: AuthRequest, res) => {
+  try {
+    const { entityType, entityId } = req.params;
+    const messages = db.prepare(
+      'SELECT * FROM email_messages WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC'
+    ).all(entityType, entityId);
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch email history' });
   }
 });
 
@@ -2362,10 +2981,15 @@ app.get('/api/documents/types/:entityType', authMiddleware, (req: AuthRequest, r
 app.get('/api/documents/:entityType/:entityId', authMiddleware, (req: AuthRequest, res) => {
   try {
     const { entityType, entityId } = req.params;
-    const docs = db.prepare(`
-      SELECT id, doc_type, original_name, mime_type, size, uploaded_at 
-      FROM documents WHERE entity_type = ? AND entity_id = ? ORDER BY uploaded_at DESC
-    `).all(entityType, entityId);
+    const applicantNumber = req.query.applicant_number ? parseInt(req.query.applicant_number as string) : undefined;
+    let sql = 'SELECT id, doc_type, original_name, mime_type, size, uploaded_at FROM documents WHERE entity_type = ? AND entity_id = ?';
+    const params: any[] = [entityType, entityId];
+    if (applicantNumber !== undefined) {
+      sql += ' AND applicant_number = ?';
+      params.push(applicantNumber);
+    }
+    sql += ' ORDER BY uploaded_at DESC';
+    const docs = db.prepare(sql).all(...params);
     res.json(docs);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch documents' });
@@ -2375,19 +2999,20 @@ app.get('/api/documents/:entityType/:entityId', authMiddleware, (req: AuthReques
 app.post('/api/documents/:entityType/:entityId', authMiddleware, upload.single('file'), (req: AuthRequest, res) => {
   try {
     const { entityType, entityId } = req.params;
-    const { doc_type } = req.body;
+    const { doc_type, applicant_number } = req.body;
+    const appNum = applicant_number ? parseInt(applicant_number) : 1;
     const file = req.file;
 
     if (!file) return res.status(400).json({ error: 'No file uploaded' });
     if (!doc_type) return res.status(400).json({ error: 'Document type required' });
 
     const stmt = db.prepare(`
-      INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by, applicant_number)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(entityType, entityId, doc_type, file.filename, file.originalname, file.mimetype, file.size, req.user?.id);
+    const result = stmt.run(entityType, entityId, doc_type, file.filename, file.originalname, file.mimetype, file.size, req.user?.id, appNum);
 
-    logAudit(req.user?.id, req.user?.email, 'create', 'document', result.lastInsertRowid as number, { entity_type: entityType, entity_id: entityId });
+    logAudit(req.user?.id, req.user?.email, 'create', 'document', result.lastInsertRowid as number, { entity_type: entityType, entity_id: entityId, applicant_number: appNum });
     res.json({ id: result.lastInsertRowid, doc_type, original_name: file.originalname, mime_type: file.mimetype, size: file.size });
   } catch (err) {
     res.status(500).json({ error: 'Failed to upload document' });
@@ -2521,10 +3146,11 @@ app.get('/api/epc-lookup', authMiddleware, async (req: AuthRequest, res) => {
       current_efficiency: r['current-energy-efficiency'],
       property_type: r['property-type'],
       inspection_date: r['inspection-date'],
+      lodgement_date: r['lodgement-date'],
       certificate_number: r['lmk-key'],
     }));
 
-    logAudit(req.user?.id, req.user?.email, 'view', 'epc_lookup');
+    await logAudit(req.user?.id, req.user?.email, 'view', 'epc_lookup');
     res.json(results);
   } catch (err) {
     console.error('EPC API error:', err);
@@ -2562,6 +3188,7 @@ app.get('/api/council-tax-lookup', authMiddleware, async (req: AuthRequest, res)
       monthlyTax: r.monthly_tax,
     })) : [];
 
+    await logAudit(req.user?.id, req.user?.email, 'view', 'council_tax_lookup');
     res.json(results);
   } catch (err) {
     console.error('Council tax lookup error:', err);
@@ -2579,7 +3206,7 @@ app.get('/api/land-registry/price-paid', authMiddleware, async (req: AuthRequest
     // HM Land Registry Price Paid Data API - Free, Open Government License
     // Using SPARQL endpoint for price paid data
     const cleanPostcode = postcode.replace(/\s/g, '').toUpperCase();
-    const url = `http://landregistry.data.gov.uk/data/ppi/transaction-record.json?_pageSize=20&propertyAddress.postcode=${encodeURIComponent(cleanPostcode)}`;
+    const url = `https://landregistry.data.gov.uk/data/ppi/transaction-record.json?_pageSize=20&propertyAddress.postcode=${encodeURIComponent(cleanPostcode)}`;
 
     const response = await fetch(url, {
       headers: { Accept: 'application/json' }
@@ -2602,7 +3229,7 @@ app.get('/api/land-registry/price-paid', authMiddleware, async (req: AuthRequest
       transaction_id: item.transactionId
     }));
 
-    logAudit(req.user?.id, req.user?.email, 'view', 'land_registry_lookup');
+    await logAudit(req.user?.id, req.user?.email, 'view', 'land_registry_lookup');
     res.json(results);
   } catch (err) {
     console.error('Land Registry error:', err);
@@ -2724,7 +3351,7 @@ app.get('/api/companies-house/search', authMiddleware, async (req: AuthRequest, 
       } : null
     }));
 
-    logAudit(req.user?.id, req.user?.email, 'view', 'companies_house_search');
+    await logAudit(req.user?.id, req.user?.email, 'view', 'companies_house_search');
     res.json(results);
   } catch (err) {
     console.error('Companies House error:', err);
@@ -2774,7 +3401,7 @@ app.get('/api/companies-house/company/:companyNumber', authMiddleware, async (re
       has_charges: data.has_charges
     };
 
-    logAudit(req.user?.id, req.user?.email, 'view', 'companies_house_detail', undefined, { company_number: companyNumber });
+    await logAudit(req.user?.id, req.user?.email, 'view', 'companies_house_detail', undefined, { company_number: companyNumber });
     res.json(result);
   } catch (err) {
     console.error('Companies House error:', err);

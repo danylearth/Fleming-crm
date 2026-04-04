@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { pool } from './db-pg';
+import pool from './db-pg';
 
 async function runMigration() {
   const migrationPath = path.join(__dirname, 'migrations', 'add-tenant-enquiry-form-fields.sql');

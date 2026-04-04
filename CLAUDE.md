@@ -59,6 +59,19 @@ npm run render-build    # Production build for Render deployment
 npm run render-start    # Production start for Render deployment
 ```
 
+### Subdomain Forms Deployment
+```bash
+# Deploy tenant form to apply.fleminglettings.co.uk
+./deploy-tenant-subdomain.sh
+
+# Deploy landlord form to landlords.fleminglettings.co.uk
+./deploy-landlord-subdomain.sh
+
+# Or manually from subdomain directories
+cd tenants-subdomain && vercel --prod
+cd landlords-subdomain && vercel --prod
+```
+
 ## Architecture
 
 ### Backend Structure
@@ -75,9 +88,13 @@ npm run render-start    # Production start for Render deployment
 
 **Key Backend Files:**
 - `src/auth.ts` - JWT authentication middleware and token generation
-- `src/email.ts` - Email service using Resend for notifications
+- `src/email.ts` - Email service using Resend, with delivery tracking via webhooks (`email_messages` table)
+- `src/sms.ts` - Twilio SMS integration with inbound webhook, templates, and delivery status. Simulates sends if Twilio env vars missing.
 - `src/scheduler.ts` - Background job scheduler for compliance reminders and automated task creation
 - `src/ai/chat.ts` - AI assistant router for natural language queries
+- `src/inventory-routes.ts` - Property inventory with photo upload and thumbnail generation (sharp)
+- `src/routes/public-tenant-enquiry.ts` - Public tenant enquiry endpoint (PostgreSQL version)
+- `src/db-inventory-migration.ts` / `src/run-migration.ts` - Database migration utilities
 
 **Scheduler System:**
 The scheduler (`src/scheduler.ts`) runs every hour and:
@@ -98,27 +115,28 @@ Special routes:
 - `POST /api/tenant-enquiries/:id/convert` - Convert enquiry to tenant
 - `PUT /api/rent-payments/:id/pay` - Mark rent payment as paid
 - `GET /api/tenant-enquiries/check-duplicates` - Cross-check duplicates across tenants/landlords/enquiries
+- `GET /api/landlords/:id/properties` - Get all properties for a landlord (including via property_landlords)
+- `GET /api/properties/:id/landlords` - Get all landlords for a property (primary + secondary)
+- `POST /api/properties/:id/landlords` - Add secondary landlord to property
+- `DELETE /api/properties/:propertyId/landlords/:landlordId` - Remove secondary landlord
+- `GET /api/landlords/:id/directors` - Get directors for a company landlord
+- `POST /api/landlords/:id/directors` - Add director to company landlord
+- `DELETE /api/landlords/:landlordId/directors/:directorId` - Remove director from company
 
 ### Frontend Structure
 
-**Three UI Versions:**
-The codebase contains three iterations of the UI (V1, V2, V3). V3 is the current production version with a navy/gold color scheme.
+**Single UI Version:**
+V1 and V2 have been deleted. The V3 suffix has been removed from all pages — files are now named `Dashboard.tsx`, `Properties.tsx`, etc.
 
 **Routing:**
 - All routes configured in `src/App.tsx`
 - Protected routes wrapped with `<ProtectedRoute>` component
 - Auth context manages user state and redirects
-- Default route redirects to `/v3`
 
-**Page Naming Convention:**
-- V1: `PageName.tsx`
-- V2: `PageNameV2.tsx`
-- V3: `PageNameV3.tsx` (current production)
-
-**Current V3 Pages:**
-- Dashboard, Properties, Landlords, Tenants, Enquiries (list + kanban), BDM, Maintenance, Tasks, Settings
-- Detail pages for each entity type
-- Enquiries have both list and kanban board views
+**Pages:**
+- List + Detail pages for: Properties, Landlords, Tenants, Enquiries, BDM, Maintenance, Tasks
+- Dashboard, Settings, Transactions, Users, Login
+- Enquiries have both list (`Enquiries`) and kanban board (`EnquiriesKanban`) views
 
 **Context Providers:**
 - `AuthContext.tsx` - User authentication state, login/logout, token management
@@ -126,15 +144,15 @@ The codebase contains three iterations of the UI (V1, V2, V3). V3 is the current
 - `PortfolioContext.tsx` - Portfolio type filtering (internal vs external landlords)
 
 **Component Organization:**
-- `components/` - Shared components (Layout, AILayout, DocumentsSection)
-- `components/v3/` - V3-specific reusable components
+- `components/` - Shared components (Layout, DocumentsSection)
+- `components/ui/` - Reusable UI components
 - `pages/` - Top-level route components
 - `hooks/` - Custom React hooks
-- `utils/` - Utility functions
+- `utils/` - Utility functions (including `sms.ts` for SMS segment calculation)
 
 **Styling:**
 - TailwindCSS with custom navy/gold theme
-- Theme colors defined in `tailwind.config.js`
+- `Layout.tsx` with collapsible sidebar
 - Navy primary: `#1a2332`
 - Gold accent: `#d4af37`
 
@@ -175,11 +193,13 @@ The codebase includes a mobile app in the `/mobile` directory for on-the-go CRM 
 
 **Core Entities:**
 - `users` - Staff users with role-based access (admin/staff)
-- `landlords` - Onboarded landlords with full KYC
+- `landlords` - Onboarded landlords with full KYC (individual/company/trust types)
+- `landlord_directors` - Directors/officers for company landlords
 - `landlords_bdm` - Business development prospects (pipeline)
 - `tenant_enquiries` - Website enquiries (pre-tenant pipeline)
 - `tenants` - Onboarded tenants with KYC and tenancy details
 - `properties` - Rental properties with compliance tracking
+- `property_landlords` - Junction table for multi-landlord properties
 - `maintenance` - Maintenance requests
 - `tasks` - Manual and automated tasks
 - `rent_payments` - Rent payment tracking
@@ -187,8 +207,12 @@ The codebase includes a mobile app in the `/mobile` directory for on-the-go CRM 
 - `audit_log` - Full audit trail of all user actions
 
 **Key Relationships:**
-- Properties belong to landlords
-- Tenants can be linked to properties
+- Properties belong to landlords (primary relationship)
+- Properties support multiple landlords via `property_landlords` junction table
+  - One primary landlord (marked with `is_primary = 1`)
+  - Multiple secondary landlords (co-owners, trustees, companies with multiple directors)
+  - Tracks ownership entity type (individual/company/trust)
+- Tenants can be linked to properties (via `tenant_id` on properties table)
 - Maintenance requests link to properties
 - Tasks can link to any entity type (polymorphic via `entity_type` and `entity_id`)
 - Documents link to any entity type (polymorphic)
@@ -207,6 +231,14 @@ The codebase includes a mobile app in the `/mobile` directory for on-the-go CRM 
 **Landlord Pipeline:**
 1. `landlords_bdm` with status: new → contacted → follow_up → interested → onboarded/not_interested
 2. Convert BDM prospect creates record in `landlords` table
+
+**Landlord Types:**
+Landlords can be one of three types:
+- `individual` - Single person owner (default)
+- `company` - Limited company (requires `company_number`, can have multiple `landlord_directors`)
+- `trust` - Trust entity
+
+Company landlords require Companies House verification and director information.
 
 ### Government API Integrations
 
@@ -258,47 +290,51 @@ The system integrates with several UK government open data APIs to provide accur
 **Hook:**
 - `useGovernmentAPIs()` - Custom React hook providing methods for all government APIs
 
-### Public Tenant Enquiry Form
+### Public Forms and Subdomains
 
-**Standalone Form:**
-The `/public-form` directory contains a standalone HTML form for tenant enquiries that can be hosted separately from the main CRM.
+**Three Public Forms:**
+The codebase includes three standalone forms for public-facing data capture:
 
-**Purpose:**
-- Embeddable on external website (fleminglettings.co.uk)
-- No authentication required
-- Directly submits to CRM via public API endpoints
-- Matches CRM navy/gold theme
+1. **Tenant Enquiry Form** (`/tenants-subdomain/`)
+   - Production URL: `apply.fleminglettings.co.uk`
+   - Multi-step wizard (7 steps) with joint applicant support
+   - Full KYC data capture
+   - Mobile-optimized with touch-friendly targets
+   - Property selection from CRM database
+
+2. **Landlord Enquiry Form** (`/landlords-subdomain/`)
+   - Production URL: `landlords.fleminglettings.co.uk`
+   - Property owner enquiry form for onboarding new landlords
+   - Captures landlord details and property information
+   - Routes to BDM pipeline in CRM
+
+3. **Legacy Public Form** (`/public-form/`)
+   - Original tenant enquiry form (single file)
+   - Can be hosted on any static host
 
 **Public API Endpoints:**
-The backend provides public endpoints specifically for this form (no auth required):
+The backend provides public endpoints (no auth required):
 - `GET /api/public/properties` - List available properties
-- `POST /api/public/tenant-enquiries` - Submit new enquiry
+- `POST /api/public/tenant-enquiries` - Submit tenant enquiry
+- `POST /api/public/landlord-enquiries` - Submit landlord enquiry
 
-**Deployment:**
-- Single file: `tenant-enquiry.html`
-- Can be hosted on any static hosting (Vercel, Netlify, GitHub Pages, etc.)
-- Configure API URL on line 922 to point to backend
-- Supports subdomain deployment (e.g., `enquiry.fleminglettings.co.uk`)
+**Subdomain Deployment:**
+Each subdomain form can be deployed independently to Vercel/Netlify:
+```bash
+cd tenants-subdomain   # or landlords-subdomain
+vercel --prod          # Deploy to Vercel
+```
 
-**Features:**
-- Responsive design (mobile/tablet/desktop)
-- Property selection from CRM database
-- Joint tenant applications support
-- Full KYC data capture (personal details, employment, address history)
-- Terms/privacy consent checkboxes
-- Direct integration with CRM tenant enquiries pipeline
+Then configure DNS CNAME records:
+- `apply` → Vercel DNS (for tenant form)
+- `landlords` → Vercel DNS (for landlord form)
 
 **Data Flow:**
-1. User submits form on external site
-2. POST to `/api/public/tenant-enquiries`
-3. Record created in `tenant_enquiries` table with status "new"
-4. Enquiry appears in CRM Enquiries module for staff to manage
-5. Staff can progress through pipeline: new → viewing_booked → onboarding → converted
-
-**Customization:**
-- Change API URL: Edit line 922 in `tenant-enquiry.html`
-- Modify styling: CSS variables in `<style>` block (lines 7-439)
-- Add/remove fields: Ensure `name` attributes match database columns
+1. User submits form on subdomain
+2. POST to `/api/public/tenant-enquiries` or `/api/public/landlord-enquiries`
+3. Record created in `tenant_enquiries` or `landlords_bdm` table
+4. Enquiry appears in CRM for staff to manage
+5. Staff progress through pipeline and convert to tenant/landlord
 
 ### Environment Configuration
 
@@ -320,6 +356,9 @@ The backend provides public endpoints specifically for this form (no auth requir
 - `EPC_API_KEY` - Register at https://epc.opendatacommunities.org (FREE)
 - `COMPANIES_HOUSE_API_KEY` - Register at https://developer.company-information.service.gov.uk (FREE)
 - `COUNCIL_TAX_API_KEY` - Subscribe at https://www.counciltaxfinder.com (PAID - Monthly subscription)
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` - Twilio SMS (optional, simulates if missing)
+- `RESEND_WEBHOOK_SECRET` - For Resend email delivery tracking webhooks (svix HMAC-SHA256)
+- `BASE_URL` - Backend base URL for webhook callback URLs
 - Note: Land Registry and Postcodes.io require NO API keys
 
 **Deployment Configurations:**
@@ -382,25 +421,47 @@ logAudit(userId, userEmail, 'create', 'landlord', entityId, changesObject);
 - `gas_reminder`, `eicr_reminder`, `epc_reminder` - Auto-created by scheduler
 - Tasks have `entity_type` and `entity_id` for linking to related entities
 
+### Joint Applicants
+- `tenant_enquiries.joint_partner_id` self-references to link two individual enquiry records
+- Each applicant has their own record, documents, and KYC
+- Shared fields (status, property, viewing) sync on update
+- Legacy records may still have `_2` suffix columns without `joint_partner_id` — UI handles both patterns
+
+### SMS & Email Integration
+- **SMS:** Twilio integration in `src/sms.ts`. Templates defined as exported functions (viewingConfirmationSms, followUpSms, rejectionSms, rentReminderSms). Frontend generates template text inline when workflow mode is selected.
+- **SMS segments:** `frontend/src/utils/sms.ts` exports `calculateSmsSegments(text)` for GSM-7 vs UCS-2 encoding detection
+- **Inbound SMS:** `/api/sms/inbound` receives Twilio webhooks, matches sender phone to `tenant_enquiries.phone_1`, stores with `direction='inbound'` in `sms_messages`
+- **Email tracking:** `email_messages` table stores all sent emails with `resend_id`. Resend webhook at `/api/email/webhook` updates delivery status (delivered, bounced, opened, clicked, failed)
+- **Webhook validation:** Twilio validated via `twilio.validateRequest()`. Resend validated via svix HMAC-SHA256 using `RESEND_WEBHOOK_SECRET`. Both skip validation in dev when secrets aren't configured.
+
+### Rate Limiting
+- `express-rate-limit` on all `/api/public/*` routes
+- POST endpoints: 10 req/15min, GET endpoints: 60 req/15min
+- Applied as per-route middleware in both `index.ts` and `index-pg.ts`
+
 ## Important Constraints
 
-1. **Database Flexibility:** Backend supports both SQLite (dev) and PostgreSQL (prod). Never hardcode SQL that's specific to one database type. The codebase uses different entry points (`index.ts` vs `index-pg.ts`) to handle this.
+1. **Express 5:** The backend uses Express 5 (`express@^5.2.1`), not Express 4. Route handlers return promises natively; error handling differs from Express 4 patterns.
 
-2. **Version Coexistence:** V1, V2, V3 pages coexist. When modifying functionality, check if changes need to propagate across versions or if V3 is the only active version.
+2. **Database Flexibility:** Backend supports both SQLite (dev) and PostgreSQL (prod). Never hardcode SQL that's specific to one database type. The codebase uses different entry points (`index.ts` vs `index-pg.ts`) to handle this.
 
-3. **Polymorphic Relationships:** Tasks and documents use `entity_type` + `entity_id` pattern. Always ensure both fields are set when creating these records.
+3. **Single UI Version:** V1 and V2 have been deleted. Only one version exists (formerly V3, now renamed without suffix). No need to propagate changes across versions.
 
-4. **Scheduler Dependencies:** The scheduler expects specific property fields (`gas_safety_expiry_date`, etc.) and task types. Don't rename these without updating the scheduler.
+4. **Polymorphic Relationships:** Tasks and documents use `entity_type` + `entity_id` pattern. Always ensure both fields are set when creating these records.
 
-5. **Multi-tenant Awareness:** Landlords have `landlord_type` (internal/external) for portfolio filtering. This affects UI filtering and reporting.
+5. **Scheduler Dependencies:** The scheduler expects specific property fields (`gas_safety_expiry_date`, etc.) and task types. Don't rename these without updating the scheduler.
 
-6. **Conversion Workflows:** BDM → Landlord and Enquiry → Tenant conversions copy data and update status. Never delete the source record, only mark as converted.
+6. **Multi-tenant Awareness:** Landlords have `landlord_type` (internal/external) for portfolio filtering. This affects UI filtering and reporting.
 
-7. **Demo Data:** Production databases can auto-seed. Be careful with `FORCE_RESEED` as it wipes all data.
+7. **Conversion Workflows:** BDM → Landlord and Enquiry → Tenant conversions copy data and update status. Never delete the source record, only mark as converted.
 
-8. **Public API Endpoints:** The `/api/public/*` routes are intentionally unauthenticated for the external enquiry form. These should remain public but consider implementing rate limiting to prevent abuse.
+8. **Demo Data:** Production databases can auto-seed. Be careful with `FORCE_RESEED` as it wipes all data.
 
-9. **Mobile Development:** When testing the mobile app on physical devices, use your local network IP address in the API configuration (found in `mobile/src/services/api.ts`), not `localhost` or `127.0.0.1`. The app needs to connect to your development machine over the local network.
+9. **Public API Endpoints:** The `/api/public/*` routes are intentionally unauthenticated for the external enquiry forms (tenant and landlord). These should remain public but consider implementing rate limiting to prevent abuse.
+
+10. **Mobile Development:** When testing the mobile app on physical devices, use your local network IP address in the API configuration (found in `mobile/src/services/api.ts`), not `localhost` or `127.0.0.1`. The app needs to connect to your development machine over the local network.
+
+11. **Multi-Landlord Properties:** Properties can have multiple landlords. Always ensure one landlord is marked as primary (`is_primary = 1` in `property_landlords` table). The primary landlord ID is also stored on the `properties.landlord_id` field for backwards compatibility and simple queries.
 
 ## Deployment Troubleshooting
 

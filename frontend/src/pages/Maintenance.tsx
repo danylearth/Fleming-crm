@@ -1,217 +1,444 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import Layout from '../components/Layout';
+import { GlassCard, Button, Input, Tag, SearchBar, EmptyState, DataTable, SearchDropdown } from '../components/ui';
+import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
-import { Wrench, Plus, X, AlertTriangle, Clock, CheckCircle2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, X, Wrench, MapPin, ChevronDown, ChevronUp, Search, Building2, User } from 'lucide-react';
+import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 
-interface MaintenanceRequest {
-  id: number; property_id: number; reported_by: string; title: string; description: string;
-  priority: string; status: string; contractor: string; cost: number; notes: string;
-  address: string; landlord_name: string; created_at: string;
+interface MaintenanceItem {
+  id: number; property_id: number; address: string; title: string; description: string;
+  priority: string; status: string; reported_date: string; resolved_date: string | null;
+  reporter_name: string; landlord_type?: string;
 }
-interface Property { id: number; address: string; }
 
-const STATUS_CONFIG: Record<string, { label: string; border: string; text: string }> = {
-  open:        { label: 'Open',        border: 'border-red-300',     text: 'text-red-600' },
-  in_progress: { label: 'In Progress', border: 'border-amber-300',   text: 'text-amber-700' },
-  completed:   { label: 'Completed',   border: 'border-emerald-300', text: 'text-emerald-700' },
-  closed:      { label: 'Closed',      border: 'border-gray-300',    text: 'text-gray-600' },
+interface TenantOption {
+  id: number; name: string; property_id: number;
+}
+
+interface LandlordOption {
+  id: number; name: string;
+}
+
+const PRIORITY_COLORS: Record<string, string> = {
+  low: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  medium: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  high: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  urgent: 'bg-red-500/20 text-red-400 border-red-500/30',
 };
 
-const PRIORITY_CONFIG: Record<string, { label: string; border: string; text: string }> = {
-  low:    { label: 'Low',    border: 'border-gray-300',  text: 'text-gray-600' },
-  medium: { label: 'Medium', border: 'border-sky-300',   text: 'text-sky-700' },
-  high:   { label: 'High',   border: 'border-amber-300', text: 'text-amber-700' },
-  urgent: { label: 'Urgent', border: 'border-red-300',   text: 'text-red-600' },
-};
+const STATUS_MAP = [
+  { key: 'open', label: 'Open', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+  { key: 'in_progress', label: 'In Progress', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  { key: 'awaiting_parts', label: 'Awaiting Parts', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  { key: 'completed', label: 'Completed', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  { key: 'closed', label: 'Closed', color: 'bg-[var(--bg-hover)] text-[var(--text-muted)]' },
+];
+
+function statusStyle(s: string) {
+  return STATUS_MAP.find(st => st.key === s)?.color || 'bg-[var(--bg-hover)] text-[var(--text-muted)]';
+}
+function statusLabel(s: string) {
+  return STATUS_MAP.find(st => st.key === s)?.label || s;
+}
+
+function formatDate(d: string) {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 export default function Maintenance() {
   const api = useApi();
-  const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [items, setItems] = useState<MaintenanceItem[]>([]);
+  const [properties, setProperties] = useState<{ id: number; address: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
-  const perPage = 10;
-  const [formData, setFormData] = useState({ property_id: '', reported_by: '', title: '', description: '', priority: 'medium' });
-  const [editData, setEditData] = useState({ status: '', contractor: '', cost: '', notes: '' });
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ title: '', description: '', priority: 'medium', property_id: '' });
+  const [propDropOpen, setPropDropOpen] = useState(false);
+  const [propSearch, setPropSearch] = useState('');
+  const [tenants, setTenants] = useState<TenantOption[]>([]);
+  const [landlords, setLandlords] = useState<LandlordOption[]>([]);
+  // Filter state
+  const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
+  const [tenantFilter, setTenantFilter] = useState<number | null>(null);
+  const [landlordFilter, setLandlordFilter] = useState<number | null>(null);
+  const { portfolioFilter } = usePortfolio();
+  // Bulk actions state
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
-  useEffect(() => { loadData(); }, []);
-
-  const loadData = async () => {
+  const load = useCallback(async () => {
     try {
-      const [reqs, props] = await Promise.all([api.get('/api/maintenance'), api.get('/api/properties')]);
-      setRequests(reqs); setProperties(props);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
-  };
+      const [data, props, tns, lls] = await Promise.all([
+        api.get('/api/maintenance'),
+        api.get('/api/properties'),
+        api.get('/api/tenants'),
+        api.get('/api/landlords'),
+      ]);
+      setItems(Array.isArray(data) ? data : data.items || []);
+      setProperties(props);
+      setTenants(Array.isArray(tns) ? tns.map((t: { id: number; name: string; property_id: number }) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
+      setLandlords(Array.isArray(lls) ? lls.map((l: { id: number; name: string }) => ({ id: l.id, name: l.name })) : []);
+    } catch { /* Silently ignore */ setItems([]); }
+    setLoading(false);
+  }, [api]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [data, props, tns, lls] = await Promise.all([
+          api.get('/api/maintenance'),
+          api.get('/api/properties'),
+          api.get('/api/tenants'),
+          api.get('/api/landlords'),
+        ]);
+        if (!cancelled) {
+          setItems(Array.isArray(data) ? data : data.items || []);
+          setProperties(props);
+          setTenants(Array.isArray(tns) ? tns.map((t: { id: number; name: string; property_id: number }) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
+          setLandlords(Array.isArray(lls) ? lls.map((l: { id: number; name: string }) => ({ id: l.id, name: l.name })) : []);
+        }
+      } catch { /* Silently ignore */ if (!cancelled) setItems([]); }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [api]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await api.post('/api/maintenance', { ...formData, property_id: parseInt(formData.property_id) });
-      setShowModal(false); setFormData({ property_id: '', reported_by: '', title: '', description: '', priority: 'medium' }); loadData();
-    } catch (err: any) { alert(err.message); }
-  };
+  const statusCounts = items.reduce((acc, i) => {
+    acc[i.status] = (acc[i.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
-  const handleUpdate = async (id: number) => {
-    try {
-      await api.put(`/api/maintenance/${id}`, { ...editData, cost: editData.cost ? parseFloat(editData.cost) : null });
-      setEditingId(null); loadData();
-    } catch (err: any) { alert(err.message); }
-  };
-
-  const startEdit = (req: MaintenanceRequest) => {
-    setEditingId(req.id);
-    setEditData({ status: req.status, contractor: req.contractor || '', cost: req.cost?.toString() || '', notes: req.notes || '' });
-  };
-
-  const filtered = requests.filter(r => {
-    const matchesSearch = r.title.toLowerCase().includes(search.toLowerCase()) || r.address.toLowerCase().includes(search.toLowerCase());
-    const matchesFilter = filter === 'all' || r.status === filter;
-    return matchesSearch && matchesFilter;
+  const portfolioFiltered = filterByPortfolio(items, portfolioFilter);
+  const filtered = portfolioFiltered.filter(i => {
+    if (statusFilter !== 'all' && i.status !== statusFilter) return false;
+    if (search && !i.title.toLowerCase().includes(search.toLowerCase()) && !i.address?.toLowerCase().includes(search.toLowerCase())) return false;
+    if (propertyFilter && i.property_id !== propertyFilter) return false;
+    if (tenantFilter) {
+      const tn = tenants.find(t => t.id === tenantFilter);
+      if (tn && tn.property_id !== i.property_id) return false;
+    }
+    if (landlordFilter) {
+      const prop = properties.find(p => p.id === i.property_id);
+      if (prop && (prop as { landlord_id?: number }).landlord_id !== landlordFilter) return false;
+    }
+    return true;
   });
 
-  const totalPages = Math.ceil(filtered.length / perPage);
-  const paged = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+  const updateStatus = async (id: number, status: string) => {
+    try { await api.put(`/api/maintenance/${id}`, { status }); await load(); } catch { /* Silently ignore */ }
+  };
 
-  const toggleSelect = (id: number) => { setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
-  const toggleSelectAll = () => { if (selectedIds.size === paged.length) setSelectedIds(new Set()); else setSelectedIds(new Set(paged.map(r => r.id))); };
+  const addItem = async () => {
+    try {
+      const prop = properties.find(p => p.id === Number(form.property_id));
+      await api.post('/api/maintenance', { ...form, property_id: Number(form.property_id), address: prop?.address || '' });
+      setShowAdd(false);
+      setForm({ title: '', description: '', priority: 'medium', property_id: '' });
+      await load();
+    } catch { /* Silently ignore */ }
+  };
 
-  const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-200 focus:outline-none";
+  const selectedProp = properties.find(p => p.id === Number(form.property_id));
+  const PRIORITY_LABELS: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" /></div>;
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedIds.length} maintenance ${selectedIds.length !== 1 ? 'items' : 'item'}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      await api.post('/api/maintenance/bulk-delete', { ids: selectedIds });
+      setSelectedIds([]);
+      await load();
+    } catch (e) {
+      console.error('Bulk delete error:', e);
+      alert('Failed to delete maintenance items. Please try again.');
+    }
+    setIsDeleting(false);
+  };
+
+  const toggleSelectItem = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filtered.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map(i => i.id));
+    }
+  };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <p className="text-xs text-gray-400 mb-0.5">Operations</p>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">Maintenance</h1>
-            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-              {requests.filter(r => r.status === 'open').length} Open
-            </span>
-          </div>
-        </div>
-        <button onClick={() => setShowModal(true)} className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">+ Log Issue</button>
-      </div>
-
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input type="text" placeholder="Search..." value={search}
-            onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-            className="w-full pl-10 pr-4 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200" />
-        </div>
-        <div className="flex items-center gap-1 ml-auto">
-          {['all', 'open', 'in_progress', 'completed'].map(s => (
-            <button key={s} onClick={() => { setFilter(s); setCurrentPage(1); }}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${filter === s ? 'bg-gray-900 text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-              {s === 'all' ? 'All' : s.replace('_', ' ')}
-            </button>
+    <Layout title="Maintenance" breadcrumb={[{ label: 'Maintenance' }]}>
+      <div className="p-4 md:p-8 space-y-6">
+        {/* Stats row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: 'Total Issues', value: items.length, accent: true },
+            { label: 'Open', value: statusCounts['open'] || 0, warn: (statusCounts['open'] || 0) > 0 },
+            { label: 'In Progress', value: statusCounts['in_progress'] || 0 },
+            { label: 'Completed', value: (statusCounts['completed'] || 0) + (statusCounts['closed'] || 0) },
+          ].map(s => (
+            <GlassCard key={s.label} className="p-4">
+              <p className="text-xs text-[var(--text-muted)]">{s.label}</p>
+              <p className={`text-2xl font-bold mt-1 ${s.warn ? 'text-orange-400' : s.accent ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                {s.value}
+              </p>
+            </GlassCard>
           ))}
         </div>
-      </div>
 
-      <div className="flex-1 flex flex-col">
-        <div className="border border-gray-200 rounded-lg overflow-hidden flex-1">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50/50">
-                <th className="w-10 px-3 py-3"><input type="checkbox" checked={paged.length>0&&selectedIds.size===paged.length} onChange={toggleSelectAll} className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500" /></th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Issue</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Property</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Priority</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {paged.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-16"><Wrench className="w-10 h-10 text-gray-300 mx-auto mb-2" /><p className="text-sm font-medium text-gray-500">No maintenance requests</p></td></tr>
-              ) : paged.map(req => {
-                const pc = PRIORITY_CONFIG[req.priority] || PRIORITY_CONFIG.medium;
-                const sc = STATUS_CONFIG[req.status] || STATUS_CONFIG.open;
-
-                if (editingId === req.id) {
-                  return (
-                    <tr key={req.id} className="border-b border-gray-100">
-                      <td colSpan={7} className="px-4 py-4">
-                        <div className="grid grid-cols-4 gap-3 mb-3">
-                          <div><label className="block text-xs text-gray-500 mb-1">Status</label><select value={editData.status} onChange={e => setEditData({...editData, status: e.target.value})} className={inputCls}><option value="open">Open</option><option value="in_progress">In Progress</option><option value="completed">Completed</option><option value="closed">Closed</option></select></div>
-                          <div><label className="block text-xs text-gray-500 mb-1">Contractor</label><input type="text" value={editData.contractor} onChange={e => setEditData({...editData, contractor: e.target.value})} className={inputCls} /></div>
-                          <div><label className="block text-xs text-gray-500 mb-1">Cost (£)</label><input type="number" value={editData.cost} onChange={e => setEditData({...editData, cost: e.target.value})} className={inputCls} /></div>
-                          <div><label className="block text-xs text-gray-500 mb-1">Notes</label><input type="text" value={editData.notes} onChange={e => setEditData({...editData, notes: e.target.value})} className={inputCls} /></div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => handleUpdate(req.id)} className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-sm">Save</button>
-                          <button onClick={() => setEditingId(null)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">Cancel</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                }
-
-                return (
-                  <tr key={req.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                    <td className="w-10 px-3 py-3"><input type="checkbox" checked={selectedIds.has(req.id)} onChange={() => toggleSelect(req.id)} className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500" /></td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-semibold text-gray-900">{req.title}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{req.description}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm text-gray-700">{req.address}</p>
-                      {req.reported_by && <p className="text-xs text-gray-400">By: {req.reported_by}</p>}
-                    </td>
-                    <td className="px-4 py-3"><span className={`inline-flex text-xs font-medium px-2.5 py-1 rounded-full border ${pc.border} ${pc.text} bg-white`}>{pc.label}</span></td>
-                    <td className="px-4 py-3"><span className={`inline-flex text-xs font-medium px-2.5 py-1 rounded-full border ${sc.border} ${sc.text} bg-white`}>{sc.label}</span></td>
-                    <td className="px-4 py-3 text-sm text-gray-500">{new Date(req.created_at).toLocaleDateString('en-GB')}</td>
-                    <td className="px-4 py-3"><button onClick={() => startEdit(req)} className="text-xs text-gray-500 hover:text-gray-900 font-medium">Update</button></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        {/* Search + Add */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex-1"><SearchBar value={search} onChange={setSearch} placeholder="Search maintenance..." /></div>
+          <Button
+            variant={editMode ? "outline" : "ghost"}
+            onClick={() => {
+              setEditMode(!editMode);
+              if (editMode) setSelectedIds([]);
+            }}
+          >
+            {editMode ? 'Cancel' : 'Edit'}
+          </Button>
+          <Button variant="gradient" onClick={() => setShowAdd(true)}>
+            <Plus size={16} className="mr-2" /> Report Issue
+          </Button>
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-4">
-            <button onClick={() => setCurrentPage(p => Math.max(1,p-1))} disabled={currentPage===1} className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40"><ChevronLeft className="w-4 h-4" /> Previous</button>
-            {Array.from({length:totalPages},(_,i)=>i+1).map(page => (
-              <button key={page} onClick={() => setCurrentPage(page)} className={`w-8 h-8 text-sm font-medium rounded-lg ${page===currentPage?'bg-gray-900 text-white':'text-gray-600 hover:bg-gray-100'}`}>{page}</button>
-            ))}
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages,p+1))} disabled={currentPage===totalPages} className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40">Next <ChevronRight className="w-4 h-4" /></button>
+        {/* Dropdown filters + Status filter */}
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchDropdown
+            icon={<Building2 size={14} />}
+            placeholder="Property"
+            searchPlaceholder="Search properties..."
+            options={properties.map(p => ({ id: p.id, label: p.address }))}
+            value={propertyFilter}
+            onChange={setPropertyFilter}
+          />
+          <SearchDropdown
+            icon={<User size={14} />}
+            placeholder="Tenant"
+            searchPlaceholder="Search tenants..."
+            options={tenants.map(t => ({ id: t.id, label: t.name, subtitle: properties.find(p => p.id === t.property_id)?.address }))}
+            value={tenantFilter}
+            onChange={setTenantFilter}
+          />
+          <SearchDropdown
+            icon={<User size={14} />}
+            placeholder="Landlord"
+            searchPlaceholder="Search landlords..."
+            options={landlords.map(l => ({ id: l.id, label: l.name }))}
+            value={landlordFilter}
+            onChange={setLandlordFilter}
+          />
+
+          <div className="h-5 w-px bg-[var(--border-subtle)] hidden sm:block" />
+
+          {[
+            { key: 'all', label: `All (${items.length})` },
+            ...STATUS_MAP.map(s => ({ key: s.key, label: `${s.label} (${statusCounts[s.key] || 0})` })),
+          ].map(f => (
+            <Tag key={f.key} active={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>
+              {f.label}
+            </Tag>
+          ))}
+        </div>
+
+        {/* Bulk Actions */}
+        {editMode && (
+          <BulkActions
+            selectedIds={selectedIds}
+            onClearSelection={() => setSelectedIds([])}
+            onBulkDelete={handleBulkDelete}
+            entityName="maintenance item"
+            isDeleting={isDeleting}
+          />
+        )}
+
+        {/* Content */}
+        {loading ? (
+          <div className="text-center py-16 text-[var(--text-muted)] text-sm">Loading...</div>
+        ) : filtered.length === 0 ? (
+          <EmptyState message={search || statusFilter !== 'all' ? 'No maintenance items match your filters' : 'No maintenance items yet'} />
+        ) : (
+          <>
+            {editMode && (
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length === filtered.length && filtered.length > 0}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+                />
+                <span className="text-sm text-gray-400">
+                  {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all'}
+                </span>
+              </div>
+            )}
+            <DataTable<MaintenanceItem>
+              columns={[
+                ...(editMode ? [{
+                  key: '_select' as const, header: '', width: 'w-12',
+                  render: (item: MaintenanceItem) => (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(item.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        toggleSelectItem(item.id);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+                    />
+                  ),
+                }] : []),
+                {
+                  key: 'title', header: 'Title',
+                render: (item) => (
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${item.priority === 'urgent' ? 'bg-red-500/20' : item.priority === 'high' ? 'bg-orange-500/20' : 'bg-[var(--bg-hover)]'
+                      }`}>
+                      <Wrench size={14} className={item.priority === 'urgent' ? 'text-red-400' : 'text-[var(--text-muted)]'} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{item.title}</p>
+                      <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{item.address}</p>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'property', header: 'Property', hideClass: 'hidden md:table-cell',
+                render: (item) => (
+                  <p className="text-xs text-[var(--text-secondary)] truncate max-w-[200px] flex items-center gap-1">
+                    <MapPin size={10} className="text-[var(--text-muted)] shrink-0" />{item.address}
+                  </p>
+                ),
+              },
+              {
+                key: 'reporter', header: 'Reported By', hideClass: 'hidden lg:table-cell',
+                render: (item) => <span className="text-xs text-[var(--text-muted)]">{item.reporter_name || '—'}</span>,
+              },
+              {
+                key: 'priority', header: 'Priority',
+                render: (item) => (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${PRIORITY_COLORS[item.priority]}`}>
+                    {PRIORITY_LABELS[item.priority] || item.priority}
+                  </span>
+                ),
+              },
+              {
+                key: 'status', header: 'Status',
+                render: (item) => (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusStyle(item.status)}`}>
+                    {statusLabel(item.status)}
+                  </span>
+                ),
+              },
+              {
+                key: 'date', header: 'Date', hideClass: 'hidden sm:table-cell',
+                render: (item) => <span className="text-xs text-[var(--text-muted)]">{formatDate(item.reported_date)}</span>,
+              },
+              {
+                key: 'expand', header: '', align: 'right', width: 'w-20',
+                render: (item) => expanded === item.id ? <ChevronUp size={14} className="text-[var(--text-muted)]" /> : <ChevronDown size={14} className="text-[var(--text-muted)]" />,
+              },
+            ]}
+            data={filtered}
+            rowKey={(item) => item.id}
+            onRowClick={(item) => !editMode && setExpanded(expanded === item.id ? null : item.id)}
+            expandedId={expanded}
+            expandedRow={(item) => (
+              <div className="px-4 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)] space-y-3">
+                {item.description && <p className="text-sm text-[var(--text-secondary)]">{item.description}</p>}
+                {item.resolved_date && <p className="text-xs text-emerald-400">Resolved: {formatDate(item.resolved_date)}</p>}
+                <div className="flex gap-2">
+                  {item.status !== 'in_progress' && item.status !== 'completed' && item.status !== 'closed' && (
+                    <Button variant="outline" size="sm" onClick={(e?: React.MouseEvent) => { e?.stopPropagation(); updateStatus(item.id, 'in_progress'); }}>Mark In Progress</Button>
+                  )}
+                  {item.status !== 'completed' && item.status !== 'closed' && (
+                    <Button variant="outline" size="sm" onClick={(e?: React.MouseEvent) => { e?.stopPropagation(); updateStatus(item.id, 'completed'); }}>Mark Completed</Button>
+                  )}
+                </div>
+              </div>
+            )}
+            />
+          </>
+        )}
+
+        {/* Add Modal */}
+        {showAdd && (
+          <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-end md:items-center justify-center z-50" onClick={() => setShowAdd(false)}>
+            <div className="bg-[var(--bg-card)] rounded-t-2xl md:rounded-2xl border border-[var(--border-input)] w-full md:w-[480px] max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-bold">Report Issue</h3>
+                <button onClick={() => setShowAdd(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+              </div>
+              <div className="space-y-4">
+                <Input label="Title *" value={form.title} onChange={v => setForm(p => ({ ...p, title: v }))} placeholder="Issue title" />
+                {/* Property selector */}
+                <div className="relative">
+                  <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Property *</label>
+                  <button type="button" onClick={() => setPropDropOpen(!propDropOpen)}
+                    className="w-full flex items-center justify-between bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-left hover:border-[var(--accent-orange)]/40 transition-colors">
+                    <span className={selectedProp ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}>
+                      {selectedProp ? selectedProp.address : 'Select property...'}
+                    </span>
+                    <ChevronDown size={14} className="text-[var(--text-muted)]" />
+                  </button>
+                  {propDropOpen && (
+                    <div className="absolute z-50 mt-1 w-full bg-[var(--bg-card)] border border-[var(--border-input)] rounded-xl shadow-2xl overflow-hidden">
+                      <div className="p-2 border-b border-[var(--border-subtle)]">
+                        <div className="flex items-center gap-2 bg-[var(--bg-input)] rounded-lg px-3 py-2">
+                          <Search size={14} className="text-[var(--text-muted)]" />
+                          <input value={propSearch} onChange={e => setPropSearch(e.target.value)} placeholder="Search properties..."
+                            className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none" autoFocus />
+                        </div>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        {properties.filter(p => p.address.toLowerCase().includes(propSearch.toLowerCase())).map(p => (
+                          <button key={p.id} onClick={() => { setForm(f => ({ ...f, property_id: String(p.id) })); setPropDropOpen(false); setPropSearch(''); }}
+                            className="w-full text-left px-3 py-2.5 text-sm hover:bg-[var(--bg-hover)] transition-colors truncate text-[var(--text-secondary)]">
+                            {p.address}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <Input label="Description" value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} placeholder="Describe the issue..." />
+                <div>
+                  <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Priority</label>
+                  <div className="flex gap-1.5">
+                    {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
+                      <button key={k} onClick={() => setForm(p => ({ ...p, priority: k }))}
+                        className={`flex-1 text-xs py-2 rounded-lg border font-medium transition-colors ${form.priority === k ? PRIORITY_COLORS[k] + ' border-current' : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
+                          }`}>{v}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
+                  <Button variant="gradient" onClick={addItem} disabled={!form.title || !form.property_id}>Report</Button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-lg w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <div className="border-b px-6 py-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">Log Maintenance Issue</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div><label className="block text-xs text-gray-500 mb-1">Property *</label><select value={formData.property_id} onChange={e => setFormData({...formData, property_id: e.target.value})} className={inputCls} required><option value="">Select property...</option>{properties.map(p => <option key={p.id} value={p.id}>{p.address}</option>)}</select></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs text-gray-500 mb-1">Reported By</label><input type="text" value={formData.reported_by} onChange={e => setFormData({...formData, reported_by: e.target.value})} placeholder="Tenant name or 'Inspection'" className={inputCls} /></div>
-                <div><label className="block text-xs text-gray-500 mb-1">Priority</label><select value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value})} className={inputCls}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
-              </div>
-              <div><label className="block text-xs text-gray-500 mb-1">Issue Title *</label><input type="text" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className={inputCls} required /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Description *</label><textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} rows={3} className={inputCls} required /></div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm font-medium">Log Issue</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+    </Layout>
   );
 }

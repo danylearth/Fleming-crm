@@ -1,164 +1,198 @@
-import type { ReactNode } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import {
-  Home, Building2, Users, UserCheck, Wrench, PoundSterling, LogOut,
-  ClipboardList, Briefcase, CheckSquare, ChevronLeft, Search, Bell, Settings
-} from 'lucide-react';
 import { useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { usePortfolio } from '../context/PortfolioContext';
+import { Menu, LogOut, ChevronLeft, ChevronRight, X, Sun, Moon, Users } from 'lucide-react';
+import {
+  DashboardIcon, EnquiriesIcon, PropertiesIcon, LandlordsIcon, TenantsIcon,
+  BdmIcon, MaintenanceIcon, TasksIcon, FinancialsIcon, SettingsIcon
+} from './ui/icons/FlemingIcons';
+import FloatingAI from './ui/FloatingAI';
+import { useTheme } from '../context/ThemeContext';
+
+const navItems = [
+  { to: '/', icon: DashboardIcon, label: 'Dashboard', roles: null },
+  { to: '/properties', icon: PropertiesIcon, label: 'Properties', roles: null },
+  { to: '/landlords', icon: LandlordsIcon, label: 'Landlords', roles: null },
+  { to: '/tenants', icon: TenantsIcon, label: 'Tenants', roles: null },
+  { to: '/enquiries', icon: EnquiriesIcon, label: 'Tenant Enquiries', roles: null },
+  { to: '/bdm', icon: BdmIcon, label: 'Landlord Enquiries', roles: null },
+  { to: '/maintenance', icon: MaintenanceIcon, label: 'Maintenance', roles: null },
+  { to: '/tasks', icon: TasksIcon, label: 'Tasks', roles: null },
+  { to: '/financials', icon: FinancialsIcon, label: 'Financials', roles: null },
+  { to: '/users', icon: Users, label: 'Team', roles: ['admin'] }, // Admin only
+  { to: '/settings', icon: SettingsIcon, label: 'Settings', roles: null },
+];
+
+const PORTFOLIO_OPTIONS = [
+  { key: 'all' as const, label: 'All' },
+  { key: 'internal' as const, label: 'My Portfolio' },
+  { key: 'external' as const, label: 'My Clients' },
+];
 
 interface LayoutProps {
-  children: ReactNode;
+  children: React.ReactNode;
+  title?: string;
+  breadcrumb?: { label: string; to?: string }[];
+  hideTopBar?: boolean;
 }
 
-export default function Layout({ children }: LayoutProps) {
-  const { user, logout } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
+export default function Layout({ children, title, hideTopBar }: LayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
-  const navSections = [
-    {
-      items: [
-        { path: '/', label: 'Overview', icon: Home },
-      ],
-    },
-    {
-      label: 'Contacts',
-      items: [
-        { path: '/tenant-enquiries', label: 'Enquiries', icon: ClipboardList },
-        { path: '/tenants', label: 'Tenants', icon: Users },
-        { path: '/landlords', label: 'Landlords', icon: UserCheck },
-        { path: '/landlords-bdm', label: 'BDM', icon: Briefcase },
-      ],
-    },
-    {
-      label: 'Property',
-      items: [
-        { path: '/properties', label: 'Properties', icon: Building2 },
-        { path: '/maintenance', label: 'Maintenance', icon: Wrench },
-      ],
-    },
-    {
-      items: [
-        { path: '/tasks', label: 'Tasks', icon: CheckSquare },
-        { path: '/transactions', label: 'Financials', icon: PoundSterling },
-      ],
-    },
-  ];
-
-  const isActive = (path: string) => {
-    if (path === '/') return location.pathname === '/';
-    return location.pathname.startsWith(path);
-  };
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
+  const { portfolioFilter, setPortfolioFilter } = usePortfolio();
 
   return (
-    <div className="h-screen flex bg-white overflow-hidden">
+    <div className="flex h-screen bg-[var(--bg-page)] font-[Lufga] text-[var(--text-primary)] overflow-hidden">
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="fixed inset-0 bg-[var(--overlay-bg)] z-40 md:hidden" onClick={() => setMobileOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside
-        className={`flex flex-col border-r border-gray-200 bg-white transition-all duration-200 flex-shrink-0 ${
-          collapsed ? 'w-16' : 'w-56'
-        }`}
-      >
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 flex flex-col bg-[var(--bg-page)] border-r border-[var(--border-subtle)] transition-all duration-200
+        ${mobileOpen ? 'translate-x-0 w-52' : '-translate-x-full w-52'}
+        md:static md:translate-x-0 ${collapsed ? 'md:w-16' : 'md:w-52'} shrink-0
+      `}>
         {/* Logo */}
-        <div className="flex items-center gap-2.5 px-4 h-14 border-b border-gray-100 flex-shrink-0">
-          <div className="w-8 h-8 bg-navy-600 rounded-lg flex items-center justify-center flex-shrink-0">
-            <Home className="w-4 h-4 text-white" />
-          </div>
-          {!collapsed && (
-            <span className="font-bold text-gray-900 text-sm tracking-tight">Fleming</span>
+        <div className="flex items-center gap-3 px-4 h-16 border-b border-[var(--border-subtle)]">
+          {(!collapsed || mobileOpen) ? (
+            <img
+              src={theme === 'dark' ? '/logo-light.png' : '/logo-dark.png'}
+              alt="Fleming Lettings"
+              className="h-8 w-auto object-contain"
+            />
+          ) : (
+            <img
+              src={theme === 'dark' ? '/logo-icon-light.png' : '/logo-icon.png'}
+              alt="Fleming Lettings"
+              className="w-8 h-8 object-contain"
+            />
           )}
+          {/* Close on mobile */}
+          <button onClick={() => setMobileOpen(false)} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-secondary)] md:hidden">
+            <X size={18} />
+          </button>
         </div>
 
+        {/* Desktop collapse toggle – edge-mounted arrow */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="absolute top-4 -right-3 z-10 w-6 h-6 rounded-full bg-[var(--bg-card)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors hidden md:flex"
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-3 px-2">
-          {navSections.map((section, si) => (
-            <div key={si} className={si > 0 ? 'mt-4' : ''}>
-              {section.label && !collapsed && (
-                <div className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-                  {section.label}
-                </div>
-              )}
-              {section.items.map(item => {
-                const active = isActive(item.path);
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    title={collapsed ? item.label : undefined}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors mb-0.5 ${
-                      active
-                        ? 'bg-gray-100 text-gray-900'
-                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                    } ${collapsed ? 'justify-center' : ''}`}
-                  >
-                    <item.icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-gray-900' : ''}`} />
-                    {!collapsed && item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
+        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+          {navItems
+            .filter(item => !item.roles || (user?.role && item.roles.includes(user.role)))
+            .map(item => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                onClick={() => setMobileOpen(false)}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${isActive
+                    ? 'bg-[var(--bg-input)] text-[var(--text-primary)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]'
+                  }`
+                }
+              >
+                <item.icon size={18} className="shrink-0" />
+                {(!collapsed || mobileOpen) && <span>{item.label}</span>}
+              </NavLink>
+            ))}
         </nav>
 
-        {/* Bottom */}
-        <div className="border-t border-gray-100 px-2 py-3 space-y-0.5">
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50 w-full transition-colors ${
-              collapsed ? 'justify-center' : ''
-            }`}
-          >
-            <ChevronLeft className={`w-[18px] h-[18px] transition-transform ${collapsed ? 'rotate-180' : ''}`} />
-            {!collapsed && 'Collapse'}
-          </button>
-          <button
-            onClick={handleLogout}
-            title="Sign out"
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-gray-400 hover:text-red-600 hover:bg-red-50 w-full transition-colors ${
-              collapsed ? 'justify-center' : ''
-            }`}
-          >
-            <LogOut className="w-[18px] h-[18px]" />
-            {!collapsed && 'Sign Out'}
-          </button>
+        {/* User */}
+        <div className="p-3 border-t border-[var(--border-subtle)]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
+              {user?.name?.[0] || 'U'}
+            </div>
+            {(!collapsed || mobileOpen) && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+                <p className="text-xs text-[var(--text-muted)] truncate">{user?.email || ''}</p>
+              </div>
+            )}
+            {(!collapsed || mobileOpen) && (
+              <button onClick={() => { logout(); navigate('/login'); }} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
+                <LogOut size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </aside>
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="flex items-center justify-between h-14 px-6 border-b border-gray-100 bg-white flex-shrink-0">
-          <div className="relative w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search or type a command"
-              className="w-full pl-10 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-500/20 focus:border-navy-400"
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-              <Bell className="w-[18px] h-[18px]" />
-            </button>
-            <div className="w-8 h-8 bg-navy-600 rounded-full flex items-center justify-center">
-              <span className="text-xs font-semibold text-white">
-                {user?.name?.charAt(0).toUpperCase()}
-              </span>
+        {!hideTopBar && (
+          <header className="flex items-center justify-between px-4 md:px-8 h-14 md:h-16 border-b border-[var(--border-subtle)] shrink-0">
+            <div className="flex items-center gap-3">
+              {/* Hamburger on mobile */}
+              <button onClick={() => setMobileOpen(true)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden mr-1">
+                <Menu size={22} />
+              </button>
+              {title && <h1 className="text-xl md:text-2xl font-bold">{title}</h1>}
             </div>
-          </div>
-        </header>
+            <div className="flex items-center gap-3">
+              {/* Portfolio toggle - Admin only */}
+              {user?.role === 'admin' && (
+                <div className="flex items-center gap-0.5 bg-[var(--bg-input)] rounded-xl p-0.5 border border-[var(--border-input)]">
+                  {PORTFOLIO_OPTIONS.map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setPortfolioFilter(opt.key)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap ${portfolioFilter === opt.key
+                          ? opt.key === 'internal'
+                            ? 'bg-orange-500/20 text-orange-400 shadow-sm'
+                            : opt.key === 'external'
+                              ? 'bg-purple-500/20 text-purple-400 shadow-sm'
+                              : 'bg-[var(--bg-hover)] text-[var(--text-primary)] shadow-sm'
+                          : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                        }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button onClick={toggleTheme} className="p-2 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-elevated)] border border-[var(--border-color)] transition-colors text-[var(--text-primary)]">
+                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-xs font-bold text-white">
+                {user?.name?.[0] || 'U'}
+              </div>
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-medium">{user?.name || 'User'}</p>
+                <p className="text-xs text-[var(--text-muted)]">{user?.email || ''}</p>
+              </div>
+            </div>
+          </header>
+        )}
 
-        {/* Content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        {/* Content – when hideTopBar, add mobile hamburger */}
+        {hideTopBar && (
+          <button onClick={() => setMobileOpen(true)} className="fixed top-4 left-4 z-30 text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden bg-[var(--bg-card)] rounded-lg p-2 border border-[var(--border-input)]">
+            <Menu size={20} />
+          </button>
+        )}
+
+        <main className="flex-1 overflow-y-auto">
           {children}
         </main>
       </div>
+
+      {/* Floating AI */}
+      <FloatingAI />
     </div>
   );
 }
