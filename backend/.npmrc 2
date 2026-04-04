@@ -1,0 +1,6 @@
+# Faster installs, skip optional dependencies
+optional=false
+# Don't run scripts during install (except necessary ones)
+ignore-scripts=false
+# Use production mode for Railway
+# production=true
