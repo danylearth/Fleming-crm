@@ -9,7 +9,7 @@ cd ..
 
 echo "=== Building backend ==="
 cd backend
-npm install --omit=optional
+npm install
 npm install sharp --ignore-scripts
 npm rebuild sharp
 npx tsc -p tsconfig.render.json || true
