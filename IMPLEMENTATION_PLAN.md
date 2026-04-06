@@ -26,7 +26,7 @@
 
 - [x] **Push to Railway and verify build succeeds** — Acceptance criteria: zero EBADPLATFORM errors, `backend/dist/index-pg.js` produced, `npm prune` completes, container starts, `/api/health` returns 200. ✓ Verified 2026-04-06: health=200, login works, merged to main.
 
-- [ ] **Verify sharp works on Linux after prune** — sharp is a production dep with platform-specific binaries. Confirm `npm ci --force` installs Linux binaries and `npm prune --omit=dev` doesn't remove them. Test by hitting an endpoint that uses sharp (inventory photo thumbnails).
+- [x] **Verify sharp works on Linux after prune** — sharp is a production dep with platform-specific binaries. Confirm `npm ci --force` installs Linux binaries and `npm prune --omit=dev` doesn't remove them. Test by hitting an endpoint that uses sharp (inventory photo thumbnails). ✓ Verified 2026-04-06: uploaded 100x100 PNG to `/api/inventory-photos/1/1`, received 200 with `thumbnail_filename` confirming sharp resized+converted successfully on Railway Linux.
 
 ### Future Release (Out of Scope)
 
