@@ -3,13 +3,13 @@ set -e
 
 echo "=== Building frontend ==="
 cd frontend
-npm install
+npm install --omit=optional
 VITE_API_URL="" npx vite build
 cd ..
 
 echo "=== Building backend ==="
 cd backend
-npm install --no-optional
+npm install --omit=optional
 npm install sharp --ignore-scripts
 npm rebuild sharp
 npx tsc -p tsconfig.render.json || true
