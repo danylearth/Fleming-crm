@@ -35,7 +35,6 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@rolldown/binding-darwin-arm64": "^1.0.0-rc.13",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
