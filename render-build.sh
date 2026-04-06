@@ -3,20 +3,23 @@ set -e
 
 echo "=== Building frontend ==="
 cd frontend
-npm install --omit=optional
-VITE_API_URL="" npx vite build
+npm ci
+npx vite build
 cd ..
 
 echo "=== Building backend ==="
 cd backend
-npm install
-npm install sharp --ignore-scripts
-npm rebuild sharp
+# Install ALL deps (including devDeps like typescript) for compilation
+npm ci --force
+# Compile TypeScript
 npx tsc -p tsconfig.render.json || true
 
 if [ ! -f dist/index-pg.js ]; then
   echo "ERROR: backend/dist/index-pg.js was not produced by tsc"
   exit 1
 fi
+
+# Remove devDeps after compilation - production image only has runtime deps
+npm prune --omit=dev
 
 echo "=== Build complete ==="
