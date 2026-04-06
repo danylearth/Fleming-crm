@@ -371,6 +371,8 @@ export async function initDb() {
       CREATE TABLE IF NOT EXISTS sms_messages (
         id SERIAL PRIMARY KEY,
         enquiry_id INTEGER REFERENCES tenant_enquiries(id),
+        entity_type TEXT,
+        entity_id INTEGER,
         to_phone TEXT NOT NULL,
         from_phone TEXT,
         message_body TEXT NOT NULL,
@@ -406,6 +408,7 @@ export async function initDb() {
       -- Create indexes
       CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
       CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
+      CREATE INDEX IF NOT EXISTS idx_sms_messages_entity ON sms_messages(entity_type, entity_id);
       CREATE INDEX IF NOT EXISTS idx_email_messages_resend_id ON email_messages(resend_id);
       CREATE INDEX IF NOT EXISTS idx_email_messages_entity ON email_messages(entity_type, entity_id);
       CREATE INDEX IF NOT EXISTS idx_properties_landlord ON properties(landlord_id);
@@ -529,6 +532,20 @@ export async function initDb() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `);
+
+    // Sprint 7: Add entity_type/entity_id to sms_messages for multi-entity SMS support
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE sms_messages ADD COLUMN IF NOT EXISTS entity_type TEXT;
+        ALTER TABLE sms_messages ADD COLUMN IF NOT EXISTS entity_id INTEGER;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+    // Backfill existing SMS records with entity_type/entity_id from enquiry_id
+    await client.query(`
+      UPDATE sms_messages SET entity_type = 'tenant_enquiry', entity_id = enquiry_id
+      WHERE enquiry_id IS NOT NULL AND entity_type IS NULL
+    `).catch(() => {});
 
     console.log('Database initialized');
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, SectionHeader, EmptyState, Card, DatePicker } from '../components/ui';
@@ -7,7 +7,8 @@ import ActivityTimeline from '../components/ui/ActivityTimeline';
 import AddressAutocomplete from '../components/ui/AddressAutocomplete';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
-import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Briefcase, Trash2, RotateCcw } from 'lucide-react';
+import { calculateSmsSegments } from '../utils/sms';
+import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Briefcase, Trash2, RotateCcw, Send, Clock } from 'lucide-react';
 import { getPropertyImage } from '../utils/propertyImages';
 
 interface Landlord {
@@ -98,13 +99,48 @@ export default function LandlordDetail() {
   const [propSaving, setPropSaving] = useState(false);
   const [propForm, setPropForm] = useState({
     landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
-    rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: false,
+    rent_amount: '', service_type: '',
   });
   const [showAddDirector, setShowAddDirector] = useState(false);
   const [directorForm, setDirectorForm] = useState({
     name: '', email: '', phone: '', date_of_birth: '', role: '', kyc_completed: false, notes: ''
   });
   const [directorSaving, setDirectorSaving] = useState(false);
+
+  // SMS
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [smsHistory, setSmsHistory] = useState<any[]>([]);
+  const [smsCompose, setSmsCompose] = useState('');
+  const [smsSending, setSmsSending] = useState(false);
+
+  // Email History
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [emailHistory, setEmailHistory] = useState<any[]>([]);
+
+  const loadSmsHistory = useCallback(async () => {
+    try {
+      const msgs = await api.get(`/api/sms/landlord/${id}`);
+      setSmsHistory(Array.isArray(msgs) ? msgs : []);
+    } catch { /* SMS history fetch failed */ }
+  }, [id, api]);
+
+  const loadEmailHistory = useCallback(async () => {
+    try {
+      const msgs = await api.get(`/api/email-history/landlord/${id}`);
+      setEmailHistory(Array.isArray(msgs) ? msgs : []);
+    } catch { /* Email history fetch failed */ }
+  }, [id, api]);
+
+  const sendStandaloneSms = async () => {
+    if (!smsCompose.trim() || !landlord?.phone) return;
+    setSmsSending(true);
+    try {
+      await api.post('/api/sms/send', { entity_type: 'landlord', entity_id: Number(id), to_phone: landlord.phone, message_body: smsCompose.trim() });
+      setSmsCompose('');
+      await loadSmsHistory();
+    } catch { /* SMS send failed */ }
+    setSmsSending(false);
+  };
 
   const populateForm = (l: Landlord) => setForm({
     name: l.name || '', email: l.email || '', phone: l.phone || '',
@@ -153,6 +189,9 @@ export default function LandlordDetail() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadSmsHistory(); loadEmailHistory(); }, [id]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -755,9 +794,107 @@ export default function LandlordDetail() {
               </div>
             </GlassCard>
 
+            {/* KYC Compliance */}
+            <GlassCard className="p-6">
+              <SectionHeader title="KYC Compliance" icon={<ShieldCheck size={16} />} />
+              <div className="space-y-2">
+                {[
+                  { label: 'Identity Verified', done: !!landlord.kyc_completed },
+                  { label: 'Company Verified', done: !!(landlord.entity_type === 'company' && landlord.company_number), show: landlord.entity_type === 'company' },
+                  { label: 'Address Verified', done: !!landlord.home_address },
+                  { label: 'Contact Details', done: !!(landlord.email && landlord.phone) },
+                ].filter(item => item.show !== false).map(item => (
+                  <div key={item.label} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                    <span className="text-xs">{item.label}</span>
+                    <span className={`text-[10px] font-medium ${item.done ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                      {item.done ? 'Yes' : 'No'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+
+            {/* SMS History */}
+            <GlassCard className="p-6">
+              <SectionHeader title="SMS History" icon={<Phone size={16} />} action={loadSmsHistory} actionLabel="Refresh" />
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                {smsHistory.length === 0 && <p className="text-xs text-[var(--text-muted)]">No messages sent yet</p>}
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {smsHistory.map((sms: any) => (
+                  <div key={sms.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                        sms.status === 'delivered'   ? 'bg-green-500/20 text-green-400' :
+                        sms.status === 'sent'        ? 'bg-blue-500/20 text-blue-400' :
+                        sms.status === 'queued' || sms.status === 'sending' ? 'bg-amber-500/20 text-amber-400' :
+                        sms.status === 'failed' || sms.status === 'undelivered' ? 'bg-red-500/20 text-red-400' :
+                                                       'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {sms.status}
+                      </span>
+                      <span className="text-[10px] text-[var(--text-muted)]">{sms.to_phone}</span>
+                    </div>
+                    <p className="text-xs text-[var(--text-primary)] whitespace-pre-wrap">{sms.message_body}</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-[10px] text-[var(--text-muted)]">{sms.sent_by_email || 'System'}</span>
+                      <span className="text-[10px] text-[var(--text-muted)]">{new Date(sms.created_at).toLocaleString('en-GB')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {landlord?.phone && (
+                <div className="mt-3">
+                  <div className="flex gap-2">
+                    <textarea value={smsCompose} onChange={e => setSmsCompose(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendStandaloneSms(); } }}
+                      placeholder={`Send SMS to ${landlord.phone}...`}
+                      rows={1}
+                      className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors resize-none [field-sizing:content]" />
+                    <Button variant="gradient" onClick={sendStandaloneSms} disabled={smsSending || !smsCompose.trim()} className="gap-1.5">
+                      <Send size={14} />
+                      <span>Send</span>
+                    </Button>
+                  </div>
+                  {smsCompose.trim() && (
+                    <p className="text-[10px] text-[var(--text-muted)] mt-1">{(() => { const s = calculateSmsSegments(smsCompose); return `${s.charCount} chars · ${s.segments} segment${s.segments !== 1 ? 's' : ''} · ${s.encoding}`; })()}</p>
+                  )}
+                </div>
+              )}
+            </GlassCard>
+
+            {/* Email History */}
+            <GlassCard className="p-6">
+              <SectionHeader title="Email History" icon={<Mail size={16} />} action={loadEmailHistory} actionLabel="Refresh" />
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                {emailHistory.length === 0 && <p className="text-xs text-[var(--text-muted)]">No emails sent yet</p>}
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {emailHistory.map((email: any) => (
+                  <div key={email.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                        email.status === 'delivered' ? 'bg-green-500/20 text-green-400' :
+                        email.status === 'sent'      ? 'bg-blue-500/20 text-blue-400' :
+                        email.status === 'opened'    ? 'bg-emerald-500/20 text-emerald-400' :
+                        email.status === 'bounced' || email.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                                                       'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {email.status}
+                      </span>
+                      <span className="text-[10px] text-[var(--text-muted)]">{email.to_email}</span>
+                    </div>
+                    <p className="text-xs text-[var(--text-primary)] font-medium">{email.subject}</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-[10px] text-[var(--text-muted)]">{email.sent_by_email || 'System'}</span>
+                      <span className="text-[10px] text-[var(--text-muted)]">{new Date(email.created_at).toLocaleString('en-GB')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+
             {/* Activity Timeline */}
             <GlassCard className="p-6">
-              <SectionHeader title="Activity Timeline" />
+              <SectionHeader title="Activity Timeline" icon={<Clock size={16} />} />
               <ActivityTimeline entityType="landlord" entityId={landlord.id} />
             </GlassCard>
           </div>
@@ -830,7 +967,7 @@ export default function LandlordDetail() {
                     onSelect={p => { if (p.postcode) setPropForm(f => ({ ...f, postcode: p.postcode || f.postcode })); }}
                     placeholder="Property address" />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Postcode" value={propForm.postcode} onChange={(v: string) => setPropForm(f => ({ ...f, postcode: v }))} placeholder="e.g. SW1A 1AA" />
+                    <Input label="Postcode *" value={propForm.postcode} onChange={(v: string) => setPropForm(f => ({ ...f, postcode: v }))} placeholder="e.g. SW1A 1AA" />
                     <Input label="Rent (£/month)" value={propForm.rent_amount} onChange={(v: string) => setPropForm(f => ({ ...f, rent_amount: v }))} placeholder="0" />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -838,32 +975,8 @@ export default function LandlordDetail() {
                       options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
                     <Input label="Bedrooms" value={propForm.bedrooms} onChange={(v: string) => setPropForm(f => ({ ...f, bedrooms: v }))} placeholder="1" />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Select label="Status" value={propForm.status} onChange={(v: string) => setPropForm(f => ({ ...f, status: v }))}
-                      options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }]} />
-                    <Select label="Service Type" value={propForm.service_type} onChange={(v: string) => setPropForm(f => ({ ...f, service_type: v }))}
-                      options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Select label="Council Tax Band" value={propForm.council_tax_band} onChange={(v: string) => setPropForm(f => ({ ...f, council_tax_band: v }))}
-                      options={[{ value: '', label: 'Select...' }, ...['A','B','C','D','E','F','G','H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
-                    <div>
-                      <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Gas Supply</label>
-                      <button type="button" onClick={() => setPropForm(f => ({ ...f, has_gas: !f.has_gas }))}
-                        className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border transition-colors w-full ${
-                          propForm.has_gas
-                            ? 'bg-[var(--accent-orange)]/10 border-[var(--accent-orange)]/30 text-[var(--accent-orange)]'
-                            : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-muted)]'
-                        }`}>
-                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${
-                          propForm.has_gas ? 'bg-[var(--accent-orange)] border-[var(--accent-orange)]' : 'border-[var(--border-input)]'
-                        }`}>
-                          {propForm.has_gas && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5L4.5 7.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                        </div>
-                        <span className="text-sm">Has Gas</span>
-                      </button>
-                    </div>
-                  </div>
+                  <Select label="Service Type" value={propForm.service_type} onChange={(v: string) => setPropForm(f => ({ ...f, service_type: v }))}
+                    options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
                 </div>
               )}
 
@@ -877,21 +990,23 @@ export default function LandlordDetail() {
                       await api.post('/api/property-landlords', {
                         property_id: Number(selectedPropertyId),
                         landlord_id: Number(id),
-                        is_primary: 1,
-                        ownership_entity_type: 'individual'
+                        is_primary: properties.length === 0 ? 1 : 0,
+                        ownership_entity_type: landlord?.entity_type || 'individual'
                       });
                       setShowAddProp(false);
+                      setSelectedPropertyId('');
                       await loadDetail();
-                    } catch (e) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    } catch (e: any) {
                       console.error(e);
-                      alert('Failed to link property');
+                      alert(e?.response?.data?.error || e?.message || 'Failed to link property. It may already be linked to this landlord.');
                     }
                     setPropSaving(false);
                   }}>
                     {propSaving ? 'Linking...' : 'Link Property'}
                   </Button>
                 ) : (
-                  <Button variant="gradient" disabled={propSaving || !propForm.address} onClick={async () => {
+                  <Button variant="gradient" disabled={propSaving || !propForm.address || !propForm.postcode} onClick={async () => {
                     setPropSaving(true);
                     try {
                       const res = await api.post('/api/properties', {
@@ -899,11 +1014,15 @@ export default function LandlordDetail() {
                         landlord_id: Number(id),
                         bedrooms: Number(propForm.bedrooms),
                         rent_amount: Number(propForm.rent_amount) || 0,
-                        has_gas: propForm.has_gas,
                       });
                       setShowAddProp(false);
-                      navigate(`/properties/${res.id}`);
-                    } catch (e) { console.error(e); }
+                      api.post('/api/activity', { action: 'create', entity_type: 'property', entity_id: res.id, changes: { landlord_id: Number(id), address: propForm.address } }).catch(() => {});
+                      await loadDetail();
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    } catch (e: any) {
+                      console.error(e);
+                      alert(e?.response?.data?.error || e?.message || 'Failed to create property');
+                    }
                     setPropSaving(false);
                   }}>
                     {propSaving ? 'Creating...' : 'Create Property'}

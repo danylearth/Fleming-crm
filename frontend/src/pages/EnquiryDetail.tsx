@@ -230,6 +230,10 @@ export default function EnquiryDetail() {
   // Onboarding wizard
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
 
+  // Email History
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [emailHistory, setEmailHistory] = useState<any[]>([]);
+
   // Holding Deposit modal
   const [showHoldingDeposit, setShowHoldingDeposit] = useState(false);
   const [hdMonthlyRent, setHdMonthlyRent] = useState('');
@@ -287,6 +291,16 @@ export default function EnquiryDetail() {
   }, [id, api]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadSmsHistory(); }, [loadSmsHistory]);
+
+  // Load Email history
+  const loadEmailHistory = useCallback(async () => {
+    try {
+      const msgs = await api.get(`/api/email-history/tenant_enquiry/${id}`);
+      setEmailHistory(Array.isArray(msgs) ? msgs : []);
+    } catch { /* Email history fetch failed */ }
+  }, [id, api]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { loadEmailHistory(); }, [loadEmailHistory]);
 
   const sendStandaloneSms = async () => {
     if (!smsCompose.trim() || !data?.phone_1) return;
@@ -1045,6 +1059,36 @@ export default function EnquiryDetail() {
               )}
             </GlassCard>
 
+            {/* Email History */}
+            <GlassCard className="p-6">
+              <SectionHeader title="Email History" icon={<Mail size={16} />} action={loadEmailHistory} actionLabel="Refresh" />
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                {emailHistory.length === 0 && <p className="text-xs text-[var(--text-muted)]">No emails sent yet</p>}
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {emailHistory.map((email: any) => (
+                  <div key={email.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                        email.status === 'delivered' ? 'bg-green-500/20 text-green-400' :
+                        email.status === 'sent'      ? 'bg-blue-500/20 text-blue-400' :
+                        email.status === 'opened'    ? 'bg-emerald-500/20 text-emerald-400' :
+                        email.status === 'bounced' || email.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                                                       'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {email.status}
+                      </span>
+                      <span className="text-[10px] text-[var(--text-muted)]">{email.to_email}</span>
+                    </div>
+                    <p className="text-xs text-[var(--text-primary)] font-medium">{email.subject}</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-[10px] text-[var(--text-muted)]">{email.sent_by_email || 'System'}</span>
+                      <span className="text-[10px] text-[var(--text-muted)]">{new Date(email.created_at).toLocaleString('en-GB')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+
             {/* Activity Timeline */}
             <GlassCard className="p-6">
               <SectionHeader title="Activity Timeline" icon={<Clock size={16} />} />
@@ -1077,7 +1121,7 @@ export default function EnquiryDetail() {
                   <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <button onClick={() => { setWorkflowMode('follow_up'); setSmsEnabled(false); const fn = form.first_name_1 || '[name]'; setSmsBody(`Hi ${fn}, just following up on your property enquiry with Fleming Lettings. Are you still looking? Please let us know if you'd like to arrange a viewing or have any questions. Call us on 01902 212 415. - Fleming Lettings`); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                <button onClick={() => { setWorkflowMode('follow_up'); setSmsEnabled(false); const fn = form.first_name_1 || '[name]'; setSmsBody(`Hi ${fn}, just following up on your recent property enquiry with Fleming Lettings. When you get five, please call our team back on 01902 212 415. Speak soon, the team at Fleming's.`); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><AwaitingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
@@ -1111,7 +1155,7 @@ export default function EnquiryDetail() {
                   const firstName = form.first_name_1 || '';
                   const genSms = (propId: string, date: string, time: string) => {
                     const prop = properties.find(p => p.id === Number(propId));
-                    const addr = prop?.address || '[property address]';
+                    const addr = prop ? `${prop.address}${prop.postcode ? `, ${prop.postcode}` : ''}` : '[property address]';
                     let d = '[date]';
                     if (date) { const parts = date.split('-'); if (parts.length === 3) d = `${parts[2]}/${parts[1]}/${parts[0]}`; }
                     const t = time ? ' at ' + time : '';
@@ -1181,7 +1225,7 @@ export default function EnquiryDetail() {
                             setSmsEnabled(e.target.checked);
                             if (e.target.checked && !smsBody) {
                               const fn = form.first_name_1 || '[name]';
-                              setSmsBody(`Hi ${fn}, just following up on your property enquiry with Fleming Lettings. Are you still looking? Please let us know if you'd like to arrange a viewing or have any questions. Call us on 01902 212 415. - Fleming Lettings`);
+                              setSmsBody(`Hi ${fn}, just following up on your recent property enquiry with Fleming Lettings. When you get five, please call our team back on 01902 212 415. Speak soon, the team at Fleming's.`);
                             }
                           }} className="w-4 h-4 rounded accent-orange-500" />
                           <Phone size={14} className="text-teal-400" />

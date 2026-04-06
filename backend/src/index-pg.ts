@@ -637,6 +637,7 @@ app.get('/api/landlords-bdm/:id', authMiddleware, async (req: AuthRequest, res) 
   try {
     const prospect = await queryOne('SELECT * FROM landlords_bdm WHERE id = $1', [req.params.id as string]);
     if (!prospect) return res.status(404).json({ error: 'Prospect not found' });
+    await logAudit(req.user?.id, req.user?.email, 'view', 'landlord_bdm', parseInt(req.params.id as string));
     res.json(prospect);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch prospect' });
@@ -657,10 +658,16 @@ app.put('/api/landlords-bdm/:id', authMiddleware, async (req: AuthRequest, res) 
       }
     }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    const bdmId = parseInt(req.params.id as string);
+    // Fetch old record to detect status change
+    const oldRecord = await queryOne('SELECT status FROM landlords_bdm WHERE id = $1', [bdmId]);
     fields.push(`updated_at=CURRENT_TIMESTAMP`);
     values.push(req.params.id);
     await run(`UPDATE landlords_bdm SET ${fields.join(', ')} WHERE id=$${idx}`, values);
-    await logAudit(req.user?.id, req.user?.email, 'update', 'landlords_bdm', parseInt(req.params.id as string), d);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'landlord_bdm', bdmId, d);
+    if (d.status && oldRecord && d.status !== oldRecord.status) {
+      await logAudit(req.user?.id, req.user?.email, 'status_changed', 'landlord_bdm', bdmId, { from: oldRecord.status, to: d.status });
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update prospect' });
@@ -2853,21 +2860,24 @@ app.post('/api/tenant-enquiries/:id/send-application-email', authMiddleware, asy
 
 app.post('/api/sms/send', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { enquiry_id, to_phone, message_body } = req.body;
+    const { enquiry_id, entity_type, entity_id, to_phone, message_body } = req.body;
     if (!to_phone || !message_body) return res.status(400).json({ error: 'to_phone and message_body required' });
     const { sendSms, normalizeUkPhone } = require('./sms');
     const normalizedPhone = normalizeUkPhone(to_phone);
     const smsResult = await sendSms({ to: normalizedPhone, body: message_body });
+    // Resolve entity type/id — support both legacy enquiry_id and new entity_type/entity_id
+    const resolvedEntityType = entity_type || (enquiry_id ? 'tenant_enquiry' : null);
+    const resolvedEntityId = entity_id || enquiry_id || null;
     const smsId = await insert(`
-      INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO sms_messages (enquiry_id, entity_type, entity_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `, [
-      enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
+      enquiry_id || null, resolvedEntityType, resolvedEntityId, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
       message_body, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
       smsResult.error || null, req.user?.id || null, req.user?.email || null
     ]);
-    if (enquiry_id) {
-      await logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id, { to_phone: normalizedPhone, message: message_body.substring(0, 100) });
+    if (resolvedEntityType && resolvedEntityId) {
+      await logAudit(req.user?.id, req.user?.email, 'sms_sent', resolvedEntityType, resolvedEntityId, { to_phone: normalizedPhone, message: message_body.substring(0, 100) });
     }
     res.json({ id: smsId, success: smsResult.success, twilio_sid: smsResult.sid });
   } catch (err) {
@@ -2940,6 +2950,47 @@ app.get('/api/sms/enquiry/:enquiryId', authMiddleware, async (req: AuthRequest, 
     res.json(messages);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch SMS history' });
+  }
+});
+
+// Generic SMS history by entity type (for BDM, landlord, tenant pages)
+app.get('/api/sms/:entityType/:entityId', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const messages = await query('SELECT * FROM sms_messages WHERE entity_type = $1 AND entity_id = $2 ORDER BY created_at DESC', [req.params.entityType, req.params.entityId]);
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch SMS history' });
+  }
+});
+
+// Generic email history by entity type (for all record pages)
+app.get('/api/email-history/:entityType/:entityId', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const messages = await query('SELECT * FROM email_messages WHERE entity_type = $1 AND entity_id = $2 ORDER BY created_at DESC', [req.params.entityType, req.params.entityId]);
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch email history' });
+  }
+});
+
+// Generic email send (for BDM, landlord pages)
+app.post('/api/email/send-generic', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { entity_type, entity_id, to_email, subject, body_html } = req.body;
+    if (!to_email || !subject || !body_html) return res.status(400).json({ error: 'to_email, subject, and body_html required' });
+    const { sendEmail } = require('./email');
+    const emailResult = await sendEmail({ to: to_email, subject, html: body_html, from: 'Fleming Lettings <accounts@fleminglettings.co.uk>' });
+    await insert(`
+      INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
+      VALUES ($1, $2, $3, $4, $5, $6, 'custom', $7, $8, $9)
+    `, [emailResult.id || null, entity_type || null, entity_id || null, to_email, 'accounts@fleminglettings.co.uk', subject, emailResult.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null]);
+    if (entity_type && entity_id) {
+      await logAudit(req.user?.id, req.user?.email, 'email_sent', entity_type, entity_id, { to: to_email, subject });
+    }
+    res.json({ success: emailResult.success });
+  } catch (err) {
+    console.error('Error sending email:', err);
+    res.status(500).json({ error: 'Failed to send email' });
   }
 });
 
