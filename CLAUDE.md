@@ -7,10 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Fleming CRM is a full-stack lettings management system for property management companies. It manages landlords, tenants, properties, maintenance requests, compliance tracking, and business development pipelines.
 
 **Stack:**
-- Frontend: React 19 + TypeScript + Vite + TailwindCSS + React Router
-- Backend: Express.js + TypeScript
+- Frontend: React 19.2 + TypeScript 5.9 + Vite 7.2 + TailwindCSS 4.1 + React Router 7
+- Backend: Express 5.2 + TypeScript 5.9
 - Database: SQLite (dev) / PostgreSQL (production)
-- Deployment: Railway, Render, Vercel (frontend static hosting)
+- Testing: Vitest 4.1 (frontend and backend)
+- Deployment: Railway (backend), Vercel (frontend static hosting)
 
 ## Development Commands
 
@@ -19,8 +20,11 @@ Fleming CRM is a full-stack lettings management system for property management c
 cd frontend
 npm install
 npm run dev          # Start dev server on port 5173
-npm run build        # Production build
+npm run build        # Production build (tsc -b && vite build)
 npm run lint         # Run ESLint
+npm test             # Run Vitest
+npm run test:watch   # Vitest in watch mode
+npm run test:coverage # Vitest with coverage
 ```
 
 ### Backend
@@ -32,6 +36,8 @@ npm run dev:pg       # PostgreSQL dev server with tsx watch
 npm run build        # TypeScript compilation
 npm run start        # Production server (compiled JS)
 npm run seed:pg      # Seed PostgreSQL with demo data
+npm test             # Run Vitest
+npm run test:watch   # Vitest in watch mode
 ```
 
 ### Mobile (from mobile directory)
@@ -78,8 +84,8 @@ cd landlords-subdomain && vercel --prod
 
 **Multiple Entry Points:**
 - `src/index.ts` - SQLite backend (development/local)
-- `src/index-pg.ts` - PostgreSQL backend (production)
-- `src/index-postgres.ts` - Legacy PostgreSQL implementation
+- `src/index-pg.ts` - PostgreSQL backend (production) — **3,500+ lines with all routes inline** (no route separation except `routes/public-tenant-enquiry.ts`)
+- `src/index-postgres.ts` - Legacy PostgreSQL implementation (not actively used)
 
 **Database Layer:**
 - `src/db.ts` - SQLite database with better-sqlite3, includes full schema initialization
@@ -438,6 +444,11 @@ logAudit(userId, userEmail, 'create', 'landlord', entityId, changesObject);
 - `express-rate-limit` on all `/api/public/*` routes
 - POST endpoints: 10 req/15min, GET endpoints: 60 req/15min
 - Applied as per-route middleware in both `index.ts` and `index-pg.ts`
+
+### Testing
+- Vitest, co-located test files (`*.test.ts`)
+- Existing tests: `frontend/src/utils/sms.test.ts`, `backend/src/auth.test.ts`, `backend/src/sms.test.ts`
+- Run a single test file: `cd frontend && npx vitest run src/utils/sms.test.ts`
 
 ## Important Constraints
 

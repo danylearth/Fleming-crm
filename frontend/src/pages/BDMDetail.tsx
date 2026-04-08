@@ -123,6 +123,7 @@ export default function BDMDetail() {
     } catch { /* Email history fetch failed */ }
   }, [id, api]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on mount is intentional
   useEffect(() => { loadDetail(); loadSmsHistory(); loadEmailHistory(); }, [loadDetail, loadSmsHistory, loadEmailHistory]);
 
   const handleSave = async () => {

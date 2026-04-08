@@ -102,7 +102,7 @@ export function viewingConfirmationSms(name: string, address: string, date: stri
 }
 
 export function followUpSms(name: string): string {
-  return `Hi there! Just following up on your recent property enquiry with Fleming Lettings. When you get five, please call our team back on 01902 212 415. Speak soon, the team at Fleming's.`;
+  return `Hi ${name}! Just following up on your recent property enquiry with Fleming Lettings. When you get five, please call our team back on 01902 212 415. Speak soon, the team at Fleming's.`;
 }
 
 export function rejectionSms(name: string, reason?: string): string {
