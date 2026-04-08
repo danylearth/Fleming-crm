@@ -242,6 +242,86 @@ app.post('/api/landlords', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+// Check for duplicate landlords (must be above :id route)
+app.get('/api/landlords/check-duplicates', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { email, phone, exclude_id } = req.query;
+    const results: any[] = [];
+
+    if (email) {
+      // Check landlords
+      const landlords = await query(
+        'SELECT id, name, email, phone FROM landlords WHERE email = $1 AND id != $2',
+        [email, exclude_id || 0]
+      );
+      landlords.forEach((l: any) => results.push({ ...l, source: 'landlords', match_type: 'email' }));
+
+      // Check tenants
+      const tenants = await query(
+        'SELECT id, name, email, phone FROM tenants WHERE email = $1 OR email_2 = $1',
+        [email]
+      );
+      tenants.forEach((t: any) => results.push({ ...t, source: 'tenants', match_type: 'email' }));
+
+      // Check enquiries
+      const enquiries = await query(
+        `SELECT id, first_name_1, last_name_1, email_1 as email, phone_1 as phone
+         FROM tenant_enquiries WHERE email_1 = $1 OR email_2 = $1`,
+        [email]
+      );
+      enquiries.forEach((e: any) => results.push({
+        ...e,
+        name: `${e.first_name_1} ${e.last_name_1}`,
+        source: 'tenant_enquiries',
+        match_type: 'email'
+      }));
+    }
+
+    if (phone) {
+      const landlords = await query(
+        'SELECT id, name, email, phone FROM landlords WHERE phone = $1 AND id != $2',
+        [phone, exclude_id || 0]
+      );
+      landlords.forEach((l: any) => {
+        if (!results.find((r: any) => r.source === 'landlords' && r.id === l.id)) {
+          results.push({ ...l, source: 'landlords', match_type: 'phone' });
+        }
+      });
+
+      const tenants = await query(
+        'SELECT id, name, email, phone FROM tenants WHERE phone = $1 OR phone_2 = $1',
+        [phone]
+      );
+      tenants.forEach((t: any) => {
+        if (!results.find((r: any) => r.source === 'tenants' && r.id === t.id)) {
+          results.push({ ...t, source: 'tenants', match_type: 'phone' });
+        }
+      });
+
+      const enquiries = await query(
+        `SELECT id, first_name_1, last_name_1, email_1 as email, phone_1 as phone
+         FROM tenant_enquiries WHERE phone_1 = $1 OR phone_2 = $1`,
+        [phone]
+      );
+      enquiries.forEach((e: any) => {
+        if (!results.find((r: any) => r.source === 'tenant_enquiries' && r.id === e.id)) {
+          results.push({
+            ...e,
+            name: `${e.first_name_1} ${e.last_name_1}`,
+            source: 'tenant_enquiries',
+            match_type: 'phone'
+          });
+        }
+      });
+    }
+
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Duplicate check failed' });
+  }
+});
+
 app.get('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = req.params.id as string;
@@ -325,86 +405,6 @@ app.post('/api/landlords/bulk-delete', authMiddleware, async (req: AuthRequest, 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to bulk delete landlords' });
-  }
-});
-
-// Check for duplicate landlords
-app.get('/api/landlords/check-duplicates', authMiddleware, async (req: AuthRequest, res) => {
-  try {
-    const { email, phone, exclude_id } = req.query;
-    const results: any[] = [];
-
-    if (email) {
-      // Check landlords
-      const landlords = await query(
-        'SELECT id, name, email, phone FROM landlords WHERE email = $1 AND id != $2',
-        [email, exclude_id || 0]
-      );
-      landlords.forEach((l: any) => results.push({ ...l, source: 'landlords', match_type: 'email' }));
-
-      // Check tenants
-      const tenants = await query(
-        'SELECT id, name, email, phone FROM tenants WHERE email = $1 OR email_2 = $1',
-        [email]
-      );
-      tenants.forEach((t: any) => results.push({ ...t, source: 'tenants', match_type: 'email' }));
-
-      // Check enquiries
-      const enquiries = await query(
-        `SELECT id, first_name_1, last_name_1, email_1 as email, phone_1 as phone
-         FROM tenant_enquiries WHERE email_1 = $1 OR email_2 = $1`,
-        [email]
-      );
-      enquiries.forEach((e: any) => results.push({
-        ...e,
-        name: `${e.first_name_1} ${e.last_name_1}`,
-        source: 'tenant_enquiries',
-        match_type: 'email'
-      }));
-    }
-
-    if (phone) {
-      const landlords = await query(
-        'SELECT id, name, email, phone FROM landlords WHERE phone = $1 AND id != $2',
-        [phone, exclude_id || 0]
-      );
-      landlords.forEach((l: any) => {
-        if (!results.find((r: any) => r.source === 'landlords' && r.id === l.id)) {
-          results.push({ ...l, source: 'landlords', match_type: 'phone' });
-        }
-      });
-
-      const tenants = await query(
-        'SELECT id, name, email, phone FROM tenants WHERE phone = $1 OR phone_2 = $1',
-        [phone]
-      );
-      tenants.forEach((t: any) => {
-        if (!results.find((r: any) => r.source === 'tenants' && r.id === t.id)) {
-          results.push({ ...t, source: 'tenants', match_type: 'phone' });
-        }
-      });
-
-      const enquiries = await query(
-        `SELECT id, first_name_1, last_name_1, email_1 as email, phone_1 as phone
-         FROM tenant_enquiries WHERE phone_1 = $1 OR phone_2 = $1`,
-        [phone]
-      );
-      enquiries.forEach((e: any) => {
-        if (!results.find((r: any) => r.source === 'tenant_enquiries' && r.id === e.id)) {
-          results.push({
-            ...e,
-            name: `${e.first_name_1} ${e.last_name_1}`,
-            source: 'tenant_enquiries',
-            match_type: 'phone'
-          });
-        }
-      });
-    }
-
-    res.json(results);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Duplicate check failed' });
   }
 });
 
@@ -668,7 +668,8 @@ app.put('/api/landlords-bdm/:id', authMiddleware, async (req: AuthRequest, res) 
     if (d.status && oldRecord && d.status !== oldRecord.status) {
       await logAudit(req.user?.id, req.user?.email, 'status_changed', 'landlord_bdm', bdmId, { from: oldRecord.status, to: d.status });
     }
-    res.json({ success: true });
+    const updated = await queryOne('SELECT * FROM landlords_bdm WHERE id = $1', [req.params.id]);
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Failed to update prospect' });
   }
@@ -2009,7 +2010,7 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
       SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email,
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant,
         (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id
-      FROM properties p JOIN landlords l ON l.id = p.landlord_id WHERE p.id = $1
+      FROM properties p LEFT JOIN landlords l ON l.id = p.landlord_id WHERE p.id = $1
     `, [req.params.id]);
     res.json(updated);
   } catch (err) {
@@ -2104,7 +2105,8 @@ app.put('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
     values.push(req.params.id);
     await run(`UPDATE tasks SET ${fields.join(', ')} WHERE id=$${idx}`, values);
     await logAudit(req.user?.id, req.user?.email, 'update', 'task', parseInt(req.params.id as string), d);
-    res.json({ success: true });
+    const updated = await queryOne('SELECT * FROM tasks WHERE id = $1', [req.params.id]);
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Failed to update task' });
   }
@@ -2129,7 +2131,7 @@ app.delete('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
     // Delete associated documents first
     const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['task', req.params.id]);
     for (const doc of documents) {
-      const filePath = path.join(uploadsDir, doc.file_name);
+      const filePath = path.join(uploadsDir, doc.filename);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
@@ -2174,8 +2176,8 @@ app.get('/api/maintenance', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const requests = await query(`
       SELECT m.*, p.address, l.name as landlord_name FROM maintenance m
-      JOIN properties p ON p.id = m.property_id JOIN landlords l ON l.id = p.landlord_id
-      ORDER BY CASE m.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 ELSE 3 END, m.created_at DESC
+      JOIN properties p ON p.id = m.property_id LEFT JOIN landlords l ON l.id = p.landlord_id
+      ORDER BY CASE m.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, m.created_at DESC
     `);
     res.json(requests);
   } catch (err) {
@@ -2228,9 +2230,33 @@ app.put('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) =>
     values.push(req.params.id);
     await run(`UPDATE maintenance SET ${fields.join(', ')} WHERE id=$${idx}`, values);
     await logAudit(req.user?.id, req.user?.email, 'update', 'maintenance', parseInt(req.params.id as string), d);
-    res.json({ success: true });
+    const updated = await queryOne(`
+      SELECT m.*, p.address, l.name as landlord_name FROM maintenance m
+      JOIN properties p ON p.id = m.property_id LEFT JOIN landlords l ON l.id = p.landlord_id
+      WHERE m.id = $1
+    `, [req.params.id]);
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Failed to update maintenance' });
+  }
+});
+
+app.delete('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const id = req.params.id as string;
+    // Delete associated documents and files
+    const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['maintenance', id]);
+    for (const doc of documents) {
+      const filePath = path.join(uploadsDir, doc.filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+    await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['maintenance', id]);
+    await run('DELETE FROM maintenance WHERE id = $1', [id]);
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'maintenance', parseInt(id));
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to delete maintenance:', err);
+    res.status(500).json({ error: 'Failed to delete maintenance request' });
   }
 });
 
@@ -2269,6 +2295,21 @@ app.get('/api/documents/types/:entityType', authMiddleware, (req: AuthRequest, r
   res.json(types);
 });
 
+app.get('/api/documents/download/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const doc = await queryOne('SELECT * FROM documents WHERE id = $1', [req.params.id as string]);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+    const filePath = path.join(uploadsDir, doc.filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+
+    res.setHeader('Content-Disposition', `attachment; filename="${doc.original_name}"`);
+    res.sendFile(filePath);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to download' });
+  }
+});
+
 app.get('/api/documents/:entityType/:entityId', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const applicantNumber = req.query.applicant_number ? parseInt(req.query.applicant_number as string) : undefined;
@@ -2305,21 +2346,6 @@ app.post('/api/documents/:entityType/:entityId', authMiddleware, upload.single('
   }
 });
 
-app.get('/api/documents/download/:id', authMiddleware, async (req: AuthRequest, res) => {
-  try {
-    const doc = await queryOne('SELECT * FROM documents WHERE id = $1', [req.params.id as string]);
-    if (!doc) return res.status(404).json({ error: 'Document not found' });
-    
-    const filePath = path.join(uploadsDir, doc.filename);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
-    
-    res.setHeader('Content-Disposition', `attachment; filename="${doc.original_name}"`);
-    res.sendFile(filePath);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to download' });
-  }
-});
-
 app.delete('/api/documents/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const doc = await queryOne('SELECT * FROM documents WHERE id = $1', [req.params.id as string]);
@@ -2340,7 +2366,7 @@ app.get('/api/tenancies', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const tenancies = await query(`
       SELECT tn.*, p.address, t.name as tenant_name FROM tenancies tn
-      JOIN properties p ON p.id = tn.property_id JOIN tenants t ON t.id = tn.tenant_id
+      JOIN properties p ON p.id = tn.property_id LEFT JOIN tenants t ON t.id = tn.tenant_id
       ORDER BY tn.start_date DESC
     `);
     res.json(tenancies);

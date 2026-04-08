@@ -504,9 +504,9 @@ export default function EnquiriesKanban() {
       } catch (e) { console.error(e); }
     }
 
-    // Update the enquiry
+    // Update the enquiry and refetch from server
     await api.put(`/api/tenant-enquiries/${id}`, payload);
-    setEnquiries(prev => prev.map(e => e.id === id ? { ...e, ...payload } : e));
+    await load();
   };
 
   const addEnquiry = async () => {
