@@ -322,7 +322,13 @@ function EnquiryCard({ enquiry, property, onAction }: {
             </span>
           )}
           {enquiry.follow_up_date && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-amber-400">
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+              isFuture(enquiry.follow_up_date)
+                ? 'bg-emerald-500/15 text-emerald-400'
+                : isPastOrToday(enquiry.follow_up_date)
+                  ? 'bg-amber-500/15 text-amber-400'
+                  : 'bg-amber-500/15 text-amber-400'
+            }`}>
               ↻ {new Date(enquiry.follow_up_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
             </span>
           )}
@@ -542,14 +548,8 @@ export default function EnquiriesKanban() {
       if (e.status === 'rejected') return showArchive;
       if (showArchive) return e.status === 'rejected';
 
-      // Hide cards with future follow-up dates
-      if (e.status === 'awaiting_response' && isFuture(e.follow_up_date)) return false;
-
       // Hide viewing_booked with future viewing dates
       if (e.status === 'viewing_booked' && isFuture(e.viewing_date)) return false;
-
-      // Hide onboarding with future follow-up
-      if (e.status === 'onboarding' && e.follow_up_date && isFuture(e.follow_up_date)) return false;
 
       return true;
     });

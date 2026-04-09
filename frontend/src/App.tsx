@@ -1,25 +1,27 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Properties from './pages/Properties';
-import PropertyDetail from './pages/PropertyDetail';
-import Landlords from './pages/Landlords';
-import LandlordDetail from './pages/LandlordDetail';
-import Tenants from './pages/Tenants';
-import TenantDetail from './pages/TenantDetail';
-import Enquiries from './pages/Enquiries';
-import EnquiryDetail from './pages/EnquiryDetail';
-import EnquiriesKanban from './pages/EnquiriesKanban';
-import BDM from './pages/BDM';
-import BDMDetail from './pages/BDMDetail';
-import Maintenance from './pages/Maintenance';
-import Tasks from './pages/Tasks';
-import TaskDetail from './pages/TaskDetail';
-import Transactions from './pages/Transactions';
-import Settings from './pages/Settings';
-import Users from './pages/Users';
+
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Properties = lazy(() => import('./pages/Properties'));
+const PropertyDetail = lazy(() => import('./pages/PropertyDetail'));
+const Landlords = lazy(() => import('./pages/Landlords'));
+const LandlordDetail = lazy(() => import('./pages/LandlordDetail'));
+const Tenants = lazy(() => import('./pages/Tenants'));
+const TenantDetail = lazy(() => import('./pages/TenantDetail'));
+const Enquiries = lazy(() => import('./pages/Enquiries'));
+const EnquiryDetail = lazy(() => import('./pages/EnquiryDetail'));
+const EnquiriesKanban = lazy(() => import('./pages/EnquiriesKanban'));
+const BDM = lazy(() => import('./pages/BDM'));
+const BDMDetail = lazy(() => import('./pages/BDMDetail'));
+const Maintenance = lazy(() => import('./pages/Maintenance'));
+const Tasks = lazy(() => import('./pages/Tasks'));
+const TaskDetail = lazy(() => import('./pages/TaskDetail'));
+const Transactions = lazy(() => import('./pages/Transactions'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Users = lazy(() => import('./pages/Users'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -64,6 +66,11 @@ function V3Redirect() {
 
 function AppRoutes() {
   return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-base)]">
+        <div className="w-8 h-8 border-2 border-[var(--border-color)] border-t-gold-500 rounded-full animate-spin" />
+      </div>
+    }>
     <Routes>
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/v3/*" element={<V3Redirect />} />
@@ -87,6 +94,7 @@ function AppRoutes() {
       <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
     </Routes>
+    </Suspense>
   );
 }
 import { PortfolioProvider } from './context/PortfolioContext';

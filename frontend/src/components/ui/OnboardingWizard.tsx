@@ -392,6 +392,40 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
     </div>`;
   };
 
+  const buildResendApplicationEmailHtml = (): string => {
+    const firstName = enquiry.first_name_1 || 'there';
+    const formUrl = enquiry.application_form_token
+      ? `https://apply.fleminglettings.co.uk/onboarding/${enquiry.application_form_token}`
+      : '#';
+    return `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
+        <h1 style="color: #fff; margin: 0; font-size: 22px;">Fleming Lettings</h1>
+      </div>
+      <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
+        <p style="font-size: 15px; color: #333;">Dear ${firstName},</p>
+        <p style="font-size: 14px; color: #555; line-height: 1.6;">Welcome to Fleming Lettings!</p>
+        <p style="font-size: 14px; color: #555; line-height: 1.6;">
+          We are still waiting on your application form(s) to be completed by clicking on the following link:
+        </p>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${formUrl}" style="display: inline-block; background: linear-gradient(135deg, #DC006D, #a5004f); color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;">
+            Complete Your Application
+          </a>
+        </div>
+        <p style="font-size: 14px; color: #555; line-height: 1.6;">
+          If you get stuck, need some help or if you would like our friendly team to guide you through the process then please do not hesitate to get in touch on <strong>01902 212 415</strong>.
+        </p>
+        <p style="font-size: 14px; color: #555;">Kind Regards,<br/><br/><strong>Accounts Team</strong></p>
+      </div>
+      <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
+        <p style="font-size: 11px; color: #999; margin: 0;">
+          Fleming Lettings and Developments UK Limited<br/>
+          Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG
+        </p>
+      </div>
+    </div>`;
+  };
+
   const sendApplicationEmail = async ({ subject, bodyHtml }: { subject: string; bodyHtml: string }) => {
     setSendingEmail(true);
     try {
@@ -770,7 +804,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                         </div>
                       )}
                       <Button variant="ghost" onClick={() => setShowApplicationEmail(true)} disabled={!enquiry.email_1} className="flex items-center gap-2">
-                        <Send size={14} /> Send Application Email
+                        <Send size={14} /> Resend Application Form Link
                       </Button>
                     </div>
                   ) : (
@@ -954,9 +988,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         sending={sendingEmail}
         to={enquiry.email_1 || ''}
         from="accounts@fleminglettings.co.uk"
-        initialSubject={`Tenancy Application – ${propertyAddress}`}
-        initialBodyHtml={buildTenancyApplicationEmailHtml()}
-        sendLabel="Send Application Email"
+        initialSubject={`Your Fleming Lettings Application Form`}
+        initialBodyHtml={buildResendApplicationEmailHtml()}
+        sendLabel="Resend Application Form Link"
       />
 
       {/* Holding deposit email preview (read-only) */}

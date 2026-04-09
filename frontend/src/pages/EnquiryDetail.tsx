@@ -10,7 +10,7 @@ import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import {
   Pencil, X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle,
-  Calendar, ExternalLink, CheckCircle, Clock, Mail, Phone, ChevronRight,
+  Calendar, ExternalLink, CheckCircle, Circle, Clock, Mail, Phone, ChevronRight,
   MessageSquare, Plus, ShieldCheck, AlertTriangle, Send
 } from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/ui/icons/FlemingIcons';
@@ -233,6 +233,8 @@ export default function EnquiryDetail() {
   // Email History
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [emailHistory, setEmailHistory] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [viewingEmail, setViewingEmail] = useState<any | null>(null);
 
   // Holding Deposit modal
   const [showHoldingDeposit, setShowHoldingDeposit] = useState(false);
@@ -918,11 +920,43 @@ export default function EnquiryDetail() {
                   <YesNo value={!!form.holding_deposit_received} onChange={v => setField('holding_deposit_received', v)} disabled={!isEditing('checklist')} />
                 </div>
 
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
-                  <span className="text-xs">Application Form Completed</span>
-                  <span className={`text-[10px] font-medium ${form.application_form_completed ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
-                    {form.application_form_completed ? 'Yes' : 'No'}
-                  </span>
+                {/* Application Form Tracking */}
+                <div className="rounded-xl border border-[var(--border-subtle)] overflow-hidden">
+                  <div className="px-3 py-2 bg-[var(--bg-subtle)] border-b border-[var(--border-subtle)]">
+                    <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Application Form Tracking</p>
+                  </div>
+                  <div className="divide-y divide-[var(--border-subtle)]">
+                    <div className="px-3 py-2.5 flex items-center justify-between">
+                      <span className="text-xs flex items-center gap-1.5">
+                        {form.application_form_sent ? <CheckCircle size={12} className="text-green-400" /> : <Circle size={12} className="text-[var(--text-muted)]" />}
+                        Form Link Sent
+                      </span>
+                      <span className={`text-[10px] font-medium ${form.application_form_sent ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                        {form.application_form_sent ? 'Sent' : 'Not sent'}
+                      </span>
+                    </div>
+                    <div className="px-3 py-2.5 flex items-center justify-between">
+                      <span className="text-xs flex items-center gap-1.5">
+                        {form.application_form_first_viewed_at ? <CheckCircle size={12} className="text-blue-400" /> : <Circle size={12} className="text-[var(--text-muted)]" />}
+                        Application Opened
+                      </span>
+                      <span className={`text-[10px] font-medium ${form.application_form_first_viewed_at ? 'text-blue-400' : 'text-[var(--text-muted)]'}`}>
+                        {form.application_form_first_viewed_at
+                          ? new Date(form.application_form_first_viewed_at as string).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                          : 'Not opened'}
+                        {form.application_form_views > 1 && <span className="ml-1 text-[var(--text-muted)]">({form.application_form_views}×)</span>}
+                      </span>
+                    </div>
+                    <div className="px-3 py-2.5 flex items-center justify-between">
+                      <span className="text-xs flex items-center gap-1.5">
+                        {form.application_form_completed ? <CheckCircle size={12} className="text-green-400" /> : <Circle size={12} className="text-[var(--text-muted)]" />}
+                        Application Completed
+                      </span>
+                      <span className={`text-[10px] font-medium ${form.application_form_completed ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                        {form.application_form_completed ? 'Completed' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* ID Verification items */}
@@ -1077,7 +1111,13 @@ export default function EnquiryDetail() {
                       }`}>
                         {email.status}
                       </span>
-                      <span className="text-[10px] text-[var(--text-muted)]">{email.to_email}</span>
+                      <span className="text-[10px] text-[var(--text-muted)] flex-1 truncate">{email.to_email}</span>
+                      <button
+                        onClick={() => setViewingEmail(email)}
+                        className="text-[10px] text-[var(--accent-orange)] hover:underline flex items-center gap-0.5 shrink-0"
+                      >
+                        <ExternalLink size={10} /> View
+                      </button>
                     </div>
                     <p className="text-xs text-[var(--text-primary)] font-medium">{email.subject}</p>
                     <div className="flex items-center justify-between mt-1.5">
@@ -1097,6 +1137,46 @@ export default function EnquiryDetail() {
           </div>
         </div>
       </div>
+
+      {/* ==================== EMAIL VIEW POPUP ==================== */}
+      {viewingEmail && (
+        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setViewingEmail(null)}>
+          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border-subtle)]">
+              <h4 className="text-sm font-bold text-[var(--text-primary)]">Email</h4>
+              <button onClick={() => setViewingEmail(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={16} /></button>
+            </div>
+            <div className="px-5 py-3 space-y-1 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)]">
+              <div className="flex gap-3 text-xs"><span className="text-[var(--text-muted)] w-14">To:</span><span>{viewingEmail.to_email}</span></div>
+              <div className="flex gap-3 text-xs"><span className="text-[var(--text-muted)] w-14">From:</span><span>{viewingEmail.from_email || 'accounts@fleminglettings.co.uk'}</span></div>
+              <div className="flex gap-3 text-xs"><span className="text-[var(--text-muted)] w-14">Subject:</span><span className="font-medium">{viewingEmail.subject}</span></div>
+              <div className="flex gap-3 text-xs">
+                <span className="text-[var(--text-muted)] w-14">Sent:</span>
+                <span>{new Date(viewingEmail.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                <span className={`ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                  viewingEmail.status === 'delivered' ? 'bg-green-500/20 text-green-400' :
+                  viewingEmail.status === 'opened'    ? 'bg-emerald-500/20 text-emerald-400' :
+                  viewingEmail.status === 'bounced' || viewingEmail.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                  'bg-blue-500/20 text-blue-400'
+                }`}>{viewingEmail.status}</span>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {viewingEmail.body_html ? (
+                <iframe
+                  srcDoc={viewingEmail.body_html}
+                  className="w-full border-0 rounded-lg"
+                  style={{ minHeight: '400px' }}
+                  sandbox="allow-same-origin"
+                  title="Email content"
+                />
+              ) : (
+                <p className="text-xs text-[var(--text-muted)] italic">Email content not available for emails sent before this feature was enabled.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ==================== WORKFLOW MODAL ==================== */}
       {showWorkflow && (

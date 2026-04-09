@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/">
     <title>Tenant Application - Fleming Lettings</title>
     <style>
-        @font-face { font-family: 'Lufga'; font-weight: 400; src: url('fonts/Lufga-Regular.otf') format('opentype'); }
-        @font-face { font-family: 'Lufga'; font-weight: 500; src: url('fonts/Lufga-Medium.otf') format('opentype'); }
-        @font-face { font-family: 'Lufga'; font-weight: 600; src: url('fonts/Lufga-SemiBold.otf') format('opentype'); }
-        @font-face { font-family: 'Lufga'; font-weight: 700; src: url('fonts/Lufga-Bold.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 400; src: url('/fonts/Lufga-Regular.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 500; src: url('/fonts/Lufga-Medium.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 600; src: url('/fonts/Lufga-SemiBold.otf') format('opentype'); }
+        @font-face { font-family: 'Lufga'; font-weight: 700; src: url('/fonts/Lufga-Bold.otf') format('opentype'); }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -976,17 +977,6 @@
                         <div class="input-group"><label>Contact Number *</label><input type="tel" id="f_nok_phone" inputmode="tel" required /></div>
                     </div>
 
-                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">NEXT OF KIN 2</span><div class="line"></div></div>
-
-                    <div class="two-col">
-                        <div class="input-group"><label>Full Name *</label><input type="text" id="f_nok2_name" required /></div>
-                        <div class="input-group"><label>Relationship *</label><input type="text" id="f_nok2_rel" placeholder="e.g. Sibling, Friend" required /></div>
-                    </div>
-                    <div class="two-col">
-                        <div class="input-group"><label>Address *</label><input type="text" id="f_nok2_address" required /></div>
-                        <div class="input-group"><label>Contact Number *</label><input type="tel" id="f_nok2_phone" inputmode="tel" required /></div>
-                    </div>
-
                     <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">GUARANTOR</span><div class="line"></div></div>
 
                     <div class="checkbox-group" style="margin-bottom:12px;">
@@ -1631,10 +1621,10 @@
                     app_next_of_kin_phone: document.getElementById('f_nok_phone').value,
                     app_next_of_kin_relationship: document.getElementById('f_nok_rel').value,
                     app_next_of_kin_address: document.getElementById('f_nok_address').value,
-                    app_next_of_kin_2_name: document.getElementById('f_nok2_name').value,
-                    app_next_of_kin_2_phone: document.getElementById('f_nok2_phone').value,
-                    app_next_of_kin_2_relationship: document.getElementById('f_nok2_rel').value,
-                    app_next_of_kin_2_address: document.getElementById('f_nok2_address').value,
+                    app_next_of_kin_2_name: null,
+                    app_next_of_kin_2_phone: null,
+                    app_next_of_kin_2_relationship: null,
+                    app_next_of_kin_2_address: null,
                     app_guarantor_name: document.getElementById('f_guarantor_name').value || null,
                     app_guarantor_phone: document.getElementById('f_guarantor_phone').value || null,
                     app_guarantor_email: document.getElementById('f_guarantor_email').value || null,
@@ -1683,7 +1673,6 @@
             'f_employer_address',
             'f_employer_address_se',
             'f_nok_address',
-            'f_nok2_address',
             'f_guarantor_address'
         ];
 

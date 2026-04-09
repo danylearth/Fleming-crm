@@ -46,7 +46,15 @@ const upload = multer({
   }
 });
 
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // curl, mobile apps, etc.
+    if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) return callback(null, true);
+    if (origin.endsWith('.fleminglettings.co.uk') || origin.endsWith('.vercel.app')) return callback(null, true);
+    callback(new Error('CORS: origin not allowed'));
+  },
+  credentials: true,
+}));
 app.use(express.json({
   verify: (req: any, _res, buf) => {
     // Preserve raw body for webhook signature verification (Resend uses svix)
@@ -1783,6 +1791,14 @@ app.get('/api/public/application-form/:token', publicReadLimiter, async (req, re
     `, [req.params.token]);
     if (!enquiry) return res.status(404).json({ error: 'Form not found or link expired' });
     if (enquiry.application_form_completed) return res.status(410).json({ error: 'This form has already been submitted', completed: true });
+    // Track form views
+    await run(`
+      UPDATE tenant_enquiries SET
+        application_form_first_viewed_at = COALESCE(application_form_first_viewed_at, NOW()),
+        application_form_last_viewed_at = NOW(),
+        application_form_views = COALESCE(application_form_views, 0) + 1
+      WHERE id = $1
+    `, [enquiry.id]);
     res.json({
       first_name_1: enquiry.first_name_1, last_name_1: enquiry.last_name_1,
       email_1: enquiry.email_1, phone_1: enquiry.phone_1, date_of_birth_1: enquiry.date_of_birth_1,
@@ -2867,9 +2883,9 @@ app.post('/api/tenant-enquiries/:id/send-application-email', authMiddleware, asy
       from: 'Fleming Lettings Accounts <accounts@fleminglettings.co.uk>',
     });
     await insert(`
-      INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
-      VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'tenancy_application', $6, $7, $8)
-    `, [emailResult.id || null, enquiryId, enquiry.email_1, 'accounts@fleminglettings.co.uk', subject, emailResult.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null]);
+      INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email)
+      VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'tenancy_application', $6, $7, $8, $9)
+    `, [emailResult.id || null, enquiryId, enquiry.email_1, 'accounts@fleminglettings.co.uk', subject, body_html, emailResult.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null]);
 
     await logAudit(req.user?.id, req.user?.email, 'email_sent', 'tenant_enquiry', enquiryId, {
       to: enquiry.email_1, subject, template: 'tenancy_application',
@@ -3007,9 +3023,9 @@ app.post('/api/email/send-generic', authMiddleware, async (req: AuthRequest, res
     const { sendEmail } = require('./email');
     const emailResult = await sendEmail({ to: to_email, subject, html: body_html, from: 'Fleming Lettings <accounts@fleminglettings.co.uk>' });
     await insert(`
-      INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
-      VALUES ($1, $2, $3, $4, $5, $6, 'custom', $7, $8, $9)
-    `, [emailResult.id || null, entity_type || null, entity_id || null, to_email, 'accounts@fleminglettings.co.uk', subject, emailResult.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null]);
+      INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email)
+      VALUES ($1, $2, $3, $4, $5, $6, 'custom', $7, $8, $9, $10)
+    `, [emailResult.id || null, entity_type || null, entity_id || null, to_email, 'accounts@fleminglettings.co.uk', subject, body_html, emailResult.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null]);
     if (entity_type && entity_id) {
       await logAudit(req.user?.id, req.user?.email, 'email_sent', entity_type, entity_id, { to: to_email, subject });
     }

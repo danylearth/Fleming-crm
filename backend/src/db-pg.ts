@@ -417,6 +417,14 @@ export async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_maintenance_property ON maintenance(property_id);
       CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
       CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_type, entity_id);
+      CREATE INDEX IF NOT EXISTS idx_tenant_enquiries_email ON tenant_enquiries(email_1);
+      CREATE INDEX IF NOT EXISTS idx_tenant_enquiries_phone ON tenant_enquiries(phone_1);
+      CREATE INDEX IF NOT EXISTS idx_tenant_enquiries_status ON tenant_enquiries(status);
+      CREATE INDEX IF NOT EXISTS idx_tenant_enquiries_token ON tenant_enquiries(application_form_token);
+      CREATE INDEX IF NOT EXISTS idx_tenant_enquiries_property ON tenant_enquiries(linked_property_id);
+      CREATE INDEX IF NOT EXISTS idx_landlords_email ON landlords(email);
+      CREATE INDEX IF NOT EXISTS idx_tenants_email ON tenants(email);
+      CREATE INDEX IF NOT EXISTS idx_tenants_phone ON tenants(phone);
     `);
 
     // ============ MIGRATIONS ============
@@ -513,6 +521,10 @@ export async function initDb() {
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_guarantor_phone TEXT;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_guarantor_email TEXT;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS app_guarantor_address TEXT;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_first_viewed_at TIMESTAMP;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_last_viewed_at TIMESTAMP;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_views INTEGER DEFAULT 0;
+        ALTER TABLE email_messages ADD COLUMN IF NOT EXISTS body_html TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `);
