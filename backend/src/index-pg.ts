@@ -2072,7 +2072,7 @@ app.post('/api/properties/bulk-delete', authMiddleware, async (req: AuthRequest,
 app.get('/api/tasks', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { status } = req.query;
-    let sql = 'SELECT t.*, u.name as assigned_to_name FROM tasks t LEFT JOIN users u ON u.id = t.assigned_to';
+    let sql = 'SELECT t.*, u.name as assigned_to_name FROM tasks t LEFT JOIN users u ON u.id::TEXT = t.assigned_to';
     if (status === 'active') sql += " WHERE t.status IN ('pending', 'in_progress')";
     sql += ' ORDER BY t.due_date NULLS LAST';
     const tasks = await query(sql);
