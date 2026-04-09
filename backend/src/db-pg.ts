@@ -559,6 +559,17 @@ export async function initDb() {
       WHERE enquiry_id IS NOT NULL AND entity_type IS NULL
     `).catch(() => {});
 
+    // Users table: backfill missing columns for older deployments
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS department TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS last_password_change TIMESTAMP;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
     console.log('Database initialized');
 
     // Migrate existing property landlord relationships

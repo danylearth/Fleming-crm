@@ -122,7 +122,7 @@ export default function Properties() {
       await load();
     } catch (e) {
       console.error('Bulk delete error:', e);
-      alert('Failed to delete properties. Please try again.');
+      console.error('Failed to delete properties:', e);
     }
     setIsDeleting(false);
   };

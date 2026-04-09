@@ -214,7 +214,7 @@ export default function Tenants() {
       await load();
     } catch (e) {
       console.error('Bulk delete error:', e);
-      alert('Failed to delete tenants. Please try again.');
+      console.error('Failed to delete tenants:', e);
     }
     setIsDeleting(false);
   };

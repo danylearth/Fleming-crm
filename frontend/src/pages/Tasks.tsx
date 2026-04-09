@@ -213,7 +213,6 @@ export default function Tasks() {
         delete payload.entity_type;
         delete payload.entity_id;
       }
-      console.log('Creating task with payload:', payload);
       await api.post('/api/tasks', payload);
       setShowAdd(false);
       setForm({
@@ -223,7 +222,6 @@ export default function Tasks() {
       await load();
     } catch (err) {
       console.error('Failed to create task:', err);
-      alert('Failed to create task. Check console for details.');
     }
   };
 
@@ -246,7 +244,7 @@ export default function Tasks() {
       await load();
     } catch (e) {
       console.error('Bulk delete error:', e);
-      alert('Failed to delete tasks. Please try again.');
+      console.error('Failed to delete tasks:', e);
     }
     setIsDeleting(false);
   };
