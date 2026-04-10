@@ -888,14 +888,6 @@ export default function PropertyDetail() {
                       <Toggle label="Has End Date" checked={form.has_end_date} onChange={v => setForm({ ...form, has_end_date: v })} />
                       {form.has_end_date && <DatePicker label="End Date" value={form.tenancy_end_date} onChange={(v: string) => setForm({ ...form, tenancy_end_date: v })} />}
                     </div>
-                    <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
-                      <h3 className="text-sm font-semibold mb-3 text-[var(--text-secondary)]">Compliance Certificates</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                        <DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={(v: string) => setForm({ ...form, eicr_expiry_date: v })} />
-                        <DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={(v: string) => setForm({ ...form, epc_expiry_date: v })} />
-                        {form.has_gas && <DatePicker label="Gas Safety Expiry Date" value={form.gas_safety_expiry_date} onChange={(v: string) => setForm({ ...form, gas_safety_expiry_date: v })} />}
-                      </div>
-                    </div>
                   </>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -916,6 +908,18 @@ export default function PropertyDetail() {
                     })()}
                   </div>
                 )}
+              </GlassCard>
+            )}
+
+            {/* Compliance Certificates — always visible, not gated by status */}
+            {editing && (
+              <GlassCard className="p-4 sm:p-6">
+                <SectionHeader title="Compliance Certificates" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                  <DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={(v: string) => setForm({ ...form, eicr_expiry_date: v })} />
+                  <DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={(v: string) => setForm({ ...form, epc_expiry_date: v })} />
+                  {form.has_gas && <DatePicker label="Gas Safety Expiry Date" value={form.gas_safety_expiry_date} onChange={(v: string) => setForm({ ...form, gas_safety_expiry_date: v })} />}
+                </div>
               </GlassCard>
             )}
 

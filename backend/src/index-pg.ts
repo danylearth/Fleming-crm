@@ -539,6 +539,11 @@ app.post('/api/properties/:propertyId/landlords', authMiddleware, async (req: Au
       RETURNING id
     `, [req.params.propertyId, landlord_id, is_primary ? 1 : 0, ownership_percentage || null, ownership_entity_type || 'individual']);
 
+    // Sync properties.landlord_id when adding a primary landlord
+    if (is_primary) {
+      await run('UPDATE properties SET landlord_id = $1 WHERE id = $2', [landlord_id, req.params.propertyId]);
+    }
+
     await logAudit(req.user?.id, req.user?.email, 'create', 'property_landlord', result.id, { property_id: req.params.propertyId, landlord_id });
     res.json({ id: result.id, success: true });
   } catch (err: any) {
@@ -593,9 +598,14 @@ app.put('/api/property-landlords/:linkId', authMiddleware, async (req: AuthReque
 
     await run(`
       UPDATE property_landlords
-      SET is_primary = $1, ownership_percentage = $2, ownership_entity_type = $3, updated_at = CURRENT_TIMESTAMP
+      SET is_primary = $1, ownership_percentage = $2, ownership_entity_type = $3
       WHERE id = $4
     `, [is_primary ? 1 : 0, ownership_percentage || null, ownership_entity_type || 'individual', req.params.linkId]);
+
+    // Sync properties.landlord_id when changing primary
+    if (is_primary) {
+      await run('UPDATE properties SET landlord_id = $1 WHERE id = $2', [link.landlord_id, link.property_id]);
+    }
 
     await logAudit(req.user?.id, req.user?.email, 'update', 'property_landlord', parseInt(req.params.linkId as string), { is_primary, ownership_percentage, ownership_entity_type });
     res.json({ success: true });
@@ -1952,6 +1962,11 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
       d.onboarded_date || null, d.notes || null, d.amenities || null,
       d.tenant_id || null, d.image_url || null
     ]);
+    // Sync tenant.property_id when tenant_id is set on creation
+    if (d.tenant_id) {
+      await run('UPDATE tenants SET property_id = $1 WHERE id = $2', [id, d.tenant_id]);
+    }
+
     await logAudit(req.user?.id, req.user?.email, 'create', 'property', id);
     res.json({ id });
   } catch (err) {
@@ -1996,7 +2011,7 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
       'charge_percentage','total_charge','rent_amount',
       'has_live_tenancy','tenancy_start_date','tenancy_type','has_end_date','tenancy_end_date',
       'rent_review_date','eicr_expiry_date','epc_grade','epc_expiry_date',
-      'has_gas','gas_safety_expiry_date','status','onboarded_date','notes','amenities','tenant_id'
+      'has_gas','gas_safety_expiry_date','status','onboarded_date','notes','amenities','tenant_id','image_url'
     ];
     for (const key of allowed) {
       if (key in d) {

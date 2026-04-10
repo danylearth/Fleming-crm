@@ -15,7 +15,7 @@ ADD COLUMN IF NOT EXISTS image_url TEXT;
 -- Step 3: Add the new CHECK constraint with 'to_let' included
 ALTER TABLE properties
 ADD CONSTRAINT properties_status_check
-CHECK (status IN ('to_let', 'available', 'let', 'maintenance'));
+CHECK (status IN ('to_let', 'available', 'let', 'let_agreed', 'full_management', 'rent_collection', 'maintenance'));
 
 -- Step 4: Update existing properties with 'available' status to 'to_let' if appropriate
 -- (This is optional - only if you want to migrate existing data)

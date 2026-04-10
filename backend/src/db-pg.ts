@@ -163,7 +163,7 @@ export async function initDb() {
         epc_expiry_date DATE,
         has_gas INTEGER DEFAULT 0,
         gas_safety_expiry_date DATE,
-        status TEXT DEFAULT 'to_let' CHECK(status IN ('to_let', 'available', 'let', 'maintenance')),
+        status TEXT DEFAULT 'to_let' CHECK(status IN ('to_let', 'available', 'let', 'let_agreed', 'full_management', 'rent_collection', 'maintenance')),
         onboarded_date DATE,
         notes TEXT,
         amenities TEXT,
@@ -661,7 +661,7 @@ export async function initDb() {
       await client.query(`
         ALTER TABLE properties
         ADD CONSTRAINT properties_status_check
-        CHECK (status IN ('to_let', 'available', 'let', 'maintenance'))
+        CHECK (status IN ('to_let', 'available', 'let', 'let_agreed', 'full_management', 'rent_collection', 'maintenance'))
       `);
       await client.query(`ALTER TABLE properties ALTER COLUMN status SET DEFAULT 'to_let'`);
       console.log('[Migration] Properties status constraint updated successfully.');

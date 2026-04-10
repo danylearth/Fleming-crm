@@ -542,7 +542,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Select label="Status *" value={form.status} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, status: v }))}
-            options={[{ value: 'tbc', label: 'TBC' }, { value: 'active', label: 'Active' }, { value: 'closed', label: 'Closed' }]} />
+            options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }]} />
           <Select label="Service Type" value={form.service_type} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, service_type: v }))}
             options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
         </div>
