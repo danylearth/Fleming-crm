@@ -2205,8 +2205,10 @@ app.post('/api/maintenance', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
     const id = await insert(
-      'INSERT INTO maintenance (property_id, title, description, category, priority) VALUES ($1, $2, $3, $4, $5)',
-      [d.property_id, d.title, d.description, d.category, d.priority || 'medium']
+      `INSERT INTO maintenance (property_id, title, description, category, priority, tenant_id, landlord_id, reporter_name, reporter_email, reporter_phone, reporter_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [d.property_id, d.title, d.description, d.category, d.priority || 'medium',
+       d.tenant_id || null, d.landlord_id || null, d.reporter_name || null, d.reporter_email || null, d.reporter_phone || null, d.reporter_type || null]
     );
     res.json({ id });
   } catch (err) {
@@ -2231,7 +2233,8 @@ app.get('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) =>
 app.put('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
-    const allowed = ['status', 'contractor', 'cost', 'resolution_notes', 'title', 'description', 'property_id', 'priority', 'reported_by', 'category'];
+    const allowed = ['status', 'contractor', 'cost', 'resolution_notes', 'title', 'description', 'property_id', 'priority', 'category',
+      'tenant_id', 'landlord_id', 'reporter_name', 'reporter_email', 'reporter_phone', 'reporter_type'];
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
