@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Avatar, SectionHeader } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
-import { Camera, Lock, Bell, Palette, Bot, Mail, Key, CheckCircle, AlertCircle } from 'lucide-react';
+import { Camera, Lock, Bell, Palette } from 'lucide-react';
 
 export default function Settings() {
   const { user } = useAuth();
@@ -14,27 +14,7 @@ export default function Settings() {
   const [passwordMsg, setPasswordMsg] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
-  // AI Config state
-  const [resendApiKey, setResendApiKey] = useState('');
-  const [emailFrom, setEmailFrom] = useState('');
-  const [assistantName, setAssistantName] = useState('');
-  const [configMsg, setConfigMsg] = useState('');
-  const [configLoading, setConfigLoading] = useState(false);
-
-  const loadConfig = useCallback(async () => {
-    try {
-      const config = await api.get('/api/ai/config');
-      setResendApiKey(config.resend_api_key || '');
-      setEmailFrom(config.email_from || '');
-      setAssistantName(config.assistant_name || '');
-    } catch {
-      // Config not set yet
-    }
-  }, [api]);
-
-  useEffect(() => {
-    loadConfig();
-  }, [loadConfig]);
+  // AI Config hidden until AI router is ported to PostgreSQL
 
   const handlePasswordChange = async () => {
     if (!oldPassword || !newPassword || !confirmPassword) {
@@ -64,25 +44,6 @@ export default function Settings() {
       setPasswordMsg(err instanceof Error ? err.message : 'Failed to update password');
     } finally {
       setPasswordLoading(false);
-    }
-  };
-
-  const handleSaveConfig = async () => {
-    setConfigLoading(true);
-    try {
-      const updates: Record<string, string> = {};
-      if (resendApiKey && !resendApiKey.startsWith('****')) updates.resend_api_key = resendApiKey;
-      if (emailFrom) updates.email_from = emailFrom;
-      if (assistantName) updates.assistant_name = assistantName;
-
-      await api.put('/api/ai/config', updates);
-      setConfigMsg('Configuration saved');
-      setTimeout(() => setConfigMsg(''), 3000);
-      loadConfig();
-    } catch (err: unknown) {
-      setConfigMsg(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setConfigLoading(false);
     }
   };
 
@@ -124,64 +85,7 @@ export default function Settings() {
           </div>
         </GlassCard>
 
-        {/* AI Assistant Configuration */}
-        <GlassCard className="p-6">
-          <SectionHeader title="AI Assistant" />
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-hover)] border border-[var(--border-subtle)]">
-              <Bot size={18} className="text-orange-400 mt-0.5 shrink-0" />
-              <div className="text-xs text-[var(--text-secondary)]">
-                Configure the AI assistant's email capabilities and identity. The assistant can send emails, chase references, and send rent reminders on your behalf.
-              </div>
-            </div>
-
-            <Input
-              label="Assistant Name"
-              value={assistantName}
-              onChange={setAssistantName}
-              placeholder="e.g. Fleming AI, Assistant"
-            />
-
-            <div className="pt-2">
-              <SectionHeader title="Email Configuration" />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-[var(--text-secondary)] flex items-center gap-2">
-                <Key size={12} /> Resend API Key
-              </label>
-              <input
-                type="password"
-                value={resendApiKey}
-                onChange={e => setResendApiKey(e.target.value)}
-                placeholder="re_xxxxxxxxxxxx"
-                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-input)] border border-[var(--border-input)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-orange-500/50"
-              />
-              <p className="text-[10px] text-[var(--text-muted)]">
-                Get your API key from <a href="https://resend.com" target="_blank" rel="noopener" className="text-orange-400 hover:underline">resend.com</a>. Free tier: 100 emails/day.
-                {!resendApiKey || resendApiKey === '' ? ' Without a key, emails will be simulated.' : ''}
-              </p>
-            </div>
-
-            <Input
-              label="From Email Address"
-              value={emailFrom}
-              onChange={setEmailFrom}
-              placeholder="Fleming Lettings <noreply@fleminglettings.com>"
-            />
-
-            {configMsg && (
-              <div className={`flex items-center gap-2 text-xs ${configMsg.includes('Failed') ? 'text-red-400' : 'text-emerald-400'}`}>
-                {configMsg.includes('Failed') ? <AlertCircle size={12} /> : <CheckCircle size={12} />}
-                {configMsg}
-              </div>
-            )}
-
-            <Button variant="primary" size="sm" onClick={handleSaveConfig} disabled={configLoading}>
-              <Mail size={14} className="mr-2" /> {configLoading ? 'Saving...' : 'Save Configuration'}
-            </Button>
-          </div>
-        </GlassCard>
+        {/* AI Assistant Configuration hidden until AI router is ported to PostgreSQL */}
 
         {/* Preferences Placeholder */}
         <GlassCard className="p-6">

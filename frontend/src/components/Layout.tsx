@@ -7,7 +7,8 @@ import {
   DashboardIcon, EnquiriesIcon, PropertiesIcon, LandlordsIcon, TenantsIcon,
   BdmIcon, MaintenanceIcon, TasksIcon, FinancialsIcon, SettingsIcon
 } from './ui/icons/FlemingIcons';
-import FloatingAI from './ui/FloatingAI';
+// FloatingAI hidden until AI router is ported to PostgreSQL (all /api/ai/* endpoints 404 in production)
+// import FloatingAI from './ui/FloatingAI';
 import { useTheme } from '../context/ThemeContext';
 
 const navItems = [
@@ -191,8 +192,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
         </main>
       </div>
 
-      {/* Floating AI */}
-      <FloatingAI />
+      {/* FloatingAI hidden until AI router is ported to PostgreSQL */}
     </div>
   );
 }
