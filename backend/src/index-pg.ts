@@ -184,8 +184,8 @@ app.get('/api/dashboard', authMiddleware, async (req: AuthRequest, res) => {
     `);
     
     stats.recentMaintenance = await query(`
-      SELECT m.*, p.address FROM maintenance m
-      JOIN properties p ON p.id = m.property_id
+      SELECT m.*, COALESCE(p.address, 'Unknown property') as address FROM maintenance m
+      LEFT JOIN properties p ON p.id = m.property_id
       WHERE m.status IN ('open', 'in_progress')
       ORDER BY CASE m.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
                m.created_at DESC LIMIT 5
