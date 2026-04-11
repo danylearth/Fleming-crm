@@ -158,48 +158,63 @@ app.post('/api/auth/setup', async (req, res) => {
 
 app.get('/api/dashboard', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const stats: any = {};
-    
-    stats.properties = (await queryOne('SELECT COUNT(*) as c FROM properties')).c;
-    stats.propertiesLet = (await queryOne("SELECT COUNT(*) as c FROM properties WHERE status = 'let'")).c;
-    stats.landlords = (await queryOne('SELECT COUNT(*) as c FROM landlords')).c;
-    stats.tenants = (await queryOne('SELECT COUNT(*) as c FROM tenants')).c;
-    stats.activeTenancies = (await queryOne("SELECT COUNT(*) as c FROM tenancies WHERE status = 'active'")).c;
-    stats.openMaintenance = (await queryOne("SELECT COUNT(*) as c FROM maintenance WHERE status IN ('open', 'in_progress')")).c;
-    
-    stats.bdmProspects = (await queryOne("SELECT COUNT(*) as c FROM landlords_bdm WHERE status NOT IN ('onboarded', 'not_interested')")).c;
-    stats.enquiries = (await queryOne("SELECT COUNT(*) as c FROM tenant_enquiries WHERE status NOT IN ('rejected', 'converted')")).c;
-    
-    stats.tasksOverdue = (await queryOne("SELECT COUNT(*) as c FROM tasks WHERE status IN ('pending', 'in_progress') AND due_date < CURRENT_DATE")).c;
-    stats.tasksDueToday = (await queryOne("SELECT COUNT(*) as c FROM tasks WHERE status IN ('pending', 'in_progress') AND due_date = CURRENT_DATE")).c;
-    
-    stats.complianceAlerts = await query(`
-      SELECT id as property_id, address, 'EICR' as type, eicr_expiry_date as expiry_date
+    const cnt = (row: any) => Number(row.c);
+
+    const properties = cnt(await queryOne('SELECT COUNT(*)::integer as c FROM properties'));
+    const propertiesLet = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM properties WHERE status = 'let'"));
+    const landlords = cnt(await queryOne('SELECT COUNT(*)::integer as c FROM landlords'));
+    const tenants = cnt(await queryOne('SELECT COUNT(*)::integer as c FROM tenants'));
+    const activeTenancies = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tenancies WHERE status = 'active'"));
+    const openMaintenance = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM maintenance WHERE status IN ('open', 'in_progress')"));
+    const bdmProspects = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM landlords_bdm WHERE status NOT IN ('onboarded', 'not_interested')"));
+    const activeEnquiries = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tenant_enquiries WHERE status NOT IN ('rejected', 'converted')"));
+    const tasksOverdue = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tasks WHERE status IN ('pending', 'in_progress') AND due_date < CURRENT_DATE"));
+    const tasksDueToday = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tasks WHERE status IN ('pending', 'in_progress') AND due_date = CURRENT_DATE"));
+
+    const complianceAlerts = await query(`
+      SELECT id, address as property_address, 'EICR' as type, eicr_expiry_date as expiry_date
       FROM properties WHERE eicr_expiry_date IS NOT NULL AND eicr_expiry_date <= CURRENT_DATE + INTERVAL '14 days'
       UNION ALL
-      SELECT id, address, 'EPC', epc_expiry_date FROM properties WHERE epc_expiry_date IS NOT NULL AND epc_expiry_date <= CURRENT_DATE + INTERVAL '14 days'
+      SELECT id, address as property_address, 'EPC', epc_expiry_date FROM properties WHERE epc_expiry_date IS NOT NULL AND epc_expiry_date <= CURRENT_DATE + INTERVAL '14 days'
       UNION ALL
-      SELECT id, address, 'Gas Safety', gas_safety_expiry_date FROM properties WHERE has_gas = 1 AND gas_safety_expiry_date IS NOT NULL AND gas_safety_expiry_date <= CURRENT_DATE + INTERVAL '14 days'
+      SELECT id, address as property_address, 'Gas Safety', gas_safety_expiry_date FROM properties WHERE has_gas = 1 AND gas_safety_expiry_date IS NOT NULL AND gas_safety_expiry_date <= CURRENT_DATE + INTERVAL '14 days'
       ORDER BY expiry_date LIMIT 10
     `);
-    
-    stats.recentMaintenance = await query(`
-      SELECT m.*, COALESCE(p.address, 'Unknown property') as address FROM maintenance m
+
+    const recentMaintenance = await query(`
+      SELECT m.id, m.description, m.status, m.priority, COALESCE(p.address, 'Unknown property') as property_address
+      FROM maintenance m
       LEFT JOIN properties p ON p.id = m.property_id
       WHERE m.status IN ('open', 'in_progress')
       ORDER BY CASE m.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
                m.created_at DESC LIMIT 5
     `);
-    
-    stats.recentTasks = await query(`
-      SELECT t.id, t.title, t.priority, t.due_date FROM tasks t
+
+    const recentTasks = await query(`
+      SELECT t.id, t.title, t.status, t.priority, t.due_date FROM tasks t
       WHERE t.status IN ('pending', 'in_progress')
       ORDER BY t.due_date NULLS LAST, CASE t.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END
       LIMIT 5
     `);
-    
+
     await logAudit(req.user?.id, req.user?.email, 'view', 'dashboard');
-    res.json(stats);
+    res.json({
+      stats: {
+        properties,
+        properties_let: propertiesLet,
+        landlords,
+        tenants,
+        active_tenancies: activeTenancies,
+        open_maintenance: openMaintenance,
+        bdm_prospects: bdmProspects,
+        active_enquiries: activeEnquiries,
+        tasks_overdue: tasksOverdue,
+        tasks_due_today: tasksDueToday,
+      },
+      complianceAlerts,
+      recentMaintenance,
+      recentTasks,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load dashboard' });
@@ -3590,7 +3605,7 @@ app.get('/api/export/:entityType', authMiddleware, async (req: AuthRequest, res)
 
     switch (entityType) {
       case 'landlords':
-        data = await query('SELECT name, email, phone, address FROM landlords');
+        data = await query('SELECT name, email, phone, home_address, address FROM landlords');
         break;
       case 'landlords_bdm':
         data = await query('SELECT name, email, phone, address, status FROM landlords_bdm');

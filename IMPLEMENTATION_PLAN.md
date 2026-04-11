@@ -58,9 +58,9 @@ Each task below maps to a section in `specs/uat-full-platform.md`. Test against 
 
 - [x] **UAT: Transactions & Rent Payments** — Create/read/update payments, mark as paid (partial vs full). Per specs/uat-full-platform.md §10. Fixed: Added GET/PUT/DELETE by ID for rent_payments (were missing). Expanded POST to include notes field. PUT /:id general update with field allowlist. PUT /:id/pay wrapped in BEGIN/COMMIT/ROLLBACK transaction, fixed falsy-zero bug with amount_paid using != null check. GET list changed INNER JOIN→LEFT JOIN on properties with COALESCE fallback. Added GET/PUT/DELETE by ID for transactions (were missing). POST transactions now validates required fields (type, amount, date) and includes audit logging.
 
-- [ ] **UAT: Documents & File Uploads** — Upload to any entity, list, download, delete. Per specs/uat-full-platform.md §11. Download route reachable after reorder — verify end-to-end.
+- [x] **UAT: Documents & File Uploads** — Upload to any entity, list, download, delete. Per specs/uat-full-platform.md §11. Fixed: download auth broken (window.open sends no Bearer token — switched to fetch+blob), CHECK constraint missing 'task' entity type (task doc operations crashed), public upload inserted string into INTEGER FK column, DELETE lacked transaction safety (file unlinked before DB commit), DOC_TYPES missing maintenance/landlord_bdm/task entries, added audit logging on delete.
 
-- [ ] **UAT: Dashboard & Reporting** — Dashboard loads with stats, data export endpoint. Per specs/uat-full-platform.md §12. Check after LEFT JOIN fix applied.
+- [x] **UAT: Dashboard & Reporting** — Dashboard loads with stats, data export endpoint. Per specs/uat-full-platform.md §12. Fixed: backend returned flat object but frontend expected nested `stats` key (stats never reached UI — fallback always fired); COUNT(*) returned bigint strings not numbers; compliance alerts aliased `property_id`/`address` but frontend expected `id`/`property_address`; maintenance query used `m.*` leaking all columns; export endpoint used wrong `address` column for landlords (should be `home_address`).
 
 - [ ] **UAT: Public API Endpoints** — `GET /api/public/properties`, `POST /api/public/tenant-enquiries`, `POST /api/public/landlord-enquiries`, rate limiting. Per specs/uat-full-platform.md §13. Rate limiting confirmed on all public routes.
 
