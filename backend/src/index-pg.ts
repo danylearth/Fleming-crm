@@ -1218,9 +1218,11 @@ app.post('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) 
     // Applicant 1 fields for primary record
     const primaryFields = [
       'title_1', 'first_name_1', 'last_name_1', 'email_1', 'phone_1',
-      'date_of_birth_1', 'current_address_1', 'employment_status_1',
-      'employer_1', 'income_1', 'nationality_1', 'contract_type_1',
-      'is_joint_application', 'linked_property_id', 'notes', 'status'
+      'date_of_birth_1', 'current_address_1', 'postcode_1', 'years_at_address_1',
+      'employment_status_1', 'employer_1', 'income_1', 'nationality_1', 'contract_type_1',
+      'is_joint_application', 'linked_property_id', 'notes', 'status',
+      'preferred_tenancy_type', 'preferred_property_type', 'preferred_bedrooms',
+      'max_rent', 'preferred_parking', 'marketing_preferences'
     ];
 
     const values: any[] = [];
@@ -1381,65 +1383,88 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
     const name = `${enquiry.first_name_1} ${enquiry.last_name_1}`;
     const isJoint = !!enquiry.joint_partner_id;
 
-    // Create tenant record for this applicant — copy onboarding data collected during pipeline
-    const hasGuarantor = !!(enquiry.app_guarantor_name || enquiry.app_guarantor_phone || enquiry.app_guarantor_email);
-    const tenantId = await insert(`
-      INSERT INTO tenants (
-        title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
-        is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent,
-        holding_deposit_received, holding_deposit_amount, holding_deposit_date,
-        nok_name, nok_relationship, nok_phone, nok_address,
-        nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
-        guarantor_required, guarantor_name, guarantor_phone, guarantor_email, guarantor_address,
-        notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
-    `, [
-      enquiry.title_1, enquiry.first_name_1, enquiry.last_name_1, name, enquiry.email_1, enquiry.phone_1,
-      enquiry.date_of_birth_1, isJoint ? 1 : 0, enquiry.kyc_completed_1,
-      property_id, tenancy_start_date, tenancy_type, monthly_rent || enquiry.monthly_rent_agreed,
-      enquiry.holding_deposit_received || 0, enquiry.holding_deposit_amount || null, enquiry.holding_deposit_received_date || null,
-      enquiry.app_next_of_kin_name || null, enquiry.app_next_of_kin_relationship || null, enquiry.app_next_of_kin_phone || null, enquiry.app_next_of_kin_address || null,
-      enquiry.app_next_of_kin_2_name || null, enquiry.app_next_of_kin_2_relationship || null, enquiry.app_next_of_kin_2_phone || null, enquiry.app_next_of_kin_2_address || null,
-      hasGuarantor ? 1 : 0, enquiry.app_guarantor_name || null, enquiry.app_guarantor_phone || null, enquiry.app_guarantor_email || null, enquiry.app_guarantor_address || null,
-      enquiry.notes || null
-    ]);
+    // Use transaction to prevent orphaned tenant records if status update fails
+    const client = await pool.connect();
+    let tenantId: number;
+    let partnerTenantId: number | null = null;
+    try {
+      await client.query('BEGIN');
 
-    await run("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id]);
+      // Create tenant record for this applicant — copy onboarding data collected during pipeline
+      const hasGuarantor = !!(enquiry.app_guarantor_name || enquiry.app_guarantor_phone || enquiry.app_guarantor_email);
+      const tenantResult = await client.query(`
+        INSERT INTO tenants (
+          title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
+          is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent,
+          holding_deposit_received, holding_deposit_amount, holding_deposit_date,
+          nok_name, nok_relationship, nok_phone, nok_address,
+          nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
+          guarantor_required, guarantor_name, guarantor_phone, guarantor_email, guarantor_address,
+          notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+        RETURNING id
+      `, [
+        enquiry.title_1, enquiry.first_name_1, enquiry.last_name_1, name, enquiry.email_1, enquiry.phone_1,
+        enquiry.date_of_birth_1, isJoint ? 1 : 0, enquiry.kyc_completed_1,
+        property_id, tenancy_start_date, tenancy_type, monthly_rent || enquiry.monthly_rent_agreed,
+        enquiry.holding_deposit_received || 0, enquiry.holding_deposit_amount || null, enquiry.holding_deposit_received_date || null,
+        enquiry.app_next_of_kin_name || null, enquiry.app_next_of_kin_relationship || null, enquiry.app_next_of_kin_phone || null, enquiry.app_next_of_kin_address || null,
+        enquiry.app_next_of_kin_2_name || null, enquiry.app_next_of_kin_2_relationship || null, enquiry.app_next_of_kin_2_phone || null, enquiry.app_next_of_kin_2_address || null,
+        hasGuarantor ? 1 : 0, enquiry.app_guarantor_name || null, enquiry.app_guarantor_phone || null, enquiry.app_guarantor_email || null, enquiry.app_guarantor_address || null,
+        enquiry.notes || null
+      ]);
+      tenantId = tenantResult.rows[0].id;
+
+      await client.query("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id]);
+
+      // If joint application with linked partner, convert partner too
+      if (isJoint) {
+        const partnerResult = await client.query('SELECT * FROM tenant_enquiries WHERE id = $1', [enquiry.joint_partner_id]);
+        const partner = partnerResult.rows[0];
+        if (partner && partner.status !== 'converted') {
+          const partnerName = `${partner.first_name_1} ${partner.last_name_1}`;
+          const partnerHasGuarantor = !!(partner.app_guarantor_name || partner.app_guarantor_phone || partner.app_guarantor_email);
+          const partnerTenantResult = await client.query(`
+            INSERT INTO tenants (
+              title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
+              is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent,
+              holding_deposit_received, holding_deposit_amount, holding_deposit_date,
+              nok_name, nok_relationship, nok_phone, nok_address,
+              nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
+              guarantor_required, guarantor_name, guarantor_phone, guarantor_email, guarantor_address,
+              notes
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+            RETURNING id
+          `, [
+            partner.title_1, partner.first_name_1, partner.last_name_1, partnerName, partner.email_1, partner.phone_1,
+            partner.date_of_birth_1, 1, partner.kyc_completed_1,
+            property_id, tenancy_start_date, tenancy_type, monthly_rent || partner.monthly_rent_agreed,
+            partner.holding_deposit_received || 0, partner.holding_deposit_amount || null, partner.holding_deposit_received_date || null,
+            partner.app_next_of_kin_name || null, partner.app_next_of_kin_relationship || null, partner.app_next_of_kin_phone || null, partner.app_next_of_kin_address || null,
+            partner.app_next_of_kin_2_name || null, partner.app_next_of_kin_2_relationship || null, partner.app_next_of_kin_2_phone || null, partner.app_next_of_kin_2_address || null,
+            partnerHasGuarantor ? 1 : 0, partner.app_guarantor_name || null, partner.app_guarantor_phone || null, partner.app_guarantor_email || null, partner.app_guarantor_address || null,
+            partner.notes || null
+          ]);
+          partnerTenantId = partnerTenantResult.rows[0].id;
+
+          await client.query("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [enquiry.joint_partner_id]);
+        }
+      }
+
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    // Audit logging outside transaction (non-critical)
     await logAudit(req.user?.id, req.user?.email, 'create', 'tenant', tenantId, { converted_from_enquiry: parseInt(req.params.id as string) });
     await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', parseInt(req.params.id as string), { converted_to_tenant: tenantId });
-
-    // If joint application with linked partner, convert partner too
-    let partnerTenantId: number | null = null;
-    if (isJoint) {
-      const partner = await queryOne('SELECT * FROM tenant_enquiries WHERE id = $1', [enquiry.joint_partner_id]);
-      if (partner && partner.status !== 'converted') {
-        const partnerName = `${partner.first_name_1} ${partner.last_name_1}`;
-        const partnerHasGuarantor = !!(partner.app_guarantor_name || partner.app_guarantor_phone || partner.app_guarantor_email);
-        partnerTenantId = await insert(`
-          INSERT INTO tenants (
-            title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
-            is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent,
-            holding_deposit_received, holding_deposit_amount, holding_deposit_date,
-            nok_name, nok_relationship, nok_phone, nok_address,
-            nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
-            guarantor_required, guarantor_name, guarantor_phone, guarantor_email, guarantor_address,
-            notes
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
-        `, [
-          partner.title_1, partner.first_name_1, partner.last_name_1, partnerName, partner.email_1, partner.phone_1,
-          partner.date_of_birth_1, 1, partner.kyc_completed_1,
-          property_id, tenancy_start_date, tenancy_type, monthly_rent || partner.monthly_rent_agreed,
-          partner.holding_deposit_received || 0, partner.holding_deposit_amount || null, partner.holding_deposit_received_date || null,
-          partner.app_next_of_kin_name || null, partner.app_next_of_kin_relationship || null, partner.app_next_of_kin_phone || null, partner.app_next_of_kin_address || null,
-          partner.app_next_of_kin_2_name || null, partner.app_next_of_kin_2_relationship || null, partner.app_next_of_kin_2_phone || null, partner.app_next_of_kin_2_address || null,
-          partnerHasGuarantor ? 1 : 0, partner.app_guarantor_name || null, partner.app_guarantor_phone || null, partner.app_guarantor_email || null, partner.app_guarantor_address || null,
-          partner.notes || null
-        ]);
-
-        await run("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [enquiry.joint_partner_id]);
-        await logAudit(req.user?.id, req.user?.email, 'create', 'tenant', partnerTenantId!, { converted_from_enquiry: enquiry.joint_partner_id });
-        await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiry.joint_partner_id, { converted_to_tenant: partnerTenantId });
-      }
+    if (partnerTenantId) {
+      await logAudit(req.user?.id, req.user?.email, 'create', 'tenant', partnerTenantId, { converted_from_enquiry: enquiry.joint_partner_id });
+      await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiry.joint_partner_id, { converted_to_tenant: partnerTenantId });
     }
 
     res.json({ tenant_id: tenantId, partner_tenant_id: partnerTenantId });
@@ -1477,7 +1502,7 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
-    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','employment_status_1','employer_1','income_1','nationality_1','contract_type_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','nationality_2','contract_type_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason','renting_requirements','is_permanent_address','holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_token','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step','joint_partner_id'];
+    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','postcode_1','years_at_address_1','employment_status_1','employer_1','income_1','nationality_1','contract_type_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','nationality_2','contract_type_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason','renting_requirements','is_permanent_address','holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_token','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step','joint_partner_id','preferred_tenancy_type','preferred_property_type','preferred_bedrooms','max_rent','preferred_parking','marketing_preferences','viewing_time'];
     for (const key of allowed) {
       if (key in d) {
         fields.push(`${key}=$${idx++}`);
@@ -1544,6 +1569,40 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Failed to update enquiry' });
+  }
+});
+
+app.delete('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const id = req.params.id as string;
+    const enquiry = await queryOne('SELECT * FROM tenant_enquiries WHERE id = $1', [id]);
+    if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
+
+    // Clear joint_partner_id on linked partner so it doesn't reference a deleted record
+    if (enquiry.joint_partner_id) {
+      await run('UPDATE tenant_enquiries SET joint_partner_id = NULL WHERE id = $1', [enquiry.joint_partner_id]);
+    }
+    // Also clear any other enquiry that points to this one as its partner
+    await run('UPDATE tenant_enquiries SET joint_partner_id = NULL WHERE joint_partner_id = $1', [id]);
+
+    // Delete associated documents and their files
+    const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['tenant_enquiry', id]);
+    for (const doc of documents) {
+      const filePath = path.join(uploadsDir, doc.filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+    await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['tenant_enquiry', id]);
+
+    // Delete associated tasks
+    await run("DELETE FROM tasks WHERE entity_type = 'tenant_enquiry' AND entity_id = $1", [id]);
+
+    // Delete the enquiry
+    await run('DELETE FROM tenant_enquiries WHERE id = $1', [id]);
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'tenant_enquiry', parseInt(id));
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete enquiry' });
   }
 });
 
