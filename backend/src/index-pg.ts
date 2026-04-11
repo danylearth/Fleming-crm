@@ -2232,11 +2232,12 @@ app.get('/api/tasks', authMiddleware, async (req: AuthRequest, res) => {
 
 app.post('/api/tasks', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { title, description, priority, assigned_to, entity_type, entity_id, due_date, task_type } = req.body;
+    const { title, description, priority, assigned_to, entity_type, entity_id, due_date, task_type, status, notes } = req.body;
     const id = await insert(
-      'INSERT INTO tasks (title, description, priority, assigned_to, entity_type, entity_id, due_date, task_type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-      [title, description, priority || 'medium', assigned_to, entity_type, entity_id, due_date, task_type || 'manual']
+      'INSERT INTO tasks (title, description, priority, assigned_to, entity_type, entity_id, due_date, task_type, status, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+      [title, description, priority || 'medium', assigned_to, entity_type, entity_id, due_date, task_type || 'manual', status || 'pending', notes]
     );
+    await logAudit(req.user?.id, req.user?.email, 'create', 'task', id, req.body);
     res.json({ id });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create task' });
@@ -2246,7 +2247,7 @@ app.post('/api/tasks', authMiddleware, async (req: AuthRequest, res) => {
 app.put('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
-    const allowed = ['title', 'description', 'priority', 'status', 'assigned_to', 'due_date', 'notes', 'entity_type', 'entity_id'];
+    const allowed = ['title', 'description', 'priority', 'status', 'assigned_to', 'due_date', 'notes', 'entity_type', 'entity_id', 'follow_up_date', 'task_type'];
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -2278,7 +2279,10 @@ app.put('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
 
 app.get('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const result = await query('SELECT * FROM tasks WHERE id = $1', [req.params.id]);
+    const result = await query(
+      'SELECT t.*, u.name as assigned_to_name FROM tasks t LEFT JOIN users u ON u.id::TEXT = t.assigned_to WHERE t.id = $1',
+      [req.params.id]
+    );
     if (result.length === 0) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -2292,20 +2296,28 @@ app.get('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
 
 app.delete('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    // Delete associated documents first
-    const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['task', req.params.id]);
+    const id = req.params.id as string;
+    // Delete physical files first (outside transaction — best-effort)
+    const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['task', id]);
     for (const doc of documents) {
       const filePath = path.join(uploadsDir, doc.filename);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
-    await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['task', req.params.id]);
 
-    // Delete the task
-    await run('DELETE FROM tasks WHERE id = $1', [req.params.id]);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['task', id]);
+      await client.query('DELETE FROM tasks WHERE id = $1', [id]);
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
 
-    await logAudit(req.user?.id, req.user?.email, 'delete', 'task', parseInt(req.params.id as string));
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'task', parseInt(id));
     res.json({ success: true });
   } catch (err) {
     console.error('Failed to delete task:', err);
@@ -2320,8 +2332,28 @@ app.post('/api/tasks/bulk-delete', authMiddleware, async (req: AuthRequest, res)
       return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
 
-    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-    const result = await run(`DELETE FROM tasks WHERE id IN (${placeholders})`, ids);
+    // Delete physical files first (outside transaction — best-effort)
+    for (const id of ids) {
+      const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['task', String(id)]);
+      for (const doc of documents) {
+        const filePath = path.join(uploadsDir, doc.filename);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const placeholders = ids.map((_: any, i: number) => `$${i + 1}`).join(',');
+      await client.query(`DELETE FROM documents WHERE entity_type = 'task' AND entity_id::INTEGER IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM tasks WHERE id IN (${placeholders})`, ids);
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
 
     for (const id of ids) {
       await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'task', id);
