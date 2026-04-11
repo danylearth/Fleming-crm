@@ -2339,8 +2339,8 @@ app.post('/api/tasks/bulk-delete', authMiddleware, async (req: AuthRequest, res)
 app.get('/api/maintenance', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const requests = await query(`
-      SELECT m.*, p.address, l.name as landlord_name FROM maintenance m
-      JOIN properties p ON p.id = m.property_id LEFT JOIN landlords l ON l.id = p.landlord_id
+      SELECT m.*, COALESCE(p.address, 'Unknown property') as address, l.name as landlord_name FROM maintenance m
+      LEFT JOIN properties p ON p.id = m.property_id LEFT JOIN landlords l ON l.id = p.landlord_id
       ORDER BY CASE m.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, m.created_at DESC
     `);
     res.json(requests);
@@ -2353,10 +2353,11 @@ app.post('/api/maintenance', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
     const id = await insert(
-      `INSERT INTO maintenance (property_id, title, description, category, priority, tenant_id, landlord_id, reporter_name, reporter_email, reporter_phone, reporter_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [d.property_id, d.title, d.description, d.category, d.priority || 'medium',
-       d.tenant_id || null, d.landlord_id || null, d.reporter_name || null, d.reporter_email || null, d.reporter_phone || null, d.reporter_type || null]
+      `INSERT INTO maintenance (property_id, title, description, category, priority, tenant_id, landlord_id, reporter_name, reporter_email, reporter_phone, reporter_type, contractor, contractor_phone, cost, notes, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+      [d.property_id, d.title, d.description, d.category || null, d.priority || 'medium',
+       d.tenant_id || null, d.landlord_id || null, d.reporter_name || null, d.reporter_email || null, d.reporter_phone || null, d.reporter_type || null,
+       d.contractor || null, d.contractor_phone || null, d.cost || null, d.notes || null, d.status || 'open']
     );
     res.json({ id });
   } catch (err) {
@@ -2366,7 +2367,11 @@ app.post('/api/maintenance', authMiddleware, async (req: AuthRequest, res) => {
 
 app.get('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const result = await query('SELECT * FROM maintenance WHERE id = $1', [req.params.id]);
+    const result = await query(`
+      SELECT m.*, COALESCE(p.address, 'Unknown property') as address, l.name as landlord_name FROM maintenance m
+      LEFT JOIN properties p ON p.id = m.property_id LEFT JOIN landlords l ON l.id = p.landlord_id
+      WHERE m.id = $1
+    `, [req.params.id]);
     if (result.length === 0) {
       return res.status(404).json({ error: 'Maintenance request not found' });
     }
@@ -2381,8 +2386,8 @@ app.get('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) =>
 app.put('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
-    const allowed = ['status', 'contractor', 'cost', 'resolution_notes', 'title', 'description', 'property_id', 'priority', 'category',
-      'tenant_id', 'landlord_id', 'reporter_name', 'reporter_email', 'reporter_phone', 'reporter_type'];
+    const allowed = ['status', 'contractor', 'contractor_phone', 'cost', 'resolution_notes', 'title', 'description', 'property_id', 'priority', 'category',
+      'tenant_id', 'landlord_id', 'reporter_name', 'reporter_email', 'reporter_phone', 'reporter_type', 'completed_date', 'notes'];
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -2398,8 +2403,8 @@ app.put('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) =>
     await run(`UPDATE maintenance SET ${fields.join(', ')} WHERE id=$${idx}`, values);
     await logAudit(req.user?.id, req.user?.email, 'update', 'maintenance', parseInt(req.params.id as string), d);
     const updated = await queryOne(`
-      SELECT m.*, p.address, l.name as landlord_name FROM maintenance m
-      JOIN properties p ON p.id = m.property_id LEFT JOIN landlords l ON l.id = p.landlord_id
+      SELECT m.*, COALESCE(p.address, 'Unknown property') as address, l.name as landlord_name FROM maintenance m
+      LEFT JOIN properties p ON p.id = m.property_id LEFT JOIN landlords l ON l.id = p.landlord_id
       WHERE m.id = $1
     `, [req.params.id]);
     res.json(updated);
@@ -2411,14 +2416,27 @@ app.put('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) =>
 app.delete('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = req.params.id as string;
-    // Delete associated documents and files
+    // Delete physical files first (outside transaction — best-effort)
     const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['maintenance', id]);
     for (const doc of documents) {
       const filePath = path.join(uploadsDir, doc.filename);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
-    await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['maintenance', id]);
-    await run('DELETE FROM maintenance WHERE id = $1', [id]);
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['maintenance', id]);
+      await client.query("DELETE FROM tasks WHERE entity_type = 'maintenance' AND entity_id = $1", [id]);
+      await client.query('DELETE FROM maintenance WHERE id = $1', [id]);
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
     await logAudit(req.user?.id, req.user?.email, 'delete', 'maintenance', parseInt(id));
     res.json({ success: true });
   } catch (err) {
@@ -2434,8 +2452,29 @@ app.post('/api/maintenance/bulk-delete', authMiddleware, async (req: AuthRequest
       return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
 
-    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-    const result = await run(`DELETE FROM maintenance WHERE id IN (${placeholders})`, ids);
+    // Delete physical files first (outside transaction — best-effort)
+    for (const id of ids) {
+      const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['maintenance', String(id)]);
+      for (const doc of documents) {
+        const filePath = path.join(uploadsDir, doc.filename);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const placeholders = ids.map((_: any, i: number) => `$${i + 1}`).join(',');
+      await client.query(`DELETE FROM documents WHERE entity_type = 'maintenance' AND entity_id::INTEGER IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM tasks WHERE entity_type = 'maintenance' AND entity_id::INTEGER IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM maintenance WHERE id IN (${placeholders})`, ids);
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
 
     for (const id of ids) {
       await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'maintenance', id);
