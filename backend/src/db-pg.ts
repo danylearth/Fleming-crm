@@ -446,6 +446,22 @@ export async function initDb() {
       END $$;
     `);
 
+    // Sprint 2: KYC breakdown, structured income, status
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS kyc_primary_id INTEGER DEFAULT 0;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS kyc_secondary_id INTEGER DEFAULT 0;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS kyc_address_verification INTEGER DEFAULT 0;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS kyc_personal_verification INTEGER DEFAULT 0;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS income_amount TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS income_employer TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS income_contract_type TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS move_in_date DATE;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
     // Sprint 5: Onboarding & application form fields
     await client.query(`
       DO $$ BEGIN

@@ -1649,36 +1649,47 @@ app.post('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
       INSERT INTO tenants (
         name, title_1, first_name_1, last_name_1, email, phone, date_of_birth_1,
         is_joint_tenancy, title_2, first_name_2, last_name_2, email_2, phone_2, date_of_birth_2,
-        nok_name, nok_relationship, nok_phone, nok_email,
+        nok_name, nok_relationship, nok_phone, nok_email, nok_address,
+        nok_2_name, nok_2_relationship, nok_2_phone, nok_2_email, nok_2_address,
         kyc_completed_1, kyc_completed_2,
+        kyc_primary_id, kyc_secondary_id, kyc_address_verification, kyc_personal_verification,
         guarantor_required, guarantor_name, guarantor_address, guarantor_phone, guarantor_email,
         guarantor_kyc_completed, guarantor_deed_received,
         holding_deposit_received, holding_deposit_amount, holding_deposit_date,
         application_forms_completed, authority_to_contact, proof_of_income, deposit_scheme,
+        income_amount, income_employer, income_contract_type,
         property_id, tenancy_start_date, tenancy_type, has_end_date, tenancy_end_date,
-        monthly_rent, notes, emergency_contact
+        monthly_rent, notes, emergency_contact, status
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-        $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42
+        $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
+        $41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55
       )
     `, [
       name,
       d.title_1 || null, d.first_name_1 || name, d.last_name_1 || '',
       d.email || null, d.phone || null, d.date_of_birth_1 || null,
-      d.is_joint_tenancy || 0,
+      d.is_joint_tenancy ? 1 : 0,
       d.title_2 || null, d.first_name_2 || null, d.last_name_2 || null,
       d.email_2 || null, d.phone_2 || null, d.date_of_birth_2 || null,
-      d.nok_name || null, d.nok_relationship || null, d.nok_phone || null, d.nok_email || null,
-      d.kyc_completed_1 || 0, d.kyc_completed_2 || 0,
-      d.guarantor_required || 0, d.guarantor_name || null, d.guarantor_address || null,
+      d.nok_name || null, d.nok_relationship || null, d.nok_phone || null, d.nok_email || null, d.nok_address || null,
+      d.nok_2_name || null, d.nok_2_relationship || null, d.nok_2_phone || null, d.nok_2_email || null, d.nok_2_address || null,
+      d.kyc_completed_1 ? 1 : 0, d.kyc_completed_2 ? 1 : 0,
+      d.kyc_primary_id ? 1 : 0, d.kyc_secondary_id ? 1 : 0, d.kyc_address_verification ? 1 : 0, d.kyc_personal_verification ? 1 : 0,
+      d.guarantor_required ? 1 : 0, d.guarantor_name || null, d.guarantor_address || null,
       d.guarantor_phone || null, d.guarantor_email || null,
-      d.guarantor_kyc_completed || 0, d.guarantor_deed_received || 0,
-      d.holding_deposit_received || 0, d.holding_deposit_amount || null, d.holding_deposit_date || null,
-      d.application_forms_completed || 0, d.authority_to_contact || 0, d.proof_of_income || 0, d.deposit_scheme || null,
+      d.guarantor_kyc_completed ? 1 : 0, d.guarantor_deed_received ? 1 : 0,
+      d.holding_deposit_received ? 1 : 0, d.holding_deposit_amount || null, d.holding_deposit_date || null,
+      d.application_forms_completed ? 1 : 0, d.authority_to_contact ? 1 : 0, d.proof_of_income ? 1 : 0, d.deposit_scheme || null,
+      d.income_amount || null, d.income_employer || null, d.income_contract_type || null,
       d.property_id || null, d.tenancy_start_date || null, d.tenancy_type || null,
-      d.has_end_date || 0, d.tenancy_end_date || null,
-      d.monthly_rent || null, d.notes || null, d.emergency_contact || null
+      d.has_end_date ? 1 : 0, d.tenancy_end_date || null,
+      d.monthly_rent || null, d.notes || null, d.emergency_contact || null, d.status || 'active'
     ]);
+    // Sync property.tenant_id when tenant is created with a property
+    if (d.property_id) {
+      await run('UPDATE properties SET tenant_id = $1 WHERE id = $2', [id, d.property_id]);
+    }
     await logAudit(req.user?.id, req.user?.email, 'create', 'tenant', id);
     res.json({ id });
   } catch (err) {
@@ -1716,32 +1727,51 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
       'nok_name','nok_relationship','nok_phone','nok_email','nok_address',
       'nok_2_name','nok_2_relationship','nok_2_phone','nok_2_email','nok_2_address',
       'kyc_completed_1','kyc_completed_2',
+      'kyc_primary_id','kyc_secondary_id','kyc_address_verification','kyc_personal_verification',
       'guarantor_required','guarantor_name','guarantor_address','guarantor_phone','guarantor_email',
       'guarantor_kyc_completed','guarantor_deed_received',
       'holding_deposit_received','holding_deposit_amount','holding_deposit_date',
       'application_forms_completed','authority_to_contact','proof_of_income','deposit_scheme',
+      'income_amount','income_employer','income_contract_type',
       'property_id','tenancy_start_date','tenancy_type','has_end_date','tenancy_end_date',
-      'monthly_rent','notes','emergency_contact'
+      'monthly_rent','notes','emergency_contact','status'
+    ];
+    const boolFields = [
+      'is_joint_tenancy','kyc_completed_1','kyc_completed_2',
+      'kyc_primary_id','kyc_secondary_id','kyc_address_verification','kyc_personal_verification',
+      'guarantor_required','guarantor_kyc_completed','guarantor_deed_received',
+      'holding_deposit_received','application_forms_completed','authority_to_contact',
+      'has_end_date'
     ];
     for (const key of allowed) {
       if (key in d) {
         fields.push(`${key}=$${idx++}`);
-        values.push(d[key]);
+        values.push(boolFields.includes(key) ? (d[key] ? 1 : 0) : d[key]);
       }
     }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
     fields.push(`updated_at=CURRENT_TIMESTAMP`);
     values.push(req.params.id);
-    await run(`UPDATE tenants SET ${fields.join(', ')} WHERE id=$${idx}`, values);
 
-    // Sync property.tenant_id when tenant changes property
-    if ('property_id' in d) {
-      // Remove tenant_id from old property
-      await run('UPDATE properties SET tenant_id = NULL WHERE tenant_id = $1', [req.params.id]);
-      // Set tenant_id on new property
-      if (d.property_id) {
-        await run('UPDATE properties SET tenant_id = $1 WHERE id = $2', [req.params.id, d.property_id]);
+    // Use transaction for tenant update + property sync
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`UPDATE tenants SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+
+      // Sync property.tenant_id when tenant changes property
+      if ('property_id' in d) {
+        await client.query('UPDATE properties SET tenant_id = NULL WHERE tenant_id = $1', [req.params.id]);
+        if (d.property_id) {
+          await client.query('UPDATE properties SET tenant_id = $1 WHERE id = $2', [req.params.id, d.property_id]);
+        }
       }
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
     }
 
     await logAudit(req.user?.id, req.user?.email, 'update', 'tenant', parseInt(req.params.id as string), req.body);
@@ -1763,11 +1793,31 @@ app.post('/api/tenants/bulk-delete', authMiddleware, async (req: AuthRequest, re
       return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
 
+    // Delete physical files first (best-effort)
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-    // Update properties to remove tenant references
-    await run(`UPDATE properties SET has_live_tenancy = 0, tenancy_start_date = NULL WHERE id IN (SELECT property_id FROM tenants WHERE id IN (${placeholders}))`, ids);
-    // Delete tenants
-    const result = await run(`DELETE FROM tenants WHERE id IN (${placeholders})`, ids);
+    const documents = await query(`SELECT * FROM documents WHERE entity_type = 'tenant' AND entity_id::INTEGER IN (${placeholders})`, ids);
+    for (const doc of documents) {
+      const filePath = path.join(uploadsDir, doc.filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Clear tenant references on properties
+      await client.query(`UPDATE properties SET has_live_tenancy = 0, tenancy_start_date = NULL, tenant_id = NULL WHERE tenant_id::INTEGER IN (${placeholders})`, ids);
+      // Delete associated documents and tasks
+      await client.query(`DELETE FROM documents WHERE entity_type = 'tenant' AND entity_id::INTEGER IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM tasks WHERE entity_type = 'tenant' AND entity_id::INTEGER IN (${placeholders})`, ids);
+      // Delete tenants
+      await client.query(`DELETE FROM tenants WHERE id IN (${placeholders})`, ids);
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
 
     for (const id of ids) {
       await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'tenant', id);
@@ -2693,18 +2743,30 @@ app.put('/api/auth/password', authMiddleware, async (req: AuthRequest, res) => {
 app.delete('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = req.params.id;
-    // Clean up property references before deleting
-    await run('UPDATE properties SET has_live_tenancy = 0, tenancy_start_date = NULL, tenant_id = NULL WHERE tenant_id = $1', [id]);
-    // Delete associated documents
+    // Delete physical files first (outside transaction — best-effort)
     const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['tenant', id]);
     for (const doc of documents) {
       const filePath = path.join(uploadsDir, doc.filename);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
-    await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['tenant', id]);
-    // Delete associated tasks
-    await run("DELETE FROM tasks WHERE entity_type = 'tenant' AND entity_id = $1", [id]);
-    await run('DELETE FROM tenants WHERE id = $1', [id]);
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Clean up property references
+      await client.query('UPDATE properties SET has_live_tenancy = 0, tenancy_start_date = NULL, tenant_id = NULL WHERE tenant_id = $1', [id]);
+      // Delete associated documents, tasks, rent_payments
+      await client.query('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['tenant', id]);
+      await client.query("DELETE FROM tasks WHERE entity_type = 'tenant' AND entity_id = $1", [id]);
+      await client.query('DELETE FROM tenants WHERE id = $1', [id]);
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
     await logAudit(req.user?.id, req.user?.email, 'delete', 'tenant', parseInt(id as string));
     res.json({ success: true });
   } catch (err) {
