@@ -227,6 +227,7 @@ app.post('/api/landlords', authMiddleware, async (req: AuthRequest, res) => {
     const cols = ['name','email','phone','alt_email','date_of_birth','home_address','address',
       'company_number','entity_type','marketing_post','marketing_email','marketing_phone',
       'marketing_sms','kyc_completed','landlord_type','referral_source','notes'];
+    const intFields = ['marketing_post','marketing_email','marketing_phone','marketing_sms','kyc_completed'];
     const insertCols: string[] = [];
     const insertVals: any[] = [];
     const placeholders: string[] = [];
@@ -235,7 +236,7 @@ app.post('/api/landlords', authMiddleware, async (req: AuthRequest, res) => {
       if (key in d && d[key] !== undefined) {
         insertCols.push(key);
         placeholders.push(`$${pIdx++}`);
-        insertVals.push(d[key] ?? null);
+        insertVals.push(intFields.includes(key) ? (d[key] ? 1 : 0) : (d[key] ?? null));
       }
     }
     const id = await insert(
@@ -358,10 +359,11 @@ app.put('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
       'company_number','entity_type','marketing_post','marketing_email','marketing_phone',
       'marketing_sms','kyc_completed','landlord_type','referral_source','notes'
     ];
+    const intFields = ['marketing_post','marketing_email','marketing_phone','marketing_sms','kyc_completed'];
     for (const key of allowed) {
       if (key in d) {
         fields.push(`${key}=$${idx++}`);
-        values.push(d[key]);
+        values.push(intFields.includes(key) ? (d[key] ? 1 : 0) : d[key]);
       }
     }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
@@ -428,10 +430,19 @@ app.get('/api/directors', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-// Get all directors for a landlord
+// Get all directors for a landlord (supports ?archived=true/false filter)
 app.get('/api/landlords/:landlordId/directors', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const directors = await query('SELECT * FROM directors WHERE landlord_id = $1 ORDER BY created_at DESC', [req.params.landlordId]);
+    const { archived } = req.query;
+    let sql = 'SELECT * FROM directors WHERE landlord_id = $1';
+    const params: any[] = [req.params.landlordId];
+    if (archived === 'true') {
+      sql += ' AND archived = 1';
+    } else if (archived === 'false') {
+      sql += ' AND archived = 0';
+    }
+    sql += ' ORDER BY created_at DESC';
+    const directors = await query(sql, params);
     res.json(directors);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch directors' });
@@ -471,14 +482,14 @@ app.put('/api/directors/:id', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-// Delete a director
+// Archive a director (soft-delete)
 app.delete('/api/directors/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    await run('DELETE FROM directors WHERE id = $1', [req.params.id]);
-    await logAudit(req.user?.id, req.user?.email, 'delete', 'director', parseInt(req.params.id as string));
+    await run('UPDATE directors SET archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [req.params.id]);
+    await logAudit(req.user?.id, req.user?.email, 'archive', 'director', parseInt(req.params.id as string));
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to delete director' });
+    res.status(500).json({ error: 'Failed to archive director' });
   }
 });
 

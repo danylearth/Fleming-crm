@@ -168,6 +168,8 @@ export default function Landlords() {
         email: form.email,
         phone: form.phone,
         address: form.postcode ? `${form.address}, ${form.postcode}` : form.address,
+        entity_type: form.entity_type,
+        landlord_type: form.landlord_type,
         company_number: form.entity_type === 'company' ? form.company_number : null,
         notes: form.notes || null
       };

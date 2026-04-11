@@ -83,7 +83,7 @@ export default function LandlordDetail() {
   const [form, setForm] = useState({
     name: '', email: '', phone: '', notes: '',
     alt_email: '', date_of_birth: '', home_address: '', company_number: '', referral_source: '',
-    entity_type: 'individual',
+    entity_type: 'individual', landlord_type: 'external',
     marketing_post: false, marketing_email: false, marketing_phone: false, marketing_sms: false,
     kyc_completed: false,
   });
@@ -146,7 +146,7 @@ export default function LandlordDetail() {
     name: l.name || '', email: l.email || '', phone: l.phone || '',
     notes: '', alt_email: l.alt_email || '', date_of_birth: l.date_of_birth || '', home_address: l.home_address || '',
     company_number: l.company_number || '', referral_source: l.referral_source || '',
-    entity_type: l.entity_type || 'individual',
+    entity_type: l.entity_type || 'individual', landlord_type: l.landlord_type || 'external',
     marketing_post: !!l.marketing_post, marketing_email: !!l.marketing_email,
     marketing_phone: !!l.marketing_phone, marketing_sms: !!l.marketing_sms,
     kyc_completed: !!l.kyc_completed,
@@ -371,6 +371,8 @@ export default function LandlordDetail() {
                       <AddressAutocomplete label={isCompany ? "Registered Address" : "Home Address"} value={form.home_address} onChange={v => setForm({ ...form, home_address: v })} />
                       <Select label="Referral Source" value={form.referral_source} onChange={v => setForm({ ...form, referral_source: v })}
                         options={[{ value: '', label: 'Select...' }, { value: 'Website', label: 'Website' }, { value: 'Word of Mouth', label: 'Word of Mouth' }, { value: 'Social Media', label: 'Social Media' }, { value: 'Rightmove', label: 'Rightmove' }, { value: 'Zoopla', label: 'Zoopla' }, { value: 'Referral', label: 'Referral' }, { value: 'Walk-in', label: 'Walk-in' }, { value: 'Other', label: 'Other' }]} />
+                      <Select label="Portfolio Type" value={form.landlord_type} onChange={v => setForm({ ...form, landlord_type: v })}
+                        options={[{ value: 'external', label: 'External' }, { value: 'internal', label: 'Internal' }]} />
                     </div>
                   </div>
                 ) : (
@@ -386,6 +388,7 @@ export default function LandlordDetail() {
                     <ReadField icon={Phone} label={isCompany ? "Office Phone" : "Phone"} value={landlord.phone} />
                     <ReadField icon={MapPin} label={isCompany ? "Registered Address" : "Home Address"} value={landlord.home_address} />
                     <ReadField icon={Megaphone} label="Referral Source" value={landlord.referral_source} />
+                    <ReadField icon={Building2} label="Portfolio Type" value={landlord.landlord_type === 'internal' ? 'Internal' : 'External'} />
                   </div>
                 );
               })()}
