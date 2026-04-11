@@ -655,7 +655,7 @@ app.post('/api/landlords-bdm', authMiddleware, async (req: AuthRequest, res) => 
       'INSERT INTO landlords_bdm (name, email, phone, address, status, follow_up_date, source, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
       [name, email || null, phone || null, address || null, status || 'new', follow_up_date || null, source || null, notes || null]
     );
-    await logAudit(req.user?.id, req.user?.email, 'create', 'landlords_bdm', id, req.body);
+    await logAudit(req.user?.id, req.user?.email, 'create', 'landlord_bdm', id, req.body);
     res.json({ id });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create landlord BDM' });
@@ -712,14 +712,27 @@ app.post('/api/landlords-bdm/:id/convert', authMiddleware, async (req: AuthReque
 
     const { landlord_type } = req.body || {};
 
-    const landlordId = await insert(
-      'INSERT INTO landlords (name, email, phone, address, notes, landlord_type, referral_source) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [prospect.name, prospect.email, prospect.phone, prospect.address, prospect.notes, landlord_type || 'external', prospect.source]
-    );
-    await run("UPDATE landlords_bdm SET status = 'onboarded', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id as string]);
+    // Use transaction to prevent orphaned landlord if BDM status update fails
+    const client = await pool.connect();
+    let landlordId: number;
+    try {
+      await client.query('BEGIN');
+      const insertResult = await client.query(
+        'INSERT INTO landlords (name, email, phone, address, notes, landlord_type, referral_source) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+        [prospect.name, prospect.email, prospect.phone, prospect.address, prospect.notes, landlord_type || 'external', prospect.source]
+      );
+      landlordId = insertResult.rows[0].id;
+      await client.query("UPDATE landlords_bdm SET status = 'onboarded', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id as string]);
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
 
     await logAudit(req.user?.id, req.user?.email, 'create', 'landlord', landlordId, { converted_from_bdm: parseInt(req.params.id as string) });
-    await logAudit(req.user?.id, req.user?.email, 'update', 'landlords_bdm', parseInt(req.params.id as string), { converted_to_landlord: landlordId });
+    await logAudit(req.user?.id, req.user?.email, 'update', 'landlord_bdm', parseInt(req.params.id as string), { converted_to_landlord: landlordId });
 
     res.json({ landlord_id: landlordId });
   } catch (err) {

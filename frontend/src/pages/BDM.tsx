@@ -17,6 +17,7 @@ const STATUSES = [
   { key: 'new', label: 'New', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   { key: 'contacted', label: 'Contacted', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
   { key: 'follow_up', label: 'Follow Up', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  { key: 'interested', label: 'Interested', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
   { key: 'onboarded', label: 'Onboarded', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
   { key: 'not_interested', label: 'Not Interested', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
 ];
@@ -533,9 +534,17 @@ export default function BDM() {
                   <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p><p className="text-xs text-[var(--text-muted)]">Schedule a follow-up date</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
+                <button onClick={() => doWorkflowAction('interested')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+                    <UserPlus size={14} className="text-white" />
+                  </div>
+                  <div className="flex-1"><p className="text-sm font-medium">Mark as Interested</p><p className="text-xs text-[var(--text-muted)]">Prospect is interested in letting</p></div>
+                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
+                </button>
 
-                {/* Convert — only when follow_up or later */}
-                {['follow_up', 'interested'].includes(workflowProspect.status) && (
+                {/* Convert — only when contacted, follow_up or interested */}
+                {['contacted', 'follow_up', 'interested'].includes(workflowProspect.status) && (
                   <>
                     <div className="h-px bg-[var(--border-subtle)] my-3" />
                     <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Convert</p>
