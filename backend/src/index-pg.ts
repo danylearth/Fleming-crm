@@ -2635,13 +2635,29 @@ app.post('/api/tenancies', authMiddleware, async (req: AuthRequest, res) => {
 app.get('/api/rent-payments', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const payments = await query(`
-      SELECT rp.*, p.address, t.name as tenant_name FROM rent_payments rp
-      JOIN properties p ON p.id = rp.property_id LEFT JOIN tenants t ON t.id = rp.tenant_id
+      SELECT rp.*, COALESCE(p.address, 'Unknown property') as address, t.name as tenant_name FROM rent_payments rp
+      LEFT JOIN properties p ON p.id = rp.property_id LEFT JOIN tenants t ON t.id = rp.tenant_id
       ORDER BY rp.due_date DESC
     `);
     res.json(payments);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch rent payments' });
+  }
+});
+
+app.get('/api/rent-payments/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const result = await query(`
+      SELECT rp.*, p.address, t.name as tenant_name FROM rent_payments rp
+      LEFT JOIN properties p ON p.id = rp.property_id LEFT JOIN tenants t ON t.id = rp.tenant_id
+      WHERE rp.id = $1
+    `, [req.params.id]);
+    if (result.length === 0) return res.status(404).json({ error: 'Rent payment not found' });
+    await logAudit(req.user?.id, req.user?.email, 'view', 'rent_payment', parseInt(req.params.id as string));
+    res.json(result[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch rent payment' });
   }
 });
 
@@ -2652,8 +2668,8 @@ app.post('/api/rent-payments', authMiddleware, async (req: AuthRequest, res) => 
       return res.status(400).json({ error: 'property_id, due_date, and amount_due are required' });
     }
     const id = await insert(
-      'INSERT INTO rent_payments (property_id, tenant_id, due_date, amount_due, status) VALUES ($1, $2, $3, $4, $5)',
-      [d.property_id, d.tenant_id || null, d.due_date, d.amount_due, 'pending']
+      'INSERT INTO rent_payments (property_id, tenant_id, due_date, amount_due, status, notes) VALUES ($1, $2, $3, $4, $5, $6)',
+      [d.property_id, d.tenant_id || null, d.due_date, d.amount_due, 'pending', d.notes || null]
     );
     await logAudit(req.user?.id, req.user?.email, 'create', 'rent_payment', id);
     res.json({ id });
@@ -2663,22 +2679,74 @@ app.post('/api/rent-payments', authMiddleware, async (req: AuthRequest, res) => 
   }
 });
 
+app.put('/api/rent-payments/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const d = req.body;
+    const allowed = ['property_id', 'tenant_id', 'due_date', 'amount_due', 'amount_paid', 'payment_date', 'status', 'notes'];
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    for (const key of allowed) {
+      if (key in d) {
+        fields.push(`${key}=$${idx++}`);
+        values.push(d[key]);
+      }
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    values.push(req.params.id);
+    await run(`UPDATE rent_payments SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'rent_payment', parseInt(req.params.id as string), d);
+    const updated = await queryOne(`
+      SELECT rp.*, p.address, t.name as tenant_name FROM rent_payments rp
+      LEFT JOIN properties p ON p.id = rp.property_id LEFT JOIN tenants t ON t.id = rp.tenant_id
+      WHERE rp.id = $1
+    `, [req.params.id]);
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update rent payment' });
+  }
+});
+
+app.delete('/api/rent-payments/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const existing = await queryOne('SELECT * FROM rent_payments WHERE id = $1', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Rent payment not found' });
+    await run('DELETE FROM rent_payments WHERE id = $1', [req.params.id]);
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'rent_payment', parseInt(req.params.id as string));
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete rent payment' });
+  }
+});
+
 app.put('/api/rent-payments/:id/pay', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
     const payment = await queryOne('SELECT * FROM rent_payments WHERE id = $1', [req.params.id as string]);
     if (!payment) return res.status(404).json({ error: 'Payment not found' });
 
-    const amountPaid = d.amount_paid || payment.amount_due;
+    const amountPaid = d.amount_paid != null ? Number(d.amount_paid) : Number(payment.amount_due);
     const paymentDate = d.payment_date || new Date().toISOString().split('T')[0];
-    const newStatus = amountPaid < payment.amount_due ? 'partial' : 'paid';
+    const newStatus = amountPaid < Number(payment.amount_due) ? 'partial' : 'paid';
 
-    await run(
-      'UPDATE rent_payments SET amount_paid=$1, payment_date=$2, status=$3 WHERE id=$4',
-      [amountPaid, paymentDate, newStatus, req.params.id]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'UPDATE rent_payments SET amount_paid=$1, payment_date=$2, status=$3, notes=COALESCE($4, notes) WHERE id=$5',
+        [amountPaid, paymentDate, newStatus, d.notes || null, req.params.id]
+      );
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
     await logAudit(req.user?.id, req.user?.email, 'update', 'rent_payment', parseInt(req.params.id as string), { status: newStatus, amount_paid: amountPaid });
-    res.json({ success: true, status: newStatus });
+    res.json({ success: true, status: newStatus, amount_paid: amountPaid, payment_date: paymentDate });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to mark payment as paid' });
@@ -3435,16 +3503,66 @@ app.get('/api/transactions', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+app.get('/api/transactions/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const result = await queryOne('SELECT * FROM transactions WHERE id = $1', [req.params.id]);
+    if (!result) return res.status(404).json({ error: 'Transaction not found' });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch transaction' });
+  }
+});
+
 app.post('/api/transactions', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { tenancy_id, type, amount, description, date } = req.body;
+    if (!type || amount == null || !date) {
+      return res.status(400).json({ error: 'type, amount, and date are required' });
+    }
     const id = await insert(
       'INSERT INTO transactions (tenancy_id, type, amount, description, date, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
-      [tenancy_id, type, amount, description || null, date, req.user?.id || null]
+      [tenancy_id || null, type, amount, description || null, date, req.user?.id || null]
     );
+    await logAudit(req.user?.id, req.user?.email, 'create', 'transaction', id);
     res.json({ id });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create transaction' });
+  }
+});
+
+app.put('/api/transactions/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const d = req.body;
+    const allowed = ['tenancy_id', 'type', 'amount', 'description', 'date'];
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    for (const key of allowed) {
+      if (key in d) {
+        fields.push(`${key}=$${idx++}`);
+        values.push(d[key]);
+      }
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    values.push(req.params.id);
+    await run(`UPDATE transactions SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'transaction', parseInt(req.params.id as string), d);
+    const updated = await queryOne('SELECT * FROM transactions WHERE id = $1', [req.params.id]);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update transaction' });
+  }
+});
+
+app.delete('/api/transactions/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const existing = await queryOne('SELECT * FROM transactions WHERE id = $1', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Transaction not found' });
+    await run('DELETE FROM transactions WHERE id = $1', [req.params.id]);
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'transaction', parseInt(req.params.id as string));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete transaction' });
   }
 });
 
