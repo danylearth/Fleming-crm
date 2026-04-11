@@ -815,6 +815,18 @@ export async function initDb() {
       END $$;
     `);
 
+    // Fix documents entity_type CHECK constraint to include 'task'
+    await client.query(`
+      ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_entity_type_check;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE documents ADD CONSTRAINT documents_entity_type_check
+          CHECK(entity_type IN ('landlord', 'landlord_bdm', 'tenant', 'tenant_enquiry', 'property', 'maintenance', 'task'));
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+    `);
+
     // Fix audit_log action CHECK constraint to include all actions
     await client.query(`
       ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_action_check;

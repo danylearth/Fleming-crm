@@ -105,12 +105,23 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
     } catch (e) { console.error(e); }
   };
 
-  const handleDownload = (id: number, name: string) => {
-    const a = document.createElement('a');
-    a.href = `${API_URL}/api/documents/download/${id}`;
-    a.download = name;
-    // For auth, open in new tab (cookie-less download won't work with bearer)
-    window.open(`${API_URL}/api/documents/download/${id}`, '_blank');
+  const handleDownload = async (id: number, name: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/documents/download/${id}`, { headers });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Download error:', e);
+      alert('Failed to download document');
+    }
   };
 
   const mimeIcon = (mime: string) => {

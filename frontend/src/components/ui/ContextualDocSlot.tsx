@@ -87,9 +87,24 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!doc) return;
-    window.open(`${API_URL}/api/documents/download/${doc.id}`, '_blank');
+    try {
+      const res = await fetch(`${API_URL}/api/documents/download/${doc.id}`, { headers });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.original_name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Download error:', e);
+      alert('Failed to download document');
+    }
   };
 
   if (loading) {

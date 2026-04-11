@@ -1200,7 +1200,7 @@ app.post('/api/public/tenant-enquiries/:id/documents', publicSubmitLimiter, uplo
     for (const file of files) {
       await insert(
         'INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-        ['tenant_enquiry', enquiryId, 'supporting_document', file.filename, file.originalname, file.mimetype, file.size, 'public_form']
+        ['tenant_enquiry', enquiryId, 'supporting_document', file.filename, file.originalname, file.mimetype, file.size, null]
       );
     }
     res.json({ success: true, message: `${files.length} document(s) uploaded` });
@@ -2523,9 +2523,12 @@ app.post('/api/maintenance/bulk-delete', authMiddleware, async (req: AuthRequest
 
 const DOC_TYPES: Record<string, string[]> = {
   landlord: ['Primary Identification', 'Address Identification', 'Proof of Funds', 'Proof of Ownership', 'Other'],
+  landlord_bdm: ['Primary Identification', 'Address Identification', 'Proof of Funds', 'Other'],
   tenant: ['Primary Identification', 'Address Identification', 'Application Form(s)', 'Bank Statements', 'Other'],
   tenant_enquiry: ['Primary ID', 'Secondary ID', 'Address ID', 'Application Form(s)', 'Other'],
   property: ['Gas Safety Certificate', 'EPC', 'EICR', 'Proof of Ownership', 'Insurance', 'Other'],
+  maintenance: ['Quote', 'Invoice', 'Photo', 'Report', 'Other'],
+  task: ['Supporting Document', 'Other'],
 };
 
 app.get('/api/documents/types/:entityType', authMiddleware, (req: AuthRequest, res) => {
@@ -2588,10 +2591,22 @@ app.delete('/api/documents/:id', authMiddleware, async (req: AuthRequest, res) =
   try {
     const doc = await queryOne('SELECT * FROM documents WHERE id = $1', [req.params.id as string]);
     if (!doc) return res.status(404).json({ error: 'Document not found' });
-    
+
     const filePath = path.join(uploadsDir, doc.filename);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    await run('DELETE FROM documents WHERE id = $1', [req.params.id as string]);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM documents WHERE id = $1', [req.params.id as string]);
+      await client.query('COMMIT');
+      // Unlink file only after DB commit succeeds
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+    await logAudit(req.user?.id, req.user?.email, 'document_delete', doc.entity_type, doc.entity_id, { doc_type: doc.doc_type, original_name: doc.original_name });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete document' });
