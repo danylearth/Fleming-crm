@@ -70,7 +70,7 @@ Each task below maps to a section in `specs/uat-full-platform.md`. Test against 
 
 - [x] **Run `npm run render-build` and verify build succeeds** — After all fixes, confirm `backend/dist/index-pg.js` is produced, frontend builds, backend starts and `/api/health` responds 200.
 
-- [ ] **Deploy to Railway and verify production** — Push fixes, confirm health endpoint, test login, spot-check one CRUD operation.
+- [x] **Deploy to Railway and verify production** — Push fixes, confirm health endpoint, test login, spot-check one CRUD operation.
 
 ### Future Release (Out of Scope)
 
