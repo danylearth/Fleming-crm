@@ -62,7 +62,7 @@ Each task below maps to a section in `specs/uat-full-platform.md`. Test against 
 
 - [x] **UAT: Dashboard & Reporting** — Dashboard loads with stats, data export endpoint. Per specs/uat-full-platform.md §12. Fixed: backend returned flat object but frontend expected nested `stats` key (stats never reached UI — fallback always fired); COUNT(*) returned bigint strings not numbers; compliance alerts aliased `property_id`/`address` but frontend expected `id`/`property_address`; maintenance query used `m.*` leaking all columns; export endpoint used wrong `address` column for landlords (should be `home_address`).
 
-- [ ] **UAT: Public API Endpoints** — `GET /api/public/properties`, `POST /api/public/tenant-enquiries`, `POST /api/public/landlord-enquiries`, rate limiting. Per specs/uat-full-platform.md §13. Rate limiting confirmed on all public routes.
+- [x] **UAT: Public API Endpoints** — `GET /api/public/properties`, `POST /api/public/tenant-enquiries`, `POST /api/public/landlord-enquiries`, rate limiting. Per specs/uat-full-platform.md §13. Verified: all 3 endpoints implemented with input validation (required fields, email regex), error handling, CORS allowing subdomain origins. `publicSubmitLimiter` (10/15min) on all POST, `publicReadLimiter` (60/15min) on all GET. Landlord enquiry has 24h duplicate check. Tenant enquiry handles joint applications with bidirectional linking. All 8 `/api/public/*` endpoints rate-limited. Build compiles, all 23 tests pass.
 
 ## Low Priority
 
