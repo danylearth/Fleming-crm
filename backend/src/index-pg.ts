@@ -1588,6 +1588,11 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
       ]);
       tenantId = tenantResult.rows[0].id;
 
+      // Sync property.tenant_id so the property shows its new tenant (mirrors PUT /api/tenants sync)
+      if (property_id) {
+        await client.query('UPDATE properties SET tenant_id = $1 WHERE id = $2', [tenantId, property_id]);
+      }
+
       await client.query("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id]);
 
       // If joint application with linked partner, convert partner too
@@ -1806,8 +1811,11 @@ app.get('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { limit, offset } = pageParams(req);
     const tenants = await query(`
-      SELECT t.*, p.address as property_address FROM tenants t
-      LEFT JOIN properties p ON p.id = t.property_id ORDER BY t.name
+      SELECT t.*, p.address as property_address, p.landlord_id as property_landlord_id, l.name as property_landlord_name
+      FROM tenants t
+      LEFT JOIN properties p ON p.id = t.property_id
+      LEFT JOIN landlords l ON l.id = p.landlord_id
+      ORDER BY t.name
       LIMIT $1 OFFSET $2
     `, [limit, offset]);
     res.json(tenants);
@@ -1876,8 +1884,11 @@ app.post('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
 app.get('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const tenant = await queryOne(`
-      SELECT t.*, p.address as property_address FROM tenants t
-      LEFT JOIN properties p ON p.id = t.property_id WHERE t.id = $1
+      SELECT t.*, p.address as property_address, p.landlord_id as property_landlord_id, l.name as property_landlord_name
+      FROM tenants t
+      LEFT JOIN properties p ON p.id = t.property_id
+      LEFT JOIN landlords l ON l.id = p.landlord_id
+      WHERE t.id = $1
     `, [req.params.id as string]);
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
     await logAudit(req.user?.id, req.user?.email, 'view', 'tenant', parseInt(req.params.id as string));
@@ -1951,8 +1962,11 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
 
     await logAudit(req.user?.id, req.user?.email, 'update', 'tenant', parseInt(req.params.id as string), req.body);
     const updated = await queryOne(`
-      SELECT t.*, p.address as property_address FROM tenants t
-      LEFT JOIN properties p ON p.id = t.property_id WHERE t.id=$1
+      SELECT t.*, p.address as property_address, p.landlord_id as property_landlord_id, l.name as property_landlord_name
+      FROM tenants t
+      LEFT JOIN properties p ON p.id = t.property_id
+      LEFT JOIN landlords l ON l.id = p.landlord_id
+      WHERE t.id=$1
     `, [req.params.id]);
     res.json(updated);
   } catch (err) {

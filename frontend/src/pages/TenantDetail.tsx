@@ -33,6 +33,7 @@ interface Tenant {
   authority_to_contact?: number; proof_of_income?: string; deposit_scheme?: string;
   income_amount?: string; income_employer?: string; income_contract_type?: string;
   property_id: number; property_address: string;
+  property_landlord_id?: number; property_landlord_name?: string;
   tenancy_start_date?: string; tenancy_type?: string;
   has_end_date?: number; tenancy_end_date?: string; monthly_rent?: number;
   move_in_date: string; status: string; notes: string;
@@ -334,14 +335,26 @@ export default function TenantDetail() {
                 )}
               </div>
               {tenant.property_id ? (
-                <button onClick={() => navigate(`/properties/${tenant.property_id}`)}
-                  className="flex items-center gap-2 mt-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group">
-                  <div className="w-7 h-7 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center group-hover:bg-[var(--accent-orange)]/20 transition-colors">
-                    <Building2 size={14} className="text-[var(--text-muted)] group-hover:text-[var(--accent-orange)] transition-colors" />
-                  </div>
-                  <span>{tenant.property_address || `Property #${tenant.property_id}`}</span>
-                  <ChevronRight size={14} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <button onClick={() => navigate(`/properties/${tenant.property_id}`)}
+                    className="flex items-center gap-2 mt-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group">
+                    <div className="w-7 h-7 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center group-hover:bg-[var(--accent-orange)]/20 transition-colors">
+                      <Building2 size={14} className="text-[var(--text-muted)] group-hover:text-[var(--accent-orange)] transition-colors" />
+                    </div>
+                    <span>{tenant.property_address || `Property #${tenant.property_id}`}</span>
+                    <ChevronRight size={14} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                  {tenant.property_landlord_id && (
+                    <button onClick={() => navigate(`/landlords/${tenant.property_landlord_id}`)}
+                      className="flex items-center gap-2 mt-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group">
+                      <div className="w-7 h-7 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center group-hover:bg-[var(--accent-orange)]/20 transition-colors">
+                        <User size={14} className="text-[var(--text-muted)] group-hover:text-[var(--accent-orange)] transition-colors" />
+                      </div>
+                      <span>{tenant.property_landlord_name || `Landlord #${tenant.property_landlord_id}`}</span>
+                      <ChevronRight size={14} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  )}
+                </div>
               ) : (
                 <p className="text-xs text-[var(--text-muted)] mt-2">No property linked</p>
               )}

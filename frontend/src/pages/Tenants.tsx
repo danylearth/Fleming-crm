@@ -12,7 +12,7 @@ import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 
 interface Tenant {
   id: number; name: string; email: string; phone: string; property_id: number;
-  property_address: string; tenancy_end_date: string; monthly_rent: number;
+  property_address: string; property_landlord_name?: string; tenancy_end_date: string; monthly_rent: number;
   status: string; nok_name: string; landlord_type?: string; created_at?: string;
 }
 
@@ -479,9 +479,14 @@ export default function Tenants() {
               {
                 key: 'property', header: 'Property', hideClass: 'hidden lg:table-cell',
                 render: (t) => t.property_address ? (
-                  <p className="text-xs text-[var(--text-secondary)] truncate max-w-[200px] flex items-center gap-1">
-                    <Building2 size={10} className="text-[var(--text-muted)] shrink-0" />{t.property_address}
-                  </p>
+                  <div className="max-w-[200px]">
+                    <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1">
+                      <Building2 size={10} className="text-[var(--text-muted)] shrink-0" />{t.property_address}
+                    </p>
+                    {t.property_landlord_name && (
+                      <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">Landlord: {t.property_landlord_name}</p>
+                    )}
+                  </div>
                 ) : (
                   <span className="text-xs text-[var(--text-muted)]">—</span>
                 ),
