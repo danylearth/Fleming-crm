@@ -10,10 +10,10 @@ export interface SendEmailParams {
   from?: string;
 }
 
-export async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; id?: string; error?: string }> {
+export async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; id?: string; error?: string; simulated?: boolean }> {
   if (!resend) {
     console.log('[EMAIL SIMULATED]', { to: params.to, subject: params.subject });
-    return { success: true, id: 'simulated-' + Date.now() };
+    return { success: true, id: 'simulated-' + Date.now(), simulated: true };
   }
 
   try {
@@ -258,6 +258,43 @@ export function tenancyApplicationEmail(
           </p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">
             If you have any questions, please don't hesitate to contact our team.
+          </p>
+          <p style="font-size: 14px; color: #555;">
+            Kind regards,<br/><strong>Fleming Lettings</strong><br/>
+            <span style="font-size: 12px; color: #888;">01902 212 415 | accounts@fleminglettings.co.uk</span>
+          </p>
+        </div>
+        <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
+          <p style="font-size: 11px; color: #999; margin: 0;">
+            Fleming Lettings and Developments UK Limited<br/>
+            Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG
+          </p>
+        </div>
+      </div>
+    `,
+  };
+}
+
+export function enquiryConfirmationEmail(name: string, reference: string, propertyAddress?: string | null): { subject: string; html: string } {
+  return {
+    subject: `We've received your enquiry — ${reference}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
+          <h1 style="color: #fff; margin: 0; font-size: 22px;">Fleming Lettings</h1>
+          <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px;">Enquiry Received</p>
+        </div>
+        <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
+          <p style="font-size: 15px; color: #333;">Dear ${name},</p>
+          <p style="font-size: 14px; color: #555; line-height: 1.6;">
+            Thank you for registering with Fleming Lettings. We have received your enquiry${propertyAddress ? ` regarding <strong>${propertyAddress}</strong>` : ''} and our team will review it and contact you shortly.
+          </p>
+          <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 16px 0;">
+            <span style="font-size: 13px; color: #666;">Your reference:</span>
+            <strong style="font-size: 15px; color: #333;"> ${reference}</strong>
+          </div>
+          <p style="font-size: 14px; color: #555; line-height: 1.6;">
+            If you have any questions in the meantime, please call us on <strong>01902 212 415</strong> quoting your reference.
           </p>
           <p style="font-size: 14px; color: #555;">
             Kind regards,<br/><strong>Fleming Lettings</strong><br/>

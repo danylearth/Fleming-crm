@@ -1306,6 +1306,29 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
       await run('UPDATE tenant_enquiries SET joint_partner_id = $1 WHERE id = $2', [partnerId, id]);
     }
 
+    // Fire-and-forget confirmation email to the applicant — must never delay
+    // or fail the submission response
+    (async () => {
+      const { sendEmail, enquiryConfirmationEmail } = require('./email');
+      let propertyAddress: string | null = null;
+      if (data.linked_property_id) {
+        const prop = await queryOne('SELECT address FROM properties WHERE id = $1', [data.linked_property_id]);
+        propertyAddress = prop?.address || null;
+      }
+      const content = enquiryConfirmationEmail(`${data.first_name_1} ${data.last_name_1}`, `ENQ-${id}`, propertyAddress);
+      const result = await sendEmail({
+        to: data.email_1,
+        subject: content.subject,
+        html: content.html,
+        from: 'Fleming Lettings <accounts@fleminglettings.co.uk>',
+      });
+      await insert(`
+        INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
+        VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'enquiry_confirmation', $6, NULL, NULL)
+      `, [result.id || null, id, data.email_1, 'accounts@fleminglettings.co.uk', content.subject,
+          result.simulated ? 'simulated' : (result.success ? 'sent' : 'failed')]);
+    })().catch(err => console.error('Enquiry confirmation email failed:', err));
+
     res.json({
       enquiry_id: id,
       partner_enquiry_id: partnerId,
@@ -3253,14 +3276,14 @@ app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res)
       const { sendSms, normalizeUkPhone } = require('./sms');
       const normalizedPhone = normalizeUkPhone(viewer_phone);
       sendSms({ to: normalizedPhone, body: sms_message })
-        .then(async (smsResult: { success: boolean; sid?: string; error?: string }) => {
+        .then(async (smsResult: { success: boolean; sid?: string; error?: string; simulated?: boolean }) => {
           try {
             await insert(`
               INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             `, [
               enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
-              sms_message, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
+              sms_message, smsResult.simulated ? 'simulated' : (smsResult.success ? 'sent' : 'failed'), smsResult.sid || null,
               smsResult.error || null, req.user?.id || null, req.user?.email || null
             ]);
             await logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id || 0, { to_phone: normalizedPhone, message: sms_message.substring(0, 100) });
@@ -3424,7 +3447,7 @@ app.post('/api/sms/send', authMiddleware, async (req: AuthRequest, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `, [
       enquiry_id || null, resolvedEntityType, resolvedEntityId, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
-      message_body, smsResult.success ? 'sent' : 'failed', smsResult.sid || null,
+      message_body, smsResult.simulated ? 'simulated' : (smsResult.success ? 'sent' : 'failed'), smsResult.sid || null,
       smsResult.error || null, req.user?.id || null, req.user?.email || null
     ]);
     if (resolvedEntityType && resolvedEntityId) {

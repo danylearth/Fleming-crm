@@ -50,10 +50,10 @@ export interface SendSmsParams {
   body: string;
 }
 
-export async function sendSms(params: SendSmsParams): Promise<{ success: boolean; sid?: string; error?: string }> {
+export async function sendSms(params: SendSmsParams): Promise<{ success: boolean; sid?: string; error?: string; simulated?: boolean }> {
   if (!twilioClient) {
     console.log('[SMS SIMULATED]', { to: params.to, body: params.body.substring(0, 80) + '...' });
-    return { success: true, sid: 'simulated-' + Date.now() };
+    return { success: true, sid: 'simulated-' + Date.now(), simulated: true };
   }
 
   try {
