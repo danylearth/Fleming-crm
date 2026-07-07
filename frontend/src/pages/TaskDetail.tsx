@@ -9,6 +9,8 @@ import {
   Upload, Link as LinkIcon, UserCircle, Users
 } from 'lucide-react';
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 interface Task {
   id: number;
   title: string;
@@ -135,7 +137,7 @@ export default function TaskDetail() {
       formData.append('file', file);
       formData.append('doc_type', 'task_attachment');
 
-      const response = await fetch(`/api/documents/task/${task.id}`, {
+      const response = await fetch(`${API_URL}/api/documents/task/${task.id}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -153,8 +155,26 @@ export default function TaskDetail() {
     e.target.value = ''; // Reset input
   };
 
-  const downloadDocument = (docId: number) => {
-    window.open(`/api/documents/download/${docId}`, '_blank');
+  const downloadDocument = async (docId: number, name?: string) => {
+    // window.open can't send the Authorization header — fetch as blob instead
+    try {
+      const res = await fetch(`${API_URL}/api/documents/download/${docId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name || '';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to download file');
+    }
   };
 
   const deleteDocument = async (docId: number) => {
@@ -380,7 +400,7 @@ export default function TaskDetail() {
                       </div>
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => downloadDocument(doc.id)}
+                          onClick={() => downloadDocument(doc.id, doc.original_name)}
                           className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                         >
                           <Download size={14} />

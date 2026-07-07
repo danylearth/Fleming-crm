@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 
 interface User {
@@ -31,17 +31,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fetch(`${API_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       })
-        .then(res => res.json())
-        .then(data => {
-          if (data.user) setUser(data.user);
-          else {
+        .then(async res => {
+          if (res.ok) {
+            const data = await res.json();
+            if (data.user) setUser(data.user);
+          } else if (res.status === 401 || res.status === 403) {
+            // Definitive rejection — token is invalid
             localStorage.removeItem('token');
             setToken(null);
           }
+          // Other statuses (5xx): keep the token — server hiccup, not an auth failure
         })
         .catch(() => {
-          localStorage.removeItem('token');
-          setToken(null);
+          // Network error (backend cold start, offline) — keep the token so a
+          // transient blip doesn't permanently log the user out
         })
         .finally(() => setLoading(false));
     } else {
@@ -76,11 +79,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, token, login, register, logout, loading }}>

@@ -977,6 +977,17 @@
                         <div class="input-group"><label>Contact Number *</label><input type="tel" id="f_nok_phone" inputmode="tel" required /></div>
                     </div>
 
+                    <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">NEXT OF KIN 2 (OPTIONAL)</span><div class="line"></div></div>
+
+                    <div class="two-col">
+                        <div class="input-group"><label>Full Name</label><input type="text" id="f_nok2_name" /></div>
+                        <div class="input-group"><label>Relationship</label><input type="text" id="f_nok2_rel" placeholder="e.g. Sibling, Friend" /></div>
+                    </div>
+                    <div class="two-col">
+                        <div class="input-group"><label>Address</label><input type="text" id="f_nok2_address" /></div>
+                        <div class="input-group"><label>Contact Number</label><input type="tel" id="f_nok2_phone" inputmode="tel" /></div>
+                    </div>
+
                     <div class="section-divider"><div class="dot"></div><span style="font-size:13px;font-weight:600;color:#888;">GUARANTOR</span><div class="line"></div></div>
 
                     <div class="checkbox-group" style="margin-bottom:12px;">
@@ -1139,7 +1150,7 @@
         const API_BASE_URL = window.FLEMING_API_URL || (
             window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
                 ? 'http://localhost:3001'
-                : 'https://fleming-crm-api-production-7e58.up.railway.app'
+                : 'https://fleming-crm-api.fly.dev'
         );
 
         // Google Places API key — set this to enable address autocomplete
@@ -1621,10 +1632,10 @@
                     app_next_of_kin_phone: document.getElementById('f_nok_phone').value,
                     app_next_of_kin_relationship: document.getElementById('f_nok_rel').value,
                     app_next_of_kin_address: document.getElementById('f_nok_address').value,
-                    app_next_of_kin_2_name: null,
-                    app_next_of_kin_2_phone: null,
-                    app_next_of_kin_2_relationship: null,
-                    app_next_of_kin_2_address: null,
+                    app_next_of_kin_2_name: document.getElementById('f_nok2_name').value || null,
+                    app_next_of_kin_2_phone: document.getElementById('f_nok2_phone').value || null,
+                    app_next_of_kin_2_relationship: document.getElementById('f_nok2_rel').value || null,
+                    app_next_of_kin_2_address: document.getElementById('f_nok2_address').value || null,
                     app_guarantor_name: document.getElementById('f_guarantor_name').value || null,
                     app_guarantor_phone: document.getElementById('f_guarantor_phone').value || null,
                     app_guarantor_email: document.getElementById('f_guarantor_email').value || null,

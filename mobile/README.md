@@ -125,7 +125,7 @@ mobile/
 ### 1. Login
 
 - Use your Fleming CRM web dashboard credentials
-- Email: `admin@fleming.com` / Password: `admin123` (demo)
+- Email: `admin@fleming.com` / Password: `<ADMIN_PASSWORD>` (demo)
 
 ### 2. Create an Inventory
 

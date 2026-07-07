@@ -309,6 +309,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
 
   const applicantName = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
 
+  // Values below come from the public enquiry form — escape before interpolating into email HTML
+  const escapeHtml = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
   const buildTenancyApplicationEmailHtml = (): string => {
     const rent = Number(enquiry.monthly_rent_agreed || 0);
     const secDep = Number(enquiry.security_deposit_amount || 0);
@@ -326,9 +329,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px;">Tenancy Application</p>
       </div>
       <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
-        <p style="font-size: 15px; color: #333;">Dear ${applicantName},</p>
+        <p style="font-size: 15px; color: #333;">Dear ${escapeHtml(applicantName)},</p>
         <p style="font-size: 14px; color: #555; line-height: 1.6;">
-          Thank you for your interest in renting <strong>${propertyAddress}</strong>. We are pleased to invite you to complete your tenancy application.
+          Thank you for your interest in renting <strong>${escapeHtml(propertyAddress)}</strong>. We are pleased to invite you to complete your tenancy application.
         </p>
         <p style="font-size: 14px; color: #555; line-height: 1.6;">
           Please review the financial details below and complete your application within <strong>14 days</strong> (by ${deadlineStr}).
@@ -402,7 +405,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         <h1 style="color: #fff; margin: 0; font-size: 22px;">Fleming Lettings</h1>
       </div>
       <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
-        <p style="font-size: 15px; color: #333;">Dear ${firstName},</p>
+        <p style="font-size: 15px; color: #333;">Dear ${escapeHtml(firstName)},</p>
         <p style="font-size: 14px; color: #555; line-height: 1.6;">Welcome to Fleming Lettings!</p>
         <p style="font-size: 14px; color: #555; line-height: 1.6;">
           We are still waiting on your application form(s) to be completed by clicking on the following link:

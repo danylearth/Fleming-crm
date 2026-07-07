@@ -115,32 +115,26 @@ export default function Tenants() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Geocode property postcodes for map markers
+  // Geocode property postcodes for map markers — one bulk call to our backend
+  // (which caches against postcodes.io) instead of hitting Nominatim per postcode
   useEffect(() => {
     if (properties.length === 0) return;
     const postcodes = [...new Set(properties.filter(p => p.postcode).map(p => p.postcode!))];
-    const newCoords: Record<number, [number, number]> = {};
     let cancelled = false;
     (async () => {
-      for (const pc of postcodes) {
-        if (cancelled) break;
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${encodeURIComponent(pc)}&country=GB&format=json&limit=1`);
-          const data = await res.json();
-          if (data[0]) {
-            const lat = parseFloat(data[0].lat);
-            const lon = parseFloat(data[0].lon);
-            properties.filter(p => p.postcode === pc).forEach(p => {
-              newCoords[p.id] = [lat, lon];
-            });
-          }
-        } catch { /* skip */ }
-        await new Promise(r => setTimeout(r, 300)); // rate limit
-      }
-      if (!cancelled) setCoords(newCoords);
+      try {
+        const geo = await api.post('/api/postcode/bulk-geocode', { postcodes }) as Record<string, { latitude: number; longitude: number }>;
+        if (cancelled) return;
+        const newCoords: Record<number, [number, number]> = {};
+        properties.forEach(p => {
+          const g = p.postcode && geo[p.postcode.trim().toUpperCase()];
+          if (g) newCoords[p.id] = [g.latitude, g.longitude];
+        });
+        setCoords(newCoords);
+      } catch { /* map markers are best-effort */ }
     })();
     return () => { cancelled = true; };
-  }, [properties]);
+  }, [properties, api]);
 
   // Build a set of property IDs owned by the selected landlord
   const landlordPropertyIds = landlordFilter
