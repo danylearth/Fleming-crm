@@ -1,10 +1,34 @@
 import { Pool } from 'pg';
+import fs from 'fs';
+import path from 'path';
 import { runInventoryMigration } from './db-inventory-migration';
 
-// Use DATABASE_URL from environment (Railway/Render provides this)
+// Production connects to Supabase, whose certs are signed by their own CA —
+// pin it (backend/supabase-ca.crt) and verify, instead of rejectUnauthorized:false.
+// DATABASE_CA_CERT_PATH overrides for other providers.
+function sslConfig() {
+  if (process.env.NODE_ENV !== 'production') return false;
+  const caPath = process.env.DATABASE_CA_CERT_PATH || path.join(__dirname, '../supabase-ca.crt');
+  return { rejectUnauthorized: true, ca: fs.readFileSync(caPath, 'utf8') };
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: sslConfig()
+});
+
+// An idle client dropped by the server (e.g. managed-Postgres failover/restart)
+// emits 'error' on the pool; without a handler node kills the process.
+pool.on('error', (err) => {
+  console.error('[db-pg] Unexpected error on idle PostgreSQL client:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] Unhandled promise rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[process] Uncaught exception:', err);
 });
 
 // Initialize tables - PostgreSQL Schema
@@ -420,7 +444,6 @@ export async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_tenant_enquiries_email ON tenant_enquiries(email_1);
       CREATE INDEX IF NOT EXISTS idx_tenant_enquiries_phone ON tenant_enquiries(phone_1);
       CREATE INDEX IF NOT EXISTS idx_tenant_enquiries_status ON tenant_enquiries(status);
-      CREATE INDEX IF NOT EXISTS idx_tenant_enquiries_token ON tenant_enquiries(application_form_token);
       CREATE INDEX IF NOT EXISTS idx_tenant_enquiries_property ON tenant_enquiries(linked_property_id);
       CREATE INDEX IF NOT EXISTS idx_landlords_email ON landlords(email);
       CREATE INDEX IF NOT EXISTS idx_tenants_email ON tenants(email);
@@ -442,7 +465,7 @@ export async function initDb() {
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_phone TEXT;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_email TEXT;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_address TEXT;
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
 
@@ -458,7 +481,7 @@ export async function initDb() {
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS income_contract_type TEXT;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS move_in_date DATE;
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
 
@@ -541,15 +564,22 @@ export async function initDb() {
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_last_viewed_at TIMESTAMP;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_views INTEGER DEFAULT 0;
         ALTER TABLE email_messages ADD COLUMN IF NOT EXISTS body_html TEXT;
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
+    `);
+
+    // Must run after the Sprint 5 migration above — application_form_token doesn't
+    // exist in the base CREATE TABLE, so a fresh database crash-loops if this index
+    // is created any earlier.
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_tenant_enquiries_token ON tenant_enquiries(application_form_token);
     `);
 
     // Sprint 4: Add assigned_to to property_viewings
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE property_viewings ADD COLUMN IF NOT EXISTS assigned_to TEXT;
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
 
@@ -557,7 +587,7 @@ export async function initDb() {
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE documents ADD COLUMN IF NOT EXISTS applicant_number INTEGER DEFAULT 1;
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
 
@@ -566,7 +596,7 @@ export async function initDb() {
       DO $$ BEGIN
         ALTER TABLE sms_messages ADD COLUMN IF NOT EXISTS entity_type TEXT;
         ALTER TABLE sms_messages ADD COLUMN IF NOT EXISTS entity_id INTEGER;
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
     // Backfill existing SMS records with entity_type/entity_id from enquiry_id
@@ -582,7 +612,7 @@ export async function initDb() {
         ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS last_password_change TIMESTAMP;
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
 
@@ -700,7 +730,7 @@ export async function initDb() {
         ALTER TABLE landlords ADD COLUMN IF NOT EXISTS landlord_type TEXT DEFAULT 'external';
         ALTER TABLE landlords ADD COLUMN IF NOT EXISTS referral_source TEXT;
         ALTER TABLE landlords ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
 
@@ -708,7 +738,7 @@ export async function initDb() {
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS viewing_with TEXT;
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
 
@@ -728,7 +758,7 @@ export async function initDb() {
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS max_rent REAL;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS marketing_preferences TEXT;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS joint_partner_id INTEGER REFERENCES tenant_enquiries(id);
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
 
@@ -753,7 +783,7 @@ export async function initDb() {
             kyc_completed_1, id_primary_verified_1, id_secondary_verified_1,
             is_joint_application, joint_partner_id,
             linked_property_id, status, follow_up_date, viewing_date, viewing_with,
-            notes, rejection_reason, source,
+            notes, rejection_reason,
             holding_deposit_requested, holding_deposit_received, holding_deposit_amount,
             security_deposit_amount, monthly_rent_agreed,
             preferred_tenancy_type, preferred_property_type, preferred_bedrooms,
@@ -766,7 +796,7 @@ export async function initDb() {
             rec.kyc_completed_2, rec.id_primary_verified_2, rec.id_secondary_verified_2,
             1, rec.id,
             rec.linked_property_id, rec.status, rec.follow_up_date, rec.viewing_date, rec.viewing_with,
-            rec.notes, rec.rejection_reason, rec.source,
+            rec.notes, rec.rejection_reason,
             rec.holding_deposit_requested, rec.holding_deposit_received, rec.holding_deposit_amount,
             rec.security_deposit_amount, rec.monthly_rent_agreed,
             rec.preferred_tenancy_type, rec.preferred_property_type, rec.preferred_bedrooms,
@@ -776,7 +806,7 @@ export async function initDb() {
 
           UPDATE tenant_enquiries SET joint_partner_id = new_id WHERE id = rec.id;
         END LOOP;
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
 
@@ -784,7 +814,7 @@ export async function initDb() {
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE directors ADD COLUMN IF NOT EXISTS archived INTEGER DEFAULT 0;
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
 
@@ -793,7 +823,7 @@ export async function initDb() {
       DO $$ BEGIN
         ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_assigned_to_fkey;
         ALTER TABLE tasks ALTER COLUMN assigned_to TYPE TEXT USING assigned_to::TEXT;
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
     await client.query(`
@@ -802,7 +832,7 @@ export async function initDb() {
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE tasks ADD CONSTRAINT tasks_entity_type_check CHECK(entity_type IN ('property', 'tenant', 'landlord', 'enquiry', 'tenant_enquiry', 'landlord_bdm', 'maintenance', 'general', NULL));
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
     await client.query(`
@@ -811,8 +841,17 @@ export async function initDb() {
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE tasks ADD CONSTRAINT tasks_task_type_check CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', 'viewing', NULL));
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
+    `);
+
+    // Scheduler dedupe guard: one task per (type, entity, cycle due-date) for
+    // scheduler-generated types — createTask() in scheduler-pg.ts relies on this
+    // via ON CONFLICT DO NOTHING, making duplicates impossible across instances
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_scheduler_dedupe
+      ON tasks(task_type, entity_type, entity_id, due_date)
+      WHERE task_type IN ('gas_reminder', 'eicr_reminder', 'epc_reminder', 'tenancy_end', 'rent_review', 'nok_missing');
     `);
 
     // Fix documents entity_type CHECK constraint to include 'task'
@@ -823,7 +862,7 @@ export async function initDb() {
       DO $$ BEGIN
         ALTER TABLE documents ADD CONSTRAINT documents_entity_type_check
           CHECK(entity_type IN ('landlord', 'landlord_bdm', 'tenant', 'tenant_enquiry', 'property', 'maintenance', 'task'));
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
 

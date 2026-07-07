@@ -54,7 +54,7 @@ describe('generateToken / verifyToken', () => {
     const decoded = verifyToken(token) as any;
     expect(decoded.iat).toBeDefined();
     expect(decoded.exp).toBeDefined();
-    expect(decoded.exp - decoded.iat).toBe(7 * 24 * 60 * 60); // 7 days
+    expect(decoded.exp - decoded.iat).toBe(24 * 60 * 60); // 24 hours
   });
 
   it('rejects an invalid token', () => {

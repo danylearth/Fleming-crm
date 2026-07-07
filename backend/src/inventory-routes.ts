@@ -6,8 +6,8 @@ import sharp from 'sharp';
 import { query, queryOne, insert, run } from './db-pg';
 import { AuthRequest } from './auth';
 
-// Ensure inventory uploads directory exists
-const inventoryUploadsDir = path.join(__dirname, '../uploads/inventory');
+// Ensure inventory uploads directory exists — share UPLOADS_PATH with index-pg.ts
+const inventoryUploadsDir = path.join(process.env.UPLOADS_PATH || path.join(__dirname, '../uploads'), 'inventory');
 const thumbnailsDir = path.join(inventoryUploadsDir, 'thumbnails');
 
 if (!fs.existsSync(inventoryUploadsDir)) {
@@ -235,12 +235,19 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
 
   app.put('/api/inventory-rooms/:id', authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const { room_name, room_type, condition, notes } = req.body;
-
-      await run(
-        `UPDATE inventory_rooms SET room_name=$1, room_type=$2, condition=$3, notes=$4 WHERE id=$5`,
-        [room_name, room_type, condition, notes, req.params.id]
-      );
+      const d = req.body;
+      const fields: string[] = [];
+      const values: any[] = [];
+      let idx = 1;
+      for (const key of ['room_name', 'room_type', 'condition', 'notes']) {
+        if (key in d) {
+          fields.push(`${key}=$${idx++}`);
+          values.push(d[key]);
+        }
+      }
+      if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+      values.push(req.params.id);
+      await run(`UPDATE inventory_rooms SET ${fields.join(', ')} WHERE id=$${idx}`, values);
 
       res.json({ success: true });
     } catch (err) {
