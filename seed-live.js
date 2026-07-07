@@ -5,9 +5,20 @@
  * Seeds demo landlords, properties, tenants, enquiries, and maintenance requests
  */
 
-const API_URL = 'https://fleming-crm-api-production-7e58.up.railway.app';
-const LOGIN_EMAIL = 'admin@fleming.com';
-const LOGIN_PASSWORD = 'admin123';
+const API_URL = process.env.SEED_API_URL;
+const LOGIN_EMAIL = process.env.SEED_ADMIN_EMAIL;
+const LOGIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD;
+
+if (!API_URL || !LOGIN_EMAIL || !LOGIN_PASSWORD) {
+  console.error('❌ SEED_API_URL, SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD environment variables are required');
+  process.exit(1);
+}
+
+if (process.env.ALLOW_DESTRUCTIVE !== '1') {
+  console.error(`❌ Refusing to run: this script writes demo data into the live database at ${API_URL}.`);
+  console.error('   Re-run with ALLOW_DESTRUCTIVE=1 set if you really mean to.');
+  process.exit(1);
+}
 
 let token = '';
 
@@ -427,7 +438,7 @@ async function main() {
     console.log(`  - ${tasks.length} tasks`);
     console.log('\n🎉 Demo data is ready!');
     console.log(`\nVisit: https://fleming-portal.vercel.app`);
-    console.log(`Login: admin@fleming.com / admin123`);
+    console.log(`Login: ${LOGIN_EMAIL}`);
 
   } catch (error) {
     console.error('\n❌ Seeding failed:', error.message);

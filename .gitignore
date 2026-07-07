@@ -8,10 +8,15 @@ dist/
 build/
 .next/
 
-# Environment
+# Environment — never commit env files (real deployments hold secrets)
 .env
-.env.local
-.env.*.local
+.env.*
+.env *
+*/.env
+*/.env.*
+*/.env *
+!.env.example
+!*/.env.example
 
 # Logs
 *.log
@@ -30,3 +35,6 @@ Thumbs.db
 *.sqlite
 .vercel
 .env*.local
+
+# Uploaded files (runtime data, never commit)
+backend/uploads/

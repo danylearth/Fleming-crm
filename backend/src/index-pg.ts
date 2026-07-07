@@ -1,15 +1,19 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import pino from 'pino';
+import pinoHttp from 'pino-http';
+import * as Sentry from '@sentry/node';
 import bcrypt from 'bcryptjs';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import pool, { initDb, query, queryOne, insert, run } from './db-pg';
-import { generateToken, authMiddleware, AuthRequest, requireRole } from './auth';
+import { generateToken, authMiddleware, AuthRequest, requireRole, requirePermission } from './auth';
 import { registerInventoryRoutes } from './inventory-routes';
 import { validateTwilioWebhook, normalizeUkPhone as normalizePhone } from './sms';
 import crypto from 'crypto';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { startScheduler } from './scheduler-pg';
 
 // Validate required environment variables
@@ -19,11 +23,25 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
+const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+
+// Error tracking — activates only when a SENTRY_DSN is configured
+if (process.env.SENTRY_DSN) {
+  Sentry.init({ dsn: process.env.SENTRY_DSN, tracesSampleRate: 0.1 });
+  logger.info('Sentry error tracking enabled');
+}
+
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, '../uploads');
+// Behind Railway/Fly/Vercel there is exactly one proxy hop; without this,
+// express-rate-limit v8 either throws per-request or buckets all clients
+// on the proxy IP.
+app.set('trust proxy', 1);
+
+// Ensure uploads directory exists — UPLOADS_PATH points at the persistent
+// volume in production; the local fallback is ephemeral
+const uploadsDir = process.env.UPLOADS_PATH || path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -46,11 +64,20 @@ const upload = multer({
   }
 });
 
+app.use(helmet());
+
+// Structured request logging; health-check probes excluded to keep logs readable
+app.use(pinoHttp({
+  logger,
+  autoLogging: { ignore: (req) => req.url === '/api/health' },
+}));
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true); // curl, mobile apps, etc.
     if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) return callback(null, true);
-    if (origin.endsWith('.fleminglettings.co.uk') || origin.endsWith('.vercel.app')) return callback(null, true);
+    if (origin === 'https://fleminglettings.co.uk' || origin.endsWith('.fleminglettings.co.uk')) return callback(null, true);
+    if (origin === 'https://fleming-portal.vercel.app') return callback(null, true); // exact — no *.vercel.app wildcard
     callback(new Error('CORS: origin not allowed'));
   },
   credentials: true,
@@ -82,6 +109,34 @@ const publicReadLimiter = rateLimit({
   message: { error: 'Too many requests from this IP, please try again later' },
 });
 
+// Public form input hygiene — these values end up rendered in the staff CRM,
+// so strip HTML tags and control chars and cap the length at the door.
+function sanitizePublicStrings(body: any) {
+  for (const key of Object.keys(body || {})) {
+    if (typeof body[key] === 'string') {
+      body[key] = body[key]
+        .replace(/<[^>]*>/g, '')
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+        .trim()
+        .slice(0, 2000);
+    }
+  }
+}
+
+// Pagination for list endpoints: ?limit= (default 500, max 1000) and ?offset=
+function pageParams(req: express.Request): { limit: number; offset: number } {
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? ''), 10) || 500, 1), 1000);
+  const offset = Math.max(parseInt(String(req.query.offset ?? ''), 10) || 0, 0);
+  return { limit, offset };
+}
+
+// "£30,000" / "30,000" → 30000; anything non-numeric → null (never NaN into REAL columns)
+function parsePublicNumber(value: any): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = parseFloat(String(value).replace(/[£$€,\s]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 app.get('/', (req, res) => {
@@ -111,7 +166,18 @@ async function logAudit(userId: number | undefined, userEmail: string | undefine
 
 // ============ AUTH ============
 
-app.post('/api/auth/login', async (req, res) => {
+// Brute-force protection: keyed on IP + submitted email so one attacker IP
+// can't lock out the office, and one email can't be hammered from one IP
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `${ipKeyGenerator(req.ip ?? '')}:${String(req.body?.email || '').toLowerCase()}`,
+  message: { error: 'Too many login attempts, please try again later' },
+});
+
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await queryOne('SELECT * FROM users WHERE email = $1 AND is_active = 1', [email]);
@@ -225,10 +291,12 @@ app.get('/api/dashboard', authMiddleware, async (req: AuthRequest, res) => {
 
 app.get('/api/landlords', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    const { limit, offset } = pageParams(req);
     const landlords = await query(`
       SELECT l.*, (SELECT COUNT(*) FROM properties p WHERE p.landlord_id = l.id) as property_count
       FROM landlords l ORDER BY l.name
-    `);
+      LIMIT $1 OFFSET $2
+    `, [limit, offset]);
     res.json(landlords);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch landlords' });
@@ -394,22 +462,38 @@ app.put('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-app.delete('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.delete('/api/landlords/:id', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const id = req.params.id as string;
-    await run('UPDATE properties SET landlord_id = NULL WHERE landlord_id = $1', [id]);
-    await run('DELETE FROM property_landlords WHERE landlord_id = $1', [id]);
-    await run('DELETE FROM directors WHERE landlord_id = $1', [id]);
-    await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['landlord', id]);
-    await run('DELETE FROM landlords WHERE id = $1', [id]);
+    // properties.landlord_id is NOT NULL — a landlord with properties cannot be deleted
+    const owned = await queryOne('SELECT COUNT(*)::int AS count FROM properties WHERE landlord_id = $1', [id]);
+    if (owned && owned.count > 0) {
+      return res.status(409).json({ error: `Landlord owns ${owned.count} propert${owned.count === 1 ? 'y' : 'ies'} — delete or reassign them first` });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('UPDATE maintenance SET landlord_id = NULL WHERE landlord_id = $1', [id]);
+      await client.query('DELETE FROM property_landlords WHERE landlord_id = $1', [id]);
+      await client.query('DELETE FROM directors WHERE landlord_id = $1', [id]);
+      await client.query('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['landlord', id]);
+      await client.query('DELETE FROM landlords WHERE id = $1', [id]);
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
     await logAudit(req.user?.id, req.user?.email, 'delete', 'landlord', parseInt(id));
     res.json({ success: true });
   } catch (err) {
+    console.error('Failed to delete landlord:', err);
     res.status(500).json({ error: 'Failed to delete landlord' });
   }
 });
 
-app.post('/api/landlords/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
+app.post('/api/landlords/bulk-delete', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -417,10 +501,26 @@ app.post('/api/landlords/bulk-delete', authMiddleware, async (req: AuthRequest, 
     }
 
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-    // Delete associated properties first (cascade delete)
-    await run(`DELETE FROM properties WHERE landlord_id IN (${placeholders})`, ids);
-    // Then delete landlords
-    await run(`DELETE FROM landlords WHERE id IN (${placeholders})`, ids);
+    // properties.landlord_id is NOT NULL — landlords with properties cannot be deleted
+    const owned = await queryOne(`SELECT COUNT(*)::int AS count FROM properties WHERE landlord_id IN (${placeholders})`, ids);
+    if (owned && owned.count > 0) {
+      return res.status(409).json({ error: `Selection includes landlords owning ${owned.count} propert${owned.count === 1 ? 'y' : 'ies'} — delete or reassign them first` });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`UPDATE maintenance SET landlord_id = NULL WHERE landlord_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM property_landlords WHERE landlord_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM directors WHERE landlord_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM documents WHERE entity_type = 'landlord' AND entity_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM landlords WHERE id IN (${placeholders})`, ids);
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
 
     for (const id of ids) {
       await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'landlord', id);
@@ -484,12 +584,20 @@ app.post('/api/landlords/:landlordId/directors', authMiddleware, async (req: Aut
 // Update a director
 app.put('/api/directors/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { name, email, phone, date_of_birth, role, kyc_completed, notes } = req.body;
-    await run(
-      `UPDATE directors SET name=$1, email=$2, phone=$3, date_of_birth=$4, role=$5, kyc_completed=$6, notes=$7, updated_at=CURRENT_TIMESTAMP
-       WHERE id=$8`,
-      [name, email || null, phone || null, date_of_birth || null, role || null, kyc_completed ? 1 : 0, notes || null, req.params.id]
-    );
+    const d = req.body;
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    for (const key of ['name', 'email', 'phone', 'date_of_birth', 'role', 'kyc_completed', 'notes']) {
+      if (key in d) {
+        fields.push(`${key}=$${idx++}`);
+        values.push(key === 'kyc_completed' ? (d[key] ? 1 : 0) : d[key]);
+      }
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    fields.push('updated_at=CURRENT_TIMESTAMP');
+    values.push(req.params.id);
+    await run(`UPDATE directors SET ${fields.join(', ')} WHERE id=$${idx}`, values);
     await logAudit(req.user?.id, req.user?.email, 'update', 'director', parseInt(req.params.id as string), req.body);
     res.json({ success: true });
   } catch (err) {
@@ -755,7 +863,7 @@ app.post('/api/landlords-bdm/:id/convert', authMiddleware, async (req: AuthReque
   }
 });
 
-app.post('/api/landlords-bdm/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
+app.post('/api/landlords-bdm/bulk-delete', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -780,11 +888,19 @@ app.post('/api/landlords-bdm/bulk-delete', authMiddleware, async (req: AuthReque
 
 app.get('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    const { limit, offset } = pageParams(req);
     const enquiries = await query(`
       SELECT te.*, p.address as property_address FROM tenant_enquiries te
       LEFT JOIN properties p ON p.id = te.linked_property_id
       ORDER BY te.created_at DESC
-    `);
+      LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+    // Bank details, NI numbers and signatures are detail-view data — never ship
+    // them in the list payload (the detail route requires a specific id)
+    const SENSITIVE = ['app_bank_name', 'app_bank_sort_code', 'app_bank_account_number', 'app_ni_number', 'app_signature'];
+    for (const row of enquiries) {
+      for (const key of SENSITIVE) delete row[key];
+    }
     res.json(enquiries);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch enquiries' });
@@ -794,6 +910,7 @@ app.get('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) =
 // Public endpoint for landlord enquiry form submissions (no auth required)
 app.post('/api/public/landlord-enquiries', publicSubmitLimiter, async (req, res) => {
   try {
+    sanitizePublicStrings(req.body);
     const {
       // Registration type
       registration_type,
@@ -1004,6 +1121,7 @@ app.post('/api/public/landlord-enquiries', publicSubmitLimiter, async (req, res)
 // Public endpoint for external form submissions (no auth required)
 app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) => {
   try {
+    sanitizePublicStrings(req.body);
     const {
       // Registration type
       registration_type,
@@ -1097,7 +1215,7 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
       nationality_1: Nationality2 || null,
       employment_status_1: EmploymentStatus2 || null,
       employer_1: job_title2 || null,
-      income_1: AnnualSalary2 ? parseFloat(AnnualSalary2) : null,
+      income_1: parsePublicNumber(AnnualSalary2),
       contract_type_1: contract_type2 || null,
     };
 
@@ -1114,17 +1232,21 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
       date_of_birth_1: dob || null,
       employment_status_1: EmploymentStatus || null,
       employer_1: job_title || null,
-      income_1: AnnualSalary ? parseFloat(AnnualSalary) : null,
+      income_1: parsePublicNumber(AnnualSalary),
       contract_type_1: contract_type || null,
       is_joint_application: is_joint,
       preferred_tenancy_type: tenancylookingfor || null,
       preferred_property_type: typeofproperty || null,
       preferred_bedrooms: noofbedrooms || null,
       preferred_parking: roadparking || null,
-      max_rent: rent_max ? parseFloat(rent_max) : null,
+      max_rent: parsePublicNumber(rent_max),
       marketing_preferences: marketing_preferences || null,
-      linked_property_id: property_id ? parseInt(property_id) : null,
+      linked_property_id: Number.isInteger(parseInt(property_id)) ? parseInt(property_id) : null,
       notes: notes || null,
+      // Secret the form echoes back to authorise document uploads for this enquiry.
+      // The staff onboarding flow later regenerates this token when sending the
+      // application form, which invalidates the upload link — that's fine.
+      application_form_token: crypto.randomBytes(24).toString('hex'),
       status: 'new'
     };
 
@@ -1188,25 +1310,37 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
       enquiry_id: id,
       partner_enquiry_id: partnerId,
       reference: `ENQ-${id}`,
+      upload_token: data.application_form_token,
       success: true,
       message: 'Enquiry submitted successfully'
     });
   } catch (err) {
     console.error('Public enquiry submission error:', err);
-    res.status(500).json({
-      error: 'Failed to submit enquiry',
-      details: err instanceof Error ? err.message : String(err)
-    });
+    res.status(500).json({ error: 'Failed to submit enquiry' });
   }
 });
 
 // PUBLIC ENDPOINT - Upload documents for a tenant enquiry (no auth)
 app.post('/api/public/tenant-enquiries/:id/documents', publicSubmitLimiter, upload.array('documents', 10), async (req, res) => {
+  // Multer has already written the files to disk by the time we run — on any
+  // rejection, unlink them so unauthenticated requests can't fill the volume
+  const discardUploadedFiles = () => {
+    for (const file of (req.files as Express.Multer.File[]) || []) {
+      try { fs.unlinkSync(file.path); } catch {}
+    }
+  };
   try {
     const enquiryId = req.params.id;
-    const enquiry = await queryOne('SELECT id FROM tenant_enquiries WHERE id = $1', [enquiryId]);
+    const enquiry = await queryOne('SELECT id, application_form_token FROM tenant_enquiries WHERE id = $1', [enquiryId]);
     if (!enquiry) {
+      discardUploadedFiles();
       return res.status(404).json({ error: 'Enquiry not found' });
+    }
+    // Enquiry IDs are sequential — require the per-enquiry secret issued at submission
+    const providedToken = (req.query.token || req.body?.token) as string | undefined;
+    if (!providedToken || !enquiry.application_form_token || providedToken !== enquiry.application_form_token) {
+      discardUploadedFiles();
+      return res.status(403).json({ error: 'Invalid or missing upload token' });
     }
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
@@ -1220,6 +1354,7 @@ app.post('/api/public/tenant-enquiries/:id/documents', publicSubmitLimiter, uplo
     }
     res.json({ success: true, message: `${files.length} document(s) uploaded` });
   } catch (err) {
+    discardUploadedFiles();
     console.error('Public document upload error:', err);
     res.status(500).json({ error: 'Failed to upload document' });
   }
@@ -1517,7 +1652,7 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
-    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','postcode_1','years_at_address_1','employment_status_1','employer_1','income_1','nationality_1','contract_type_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','nationality_2','contract_type_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason','renting_requirements','is_permanent_address','holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_token','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step','joint_partner_id','preferred_tenancy_type','preferred_property_type','preferred_bedrooms','max_rent','preferred_parking','marketing_preferences','viewing_time'];
+    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','postcode_1','years_at_address_1','employment_status_1','employer_1','income_1','nationality_1','contract_type_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','nationality_2','contract_type_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason','holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_token','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step','joint_partner_id','preferred_tenancy_type','preferred_property_type','preferred_bedrooms','max_rent','preferred_parking','marketing_preferences'];
     for (const key of allowed) {
       if (key in d) {
         fields.push(`${key}=$${idx++}`);
@@ -1587,7 +1722,7 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
   }
 });
 
-app.delete('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.delete('/api/tenant-enquiries/:id', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const id = req.params.id as string;
     const enquiry = await queryOne('SELECT * FROM tenant_enquiries WHERE id = $1', [id]);
@@ -1621,7 +1756,7 @@ app.delete('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest,
   }
 });
 
-app.post('/api/tenant-enquiries/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
+app.post('/api/tenant-enquiries/bulk-delete', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -1646,10 +1781,12 @@ app.post('/api/tenant-enquiries/bulk-delete', authMiddleware, async (req: AuthRe
 
 app.get('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    const { limit, offset } = pageParams(req);
     const tenants = await query(`
       SELECT t.*, p.address as property_address FROM tenants t
       LEFT JOIN properties p ON p.id = t.property_id ORDER BY t.name
-    `);
+      LIMIT $1 OFFSET $2
+    `, [limit, offset]);
     res.json(tenants);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch tenants' });
@@ -1678,7 +1815,7 @@ app.post('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
-        $41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55
+        $41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56
       )
     `, [
       name,
@@ -1801,7 +1938,7 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-app.post('/api/tenants/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
+app.post('/api/tenants/bulk-delete', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -1821,9 +1958,12 @@ app.post('/api/tenants/bulk-delete', authMiddleware, async (req: AuthRequest, re
       await client.query('BEGIN');
       // Clear tenant references on properties
       await client.query(`UPDATE properties SET has_live_tenancy = 0, tenancy_start_date = NULL, tenant_id = NULL WHERE tenant_id::INTEGER IN (${placeholders})`, ids);
-      // Delete associated documents and tasks
+      await client.query(`UPDATE maintenance SET tenant_id = NULL WHERE tenant_id IN (${placeholders})`, ids);
+      // Delete associated documents, tasks, tenancies, rent_payments
       await client.query(`DELETE FROM documents WHERE entity_type = 'tenant' AND entity_id::INTEGER IN (${placeholders})`, ids);
       await client.query(`DELETE FROM tasks WHERE entity_type = 'tenant' AND entity_id::INTEGER IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM rent_payments WHERE tenant_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM tenancies WHERE tenant_id IN (${placeholders})`, ids);
       // Delete tenants
       await client.query(`DELETE FROM tenants WHERE id IN (${placeholders})`, ids);
       await client.query('COMMIT');
@@ -1932,7 +2072,7 @@ app.get('/api/public/properties', publicReadLimiter, async (req, res) => {
     res.json(properties);
   } catch (err) {
     console.error('[Public Properties] Error:', err);
-    res.status(500).json({ error: 'Failed to fetch properties', details: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'Failed to fetch properties' });
   }
 });
 
@@ -1977,6 +2117,7 @@ app.get('/api/public/application-form/:token', publicReadLimiter, async (req, re
 // POST submit completed form (public - no auth)
 app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req, res) => {
   try {
+    sanitizePublicStrings(req.body);
     const enquiry = await queryOne('SELECT id, application_form_completed FROM tenant_enquiries WHERE application_form_token = $1', [req.params.token]);
     if (!enquiry) return res.status(404).json({ error: 'Form not found' });
     if (enquiry.application_form_completed) return res.status(410).json({ error: 'Already submitted' });
@@ -2070,11 +2211,13 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
 
 app.get('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    const { limit, offset } = pageParams(req);
     const properties = await query(`
       SELECT p.*, l.name as landlord_name,
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant
       FROM properties p LEFT JOIN landlords l ON l.id = p.landlord_id ORDER BY p.address
-    `);
+      LIMIT $1 OFFSET $2
+    `, [limit, offset]);
     res.json(properties);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch properties' });
@@ -2119,11 +2262,7 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
     res.json({ id });
   } catch (err) {
     console.error('Property creation error:', err);
-    res.status(500).json({
-      error: 'Failed to create property',
-      details: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined
-    });
+    res.status(500).json({ error: 'Failed to create property' });
   }
 });
 
@@ -2198,7 +2337,7 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
   }
 });
 
-app.post('/api/properties/bulk-delete', authMiddleware, async (req: AuthRequest, res) => {
+app.post('/api/properties/bulk-delete', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -2206,18 +2345,27 @@ app.post('/api/properties/bulk-delete', authMiddleware, async (req: AuthRequest,
     }
 
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-    // Update tenants to remove property references
-    await run(`UPDATE tenants SET property_id = NULL WHERE property_id IN (${placeholders})`, ids);
-    // Update maintenance records to remove property references (or delete them if cascading is preferred)
-    await run(`DELETE FROM maintenance WHERE property_id IN (${placeholders})`, ids);
-    // Update rent payments to remove property references
-    await run(`DELETE FROM rent_payments WHERE property_id IN (${placeholders})`, ids);
-    // Delete tasks linked to these properties
-    await run(`DELETE FROM tasks WHERE entity_type = 'property' AND entity_id IN (${placeholders})`, ids);
-    // Delete documents linked to these properties
-    await run(`DELETE FROM documents WHERE entity_type = 'property' AND entity_id IN (${placeholders})`, ids);
-    // Delete properties
-    const result = await run(`DELETE FROM properties WHERE id IN (${placeholders})`, ids);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`UPDATE tenants SET property_id = NULL WHERE property_id IN (${placeholders})`, ids);
+      await client.query(`UPDATE tenant_enquiries SET linked_property_id = NULL WHERE linked_property_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM maintenance WHERE property_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM rent_payments WHERE property_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM tenancies WHERE property_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM property_viewings WHERE property_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM property_expenses WHERE property_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM tasks WHERE entity_type = 'property' AND entity_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM documents WHERE entity_type = 'property' AND entity_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM property_landlords WHERE property_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM properties WHERE id IN (${placeholders})`, ids); // inventories cascade
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
 
     for (const id of ids) {
       await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'property', id);
@@ -2235,10 +2383,11 @@ app.post('/api/properties/bulk-delete', authMiddleware, async (req: AuthRequest,
 app.get('/api/tasks', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { status } = req.query;
+    const { limit, offset } = pageParams(req);
     let sql = 'SELECT t.*, u.name as assigned_to_name FROM tasks t LEFT JOIN users u ON u.id::TEXT = t.assigned_to';
     if (status === 'active') sql += " WHERE t.status IN ('pending', 'in_progress')";
-    sql += ' ORDER BY t.due_date NULLS LAST';
-    const tasks = await query(sql);
+    sql += ' ORDER BY t.due_date NULLS LAST LIMIT $1 OFFSET $2';
+    const tasks = await query(sql, [limit, offset]);
     res.json(tasks);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch tasks' });
@@ -2385,11 +2534,13 @@ app.post('/api/tasks/bulk-delete', authMiddleware, async (req: AuthRequest, res)
 
 app.get('/api/maintenance', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    const { limit, offset } = pageParams(req);
     const requests = await query(`
       SELECT m.*, COALESCE(p.address, 'Unknown property') as address, l.name as landlord_name FROM maintenance m
       LEFT JOIN properties p ON p.id = m.property_id LEFT JOIN landlords l ON l.id = p.landlord_id
       ORDER BY CASE m.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, m.created_at DESC
-    `);
+      LIMIT $1 OFFSET $2
+    `, [limit, offset]);
     res.json(requests);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch maintenance' });
@@ -2583,7 +2734,7 @@ app.get('/api/documents/:entityType/:entityId', authMiddleware, async (req: Auth
   }
 });
 
-app.post('/api/documents/:entityType/:entityId', authMiddleware, upload.single('file'), async (req: AuthRequest, res) => {
+app.post('/api/documents/:entityType/:entityId', authMiddleware, requirePermission('staff'), upload.single('file'), async (req: AuthRequest, res) => {
   try {
     const { entityType, entityId } = req.params;
     const { doc_type, applicant_number } = req.body;
@@ -2602,7 +2753,7 @@ app.post('/api/documents/:entityType/:entityId', authMiddleware, upload.single('
   }
 });
 
-app.delete('/api/documents/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.delete('/api/documents/:id', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
   try {
     const doc = await queryOne('SELECT * FROM documents WHERE id = $1', [req.params.id as string]);
     if (!doc) return res.status(404).json({ error: 'Document not found' });
@@ -2738,7 +2889,7 @@ app.put('/api/rent-payments/:id', authMiddleware, async (req: AuthRequest, res) 
   }
 });
 
-app.delete('/api/rent-payments/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.delete('/api/rent-payments/:id', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const existing = await queryOne('SELECT * FROM rent_payments WHERE id = $1', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Rent payment not found' });
@@ -2909,7 +3060,7 @@ app.put('/api/auth/password', authMiddleware, async (req: AuthRequest, res) => {
 
 // ============ DELETE ENDPOINTS ============
 
-app.delete('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.delete('/api/tenants/:id', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const id = req.params.id;
     // Delete physical files first (outside transaction — best-effort)
@@ -2924,9 +3075,12 @@ app.delete('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => 
       await client.query('BEGIN');
       // Clean up property references
       await client.query('UPDATE properties SET has_live_tenancy = 0, tenancy_start_date = NULL, tenant_id = NULL WHERE tenant_id = $1', [id]);
-      // Delete associated documents, tasks, rent_payments
+      await client.query('UPDATE maintenance SET tenant_id = NULL WHERE tenant_id = $1', [id]);
+      // Delete associated documents, tasks, tenancies, rent_payments
       await client.query('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['tenant', id]);
       await client.query("DELETE FROM tasks WHERE entity_type = 'tenant' AND entity_id = $1", [id]);
+      await client.query('DELETE FROM rent_payments WHERE tenant_id = $1', [id]);
+      await client.query('DELETE FROM tenancies WHERE tenant_id = $1', [id]);
       await client.query('DELETE FROM tenants WHERE id = $1', [id]);
       await client.query('COMMIT');
     } catch (txErr) {
@@ -2943,20 +3097,34 @@ app.delete('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => 
   }
 });
 
-app.delete('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.delete('/api/properties/:id', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['property', req.params.id]);
     for (const doc of documents) {
       const filePath = path.join(uploadsDir, doc.filename);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
-    await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['property', req.params.id]);
-    await run('DELETE FROM tasks WHERE entity_type = $1 AND entity_id = $2', ['property', req.params.id]);
-    await run('DELETE FROM maintenance WHERE property_id = $1', [req.params.id]);
-    await run('DELETE FROM rent_payments WHERE property_id = $1', [req.params.id]);
-    await run('UPDATE tenants SET property_id = NULL WHERE property_id = $1', [req.params.id]);
-    await run('DELETE FROM property_landlords WHERE property_id = $1', [req.params.id]);
-    await run('DELETE FROM properties WHERE id = $1', [req.params.id]);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['property', req.params.id]);
+      await client.query('DELETE FROM tasks WHERE entity_type = $1 AND entity_id = $2', ['property', req.params.id]);
+      await client.query('DELETE FROM maintenance WHERE property_id = $1', [req.params.id]);
+      await client.query('DELETE FROM rent_payments WHERE property_id = $1', [req.params.id]);
+      await client.query('DELETE FROM tenancies WHERE property_id = $1', [req.params.id]);
+      await client.query('DELETE FROM property_viewings WHERE property_id = $1', [req.params.id]);
+      await client.query('DELETE FROM property_expenses WHERE property_id = $1', [req.params.id]);
+      await client.query('UPDATE tenants SET property_id = NULL WHERE property_id = $1', [req.params.id]);
+      await client.query('UPDATE tenant_enquiries SET linked_property_id = NULL WHERE linked_property_id = $1', [req.params.id]);
+      await client.query('DELETE FROM property_landlords WHERE property_id = $1', [req.params.id]);
+      await client.query('DELETE FROM properties WHERE id = $1', [req.params.id]); // inventories cascade
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
     await logAudit(req.user?.id, req.user?.email, 'delete', 'property', parseInt(req.params.id as string));
     res.json({ success: true });
   } catch (err) {
@@ -3110,10 +3278,19 @@ app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res)
 
 app.put('/api/property-viewings/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { status, feedback, interested, notes } = req.body;
-    await run(`
-      UPDATE property_viewings SET status=$1, feedback=$2, interested=$3, notes=$4 WHERE id=$5
-    `, [status, feedback, interested ? 1 : 0, notes, req.params.id]);
+    const d = req.body;
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    for (const key of ['status', 'feedback', 'interested', 'notes']) {
+      if (key in d) {
+        fields.push(`${key}=$${idx++}`);
+        values.push(key === 'interested' ? (d[key] ? 1 : 0) : d[key]);
+      }
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    values.push(req.params.id);
+    await run(`UPDATE property_viewings SET ${fields.join(', ')} WHERE id=$${idx}`, values);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update viewing' });
@@ -3526,7 +3703,8 @@ app.post('/api/activity', authMiddleware, async (req: AuthRequest, res) => {
 
 app.get('/api/transactions', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const transactions = await query('SELECT * FROM transactions ORDER BY date DESC, created_at DESC');
+    const { limit, offset } = pageParams(req);
+    const transactions = await query('SELECT * FROM transactions ORDER BY date DESC, created_at DESC LIMIT $1 OFFSET $2', [limit, offset]);
     res.json(transactions);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch transactions' });
@@ -3584,7 +3762,7 @@ app.put('/api/transactions/:id', authMiddleware, async (req: AuthRequest, res) =
   }
 });
 
-app.delete('/api/transactions/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.delete('/api/transactions/:id', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const existing = await queryOne('SELECT * FROM transactions WHERE id = $1', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Transaction not found' });
@@ -3598,7 +3776,7 @@ app.delete('/api/transactions/:id', authMiddleware, async (req: AuthRequest, res
 
 // ============ DATA EXPORT ============
 
-app.get('/api/export/:entityType', authMiddleware, async (req: AuthRequest, res) => {
+app.get('/api/export/:entityType', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const { entityType } = req.params;
     let data;
@@ -3792,6 +3970,49 @@ app.get('/api/postcode/lookup', authMiddleware, async (req: AuthRequest, res) =>
   }
 });
 
+// Bulk postcode → lat/lon for map markers. In-memory cache: coordinates for a
+// postcode effectively never change, so each one hits postcodes.io at most once
+// per process lifetime.
+const postcodeGeoCache = new Map<string, { latitude: number | null; longitude: number | null }>();
+app.post('/api/postcode/bulk-geocode', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const postcodes: string[] = Array.isArray(req.body?.postcodes) ? req.body.postcodes.slice(0, 100) : [];
+    if (postcodes.length === 0) return res.status(400).json({ error: 'postcodes array required' });
+
+    const result: Record<string, { latitude: number; longitude: number }> = {};
+    const missing: string[] = [];
+    for (const pc of postcodes) {
+      const key = String(pc).trim().toUpperCase();
+      const hit = postcodeGeoCache.get(key);
+      if (hit) {
+        if (hit.latitude != null && hit.longitude != null) result[key] = { latitude: hit.latitude, longitude: hit.longitude };
+      } else {
+        missing.push(key);
+      }
+    }
+
+    if (missing.length > 0) {
+      const response = await fetch('https://api.postcodes.io/postcodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postcodes: missing }),
+      });
+      const data: any = await response.json();
+      for (const item of data.result || []) {
+        const key = String(item.query).trim().toUpperCase();
+        const entry = { latitude: item.result?.latitude ?? null, longitude: item.result?.longitude ?? null };
+        postcodeGeoCache.set(key, entry);
+        if (entry.latitude != null && entry.longitude != null) result[key] = { latitude: entry.latitude, longitude: entry.longitude };
+      }
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error('Bulk geocode error:', err);
+    res.status(500).json({ error: 'Failed to geocode postcodes' });
+  }
+});
+
 app.get('/api/postcode/autocomplete', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const q = (req.query.query as string || '').trim();
@@ -3912,10 +4133,26 @@ app.get(/^(?!\/api).*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
 });
 
-// Start server
+// Global error handler — anything thrown/rejected in a route lands here.
+// Never leak internals to the caller; full detail goes to the log (and Sentry if configured).
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error({ err, path: req.path, method: req.method }, 'unhandled route error');
+  if (process.env.SENTRY_DSN) Sentry.captureException(err);
+  if (res.headersSent) return;
+  if (err?.message?.startsWith('CORS:')) {
+    return res.status(403).json({ error: 'Origin not allowed' });
+  }
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Start server. In production the schema is applied by the release step
+// (fly.toml release_command → migrate.ts) before machines boot; in dev the
+// server bootstraps its own schema.
 async function start() {
   try {
-    await initDb();
+    if (process.env.NODE_ENV !== 'production') {
+      await initDb();
+    }
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Fleming CRM (PostgreSQL) running on port ${PORT}`);
       console.log(`Health check available at http://0.0.0.0:${PORT}/api/health`);

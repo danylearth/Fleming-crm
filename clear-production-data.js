@@ -10,12 +10,34 @@
  */
 
 const { Pool } = require('pg');
+const readline = require('readline');
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
   console.error('❌ ERROR: DATABASE_URL environment variable is required');
   process.exit(1);
+}
+
+if (process.env.ALLOW_DESTRUCTIVE !== '1') {
+  console.error('❌ Refusing to run: this script PERMANENTLY DELETES all data in the target database.');
+  console.error('   Take a database backup first, then re-run with ALLOW_DESTRUCTIVE=1 set.');
+  process.exit(1);
+}
+
+function confirmOrAbort() {
+  const host = new URL(DATABASE_URL).hostname;
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`⚠️  About to DELETE ALL DATA on "${host}". Type DELETE ALL DATA to continue: `, (answer) => {
+      rl.close();
+      if (answer.trim() !== 'DELETE ALL DATA') {
+        console.error('❌ Aborted — confirmation phrase did not match.');
+        process.exit(1);
+      }
+      resolve();
+    });
+  });
 }
 
 const pool = new Pool({
@@ -73,7 +95,8 @@ async function clearData() {
   }
 }
 
-clearData()
+confirmOrAbort()
+  .then(clearData)
   .then(() => {
     console.log('\n✅ Done!');
     process.exit(0);

@@ -4,6 +4,20 @@ primary_region = "lhr"
 [build]
   dockerfile = "Dockerfile"
 
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+  UPLOADS_PATH = "/data/uploads"
+
+[deploy]
+  release_command = "node dist/migrate.js"
+
+# Single machine by design: uploads live on this volume, and volumes are
+# per-machine — scaling out requires moving uploads to object storage first
+[mounts]
+  source = "uploads_data"
+  destination = "/data"
+
 [http_service]
   internal_port = 3000
   force_https = true

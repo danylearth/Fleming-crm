@@ -15,12 +15,18 @@ async function seed() {
   
   try {
     console.log('Creating admin user...');
-    const hashedPassword = await bcrypt.hash('test123', 10);
+    // This script can target a production database — never hardcode credentials here
+    const adminEmail = process.env.SEED_ADMIN_EMAIL;
+    const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+    if (!adminEmail || !adminPassword) {
+      throw new Error('SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD environment variables are required');
+    }
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
     await client.query(`
-      INSERT INTO users (email, password, name, role) 
-      VALUES ($1, $2, $3, $4) 
+      INSERT INTO users (email, password, name, role)
+      VALUES ($1, $2, $3, $4)
       ON CONFLICT (email) DO NOTHING
-    `, ['d@planet.earth', hashedPassword, 'Admin', 'admin']);
+    `, [adminEmail, hashedPassword, 'Admin', 'admin']);
     
     console.log('Loading Excel file...');
     const workbook = XLSX.readFile(XLSX_PATH);

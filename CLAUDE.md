@@ -9,9 +9,9 @@ Fleming CRM is a full-stack lettings management system for property management c
 **Stack:**
 - Frontend: React 19.2 + TypeScript 5.9 + Vite 7.2 + TailwindCSS 4.1 + React Router 7
 - Backend: Express 5.2 + TypeScript 5.9
-- Database: SQLite (dev) / PostgreSQL (production)
+- Database: PostgreSQL — Supabase (production), local Postgres (dev)
 - Testing: Vitest 4.1 (frontend and backend)
-- Deployment: Railway (backend), Vercel (frontend static hosting)
+- Deployment: Fly.io (backend), Vercel (frontend static hosting)
 
 ## Development Commands
 
@@ -31,11 +31,11 @@ npm run test:coverage # Vitest with coverage
 ```bash
 cd backend
 npm install
-npm run dev          # SQLite dev server with tsx watch
-npm run dev:pg       # PostgreSQL dev server with tsx watch
+npm run dev          # Dev server (Postgres, reads backend/.env) with tsx watch
 npm run build        # TypeScript compilation
 npm run start        # Production server (compiled JS)
-npm run seed:pg      # Seed PostgreSQL with demo data
+npm run seed:dev     # Seed local dev database with demo data
+npm run migrate      # Apply schema + versioned migrations
 npm test             # Run Vitest
 npm run test:watch   # Vitest in watch mode
 ```
@@ -61,8 +61,8 @@ python3 -m http.server 8000  # Test locally at http://localhost:8000/tenant-enqu
 ```bash
 npm run dev:frontend    # Start frontend dev server
 npm run dev:backend     # Start backend dev server
-npm run render-build    # Production build for Render deployment
-npm run render-start    # Production start for Render deployment
+npm run build           # Full production build (frontend + backend)
+npm run start           # Production start (compiled backend)
 ```
 
 ### Subdomain Forms Deployment
@@ -82,28 +82,23 @@ cd landlords-subdomain && vercel --prod
 
 ### Backend Structure
 
-**Multiple Entry Points:**
-- `src/index.ts` - SQLite backend (development/local)
-- `src/index-pg.ts` - PostgreSQL backend (production) — **3,500+ lines with all routes inline** (no route separation except `routes/public-tenant-enquiry.ts`)
-- `src/index-postgres.ts` - Legacy PostgreSQL implementation (not actively used)
+**Single Entry Point:**
+- `src/index-pg.ts` - the PostgreSQL backend used in both dev and production — **3,500+ lines with all routes inline** (plus `inventory-routes.ts`). The old SQLite backend was deleted; dev runs against local Postgres.
 
 **Database Layer:**
-- `src/db.ts` - SQLite database with better-sqlite3, includes full schema initialization
-- `src/db-pg.ts` - PostgreSQL abstraction layer with connection pool helpers
-- Database choice controlled by environment and entry point
+- `src/db-pg.ts` - PostgreSQL pool helpers + idempotent baseline schema (`initDb`)
+- `src/migrate.ts` - release-step migration runner (`schema_migrations` + `backend/migrations/*.sql`)
 
 **Key Backend Files:**
 - `src/auth.ts` - JWT authentication middleware and token generation
 - `src/email.ts` - Email service using Resend, with delivery tracking via webhooks (`email_messages` table)
 - `src/sms.ts` - Twilio SMS integration with inbound webhook, templates, and delivery status. Simulates sends if Twilio env vars missing.
-- `src/scheduler.ts` - Background job scheduler for compliance reminders and automated task creation
-- `src/ai/chat.ts` - AI assistant router for natural language queries
+- `src/scheduler-pg.ts` - Background job scheduler for compliance reminders and automated task creation
 - `src/inventory-routes.ts` - Property inventory with photo upload and thumbnail generation (sharp)
-- `src/routes/public-tenant-enquiry.ts` - Public tenant enquiry endpoint (PostgreSQL version)
-- `src/db-inventory-migration.ts` / `src/run-migration.ts` - Database migration utilities
+- `src/db-inventory-migration.ts` - Inventory tables migration (invoked by initDb)
 
 **Scheduler System:**
-The scheduler (`src/scheduler.ts`) runs every hour and:
+The scheduler (`src/scheduler-pg.ts`) runs every hour and:
 - Checks compliance certificate expiry dates (Gas Safety, EICR, EPC)
 - Auto-creates reminder tasks at 30, 14, and 7 days before expiry
 - Avoids duplicate tasks by checking existing pending/in-progress tasks
@@ -177,7 +172,7 @@ The codebase includes a mobile app in the `/mobile` directory for on-the-go CRM 
 
 **API Configuration:**
 - Development: Connects to local backend via network IP (configure in `src/services/api.ts`)
-- Production: Connects to Railway backend URL
+- Production: Connects to Fly.io backend URL
 - Change `API_BASE_URL` in `src/services/api.ts` to point to your backend
 - Development requires your local network IP (not localhost) for physical device testing
 - Current dev IP: `192.168.0.123:3001` (update this to match your local network)
@@ -346,14 +341,13 @@ Then configure DNS CNAME records:
 
 **Required Environment Variables:**
 - `DATABASE_URL` - PostgreSQL connection string (production)
-- `DATABASE_PATH` - SQLite file path (optional, defaults to `backend/fleming.db`)
 - `JWT_SECRET` - Secret for JWT token signing
 - `UPLOADS_PATH` - Directory for file uploads (defaults to `backend/uploads`)
 - `RESEND_API_KEY` - API key for Resend email service (optional)
-- `FORCE_RESEED` - Set to "true" to wipe and re-seed database on startup
+- `FORCE_RESEED` - dev only: set to "true" to wipe and re-seed via `npm run seed:dev`
 
 **Frontend Environment Variables:**
-- `VITE_API_URL` - Backend API URL (e.g., `http://localhost:3001` for dev, `https://fleming-crm-api-production-7e58.up.railway.app` for production)
+- `VITE_API_URL` - Backend API URL (e.g., `http://localhost:3001` for dev, `https://fleming-crm-api.fly.dev` for production)
 - `VITE_GOOGLE_PLACES_API_KEY` - Google Places API key for address autocomplete (optional)
 - Frontend `.env` file should have localhost for development
 - Production deployments (Vercel) use environment variables set in Vercel dashboard
@@ -368,30 +362,26 @@ Then configure DNS CNAME records:
 - Note: Land Registry and Postcodes.io require NO API keys
 
 **Deployment Configurations:**
-- `render.yaml` - Render deployment with persistent disk for SQLite
-- `railway.json` - Railway deployment configuration (backend API-only)
+- `backend/fly.toml` + `backend/Dockerfile` - Fly.io deployment (API)
 - `vercel.json` - Vercel configuration (frontend static hosting)
-- `render-build.sh` - Production build script
+- `render-build.sh` - Full build script (frontend + backend)
+- See `DEPLOYMENT.md` for the full deployment guide
 
 **Current Production Deployment:**
 - Frontend: https://fleming-portal.vercel.app (Vercel)
-- Backend: https://fleming-crm-api-production-7e58.up.railway.app (Railway)
-- Frontend env var `VITE_API_URL` must point to Railway backend URL
+- Backend: https://fleming-crm-api.fly.dev (Fly.io)
+- Frontend env var `VITE_API_URL` must point to the Fly.io backend URL
 - Backend serves API-only (no static frontend files)
-- Railway uses `index-pg.ts` entry point for PostgreSQL
+- The production backend uses the `index-pg.ts` entry point for PostgreSQL
 - Vercel deploys from root using `vercel.json` build configuration
 
 ### Data Seeding
 
-**Auto-seeding (PostgreSQL):**
-When `DATABASE_URL` is set and database is empty, the system auto-seeds with demo data from `src/db-pg.ts`:
-- Creates admin user
-- Seeds sample landlords, properties, tenants, enquiries, BDM prospects, maintenance, tasks
-- Creates realistic compliance dates and schedules
+**Dev seeding:**
+- `npm run seed:dev` - Small deterministic demo dataset for local development (`backend/seed-dev.ts`). Refuses to run when `NODE_ENV=production`; `FORCE_RESEED=true` wipes and re-seeds.
+- `npm run seed:pg` - Legacy import from an Excel file (`backend/seed-pg.ts`); requires `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`.
 
-**Manual Seeding:**
-- `npm run seed:pg` - Run seed script from Excel file (see `backend/seed-pg.ts`)
-- Set `FORCE_RESEED=true` to wipe and re-seed on next startup
+Production does NOT auto-seed — the first admin is created via `POST /api/auth/setup`.
 
 ## Key Development Patterns
 
@@ -443,7 +433,7 @@ logAudit(userId, userEmail, 'create', 'landlord', entityId, changesObject);
 ### Rate Limiting
 - `express-rate-limit` on all `/api/public/*` routes
 - POST endpoints: 10 req/15min, GET endpoints: 60 req/15min
-- Applied as per-route middleware in both `index.ts` and `index-pg.ts`
+- Applied as per-route middleware in `index-pg.ts`
 
 ### Testing
 - Vitest, co-located test files (`*.test.ts`)
@@ -454,7 +444,7 @@ logAudit(userId, userEmail, 'create', 'landlord', entityId, changesObject);
 
 1. **Express 5:** The backend uses Express 5 (`express@^5.2.1`), not Express 4. Route handlers return promises natively; error handling differs from Express 4 patterns.
 
-2. **Database Flexibility:** Backend supports both SQLite (dev) and PostgreSQL (prod). Never hardcode SQL that's specific to one database type. The codebase uses different entry points (`index.ts` vs `index-pg.ts`) to handle this.
+2. **Single PostgreSQL Backend:** Dev and production both run `index-pg.ts` against Postgres. Schema changes go through `initDb` (idempotent baseline) or numbered files in `backend/migrations/`.
 
 3. **Single UI Version:** V1 and V2 have been deleted. Only one version exists (formerly V3, now renamed without suffix). No need to propagate changes across versions.
 
@@ -466,7 +456,7 @@ logAudit(userId, userEmail, 'create', 'landlord', entityId, changesObject);
 
 7. **Conversion Workflows:** BDM → Landlord and Enquiry → Tenant conversions copy data and update status. Never delete the source record, only mark as converted.
 
-8. **Demo Data:** Production databases can auto-seed. Be careful with `FORCE_RESEED` as it wipes all data.
+8. **Demo Data:** Only local dev seeds (`npm run seed:dev`). `FORCE_RESEED=true` wipes the target database — it is blocked when NODE_ENV=production.
 
 9. **Public API Endpoints:** The `/api/public/*` routes are intentionally unauthenticated for the external enquiry forms (tenant and landlord). These should remain public but consider implementing rate limiting to prevent abuse.
 
@@ -476,62 +466,23 @@ logAudit(userId, userEmail, 'create', 'landlord', entityId, changesObject);
 
 ## Deployment Troubleshooting
 
-### Common Railway Backend Issues
-
-**ENOENT Error (no such file or directory: frontend/dist/index.html):**
-- Cause: Root route handler in `index-pg.ts` calling `next()` when receiving HTML requests
-- Solution: Ensure root route (`GET /`) always returns JSON, never calls `next()`
-- The backend is API-only; all frontend static file serving should be commented out
-
-**Database Not Initialized:**
-- If login fails with "Invalid credentials" and no users exist, use setup endpoint:
-- `POST /api/auth/setup` with `{email, password, name}` to create first admin user
-- Check Railway logs to verify `DATABASE_URL` is set and database initialized successfully
-
-**Build Failures:**
-- Verify `railway.json` uses correct buildCommand: `./render-build.sh`
-- Verify `railway.json` uses correct startCommand: `cd backend && node dist/index-pg.js`
-- Check that `tsconfig.render.json` excludes SQLite files: `index.ts`, `db.ts`
-- Check that `tsconfig.render.json` includes PostgreSQL files via `src/**/*.ts`
-
-### Common Vercel Frontend Issues
-
-**ECONNREFUSED or Connection Errors:**
-- Verify `VITE_API_URL` environment variable is set in Vercel project settings
-- Must point to full Railway URL: `https://fleming-crm-api-production-7e58.up.railway.app`
-- Set for all environments: Production, Preview, Development
-- After changing env vars, trigger redeploy via `vercel --prod` or git push
-
-**Environment Variable Management:**
-```bash
-# Add environment variable to Vercel
-vercel env add VITE_API_URL production
-
-# Remove old environment variable
-vercel env rm VITE_API_URL production --yes
-
-# List current environment variables
-vercel env ls
-
-# Deploy to production
-vercel --prod
-```
+See `DEPLOYMENT.md` for the full deployment/runbook documentation (Fly.io backend, Supabase database, Vercel frontends).
 
 ### Testing Production Deployment
 
 ```bash
 # Test backend health
-curl https://fleming-crm-api-production-7e58.up.railway.app/api/health
+curl https://fleming-crm-api.fly.dev/api/health
 
 # Test backend login
-curl -X POST https://fleming-crm-api-production-7e58.up.railway.app/api/auth/login \
+curl -X POST https://fleming-crm-api.fly.dev/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@fleming.com","password":"admin123"}'
+  -d '{"email":"admin@fleming.com","password":"<ADMIN_PASSWORD>"}'
 
 # Create initial admin user if database is empty
-curl -X POST https://fleming-crm-api-production-7e58.up.railway.app/api/auth/setup \
+curl -X POST https://fleming-crm-api.fly.dev/api/auth/setup \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@fleming.com","password":"admin123","name":"Admin User"}'
+  -d '{"email":"admin@fleming.com","password":"<ADMIN_PASSWORD>","name":"Admin User"}'
 
 # Check frontend is serving
 curl https://fleming-portal.vercel.app
@@ -539,6 +490,4 @@ curl https://fleming-portal.vercel.app
 
 ### Default Credentials
 
-If database is freshly initialized:
-- Email: `admin@fleming.com`
-- Password: `admin123`
+Local dev seed only (`npm run seed:dev`): `admin@fleming.com` (password defaults to the dev value in `backend/seed-dev.ts`, override with `SEED_ADMIN_PASSWORD`). Production admin users are created explicitly via `POST /api/auth/setup` — there is no default production password.

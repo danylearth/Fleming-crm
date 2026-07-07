@@ -40,7 +40,7 @@ git push -u origin main
 Then enable Pages in repo settings and add CNAME file with: `apply.fleminglettings.co.uk`
 
 ## API Endpoint
-Form submits to: `https://fleming-crm-api-production-7e58.up.railway.app/api/public/tenant-enquiries`
+Form submits to: `https://fleming-crm-api.fly.dev/api/public/tenant-enquiries`
 
 ## DNS Configuration
 Add CNAME record:

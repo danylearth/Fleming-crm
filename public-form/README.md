@@ -63,7 +63,7 @@ Add a button/link on your main website:
 
 The form currently points to the production CRM API:
 ```javascript
-const API_URL = 'https://fleming-crm-api-production-7e58.up.railway.app';
+const API_URL = 'https://fleming-crm-api.fly.dev';
 ```
 
 ### API Endpoints Used

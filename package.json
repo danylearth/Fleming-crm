@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "description": "Fleming CRM - Full-stack lettings management",
   "scripts": {
-    "render-build": "chmod +x render-build.sh && ./render-build.sh",
-    "render-start": "cd backend && node dist/index.js",
+    "build": "chmod +x render-build.sh && ./render-build.sh",
+    "start": "cd backend && node dist/index-pg.js",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm run dev"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "engines": {
+    "node": "20.x"
+  }
 }

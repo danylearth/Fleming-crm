@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -22,8 +23,10 @@ export function invalidateCache(endpointPrefix?: string) {
 }
 
 export function useApi() {
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
 
+  // Memoized so effects depending on the api object don't re-run every render
+  return useMemo(() => {
   const request = async (endpoint: string, options: RequestInit = {}) => {
     const res = await fetch(`${API_URL}${endpoint}`, {
       ...options,
@@ -34,6 +37,11 @@ export function useApi() {
       },
     });
 
+    if (res.status === 401) {
+      // Definitive: token invalid/expired — clear session; ProtectedRoute redirects to /login
+      logout();
+      throw new Error('Session expired — please sign in again');
+    }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Request failed');
     return data;
@@ -83,4 +91,5 @@ export function useApi() {
     delete: (endpoint: string) =>
       mutate(endpoint, { method: 'DELETE' }),
   };
+  }, [token, logout]);
 }

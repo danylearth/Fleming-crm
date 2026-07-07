@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/auth';
+import { onUnauthenticated } from '../services/api';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -21,6 +22,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     checkAuth();
+    // API layer clears the token on 401 — drop the user so AppNavigator shows Login
+    const unsubscribe = onUnauthenticated(() => setUser(null));
+    return unsubscribe;
   }, []);
 
   const checkAuth = async () => {

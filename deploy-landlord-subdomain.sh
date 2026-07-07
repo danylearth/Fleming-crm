@@ -125,7 +125,7 @@ Then enable Pages in repo settings and add CNAME file with: `landlords.flemingle
 - `netlify.toml` - Netlify deployment configuration
 
 ## API Endpoint
-Form submits to: `https://fleming-crm-api-production-7e58.up.railway.app/api/public/landlord-enquiries`
+Form submits to: `https://fleming-crm-api.fly.dev/api/public/landlord-enquiries`
 
 ## DNS Configuration
 Add CNAME record:

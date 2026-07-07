@@ -4,9 +4,18 @@ import * as SecureStore from 'expo-secure-store';
 // Backend API URL
 const API_BASE_URL = __DEV__
   ? 'http://192.168.0.123:3001' // Your local network IP address for development
-  : 'https://fleming-crm-api-production-7e58.up.railway.app'; // Production Railway URL
+  : 'https://fleming-crm-api.fly.dev'; // Production API URL (Fly.io)
 
 const TOKEN_KEY = 'fleming_auth_token';
+
+// Lets AuthContext react when the API layer detects an invalid session (401),
+// so AppNavigator flips to the Login stack instead of silently failing requests
+type UnauthenticatedListener = () => void;
+const unauthenticatedListeners = new Set<UnauthenticatedListener>();
+export function onUnauthenticated(listener: UnauthenticatedListener): () => void {
+  unauthenticatedListeners.add(listener);
+  return () => { unauthenticatedListeners.delete(listener); };
+}
 
 class ApiService {
   private client: AxiosInstance;
@@ -44,8 +53,9 @@ class ApiService {
       (response) => response,
       async (error) => {
         if (error.response?.status === 401) {
-          // Token expired or invalid - clear it
+          // Token expired or invalid - clear it and tell the UI
           await this.clearToken();
+          unauthenticatedListeners.forEach(listener => listener());
         }
         return Promise.reject(error);
       }
