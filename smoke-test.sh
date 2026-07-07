@@ -8,7 +8,7 @@ set -e  # Exit on any error
 
 API_URL=${1:-"http://localhost:3001"}
 ADMIN_EMAIL=${2:-"admin@fleming.com"}
-ADMIN_PASSWORD=${3:-"admin123"}
+ADMIN_PASSWORD=${3:?"Usage: ./smoke-test.sh <API_URL> <ADMIN_EMAIL> <ADMIN_PASSWORD> — password must be passed explicitly"}
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -110,7 +110,7 @@ run_test "Update Property" \
 run_test "Create Tenant Enquiry" \
     "curl -sf -X POST '$API_URL/api/public/tenant-enquiries' \
         -H 'Content-Type: application/json' \
-        -d '{\"first_name_1\":\"Smoke\",\"last_name_1\":\"Test\",\"email_1\":\"smoketest@example.com\",\"phone_1\":\"07700900002\"}' \
+        -d '{\"FirstName\":\"Smoke\",\"Surname\":\"Test\",\"form_email\":\"smoketest@example.com\",\"contactNumber\":\"07700900002\"}' \
         | grep -q 'id'"
 
 # Test 7: Create Task

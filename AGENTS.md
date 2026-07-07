@@ -3,10 +3,10 @@
 
 ## Tech Stack
 - **Frontend:** React 19.2.0 + TypeScript 5.9.3 + Vite 7.2.4 + TailwindCSS 4.1.18 + React Router 7.13.0
-- **Backend:** Express 5.2.1 + TypeScript 5.9.3 + PostgreSQL (prod) / SQLite (dev)
+- **Backend:** Express 5.2.1 + TypeScript 5.9.3 + PostgreSQL (Supabase prod / local Postgres dev)
 - **Mobile:** React Native 0.81.5 + Expo 54 + TanStack Query 5 + Expo SecureStore
 - **Auth:** JWT (jsonwebtoken 9.0.3) + bcryptjs 3.0.3, 7-day tokens
-- **Key deps:** multer 2.0.2 (uploads), sharp 0.34.5 (thumbnails), resend 6.9.3 (email), twilio 5.5.1 (SMS), pg 8.18.0 + better-sqlite3 12.6.2, Vitest 4.1.2
+- **Key deps:** multer 2.0.2 (uploads), sharp 0.34.5 (thumbnails), resend 6.9.3 (email), twilio 5.5.1 (SMS), pg 8.18.0, Vitest 4.1.2
 
 ## Build Commands
 ```bash
@@ -18,7 +18,7 @@ cd frontend && npm test                 # Vitest run
 cd frontend && npm run test:coverage    # Vitest coverage
 
 # Backend
-cd backend && npm run dev               # SQLite dev (tsx watch src/index.ts)
+cd backend && npm run dev               # Postgres dev (tsx watch src/index-pg.ts, reads backend/.env)
 cd backend && npm run dev:pg            # PostgreSQL dev (tsx watch src/index-pg.ts)
 cd backend && npm run build             # tsc → dist/
 cd backend && npm run start             # node dist/index-pg.js (prod)
@@ -53,7 +53,6 @@ npm run render-build / render-start     # Render deployment
 │   ├── hooks/          # useApi, useAIChat, useGovernmentAPIs, usePermissions
 │   └── utils/          # sms.ts (segment calc), sms.test.ts
 ├── backend/src/
-│   ├── index.ts        # SQLite entry point (dev)
 │   ├── index-pg.ts     # PostgreSQL entry point (prod) — 3500+ lines, ALL routes inline
 │   ├── db.ts / db-pg.ts
 │   ├── auth.ts         # JWT middleware + requireRole() | auth.test.ts
@@ -72,7 +71,7 @@ npm run render-build / render-start     # Render deployment
 ```
 
 ## Architecture
-Monorepo: frontend (Vercel static), backend API (Railway/PostgreSQL port 3001), mobile (Expo). REST API with JWT auth on all `/api/*` except `/api/public/*` (unauthenticated, rate-limited). Dual DB: `index.ts`+`db.ts` = SQLite dev; `index-pg.ts`+`db-pg.ts` = PostgreSQL prod. All routes consolidated in `index-pg.ts` — no route separation except `routes/public-tenant-enquiry.ts`.
+Monorepo: frontend (Vercel static), backend API (Fly.io/PostgreSQL port 3001), mobile (Expo). REST API with JWT auth on all `/api/*` except `/api/public/*` (unauthenticated, rate-limited). Single backend: `index-pg.ts`+`db-pg.ts` (PostgreSQL) in both dev and prod. All routes consolidated in `index-pg.ts` plus `inventory-routes.ts`.
 
 ## Existing Features
 - **Dashboard** — stats, recent activity, compliance alerts
@@ -101,7 +100,7 @@ Monorepo: frontend (Vercel static), backend API (Railway/PostgreSQL port 3001), 
 
 ## Dev Server
 ```bash
-cd backend && npm run dev:pg   # PostgreSQL dev (or npm run dev for SQLite)
+cd backend && npm run dev      # PostgreSQL dev
 cd frontend && npm run dev     # http://localhost:5173
 
 # Key env vars:
@@ -110,8 +109,8 @@ cd frontend && npm run dev     # http://localhost:5173
 #          EMAIL_FROM, ENQUIRY_NOTIFICATION_EMAIL, FRONTEND_URL (optional)
 #          EPC_API_KEY, EPC_API_EMAIL, COMPANIES_HOUSE_API_KEY, COUNCIL_TAX_API_KEY (optional)
 # Frontend: VITE_API_URL (default http://localhost:3001)
-# Default creds: admin@fleming.com / admin123
-# Production: frontend → https://fleming-portal.vercel.app, backend → https://fleming-crm-api-production-7e58.up.railway.app
+# Default creds (local dev seed only): admin@fleming.com — see backend/seed-dev.ts / SEED_ADMIN_PASSWORD
+# Production: frontend → https://fleming-portal.vercel.app, backend → https://fleming-crm-api.fly.dev (Fly.io)
 ```
 
 ## Patterns Discovered
@@ -130,7 +129,7 @@ cd frontend && npm run dev     # http://localhost:5173
 - Express 5 (not 4): route handlers return promises natively; error handling differs
 - Backend is API-only: root `GET /` must return JSON, never serve frontend files (Railway)
 - Never delete converted records (BDM→Landlord, Enquiry→Tenant) — only mark as converted
-- SQLite: `index.ts`/`db.ts`; PostgreSQL: `index-pg.ts`/`db-pg.ts` — never mix SQL syntax across entry points
+- Single PostgreSQL backend: `index-pg.ts`/`db-pg.ts`
 - Mobile physical device: use local network IP in `mobile/src/services/api.ts`, not `localhost`
 - Multi-landlord: always set one `is_primary = 1` in `property_landlords`; also update `properties.landlord_id` for backwards compat
 - `index-pg.ts` is 3500+ lines with all routes inline — no route separation except `routes/public-tenant-enquiry.ts`

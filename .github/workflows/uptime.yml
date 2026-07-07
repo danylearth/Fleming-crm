@@ -1,0 +1,44 @@
+name: Uptime check — public API
+
+on:
+  schedule:
+    # Every 30 minutes. GitHub emails repo admins when a scheduled workflow fails.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      API_URL: https://fleming-crm-api.fly.dev
+    steps:
+      - name: GET /api/health
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -m 20 "$API_URL/api/health")
+          echo "health: $code"
+          [ "$code" = "200" ]
+
+      - name: GET /api/public/properties
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -m 20 "$API_URL/api/public/properties")
+          echo "public properties: $code"
+          [ "$code" = "200" ]
+
+      # Empty body → the route's own validation must answer 400.
+      # Anything else (404 route missing, 5xx crash) means lead capture is down.
+      - name: POST /api/public/tenant-enquiries (validation probe)
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -m 20 -X POST \
+            -H "Content-Type: application/json" -d '{}' \
+            "$API_URL/api/public/tenant-enquiries")
+          echo "tenant-enquiries: $code"
+          [ "$code" = "400" ]
+
+      - name: POST /api/public/landlord-enquiries (validation probe)
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -m 20 -X POST \
+            -H "Content-Type: application/json" -d '{}' \
+            "$API_URL/api/public/landlord-enquiries")
+          echo "landlord-enquiries: $code"
+          [ "$code" = "400" ]

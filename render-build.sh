@@ -10,9 +10,9 @@ cd ..
 echo "=== Building backend ==="
 cd backend
 # Install ALL deps (including devDeps like typescript) for compilation
-npm ci --force
-# Compile TypeScript
-npx tsc -p tsconfig.render.json || true
+npm ci
+# Compile TypeScript — a type error must fail the build
+npx tsc
 
 if [ ! -f dist/index-pg.js ]; then
   echo "ERROR: backend/dist/index-pg.js was not produced by tsc"
