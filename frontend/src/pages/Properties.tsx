@@ -5,9 +5,11 @@ import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, SearchDro
 import AddressAutocomplete from '../components/ui/AddressAutocomplete';
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
-import { Building2, Plus, List, Map, X, Search, ChevronDown, User } from 'lucide-react';
+import { Building2, Plus, List, Map, X, Search, ChevronDown, User, Upload } from 'lucide-react';
+import CsvImport from '../components/ui/CsvImport';
 import PropertyMap from '../components/ui/PropertyMap';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
+import { usePermissions } from '../hooks/usePermissions';
 
 interface Property {
   id: number; address: string; postcode: string; rent_amount: number;
@@ -46,6 +48,7 @@ function statusLabel(s: string) {
 export default function Properties() {
   const api = useApi();
   const navigate = useNavigate();
+  const { canCreate } = usePermissions();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -53,6 +56,7 @@ export default function Properties() {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [landlords, setLandlords] = useState<LandlordOption[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
@@ -183,10 +187,17 @@ export default function Properties() {
           >
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
+          {canCreate() && (
+            <Button variant="outline" onClick={() => setShowImport(true)}>
+              <Upload size={16} className="mr-2" /> Import CSV
+            </Button>
+          )}
           <Button variant="gradient" onClick={() => setShowAdd(true)}>
             <Plus size={16} className="mr-2" /> Add Property
           </Button>
         </div>
+
+        {showImport && <CsvImport entity="properties" onClose={() => setShowImport(false)} onDone={load} />}
 
         {/* Dropdown filters + Status filter */}
         <div className="flex flex-wrap items-center gap-3">

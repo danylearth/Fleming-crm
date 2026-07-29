@@ -15,6 +15,7 @@ import { validateTwilioWebhook, normalizeUkPhone as normalizePhone } from './sms
 import crypto from 'crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { startScheduler } from './scheduler-pg';
+import { coerceImportValue } from './import-utils';
 
 // Validate required environment variables
 if (!process.env.DATABASE_URL) {
@@ -82,6 +83,10 @@ app.use(cors({
   },
   credentials: true,
 }));
+// Bulk imports need more than Express's 100KB default. Authenticate before
+// accepting the larger body so unauthenticated callers cannot consume it.
+app.use('/api/import', authMiddleware, express.json({ limit: '2mb' }));
+
 app.use(express.json({
   verify: (req: any, _res, buf) => {
     // Preserve raw body for webhook signature verification (Resend uses svix)
@@ -2264,35 +2269,50 @@ app.get('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
 app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
-    const id = await insert(`
-      INSERT INTO properties (
-        landlord_id, address, postcode, property_type, bedrooms,
-        is_leasehold, leasehold_start_date, leasehold_end_date, leaseholder_info,
-        proof_of_ownership_received, council_tax_band, service_type,
-        charge_percentage, total_charge, rent_amount,
-        has_live_tenancy, tenancy_start_date, tenancy_type, has_end_date, tenancy_end_date,
-        rent_review_date, eicr_expiry_date, epc_grade, epc_expiry_date,
-        has_gas, gas_safety_expiry_date, status, onboarded_date, notes, amenities,
-        tenant_id, image_url
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-        $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32
-      )
-    `, [
-      d.landlord_id, d.address, d.postcode, d.property_type || 'house', d.bedrooms || 1,
-      d.is_leasehold ? 1 : 0, d.leasehold_start_date || null, d.leasehold_end_date || null, d.leaseholder_info || null,
-      d.proof_of_ownership_received ? 1 : 0, d.council_tax_band || null, d.service_type || null,
-      d.charge_percentage || null, d.total_charge || null, d.rent_amount || 0,
-      d.has_live_tenancy ? 1 : 0, d.tenancy_start_date || null, d.tenancy_type || null,
-      d.has_end_date ? 1 : 0, d.tenancy_end_date || null,
-      d.rent_review_date || null, d.eicr_expiry_date || null, d.epc_grade || null, d.epc_expiry_date || null,
-      d.has_gas ? 1 : 0, d.gas_safety_expiry_date || null, d.status || 'to_let',
-      d.onboarded_date || null, d.notes || null, d.amenities || null,
-      d.tenant_id || null, d.image_url || null
-    ]);
-    // Sync tenant.property_id when tenant_id is set on creation
-    if (d.tenant_id) {
-      await run('UPDATE tenants SET property_id = $1 WHERE id = $2', [id, d.tenant_id]);
+    const client = await pool.connect();
+    let id: number;
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(`
+        INSERT INTO properties (
+          landlord_id, address, postcode, property_type, bedrooms,
+          is_leasehold, leasehold_start_date, leasehold_end_date, leaseholder_info,
+          proof_of_ownership_received, council_tax_band, service_type,
+          charge_percentage, total_charge, rent_amount,
+          has_live_tenancy, tenancy_start_date, tenancy_type, has_end_date, tenancy_end_date,
+          rent_review_date, eicr_expiry_date, epc_grade, epc_expiry_date,
+          has_gas, gas_safety_expiry_date, status, onboarded_date, notes, amenities,
+          tenant_id, image_url
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+          $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32
+        ) RETURNING id
+      `, [
+        d.landlord_id, d.address, d.postcode, d.property_type || 'house', d.bedrooms || 1,
+        d.is_leasehold ? 1 : 0, d.leasehold_start_date || null, d.leasehold_end_date || null, d.leaseholder_info || null,
+        d.proof_of_ownership_received ? 1 : 0, d.council_tax_band || null, d.service_type || null,
+        d.charge_percentage || null, d.total_charge || null, d.rent_amount || 0,
+        d.has_live_tenancy ? 1 : 0, d.tenancy_start_date || null, d.tenancy_type || null,
+        d.has_end_date ? 1 : 0, d.tenancy_end_date || null,
+        d.rent_review_date || null, d.eicr_expiry_date || null, d.epc_grade || null, d.epc_expiry_date || null,
+        d.has_gas ? 1 : 0, d.gas_safety_expiry_date || null, d.status || 'to_let',
+        d.onboarded_date || null, d.notes || null, d.amenities || null,
+        d.tenant_id || null, d.image_url || null
+      ]);
+      id = result.rows[0].id;
+      if (d.tenant_id) {
+        await client.query('UPDATE tenants SET property_id = $1 WHERE id = $2', [id, d.tenant_id]);
+      }
+      await client.query(
+        'INSERT INTO property_landlords (property_id, landlord_id, is_primary) VALUES ($1, $2, 1) ON CONFLICT (property_id, landlord_id) DO NOTHING',
+        [id, d.landlord_id]
+      );
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
     }
 
     await logAudit(req.user?.id, req.user?.email, 'create', 'property', id);
@@ -3180,6 +3200,168 @@ app.post('/api/directors/:id/reinstate', authMiddleware, async (req: AuthRequest
   } catch (err) {
     res.status(500).json({ error: 'Failed to reinstate director' });
   }
+});
+
+// ============ CSV IMPORT ============
+
+const IMPORT_MAX_ROWS = 1000;
+// Column whitelists per entity — unknown keys in rows are ignored.
+const IMPORT_COLUMNS: Record<string, string[]> = {
+  'tenant-enquiries': ['first_name_1', 'last_name_1', 'email_1', 'phone_1', 'date_of_birth_1', 'nationality_1',
+    'current_address_1', 'employment_status_1', 'employer_1', 'income_1', 'preferred_tenancy_type',
+    'preferred_property_type', 'notes'],
+  'landlords': ['name', 'email', 'phone', 'address', 'home_address', 'entity_type', 'company_number'],
+  'properties': ['address', 'postcode', 'property_type', 'bedrooms', 'rent_amount', 'notes'],
+};
+app.post('/api/import/:entity', requirePermission('staff'), async (req: AuthRequest, res) => {
+  const entity = req.params.entity as string;
+  if (!(entity in IMPORT_COLUMNS)) return res.status(400).json({ error: 'Unknown import entity' });
+  const rows = req.body?.rows;
+  if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'rows array required' });
+  if (rows.length > IMPORT_MAX_ROWS) return res.status(400).json({ error: `Too many rows (max ${IMPORT_MAX_ROWS})` });
+
+  const skipped: { row: number; reason: string }[] = [];
+  let inserted = 0;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const seen = new Set<string>();
+
+    const insertRow = async (table: string, data: Record<string, any>) => {
+      const cols = Object.keys(data);
+      await client.query(
+        `INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(',')})`,
+        cols.map(c => data[c])
+      );
+    };
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowNum = i + 1;
+      const r = rows[i] || {};
+      const data: Record<string, any> = {};
+      let invalidReason: string | undefined;
+      for (const col of IMPORT_COLUMNS[entity]) {
+        const coerced = coerceImportValue(col, r[col]);
+        if (coerced.error) {
+          invalidReason = coerced.error;
+          break;
+        }
+        if (coerced.value !== null) data[col] = coerced.value;
+      }
+      if (invalidReason) {
+        skipped.push({ row: rowNum, reason: invalidReason });
+        continue;
+      }
+
+      if (entity === 'tenant-enquiries') {
+        if (!data.first_name_1 || !data.last_name_1 || !data.email_1) {
+          skipped.push({ row: rowNum, reason: 'missing required fields (first name, last name, email)' });
+          continue;
+        }
+        const email = String(data.email_1).toLowerCase();
+        const phone = data.phone_1 ? String(data.phone_1) : null;
+        if (seen.has(`e:${email}`) || (phone && seen.has(`p:${phone}`))) {
+          skipped.push({ row: rowNum, reason: 'duplicate within file' });
+          continue;
+        }
+        const dup = await client.query(
+          'SELECT id FROM tenant_enquiries WHERE lower(email_1) = $1 OR ($2::text IS NOT NULL AND phone_1 = $2) LIMIT 1',
+          [email, phone]
+        );
+        if (dup.rows.length) {
+          skipped.push({ row: rowNum, reason: `duplicate of existing enquiry #${dup.rows[0].id}` });
+          continue;
+        }
+        seen.add(`e:${email}`);
+        if (phone) seen.add(`p:${phone}`);
+        await insertRow('tenant_enquiries', { ...data, email_1: email, status: 'new' });
+      } else if (entity === 'landlords') {
+        if (!data.name) {
+          skipped.push({ row: rowNum, reason: 'missing required field (name)' });
+          continue;
+        }
+        const name = String(data.name).toLowerCase();
+        const email = data.email ? String(data.email).toLowerCase() : null;
+        if (seen.has(`n:${name}`) || (email && seen.has(`e:${email}`))) {
+          skipped.push({ row: rowNum, reason: 'duplicate within file' });
+          continue;
+        }
+        const dup = await client.query(
+          'SELECT id FROM landlords WHERE lower(name) = $1 OR ($2::text IS NOT NULL AND lower(email) = $2) LIMIT 1',
+          [name, email]
+        );
+        if (dup.rows.length) {
+          skipped.push({ row: rowNum, reason: `duplicate of existing landlord #${dup.rows[0].id}` });
+          continue;
+        }
+        seen.add(`n:${name}`);
+        if (email) seen.add(`e:${email}`);
+        await insertRow('landlords', data);
+      } else {
+        // properties — resolve landlord by email or exact name; never auto-create
+        if (!data.address) {
+          skipped.push({ row: rowNum, reason: 'missing required field (address)' });
+          continue;
+        }
+        if (!data.postcode) {
+          skipped.push({ row: rowNum, reason: 'missing required field (postcode)' });
+          continue;
+        }
+        const landlordRef = typeof r.landlord === 'string' ? r.landlord.trim() : '';
+        if (!landlordRef) {
+          skipped.push({ row: rowNum, reason: 'missing required field (landlord)' });
+          continue;
+        }
+        const landlord = await client.query(
+          'SELECT id FROM landlords WHERE lower(email) = $1 OR lower(name) = $1 ORDER BY id LIMIT 2',
+          [landlordRef.toLowerCase()]
+        );
+        if (!landlord.rows.length) {
+          skipped.push({ row: rowNum, reason: `landlord not found: ${landlordRef}` });
+          continue;
+        }
+        if (landlord.rows.length > 1) {
+          skipped.push({ row: rowNum, reason: `ambiguous landlord reference: ${landlordRef}` });
+          continue;
+        }
+        const addrKey = `a:${String(data.address).toLowerCase()}|${String(data.postcode || '').toLowerCase()}`;
+        if (seen.has(addrKey)) {
+          skipped.push({ row: rowNum, reason: 'duplicate within file' });
+          continue;
+        }
+        const dup = await client.query(
+          "SELECT id FROM properties WHERE lower(address) = $1 AND lower(coalesce(postcode, '')) = $2 LIMIT 1",
+          [String(data.address).toLowerCase(), String(data.postcode || '').toLowerCase()]
+        );
+        if (dup.rows.length) {
+          skipped.push({ row: rowNum, reason: `duplicate of existing property #${dup.rows[0].id}` });
+          continue;
+        }
+        seen.add(addrKey);
+        const propResult = await client.query(
+          `INSERT INTO properties (landlord_id, address, postcode, property_type, bedrooms, rent_amount, notes, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'to_let') RETURNING id`,
+          [landlord.rows[0].id, data.address, data.postcode || null, data.property_type || 'house',
+            data.bedrooms || 1, data.rent_amount || 0, data.notes || null]
+        );
+        await client.query(
+          'INSERT INTO property_landlords (property_id, landlord_id, is_primary) VALUES ($1, $2, 1) ON CONFLICT (property_id, landlord_id) DO NOTHING',
+          [propResult.rows[0].id, landlord.rows[0].id]
+        );
+      }
+      inserted++;
+    }
+    await client.query('COMMIT');
+  } catch (txErr) {
+    await client.query('ROLLBACK');
+    console.error('Import failed:', txErr);
+    client.release();
+    return res.status(500).json({ error: 'Import failed — nothing was imported' });
+  }
+  client.release();
+
+  await logAudit(req.user?.id, req.user?.email, 'create', `${entity}-import`, undefined, { inserted, skipped: skipped.length });
+  res.json({ inserted, skipped });
 });
 
 // ============ LANDLORD PROPERTIES ============

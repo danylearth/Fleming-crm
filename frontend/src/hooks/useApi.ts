@@ -47,7 +47,7 @@ export function useApi() {
     return data;
   };
 
-  const get = async (endpoint: string): Promise<unknown> => {
+  const get = async (endpoint: string) => {
     if (!token) return request(endpoint);
 
     const key = cacheKey(token, endpoint);
@@ -82,8 +82,8 @@ export function useApi() {
 
   return {
     get,
-    post: (endpoint: string, body: Record<string, unknown>) =>
-      mutate(endpoint, { method: 'POST', body: JSON.stringify(body) }),
+    post: (endpoint: string, body: Record<string, unknown>, invalidate?: string) =>
+      mutate(endpoint, { method: 'POST', body: JSON.stringify(body) }, invalidate),
     put: (endpoint: string, body: Record<string, unknown>) =>
       mutate(endpoint, { method: 'PUT', body: JSON.stringify(body) }),
     patch: (endpoint: string, body: Record<string, unknown>) =>

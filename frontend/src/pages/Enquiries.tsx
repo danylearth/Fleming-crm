@@ -3,7 +3,8 @@ import Layout from '../components/Layout';
 import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState, DataTable, DatePicker } from '../components/ui';
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Calendar, LayoutGrid, List, Building2, ArrowRight, XCircle, Mail, Phone } from 'lucide-react';
+import { Plus, X, Calendar, LayoutGrid, List, Building2, ArrowRight, XCircle, Mail, Phone, Upload } from 'lucide-react';
+import CsvImport from '../components/ui/CsvImport';
 import { BookingIcon, AwaitingIcon, OnboardingIcon } from '../components/ui/icons/FlemingIcons';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
@@ -11,6 +12,7 @@ import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 import { SearchDropdown } from '../components/ui/SearchDropdown';
 import OnboardingWizard from '../components/ui/OnboardingWizard';
 import { calculateSmsSegments } from '../utils/sms';
+import { usePermissions } from '../hooks/usePermissions';
 
 interface EnquiryRaw {
   id: number;
@@ -251,6 +253,7 @@ function EmploymentFields({ form, setField, suffix, editing }: {
 // ─── Main Page ───
 export default function Enquiries() {
   const api = useApi();
+  const { canCreate } = usePermissions();
   const navigate = useNavigate();
   const [rawEnquiries, setRawEnquiries] = useState<EnquiryRaw[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
@@ -261,6 +264,7 @@ export default function Enquiries() {
   const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '', property_id: '' });
   const [saving, setSaving] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -549,10 +553,17 @@ export default function Enquiries() {
           >
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
+          {canCreate() && (
+            <Button variant="outline" onClick={() => setShowImport(true)}>
+              <Upload size={16} className="mr-2" /> Import CSV
+            </Button>
+          )}
           <Button variant="gradient" onClick={() => setShowAdd(true)}>
             <Plus size={16} className="mr-2" /> Add Enquiry
           </Button>
         </div>
+
+        {showImport && <CsvImport entity="tenant-enquiries" onClose={() => setShowImport(false)} onDone={load} />}
 
         {/* Property filter */}
         <div className="flex flex-wrap items-center gap-3">

@@ -4,8 +4,10 @@ import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState, DataTable, SearchDropdown } from '../components/ui';
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Building2, Phone, Mail, Search, Check, LayoutGrid, List, User, AlertCircle, Briefcase } from 'lucide-react';
+import { Plus, X, Building2, Phone, Mail, Search, Check, LayoutGrid, List, User, AlertCircle, Briefcase, Upload } from 'lucide-react';
+import CsvImport from '../components/ui/CsvImport';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
+import { usePermissions } from '../hooks/usePermissions';
 
 interface Landlord {
   id: number; name: string; email: string; phone: string;
@@ -24,6 +26,7 @@ interface TenantOption {
 export default function Landlords() {
   const navigate = useNavigate();
   const api = useApi();
+  const { canCreate } = usePermissions();
   const [landlords, setLandlords] = useState<Landlord[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [directors, setDirectors] = useState<{ id: number; landlord_id: number; name?: string; email?: string; phone?: string }[]>([]);
@@ -31,6 +34,7 @@ export default function Landlords() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [showModal, setShowModal] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState({
     name: '', email: '', phone: '', address: '', postcode: '', notes: '',
     landlord_type: 'external', entity_type: 'individual', company_number: ''
@@ -288,10 +292,17 @@ export default function Landlords() {
           >
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
+          {canCreate() && (
+            <Button variant="outline" onClick={() => setShowImport(true)}>
+              <Upload size={16} className="mr-2" /> Import CSV
+            </Button>
+          )}
           <Button variant="gradient" onClick={() => setShowModal(true)}>
             <Plus size={16} className="mr-2" /> Add Landlord
           </Button>
         </div>
+
+        {showImport && <CsvImport entity="landlords" onClose={() => setShowImport(false)} onDone={load} />}
 
         {/* Dropdown filters + Filter tabs */}
         <div className="flex flex-wrap items-center gap-3">

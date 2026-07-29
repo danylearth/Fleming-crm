@@ -38,3 +38,6 @@ Thumbs.db
 
 # Uploaded files (runtime data, never commit)
 backend/uploads/
+
+# Local CSV import fixtures (may contain applicant PII)
+frontend/public/__test-*.csv

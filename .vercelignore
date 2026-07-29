@@ -1,0 +1,2 @@
+# Local CSV import fixtures may contain applicant PII and must never be uploaded.
+frontend/public/__test-*.csv

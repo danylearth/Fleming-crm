@@ -15,6 +15,7 @@ interface Landlord {
   id: number; name: string; email: string; phone: string; address: string; notes: string;
   alt_email: string; date_of_birth: string; home_address: string; company_number: string;
   entity_type: string; // 'individual' | 'company' | 'trust'
+  landlord_type?: string; // 'internal' | 'external'
   marketing_post: number; marketing_email: number; marketing_phone: number; marketing_sms: number;
   kyc_completed: number; property_count: number; referral_source: string;
 }
