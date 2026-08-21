@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { normalizeUkPhone, viewingConfirmationSms, followUpSms, rejectionSms, rentReminderSms, genericSms } from './sms';
 
 describe('normalizeUkPhone', () => {
@@ -79,5 +79,20 @@ describe('SMS templates', () => {
   it('genericSms wraps message with name and sign-off', () => {
     const msg = genericSms('Dan', 'your keys are ready for collection');
     expect(msg).toBe('Hi Dan, your keys are ready for collection - Fleming Lettings');
+  });
+});
+
+describe('SMS provider safety', () => {
+  it('does not report a successful send when Twilio is not configured', async () => {
+    vi.stubEnv('TWILIO_ACCOUNT_SID', '');
+    vi.stubEnv('TWILIO_AUTH_TOKEN', '');
+    vi.stubEnv('TWILIO_PHONE_NUMBER', '');
+    vi.stubEnv('ALLOW_SIMULATED_MESSAGES', '');
+    vi.resetModules();
+    const { sendSms } = await import('./sms');
+    const result = await sendSms({ to: '+447700900000', body: 'Test message' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not configured');
+    vi.unstubAllEnvs();
   });
 });

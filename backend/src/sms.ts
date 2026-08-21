@@ -1,5 +1,4 @@
-// Twilio SMS integration — follows same pattern as email.ts
-// If TWILIO env vars are missing, simulates sends (console.log + fake SID)
+// Twilio SMS integration — follows the same provider-confirmed semantics as email.ts.
 
 import type { Request, Response, NextFunction } from 'express';
 
@@ -7,6 +6,7 @@ let twilioClient: any = null;
 let twilioLib: any = null;
 const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER || '';
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+const ALLOW_SIMULATED_MESSAGES = process.env.ALLOW_SIMULATED_MESSAGES === 'true' && process.env.NODE_ENV !== 'production';
 
 if (process.env.TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
   try {
@@ -24,7 +24,11 @@ if (process.env.TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
  */
 export function validateTwilioWebhook(req: Request, res: Response, next: NextFunction) {
   if (!TWILIO_AUTH_TOKEN || !process.env.BASE_URL || !twilioLib) {
-    // No auth token or base URL = simulation/dev mode, skip validation
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[TWILIO] Webhook validation is not configured in production');
+      return res.status(503).send('Twilio webhook validation is not configured');
+    }
+    // Local development can still exercise webhook handlers without Twilio.
     return next();
   }
 
@@ -52,8 +56,13 @@ export interface SendSmsParams {
 
 export async function sendSms(params: SendSmsParams): Promise<{ success: boolean; sid?: string; error?: string; simulated?: boolean }> {
   if (!twilioClient) {
-    console.log('[SMS SIMULATED]', { to: params.to, body: params.body.substring(0, 80) + '...' });
-    return { success: true, sid: 'simulated-' + Date.now(), simulated: true };
+    if (ALLOW_SIMULATED_MESSAGES) {
+      console.log('[SMS SIMULATED]', { to: params.to, body: params.body.substring(0, 80) + '...' });
+      return { success: true, sid: 'simulated-' + Date.now(), simulated: true };
+    }
+    const error = 'SMS service is not configured (Twilio credentials are missing)';
+    console.error('[SMS ERROR]', error);
+    return { success: false, error };
   }
 
   try {

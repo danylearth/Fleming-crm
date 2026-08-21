@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
 import { Button, DatePicker } from './index';
@@ -6,7 +6,7 @@ import EmailPreviewModal from './EmailPreviewModal';
 import {
   CheckCircle, Circle, Clock, Mail, FileText, Shield, CreditCard,
   ChevronDown, AlertTriangle, User, X, Send,
-  Download, Upload, Trash2, Eye, Paperclip
+  Eye, PoundSterling
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -90,6 +90,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
 
   // Step 5: Credit check
   const [creditScore, setCreditScore] = useState('');
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [reviewError, setReviewError] = useState('');
 
   // Application email modal
   const [showApplicationEmail, setShowApplicationEmail] = useState(false);
@@ -99,10 +101,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
   const [showHDEmailPreview, setShowHDEmailPreview] = useState(false);
 
   // Documents for ID verification step
-  const [enquiryDocs, setEnquiryDocs] = useState<{ id: number; doc_type: string; original_name: string; mime_type: string; size: number; uploaded_at: string }[]>([]);
-  const [uploading, setUploading] = useState<string | null>(null); // tracks which doc_type is uploading
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const pendingDocType = useRef<string>('');
+  const [enquiryDocs, setEnquiryDocs] = useState<{ id: number; doc_type: string; original_name: string; mime_type: string; size: number; uploaded_at: string; review_status?: string; review_notes?: string; reviewed_at?: string }[]>([]);
+  const [emailMessages, setEmailMessages] = useState<{ id: number; template: string; status: string; error_message?: string; created_at: string }[]>([]);
 
   const fetchDocs = () => {
     if (!token) return;
@@ -114,48 +114,67 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
       .catch(() => {});
   };
 
-  // Fetch documents for this enquiry
-  useEffect(() => { fetchDocs(); }, [enquiryId, token]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleUploadClick = (docType: string) => {
-    pendingDocType.current = docType;
-    fileInputRef.current?.click();
+  const fetchEmailHistory = () => {
+    api.get(`/api/email-history/tenant_enquiry/${enquiryId}`)
+      .then(data => { if (Array.isArray(data)) setEmailMessages(data); })
+      .catch(() => {});
   };
 
-  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !token) return;
-    const docType = pendingDocType.current;
-    setUploading(docType);
+  // Fetch documents for this enquiry
+  useEffect(() => { fetchDocs(); fetchEmailHistory(); }, [enquiryId, token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const reviewDocument = async (docId: number, status: 'approved' | 'rejected') => {
+    setSaving(true);
+    setReviewError('');
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('doc_type', docType);
-      const res = await fetch(`${API_URL}/api/documents/tenant_enquiry/${enquiryId}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
-      if (!res.ok) throw new Error('Upload failed');
+      await api.put(`/api/documents/${docId}/review`, { status, notes: reviewNotes || null });
       fetchDocs();
-    } catch {
-      // silently fail — user sees no new doc appear
+      onUpdate();
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Document review could not be saved');
     } finally {
-      setUploading(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      setSaving(false);
     }
   };
 
-  const handleDeleteDoc = async (docId: number) => {
+  const downloadDocument = async (docId: number, originalName: string) => {
     if (!token) return;
+    const response = await fetch(`${API_URL}/api/documents/download/${docId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      setReviewError('Document download failed');
+      return;
+    }
+    const href = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = originalName;
+    link.click();
+    URL.revokeObjectURL(href);
+  };
+
+  const updateApplicationReview = async (status: 'approved' | 'changes_requested') => {
+    setSaving(true);
+    setReviewError('');
     try {
-      await fetch(`${API_URL}/api/documents/${docId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+      await api.post(`/api/tenant-enquiries/${enquiryId}/application-review`, {
+        status,
+        notes: reviewNotes || null,
       });
-      fetchDocs();
-    } catch {
-      // silently fail
+      if (status === 'changes_requested') {
+        const escapedNotes = escapeHtml(reviewNotes || 'Please review your application and supporting documents.');
+        await api.post(`/api/tenant-enquiries/${enquiryId}/send-application-email`, {
+          subject: 'Changes requested for your Fleming Lettings application',
+          body_html: buildChangesRequestedEmailHtml(escapedNotes),
+        });
+        fetchEmailHistory();
+      }
+      onUpdate();
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Application review could not be updated');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -169,19 +188,18 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
     }
     setHdReceivedAmount(enquiry.holding_deposit_received_amount ? String(enquiry.holding_deposit_received_amount) : '');
     setCreditScore(enquiry.credit_score || '');
+    setReviewNotes(enquiry.application_review_notes || '');
     // Set active step based on progress
     if (!enquiry.holding_deposit_requested) setActiveStep(0);
     else if (!enquiry.holding_deposit_received) setActiveStep(1);
     else if (!enquiry.application_form_completed) setActiveStep(2);
-    else if (!enquiry.id_primary_verified_1 || !enquiry.id_secondary_verified_1) setActiveStep(3);
-    else if (!enquiry.bank_statements_received || !enquiry.credit_check_completed) setActiveStep(4);
+    else if (enquiry.application_review_status !== 'approved') setActiveStep(3);
+    else if (!enquiry.credit_check_completed) setActiveStep(4);
     else setActiveStep(5);
   }, [enquiry, properties]);
 
   const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
   const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
-  const isJoint = !!enquiry.is_joint_application;
-
   // Step definitions
   const steps = [
     {
@@ -205,24 +223,22 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
       desc: enquiry.application_form_completed ? 'Completed & signed' : enquiry.application_form_sent ? 'Sent — waiting for tenant' : 'Not yet sent',
     },
     {
-      label: 'ID Verification',
+      label: 'Application Review',
       icon: Shield,
-      getStatus: () => {
-        const done1 = enquiry.id_primary_verified_1 && enquiry.id_secondary_verified_1;
-        const done2 = !isJoint || (enquiry.id_primary_verified_2 && enquiry.id_secondary_verified_2);
-        return done1 && done2 ? 'green' : (enquiry.id_primary_verified_1 || enquiry.id_secondary_verified_1) ? 'amber' : 'red';
-      },
-      desc: 'Primary & secondary ID for all applicants',
+      getStatus: () => enquiry.application_review_status === 'approved'
+        ? 'green'
+        : enquiry.application_form_completed ? 'amber' : 'red',
+      desc: enquiry.application_review_status === 'approved'
+        ? 'Application and evidence approved'
+        : enquiry.application_review_status === 'changes_requested'
+          ? 'Changes requested from applicant'
+          : 'Review the submitted form and evidence',
     },
     {
-      label: 'Financial Checks',
+      label: 'Run Credit Check',
       icon: CreditCard,
-      getStatus: () => {
-        const all = enquiry.bank_statements_received && enquiry.source_of_funds_verified && enquiry.employment_check_completed && enquiry.credit_check_completed;
-        const any = enquiry.bank_statements_received || enquiry.source_of_funds_verified || enquiry.employment_check_completed || enquiry.credit_check_completed;
-        return all ? 'green' : any ? 'amber' : 'red';
-      },
-      desc: 'Bank statements, source of funds, employment & credit',
+      getStatus: () => enquiry.credit_check_completed ? 'green' : 'red',
+      desc: enquiry.credit_check_completed ? `Credit check completed${enquiry.credit_score ? ` — ${enquiry.credit_score}` : ''}` : 'Run after the application is approved',
     },
     {
       label: 'Convert to Tenant',
@@ -432,6 +448,21 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
     </div>`;
   };
 
+  const buildChangesRequestedEmailHtml = (escapedNotes: string): string => {
+    const formUrl = enquiry.application_form_token
+      ? `https://apply.fleminglettings.co.uk/onboarding/${enquiry.application_form_token}`
+      : '#';
+    return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;line-height:1.6">
+      <h2 style="color:#25073B">Application changes requested</h2>
+      <p>Hi ${escapeHtml(enquiry.first_name_1 || 'there')},</p>
+      <p>We have reviewed your tenancy application and need the following updates:</p>
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px">${escapedNotes}</div>
+      <p>You can edit your answers and replace supporting documents using your existing secure link:</p>
+      <p><a href="${formUrl}" style="display:inline-block;background:#DC006D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">Update your application</a></p>
+      <p>Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
+    </div>`;
+  };
+
   const sendApplicationEmail = async ({ subject, bodyHtml }: { subject: string; bodyHtml: string }) => {
     setSendingEmail(true);
     try {
@@ -440,6 +471,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         body_html: bodyHtml,
       });
       setShowApplicationEmail(false);
+      fetchEmailHistory();
       onUpdate();
     } catch (err) {
       console.error('Failed to send application email:', err);
@@ -449,6 +481,19 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
   };
 
   const stepCardProps = { activeStep, setActiveStep };
+  const applicationData = (enquiry.app_form_data || {}) as Record<string, unknown>;
+  const requiredReviewDocumentTypes = ['Primary Identification', 'Secondary Identification', 'Bank Statements'];
+  if (!['Student', 'Unemployed'].includes(String(applicationData.employment_status || ''))) {
+    requiredReviewDocumentTypes.push('Proof of Income or Employment');
+  }
+  const allRequiredDocsApproved = requiredReviewDocumentTypes.every(docType =>
+    enquiryDocs.some(doc => doc.doc_type === docType && doc.review_status === 'approved')
+  );
+  const latestApplicationEmail = emailMessages.find(message =>
+    message.template === 'tenancy_application' || message.template === 'holding_deposit_request'
+  );
+  const answerLabel = (key: string) => key.replace(/^declaration_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const answerValue = (value: unknown) => typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value || '—');
 
   return (
     <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -508,7 +553,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                   )}
                 </div>
 
-                {/* Email & attachments summary */}
+                {/* Email content summary */}
                 <div className="bg-[var(--bg-subtle)] rounded-lg p-3 space-y-2">
                   <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Email Summary</p>
                   <div className="grid grid-cols-2 gap-2">
@@ -531,10 +576,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                   </div>
                   <div className="h-px bg-[var(--border-subtle)]" />
                   <div>
-                    <p className="text-[10px] text-[var(--text-muted)] mb-1">Attachments</p>
+                    <p className="text-[10px] text-[var(--text-muted)] mb-1">Email contains</p>
                     <div className="flex flex-wrap gap-2">
                       <span className="inline-flex items-center gap-1 text-[10px] text-[var(--text-secondary)] bg-[var(--bg-hover)] rounded px-2 py-1">
-                        <Paperclip size={10} /> Holding Deposit Request (PDF)
+                        <PoundSterling size={10} /> Holding Deposit Summary
                       </span>
                       <span className="inline-flex items-center gap-1 text-[10px] text-[var(--text-secondary)] bg-[var(--bg-hover)] rounded px-2 py-1">
                         <FileText size={10} /> Application Form Link
@@ -590,7 +635,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                 <div className="bg-[var(--bg-subtle)] rounded-lg p-3 text-[10px] text-[var(--text-muted)] space-y-1">
                   <p className="font-medium text-[var(--text-secondary)]">Will send to: {enquiry.email_1}</p>
                   <p>From: enquiries@fleminglettings.co.uk</p>
-                  <p>Includes: Holding Deposit PDF + Application Form Link</p>
+                  <p>Includes: Holding Deposit Summary + Application Form Link</p>
                 </div>
                 <Button variant="gradient" onClick={requestHoldingDeposit} disabled={saving || !hdMonthlyRent || !hdHoldingDeposit}>
                   {saving ? 'Sending...' : 'Send Email & Application Link'}
@@ -727,6 +772,17 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                     ))}
                   </div>
 
+                  {latestApplicationEmail && (
+                    <div className={`rounded-lg px-3 py-2 text-xs border ${['failed', 'bounced', 'complained'].includes(latestApplicationEmail.status)
+                      ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                      : latestApplicationEmail.status === 'delivered'
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                        : 'bg-blue-500/10 border-blue-500/20 text-blue-400'}`}>
+                      Latest email: <strong>{latestApplicationEmail.status === 'sent' ? 'accepted by provider' : latestApplicationEmail.status}</strong>
+                      {latestApplicationEmail.error_message && <span> — {latestApplicationEmail.error_message}</span>}
+                    </div>
+                  )}
+
                   {/* Contextual content below the tracker */}
                   {completed ? (
                     <div className="space-y-2">
@@ -825,123 +881,87 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
             })()}
           </StepCard>
 
-          {/* Step 4: ID Verification */}
+          {/* Step 4: Application Review */}
           <StepCard idx={3} step={steps[3]} {...stepCardProps}>
-            <div className="space-y-2">
-              {/* Hidden file input shared across all upload buttons */}
-              <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onChange={handleFileSelected} />
-
-              {/* Applicant 1 */}
-              <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Applicant 1 — {enquiry.first_name_1}</p>
-              {[
-                { docType: 'Primary ID', verifiedKey: 'id_primary_verified_1' as const },
-                { docType: 'Secondary ID', verifiedKey: 'id_secondary_verified_1' as const },
-              ].map(({ docType, verifiedKey }) => {
-                const docs = enquiryDocs.filter(d => d.doc_type === docType);
-                return (
-                  <div key={verifiedKey} className="bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs">{docType}</span>
-                      <div className="flex gap-1">
-                        <button onClick={() => handleUploadClick(docType)} disabled={uploading === docType}
-                          className="px-2 py-1 rounded-lg text-[10px] font-medium bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1">
-                          <Upload size={10} /> {uploading === docType ? 'Uploading…' : 'Upload'}
-                        </button>
-                        <button onClick={() => updateField({ [verifiedKey]: enquiry[verifiedKey] ? 0 : 1 })} disabled={saving}
-                          className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry[verifiedKey] ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
-                          {enquiry[verifiedKey] ? 'Verified' : 'Mark Verified'}
-                        </button>
-                      </div>
-                    </div>
-                    {docs.map(doc => (
-                      <div key={doc.id} className="flex items-center justify-between bg-[var(--bg-subtle)] rounded px-2 py-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <FileText size={12} className="text-[var(--text-muted)] shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-[11px] text-[var(--text-primary)] truncate">{doc.original_name}</p>
-                            <p className="text-[10px] text-[var(--text-muted)]">{new Date(doc.uploaded_at).toLocaleDateString('en-GB')}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <a href={`${API_URL}/api/documents/download/${doc.id}`} target="_blank" rel="noopener noreferrer"
-                            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5"><Download size={12} /></a>
-                          <button onClick={() => handleDeleteDoc(doc.id)}
-                            className="text-[var(--text-muted)] hover:text-red-400 p-0.5"><Trash2 size={12} /></button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-
-              {/* Applicant 2 (joint only) */}
-              {isJoint && (
+            <div className="space-y-4">
+              {!enquiry.application_form_completed ? (
+                <div className="text-xs text-[var(--text-muted)] flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-amber-400" /> Waiting for the applicant to submit the form and documents.
+                </div>
+              ) : (
                 <>
-                  <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mt-3">Applicant 2 — {enquiry.first_name_2 || 'Joint'}</p>
-                  {[
-                    { docType: 'Primary ID', verifiedKey: 'id_primary_verified_2' as const },
-                    { docType: 'Secondary ID', verifiedKey: 'id_secondary_verified_2' as const },
-                  ].map(({ docType, verifiedKey }) => {
-                    const a2DocType = `${docType} (Applicant 2)`;
-                    const docs = enquiryDocs.filter(d => d.doc_type === a2DocType);
-                    return (
-                      <div key={verifiedKey} className="bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs">{docType}</span>
-                          <div className="flex gap-1">
-                            <button onClick={() => handleUploadClick(a2DocType)} disabled={uploading === a2DocType}
-                              className="px-2 py-1 rounded-lg text-[10px] font-medium bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1">
-                              <Upload size={10} /> {uploading === a2DocType ? 'Uploading…' : 'Upload'}
-                            </button>
-                            <button onClick={() => updateField({ [verifiedKey]: enquiry[verifiedKey] ? 0 : 1 })} disabled={saving}
-                              className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry[verifiedKey] ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
-                              {enquiry[verifiedKey] ? 'Verified' : 'Mark Verified'}
-                            </button>
-                          </div>
+                  <div className="bg-[var(--bg-subtle)] rounded-lg p-3 max-h-56 overflow-y-auto">
+                    <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Submitted answers</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      {Object.entries(applicationData).map(([key, value]) => (
+                        <div key={key} className={String(value).length > 50 ? 'col-span-2' : ''}>
+                          <p className="text-[10px] text-[var(--text-muted)]">{answerLabel(key)}</p>
+                          <p className="text-xs text-[var(--text-primary)] break-words">{answerValue(value)}</p>
                         </div>
-                        {docs.map(doc => (
-                          <div key={doc.id} className="flex items-center justify-between bg-[var(--bg-subtle)] rounded px-2 py-1">
-                            <div className="flex items-center gap-2 min-w-0">
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Supporting documents</p>
+                    {requiredReviewDocumentTypes.map(docType => {
+                      const docs = enquiryDocs.filter(doc => doc.doc_type === docType);
+                      return (
+                        <div key={docType} className="bg-[var(--bg-hover)]/50 rounded-lg p-3 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-medium">{docType}</span>
+                            <span className={`text-[10px] ${docs.some(doc => doc.review_status === 'approved') ? 'text-emerald-400' : 'text-amber-400'}`}>
+                              {docs.length ? `${docs.length} uploaded` : 'Missing'}
+                            </span>
+                          </div>
+                          {docs.map(doc => (
+                            <div key={doc.id} className="flex items-center gap-2 bg-[var(--bg-subtle)] rounded px-2 py-2">
                               <FileText size={12} className="text-[var(--text-muted)] shrink-0" />
-                              <div className="min-w-0">
+                              <button onClick={() => downloadDocument(doc.id, doc.original_name)} className="text-left min-w-0 flex-1">
                                 <p className="text-[11px] text-[var(--text-primary)] truncate">{doc.original_name}</p>
                                 <p className="text-[10px] text-[var(--text-muted)]">{new Date(doc.uploaded_at).toLocaleDateString('en-GB')}</p>
-                              </div>
+                              </button>
+                              <span className={`text-[10px] font-medium ${doc.review_status === 'approved' ? 'text-emerald-400' : doc.review_status === 'rejected' ? 'text-red-400' : 'text-amber-400'}`}>
+                                {doc.review_status || 'pending'}
+                              </span>
+                              <button onClick={() => reviewDocument(doc.id, 'approved')} disabled={saving} className="px-2 py-1 rounded text-[10px] bg-emerald-500/15 text-emerald-400">Approve</button>
+                              <button onClick={() => reviewDocument(doc.id, 'rejected')} disabled={saving} className="px-2 py-1 rounded text-[10px] bg-red-500/15 text-red-400">Reject</button>
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <a href={`${API_URL}/api/documents/download/${doc.id}`} target="_blank" rel="noopener noreferrer"
-                                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5"><Download size={12} /></a>
-                              <button onClick={() => handleDeleteDoc(doc.id)}
-                                className="text-[var(--text-muted)] hover:text-red-400 p-0.5"><Trash2 size={12} /></button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-[var(--text-muted)] mb-1">Review notes / changes required</label>
+                    <textarea value={reviewNotes} onChange={event => setReviewNotes(event.target.value)} rows={3}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none" />
+                  </div>
+                  {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={() => updateApplicationReview('changes_requested')} disabled={saving || !reviewNotes.trim()}>
+                      Request Changes &amp; Email Applicant
+                    </Button>
+                    <Button variant="gradient" size="sm" onClick={() => updateApplicationReview('approved')} disabled={saving || !allRequiredDocsApproved}>
+                      Approve Application
+                    </Button>
+                  </div>
+                  {!allRequiredDocsApproved && <p className="text-[10px] text-amber-400">Approve at least one file in each required category before approving the application.</p>}
                 </>
               )}
             </div>
           </StepCard>
 
-          {/* Step 5: Financial Checks */}
+          {/* Step 5: Run Credit Check */}
           <StepCard idx={4} step={steps[4]} {...stepCardProps}>
-            <div className="space-y-2">
-              {[
-                { key: 'bank_statements_received', label: '3 Months Bank Statements' },
-                { key: 'source_of_funds_verified', label: 'Source of Funds' },
-                { key: 'employment_check_completed', label: 'Employment Check' },
-              ].map(item => (
-                <div key={item.key} className="flex items-center justify-between bg-[var(--bg-hover)]/50 rounded-lg px-3 py-2">
-                  <span className="text-xs">{item.label}</span>
-                  <button onClick={() => updateField({ [item.key]: enquiry[item.key] ? 0 : 1 })} disabled={saving}
-                    className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${enquiry[item.key] ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border-input)]'}`}>
-                    {enquiry[item.key] ? 'Complete' : 'Mark Complete'}
-                  </button>
+            <div className="space-y-3">
+              {enquiry.application_review_status !== 'approved' && (
+                <div className="text-xs text-[var(--text-muted)] flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-amber-400" /> Approve the application before recording a credit check.
                 </div>
-              ))}
-              <div className="h-px bg-[var(--border-subtle)]" />
-              <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Credit Check</p>
+              )}
+              <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Credit Check Result</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] text-[var(--text-muted)] mb-1">Credit Score</label>
@@ -951,7 +971,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                 <div className="flex items-end">
                   <Button variant={enquiry.credit_check_completed ? 'outline' : 'gradient'} size="sm" onClick={() => updateField({
                     credit_check_completed: 1, credit_score: creditScore, credit_check_date: new Date().toISOString().split('T')[0],
-                  })} disabled={saving || !creditScore}>
+                  })} disabled={saving || !creditScore || enquiry.application_review_status !== 'approved'}>
                     {enquiry.credit_check_completed ? 'Updated' : 'Save Score'}
                   </Button>
                 </div>

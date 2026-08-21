@@ -83,7 +83,7 @@ function buildHoldingDepositEmailHtml(
         </a>
       </div>
       <p style="font-size: 13px; color: #888; line-height: 1.6;">
-        The Holding Deposit Information Sheet is attached to this email for your records. Please read it carefully before making any payment.
+        Please review the holding deposit information and financial summary above carefully before making any payment.
       </p>
       <p style="font-size: 14px; color: #555; line-height: 1.6;">
         If you have any questions, please don't hesitate to contact us.

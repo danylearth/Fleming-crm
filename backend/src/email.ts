@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'Fleming Lettings <enquiries@fleminglettings.co.uk>';
+const ALLOW_SIMULATED_MESSAGES = process.env.ALLOW_SIMULATED_MESSAGES === 'true' && process.env.NODE_ENV !== 'production';
 
 export interface SendEmailParams {
   to: string | string[];
@@ -12,8 +13,13 @@ export interface SendEmailParams {
 
 export async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; id?: string; error?: string; simulated?: boolean }> {
   if (!resend) {
-    console.log('[EMAIL SIMULATED]', { to: params.to, subject: params.subject });
-    return { success: true, id: 'simulated-' + Date.now(), simulated: true };
+    if (ALLOW_SIMULATED_MESSAGES) {
+      console.log('[EMAIL SIMULATED]', { to: params.to, subject: params.subject });
+      return { success: true, id: 'simulated-' + Date.now(), simulated: true };
+    }
+    const error = 'Email service is not configured (RESEND_API_KEY is missing)';
+    console.error('[EMAIL ERROR]', error);
+    return { success: false, error };
   }
 
   try {
@@ -160,7 +166,7 @@ export function holdingDepositRequestEmail(
             </a>
           </div>
           <p style="font-size: 13px; color: #888; line-height: 1.6;">
-            The Holding Deposit Information Sheet is attached to this email for your records. Please read it carefully before making any payment.
+            Please review the holding deposit information and financial summary above carefully before making any payment.
           </p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">
             If you have any questions, please don't hesitate to contact us.
