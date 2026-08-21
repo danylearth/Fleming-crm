@@ -479,10 +479,22 @@ export async function initDb() {
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS income_amount TEXT;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS income_employer TEXT;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS income_contract_type TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS income_frequency TEXT DEFAULT 'monthly';
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS move_in_date DATE;
       EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
+    `);
+
+    // Current CRM tenancy terminology. Legacy values remain valid so this
+    // schema change does not silently rewrite existing contracts.
+    await client.query(`
+      ALTER TABLE tenants DROP CONSTRAINT IF EXISTS tenants_tenancy_type_check;
+      ALTER TABLE tenants ADD CONSTRAINT tenants_tenancy_type_check
+        CHECK (tenancy_type IN ('Fixed Term', 'Assured Periodic Tenancy', 'AST', 'HMO', 'Rolling', 'Other', NULL));
+      ALTER TABLE properties DROP CONSTRAINT IF EXISTS properties_tenancy_type_check;
+      ALTER TABLE properties ADD CONSTRAINT properties_tenancy_type_check
+        CHECK (tenancy_type IN ('Fixed Term', 'Assured Periodic Tenancy', 'AST', 'HMO', 'Rolling', 'Other', NULL));
     `);
 
     // Sprint 5: Onboarding & application form fields
@@ -563,6 +575,7 @@ export async function initDb() {
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_first_viewed_at TIMESTAMP;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_last_viewed_at TIMESTAMP;
         ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_views INTEGER DEFAULT 0;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS follow_up_return_status TEXT;
         ALTER TABLE email_messages ADD COLUMN IF NOT EXISTS body_html TEXT;
       EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;

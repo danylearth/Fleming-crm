@@ -50,9 +50,10 @@ function getMonthDays(year: number, month: number) {
 export function DatePicker({ label, value, onChange, placeholder = 'DD-MM-YYYY', className = '' }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const [yearPicker, setYearPicker] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const [draft, setDraft] = useState(formatDisplay(value));
 
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -60,6 +61,35 @@ export function DatePicker({ label, value, onChange, placeholder = 'DD-MM-YYYY',
   const initial = value ? new Date(value) : today;
   const [viewYear, setViewYear] = useState(initial.getFullYear());
   const [viewMonth, setViewMonth] = useState(initial.getMonth());
+
+  useEffect(() => {
+    setDraft(formatDisplay(value));
+  }, [value]);
+
+  const parseTypedDate = (typed: string) => {
+    const match = typed.trim().match(/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,4})$/);
+    if (!match) return null;
+    const [, first, monthPart, last] = match;
+    const year = first.length === 4 ? Number(first) : Number(last);
+    const month = Number(monthPart);
+    const day = first.length === 4 ? Number(last) : Number(first);
+    const parsed = new Date(year, month - 1, day);
+    if (
+      year < 1000 || month < 1 || month > 12 || day < 1 ||
+      parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day
+    ) return null;
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  };
+
+  const handleTypedChange = (typed: string) => {
+    setDraft(typed);
+    if (!typed.trim()) {
+      onChange('');
+      return;
+    }
+    const iso = parseTypedDate(typed);
+    if (iso) onChange(iso);
+  };
 
   const updatePos = useCallback(() => {
     if (triggerRef.current) {
@@ -220,15 +250,23 @@ export function DatePicker({ label, value, onChange, placeholder = 'DD-MM-YYYY',
   return (
     <div className={`relative ${className}`}>
       {label && <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">{label}</label>}
-      <button
+      <div
         ref={triggerRef}
-        type="button"
-        onClick={handleToggleOpen}
-        className="w-full flex items-center justify-between bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors text-left"
+        className="w-full flex items-center bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl focus-within:border-[var(--accent)] transition-colors"
       >
-        <span className={value ? '' : 'text-[var(--text-muted)]'}>{value ? formatDisplay(value) : placeholder}</span>
-        <Calendar size={16} className="text-[var(--text-muted)]" />
-      </button>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          onChange={e => handleTypedChange(e.target.value)}
+          placeholder={placeholder}
+          aria-label={label || placeholder}
+          className="min-w-0 flex-1 bg-transparent px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
+        />
+        <button type="button" onClick={handleToggleOpen} className="px-3 py-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Open calendar">
+          <Calendar size={16} />
+        </button>
+      </div>
       {dropdown}
     </div>
   );

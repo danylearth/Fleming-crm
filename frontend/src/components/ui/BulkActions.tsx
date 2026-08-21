@@ -7,6 +7,7 @@ interface BulkActionsProps {
   onBulkDelete: () => void;
   entityName: string;
   isDeleting?: boolean;
+  children?: React.ReactNode;
 }
 
 export default function BulkActions({
@@ -15,6 +16,7 @@ export default function BulkActions({
   onBulkDelete,
   entityName,
   isDeleting = false,
+  children,
 }: BulkActionsProps) {
   if (selectedIds.length === 0) return null;
 
@@ -32,14 +34,17 @@ export default function BulkActions({
         </button>
       </div>
 
-      <button
-        onClick={onBulkDelete}
-        disabled={isDeleting}
-        className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-      >
-        <Trash2 className="w-4 h-4" />
-        {isDeleting ? 'Deleting...' : 'Delete Selected'}
-      </button>
+      <div className="flex items-center gap-2 flex-wrap">
+        {children}
+        <button
+          onClick={onBulkDelete}
+          disabled={isDeleting}
+          className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />
+          {isDeleting ? 'Deleting...' : 'Delete Selected'}
+        </button>
+      </div>
     </div>
   );
 }

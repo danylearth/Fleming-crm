@@ -38,6 +38,7 @@ interface PropertyDetail {
   gas_safety_expiry_date: string | null; has_gas: number;
   notes: string | null;
   amenities: string | null;
+  image_url?: string | null;
 }
 
 interface Task {
@@ -318,9 +319,7 @@ export default function PropertyDetail() {
   const compliancePercent = (d: string | null) => {
     if (!d) return 0;
     const days = daysUntil(d)!;
-    if (days < 0) return 0;
-    if (days > 365) return 100;
-    return Math.round((days / 365) * 100);
+    return days >= 0 ? 100 : 0;
   };
 
   const overallCompliance = () => {
@@ -573,7 +572,7 @@ export default function PropertyDetail() {
       <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         {/* Hero */}
         <div className="relative h-48 sm:h-56 md:h-64 rounded-xl sm:rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
-          <img src={getPropertyImage(property.id, 1200, 400)} alt={property.address}
+          <img src={getPropertyImage(property.id, 1200, 400, `${property.address}, ${property.postcode}`, property.image_url)} alt={property.address}
             className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
           <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-t from-black/70 to-transparent">
             <div className="flex items-center gap-2 mb-1">
@@ -882,11 +881,20 @@ export default function PropertyDetail() {
                   <>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                       <Toggle label="Live Tenancy" checked={form.has_live_tenancy} onChange={v => setForm({ ...form, has_live_tenancy: v })} />
-                      <Select label="Tenancy Type" value={form.tenancy_type} onChange={(v: string) => setForm({ ...form, tenancy_type: v })}
-                        options={[{ value: '', label: 'Select...' }, { value: 'AST', label: 'AST' }, { value: 'HMO', label: 'HMO' }, { value: 'Rolling', label: 'Rolling' }, { value: 'Other', label: 'Other' }]} />
+                      <Select label="Tenancy Type" value={form.tenancy_type} onChange={(v: string) => setForm({
+                        ...form,
+                        tenancy_type: v,
+                        has_end_date: v === 'Fixed Term',
+                        tenancy_end_date: v === 'Assured Periodic Tenancy' ? '' : form.tenancy_end_date,
+                      })}
+                        options={[
+                          { value: '', label: 'Select...' },
+                          ...(!['', 'Fixed Term', 'Assured Periodic Tenancy'].includes(form.tenancy_type) ? [{ value: form.tenancy_type, label: `${form.tenancy_type} (legacy)` }] : []),
+                          { value: 'Fixed Term', label: 'Fixed Term' },
+                          { value: 'Assured Periodic Tenancy', label: 'Assured Periodic Tenancy' },
+                        ]} />
                       <DatePicker label="Start Date" value={form.tenancy_start_date} onChange={(v: string) => setForm({ ...form, tenancy_start_date: v })} />
-                      <Toggle label="Has End Date" checked={form.has_end_date} onChange={v => setForm({ ...form, has_end_date: v })} />
-                      {form.has_end_date && <DatePicker label="End Date" value={form.tenancy_end_date} onChange={(v: string) => setForm({ ...form, tenancy_end_date: v })} />}
+                      {form.tenancy_type === 'Fixed Term' && <DatePicker label="End Date" value={form.tenancy_end_date} onChange={(v: string) => setForm({ ...form, tenancy_end_date: v })} />}
                     </div>
                   </>
                 ) : (

@@ -25,7 +25,7 @@ async function logAudit(action: string, entityType: string, entityId?: number, c
   try {
     await run(
       `INSERT INTO audit_log (user_id, user_email, action, entity_type, entity_id, changes) VALUES ($1, $2, $3, $4, $5, $6)`,
-      [null, 'system@scheduler', 'create', entityType, entityId || null, changes ? JSON.stringify(changes) : null]
+      [null, 'system@scheduler', action, entityType, entityId || null, changes ? JSON.stringify(changes) : null]
     );
   } catch (err) {
     console.error('[Scheduler] Audit log error:', err);
@@ -248,15 +248,36 @@ async function runNokChecks(): Promise<number> {
   return tasksCreated;
 }
 
+async function runDueFollowUps(): Promise<number> {
+  const due = await query(`
+    UPDATE tenant_enquiries
+    SET status = COALESCE(NULLIF(follow_up_return_status, ''), 'new'),
+        follow_up_date = NULL,
+        follow_up_return_status = NULL,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE status = 'awaiting_response'
+      AND follow_up_date IS NOT NULL
+      AND follow_up_date <= CURRENT_DATE
+    RETURNING id, status
+  `);
+  for (const enquiry of due) {
+    await logAudit('update', 'tenant_enquiry', enquiry.id, {
+      action: 'follow_up_returned', status: enquiry.status, via: 'scheduler',
+    });
+  }
+  return due.length;
+}
+
 async function runAllChecks() {
   const complianceTasks = await runComplianceChecks();
   const tenancyTasks = await runTenancyEndChecks();
   const rentReviewTasks = await runRentReviewChecks();
   const nokTasks = await runNokChecks();
-  const total = complianceTasks + tenancyTasks + rentReviewTasks + nokTasks;
+  const dueFollowUps = await runDueFollowUps();
+  const total = complianceTasks + tenancyTasks + rentReviewTasks + nokTasks + dueFollowUps;
 
   if (total > 0) {
-    console.log(`[Scheduler] Created ${total} tasks (compliance: ${complianceTasks}, tenancy: ${tenancyTasks}, rent review: ${rentReviewTasks}, nok: ${nokTasks})`);
+    console.log(`[Scheduler] Processed ${total} items (compliance: ${complianceTasks}, tenancy: ${tenancyTasks}, rent review: ${rentReviewTasks}, nok: ${nokTasks}, follow-ups: ${dueFollowUps})`);
   }
 }
 

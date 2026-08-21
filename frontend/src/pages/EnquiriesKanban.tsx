@@ -28,6 +28,7 @@ interface EnquiryRaw {
 interface Property {
   id: number; address: string; postcode?: string;
   rent_amount?: number; bedrooms?: number; property_type?: string;
+  image_url?: string | null;
 }
 
 const COLUMNS = [
@@ -61,7 +62,6 @@ function isFuture(d?: string | null) {
   return date > today;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function isPastOrToday(d?: string | null) {
   if (!d) return true;
   const date = new Date(d);
@@ -272,7 +272,7 @@ function EnquiryCard({ enquiry, property, onAction }: {
       {/* Property Image */}
       {hasProperty ? (
         <div className="relative h-28 overflow-hidden">
-          <img src={getPropertyImage(property!.id, 400, 200)} alt={property!.address}
+          <img src={getPropertyImage(property!.id, 400, 200, `${property!.address}, ${property!.postcode || ''}`, property!.image_url)} alt={property!.address}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
           <div className="absolute bottom-2 left-3 right-3">
@@ -432,7 +432,7 @@ function PropertyDropdown({ properties, value, onChange, enquiries, linkedProper
                     isSelected ? 'bg-[var(--bg-subtle)]' : ''
                   }`}>
                   <img
-                    src={getPropertyImage(p.id, 64, 64)}
+                    src={getPropertyImage(p.id, 64, 64, `${p.address}, ${p.postcode || ''}`, p.image_url)}
                     alt={p.address}
                     className="w-8 h-8 rounded-lg object-cover shrink-0"
                     loading="lazy"

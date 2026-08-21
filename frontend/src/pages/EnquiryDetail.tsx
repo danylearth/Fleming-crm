@@ -86,11 +86,11 @@ function buildHoldingDepositEmailHtml(
         The Holding Deposit Information Sheet is attached to this email for your records. Please read it carefully before making any payment.
       </p>
       <p style="font-size: 14px; color: #555; line-height: 1.6;">
-        If you have any questions, please don't hesitate to contact our accounts team.
+        If you have any questions, please don't hesitate to contact us.
       </p>
       <p style="font-size: 14px; color: #555;">
-        Kind regards,<br/><strong>Fleming Lettings</strong><br/>
-        <span style="font-size: 12px; color: #888;">01902 212 415 | accounts@fleminglettings.co.uk</span>
+        Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
+        <span style="font-size: 12px; color: #888;">01902 212 415 | enquiries@fleminglettings.co.uk</span>
       </p>
     </div>
     <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
@@ -312,7 +312,9 @@ export default function EnquiryDetail() {
       setSmsCompose('');
       await loadSmsHistory();
       await loadDetail();
-    } catch { /* SMS send failed */ }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'SMS could not be sent');
+    }
     setSmsSending(false);
   };
 
@@ -334,7 +336,9 @@ export default function EnquiryDetail() {
       });
       await loadDetail();
       setEditingSection(null);
-    } catch { /* save failed */ }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Changes could not be saved');
+    }
     setSaving(false);
   };
 
@@ -350,13 +354,16 @@ export default function EnquiryDetail() {
       switch (workflowMode) {
         case 'viewing':
           if (wfPropId && wfDate) {
-            await api.post('/api/property-viewings', {
+            const viewingResult = await api.post('/api/property-viewings', {
               property_id: Number(wfPropId), enquiry_id: Number(id),
               viewer_name: name, viewer_email: form.email_1 || '',
               viewer_phone: form.phone_1 || '', viewing_date: wfDate, viewing_time: wfTime,
               assigned_to: wfAssignedTo || null,
               send_sms: smsEnabled, sms_message: smsBody || null,
             });
+            if (smsEnabled && viewingResult?.sms && !viewingResult.sms.success) {
+              alert(viewingResult.sms.error || 'The viewing was booked, but the SMS could not be sent');
+            }
             await saveSection({ status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate, viewing_with: wfViewingWith || null });
             if (smsEnabled) await loadSmsHistory();
           }
@@ -365,7 +372,7 @@ export default function EnquiryDetail() {
           if (wfDate) {
             await saveSection({ status: 'awaiting_response', follow_up_date: wfDate });
             if (smsEnabled && form.phone_1 && smsBody) {
-              await api.post('/api/sms/send', { enquiry_id: Number(id), to_phone: form.phone_1, message_body: smsBody }).catch(() => {});
+              await api.post('/api/sms/send', { enquiry_id: Number(id), to_phone: form.phone_1, message_body: smsBody });
               await loadSmsHistory();
             }
           }
@@ -376,7 +383,7 @@ export default function EnquiryDetail() {
         case 'reject':
           await saveSection({ status: 'rejected', rejection_reason: wfReason });
           if (smsEnabled && form.phone_1 && smsBody) {
-            await api.post('/api/sms/send', { enquiry_id: Number(id), to_phone: form.phone_1, message_body: smsBody }).catch(() => {});
+            await api.post('/api/sms/send', { enquiry_id: Number(id), to_phone: form.phone_1, message_body: smsBody });
             await loadSmsHistory();
           }
           break;
@@ -407,7 +414,9 @@ export default function EnquiryDetail() {
       await api.put(`/api/tenant-enquiries/${id}`, { ...form, notes: JSON.stringify(updated) });
       api.post('/api/activity', { action: 'note_added', entity_type: 'tenant_enquiry', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
       await loadDetail();
-    } catch { /* note save failed */ }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Note could not be saved');
+    }
     setAddingNote(false);
   };
 
@@ -529,7 +538,7 @@ export default function EnquiryDetail() {
                 </Button>
               )}
               {!['converted', 'rejected'].includes(form.status) && (
-                <Button variant={form.status === 'onboarding' ? 'outline' : 'gradient'} size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); setSmsEnabled(!!form.phone_1); setSmsBody(''); }}>
+                <Button variant={form.status === 'onboarding' ? 'outline' : 'gradient'} size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); setSmsEnabled(false); setSmsBody(''); }}>
                   <ArrowRight size={14} className="mr-1.5" /> Progress
                 </Button>
               )}
@@ -1148,7 +1157,7 @@ export default function EnquiryDetail() {
             </div>
             <div className="px-5 py-3 space-y-1 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)]">
               <div className="flex gap-3 text-xs"><span className="text-[var(--text-muted)] w-14">To:</span><span>{viewingEmail.to_email}</span></div>
-              <div className="flex gap-3 text-xs"><span className="text-[var(--text-muted)] w-14">From:</span><span>{viewingEmail.from_email || 'accounts@fleminglettings.co.uk'}</span></div>
+              <div className="flex gap-3 text-xs"><span className="text-[var(--text-muted)] w-14">From:</span><span>{viewingEmail.from_email || 'enquiries@fleminglettings.co.uk'}</span></div>
               <div className="flex gap-3 text-xs"><span className="text-[var(--text-muted)] w-14">Subject:</span><span className="font-medium">{viewingEmail.subject}</span></div>
               <div className="flex gap-3 text-xs">
                 <span className="text-[var(--text-muted)] w-14">Sent:</span>
@@ -1208,7 +1217,7 @@ export default function EnquiryDetail() {
                 </button>
                 <button onClick={() => setWorkflowMode('onboarding')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center"><OnboardingIcon size={14} className="text-white" /></div>
-                  <div className="flex-1"><p className="text-sm font-medium">Start Onboarding</p></div>
+                  <div className="flex-1"><p className="text-sm font-medium">{form.holding_deposit_requested || form.application_form_sent || form.onboarding_step ? 'Continue Onboarding' : 'Start Onboarding'}</p><p className="text-xs text-[var(--text-muted)]">{form.holding_deposit_requested || form.application_form_sent || form.onboarding_step ? 'Continue the tenant’s onboarding' : 'Begin tenant onboarding'}</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
                 {canConvert && (
@@ -1412,7 +1421,7 @@ export default function EnquiryDetail() {
         open={showHoldingDeposit}
         onClose={() => setShowHoldingDeposit(false)}
         to={data?.email_1 || ''}
-        from="accounts@fleminglettings.co.uk"
+        from="enquiries@fleminglettings.co.uk"
         initialSubject={`Holding Deposit Request - ${selectedProp?.address || 'Property'}`}
         initialBodyHtml={buildHoldingDepositEmailHtml(
           [data?.first_name_1, data?.last_name_1].filter(Boolean).join(' ') || 'Applicant',
@@ -1437,6 +1446,7 @@ export default function EnquiryDetail() {
             await loadDetail();
           } catch (err) {
             console.error('Failed to send holding deposit request:', err);
+            alert(err instanceof Error ? err.message : 'Holding deposit email could not be sent');
           }
           setHdSending(false);
         }}

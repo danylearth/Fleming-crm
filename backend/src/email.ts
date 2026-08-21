@@ -1,10 +1,10 @@
 import { Resend } from 'resend';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const EMAIL_FROM = process.env.EMAIL_FROM || 'Fleming Lettings <onboarding@resend.dev>';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'Fleming Lettings <enquiries@fleminglettings.co.uk>';
 
 export interface SendEmailParams {
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
   from?: string;
@@ -51,7 +51,7 @@ export function viewingConfirmationEmail(name: string, address: string, date: st
           <span style="color: #666;">Date: ${date}</span>
         </div>
         <p>Please arrive on time. If you need to reschedule, reply to this email or call us.</p>
-        <p>Best regards,<br/>Fleming Lettings</p>
+        <p>Best regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
       </div>
     `,
   };
@@ -67,7 +67,7 @@ export function referenceChaseEmail(landlordName: string, tenantName: string, pr
         <p>We are writing regarding a reference request for <strong>${tenantName}</strong>, who has applied for a property at <strong>${propertyAddress}</strong>.</p>
         <p>We would greatly appreciate it if you could provide a landlord reference at your earliest convenience. We kindly request a response within <strong>48 hours</strong>.</p>
         <p>If you have any questions, please don't hesitate to get in touch.</p>
-        <p>Kind regards,<br/>Fleming Lettings</p>
+        <p>Kind regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
       </div>
     `,
   };
@@ -88,7 +88,7 @@ export function rentReminderEmail(tenantName: string, amount: number, address: s
         </div>
         <p>If you have already made this payment, please disregard this message. Otherwise, please arrange payment as soon as possible.</p>
         <p>If you are experiencing difficulties, please contact us to discuss your options.</p>
-        <p>Kind regards,<br/>Fleming Lettings</p>
+        <p>Kind regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
       </div>
     `,
   };
@@ -111,7 +111,7 @@ export function statusUpdateEmail(name: string, address: string, status: string)
         <p>Hi ${name},</p>
         <p>We wanted to let you know that regarding your application for <strong>${address}</strong>, ${statusMessages[status] || 'your application status has been updated'}.</p>
         <p>If you have any questions, please don't hesitate to get in touch.</p>
-        <p>Best regards,<br/>Fleming Lettings</p>
+        <p>Best regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
       </div>
     `,
   };
@@ -163,11 +163,11 @@ export function holdingDepositRequestEmail(
             The Holding Deposit Information Sheet is attached to this email for your records. Please read it carefully before making any payment.
           </p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">
-            If you have any questions, please don't hesitate to contact our accounts team.
+            If you have any questions, please don't hesitate to contact us.
           </p>
           <p style="font-size: 14px; color: #555;">
-            Kind regards,<br/><strong>Fleming Lettings</strong><br/>
-            <span style="font-size: 12px; color: #888;">01902 212 415 | accounts@fleminglettings.co.uk</span>
+            Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
+            <span style="font-size: 12px; color: #888;">01902 212 415 | enquiries@fleminglettings.co.uk</span>
           </p>
         </div>
         <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
@@ -260,8 +260,8 @@ export function tenancyApplicationEmail(
             If you have any questions, please don't hesitate to contact our team.
           </p>
           <p style="font-size: 14px; color: #555;">
-            Kind regards,<br/><strong>Fleming Lettings</strong><br/>
-            <span style="font-size: 12px; color: #888;">01902 212 415 | accounts@fleminglettings.co.uk</span>
+            Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
+            <span style="font-size: 12px; color: #888;">01902 212 415 | enquiries@fleminglettings.co.uk</span>
           </p>
         </div>
         <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
@@ -297,8 +297,8 @@ export function enquiryConfirmationEmail(name: string, reference: string, proper
             If you have any questions in the meantime, please call us on <strong>01902 212 415</strong> quoting your reference.
           </p>
           <p style="font-size: 14px; color: #555;">
-            Kind regards,<br/><strong>Fleming Lettings</strong><br/>
-            <span style="font-size: 12px; color: #888;">01902 212 415 | accounts@fleminglettings.co.uk</span>
+            Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
+            <span style="font-size: 12px; color: #888;">01902 212 415 | enquiries@fleminglettings.co.uk</span>
           </p>
         </div>
         <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
@@ -321,7 +321,7 @@ export function genericEmail(name: string, topic: string): { subject: string; ht
         <p>Hi ${name},</p>
         <p>Thank you for your enquiry. We wanted to follow up regarding ${topic.toLowerCase()}.</p>
         <p>Please don't hesitate to get in touch if you have any questions.</p>
-        <p>Best regards,<br/>Fleming Lettings</p>
+        <p>Best regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
       </div>
     `,
   };

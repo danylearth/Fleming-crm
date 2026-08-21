@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Avatar, SectionHeader, EmptyState, Card, DatePicker } from '../components/ui';
+import { GlassCard, Button, Input, Select, Avatar, SectionHeader, EmptyState, DatePicker } from '../components/ui';
 import DocumentUpload from '../components/ui/DocumentUpload';
 import ActivityTimeline from '../components/ui/ActivityTimeline';
 import AddressAutocomplete from '../components/ui/AddressAutocomplete';
@@ -9,7 +9,6 @@ import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { calculateSmsSegments } from '../utils/sms';
 import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Briefcase, Trash2, RotateCcw, Send, Clock } from 'lucide-react';
-import { getPropertyImage } from '../utils/propertyImages';
 
 interface Landlord {
   id: number; name: string; email: string; phone: string; address: string; notes: string;
@@ -21,6 +20,7 @@ interface Landlord {
 }
 interface Property {
   id: number; address: string; landlord_id: number; type?: string; status?: string; notes?: string;
+  link_id?: number; is_primary?: number;
 }
 interface Director {
   id: number; landlord_id: number; name: string; email: string; phone: string;
@@ -180,7 +180,10 @@ export default function LandlordDetail() {
         propNotesMap[p.id] = parseNotes(p.notes || '');
       });
       setPropertyNotes(propNotesMap);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : 'Failed to load landlord');
+    }
   };
 
   useEffect(() => {
@@ -207,7 +210,10 @@ export default function LandlordDetail() {
       populateForm(updated);
       setNotes(parseNotes(updated.notes));
       setEditing(false);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : 'Failed to save landlord');
+    }
     setSaving(false);
   };
 
@@ -418,24 +424,38 @@ export default function LandlordDetail() {
               {properties.length === 0 ? (
                 <EmptyState message="No properties linked" />
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="divide-y divide-[var(--border-subtle)] rounded-xl border border-[var(--border-subtle)] overflow-hidden">
                   {properties.map(p => (
-                    <Card key={p.id} hover onClick={() => navigate(`/properties/${p.id}`)} className="overflow-hidden">
-                      <img src={getPropertyImage(p.id, 400, 160)} alt={p.address} className="h-24 w-full object-cover" loading="lazy" />
-                      <div className="p-3">
+                    <div key={p.id} className="flex items-center gap-3 px-4 py-3 bg-[var(--bg-subtle)]/40 hover:bg-[var(--bg-hover)] transition-colors">
+                      <button onClick={() => navigate(`/properties/${p.id}`)} className="min-w-0 flex-1 text-left">
                         <p className="text-sm font-medium truncate">{p.address}</p>
-                        {p.type && <p className="text-xs text-[var(--text-muted)]">{p.type}</p>}
-                        {p.status && (
-                          <span className={`inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-md ${
-                            p.status === 'to_let' ? 'bg-emerald-500/10 text-emerald-400' :
-                            p.status === 'let_agreed' ? 'bg-blue-500/10 text-blue-400' :
-                            p.status === 'full_management' ? 'bg-purple-500/10 text-purple-400' :
-                            p.status === 'rent_collection' ? 'bg-amber-500/10 text-amber-400' :
-                            'bg-[var(--bg-hover)] text-[var(--text-muted)]'
-                          }`}>{p.status === 'to_let' ? 'To Let' : p.status === 'let_agreed' ? 'Let Agreed' : p.status === 'full_management' ? 'Full Mgmt' : p.status === 'rent_collection' ? 'Rent Collection' : p.status}</span>
-                        )}
-                      </div>
-                    </Card>
+                        <div className="flex items-center gap-2 mt-1">
+                          {p.type && <span className="text-xs text-[var(--text-muted)]">{p.type}</span>}
+                          {!!p.is_primary && <span className="text-[10px] text-[var(--accent-orange)]">Primary</span>}
+                          {p.status && (
+                            <span className="text-[10px] text-[var(--text-muted)]">{p.status.replaceAll('_', ' ')}</span>
+                          )}
+                        </div>
+                      </button>
+                      {p.link_id && (
+                        <button
+                          type="button"
+                          title="Unlink property"
+                          onClick={async () => {
+                            if (!window.confirm(`Unlink ${p.address} from ${landlord.name}?`)) return;
+                            try {
+                              await api.delete(`/api/property-landlords/${p.link_id}`);
+                              await loadDetail();
+                            } catch (e) {
+                              alert(e instanceof Error ? e.message : 'Failed to unlink property');
+                            }
+                          }}
+                          className="p-2 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}

@@ -3,7 +3,7 @@ import Layout from '../components/Layout';
 import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState, DataTable, DatePicker } from '../components/ui';
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Calendar, LayoutGrid, List, Building2, ArrowRight, XCircle, Mail, Phone, Upload } from 'lucide-react';
+import { Plus, X, Calendar, LayoutGrid, List, Building2, ArrowRight, XCircle, Mail, Phone, Upload, Home } from 'lucide-react';
 import CsvImport from '../components/ui/CsvImport';
 import { BookingIcon, AwaitingIcon, OnboardingIcon } from '../components/ui/icons/FlemingIcons';
 import { useNavigate } from 'react-router-dom';
@@ -39,6 +39,10 @@ interface Enquiry {
   linked_property_id: number | null;
   created_at: string;
   landlord_type?: string;
+  address?: string;
+  is_joint_application?: boolean;
+  joint_partner_id?: number | null;
+  onboarding_started?: boolean;
 }
 
 function mapEnquiry(raw: EnquiryRaw): Enquiry {
@@ -52,6 +56,10 @@ function mapEnquiry(raw: EnquiryRaw): Enquiry {
     linked_property_id: raw.linked_property_id || null,
     created_at: raw.created_at,
     landlord_type: raw.landlord_type || undefined,
+    address: [raw.current_address_1, raw.postcode_1].filter(Boolean).join(', '),
+    is_joint_application: !!raw.is_joint_application,
+    joint_partner_id: raw.joint_partner_id || null,
+    onboarding_started: !!(raw.holding_deposit_requested || raw.application_form_sent || raw.onboarding_step),
   };
 }
 
@@ -283,6 +291,9 @@ export default function Enquiries() {
   const [wfViewingWith, setWfViewingWith] = useState('');
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [smsBody, setSmsBody] = useState('');
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
   const [allUsers, setAllUsers] = useState<{ id: number; name: string; email: string }[]>([]);
   // Onboarding wizard
   const [onboardingEnquiryId, setOnboardingEnquiryId] = useState<number | null>(null);
@@ -367,14 +378,39 @@ export default function Enquiries() {
     setWorkflowMode('choose');
     const propId = e.linked_property_id ? String(e.linked_property_id) : '';
     setWfDate(''); setWfTime('10:00'); setWfPropId(propId); setWfReason('');
-    setWfAssignedTo(''); setWfViewingWith(''); setSmsEnabled(!!e.phone);
+    setWfAssignedTo(''); setWfViewingWith(''); setSmsEnabled(false); setEmailEnabled(false);
+    setEmailSubject(''); setEmailBody('');
     const fn = e.name?.split(' ')[0] || '';
     setSmsBody(generateViewingSms(fn, propId, '', '10:00'));
+  };
+
+  const applicantFirstNames = (enquiry: Enquiry) => {
+    const names = [enquiry.name.split(' ')[0]];
+    if (enquiry.joint_partner_id) {
+      const partner = rawEnquiries.find(raw => raw.id === enquiry.joint_partner_id);
+      if (partner?.first_name_1) names.push(partner.first_name_1);
+    }
+    return [...new Set(names.filter(Boolean))];
+  };
+
+  const prepareWorkflowEmail = (mode: 'follow_up' | 'reject') => {
+    if (!workflowEnquiry) return;
+    const names = applicantFirstNames(workflowEnquiry);
+    const greeting = names.length > 1 ? names.join(' and ') : names[0] || 'there';
+    setEmailEnabled(false);
+    if (mode === 'reject') {
+      setEmailSubject('Your application with Fleming Lettings');
+      setEmailBody(`Hi there ${greeting},\n\nThank you for registering and showing your interest in our latest listing.\n\nUnfortunately, we are not going to be able to take your application any further at this point. This can be for a number of reasons, including affordability checks, landlord’s discretion or that the property has already been let or taken off market.\n\nWe understand how disappointing this news might be, but rest assured we’re on hand to help with any future listings that might be suitable.\n\nKind regards,\nLettings Support Team | fleminglettings.co.uk\nenquiries@fleminglettings.co.uk | 01902 212 415`);
+    } else {
+      setEmailSubject('Following up on your property enquiry');
+      setEmailBody(`Hi there ${greeting},\n\nWe’re following up on your recent property enquiry with Fleming Lettings. Please let us know if you are still looking, would like to arrange a viewing, or have any questions.\n\nYou can reply to this email or call us on 01902 212 415.\n\nKind regards,\nLettings Support Team | fleminglettings.co.uk\nenquiries@fleminglettings.co.uk | 01902 212 415`);
+    }
   };
 
   const doWorkflowAction = async () => {
     if (!workflowEnquiry) return;
     setWfLoading(true);
+    let communicationWarning = '';
     try {
       const raw = rawEnquiries.find(r => r.id === workflowEnquiry.id);
       if (!raw) return;
@@ -383,13 +419,16 @@ export default function Enquiries() {
         case 'viewing':
           if (wfPropId && wfDate) {
             const name = workflowEnquiry.name;
-            await api.post('/api/property-viewings', {
+            const viewingResult = await api.post('/api/property-viewings', {
               property_id: Number(wfPropId), enquiry_id: workflowEnquiry.id,
               viewer_name: name, viewer_email: workflowEnquiry.email,
               viewer_phone: workflowEnquiry.phone, viewing_date: wfDate, viewing_time: wfTime,
               assigned_to: wfAssignedTo || null,
               send_sms: smsEnabled, sms_message: smsBody || null,
             });
+            if (smsEnabled && viewingResult?.sms && !viewingResult.sms.success) {
+              communicationWarning = viewingResult.sms.error || 'The viewing was booked, but the SMS could not be sent';
+            }
             await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`, {
               ...raw, status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate, viewing_with: wfViewingWith || null,
             });
@@ -412,7 +451,12 @@ export default function Enquiries() {
             if (smsEnabled && workflowEnquiry.phone && smsBody) {
               await api.post('/api/sms/send', {
                 enquiry_id: workflowEnquiry.id, to_phone: workflowEnquiry.phone, message_body: smsBody,
-              }).catch(() => {});
+              }).catch(e => { communicationWarning = e instanceof Error ? e.message : 'SMS could not be sent'; });
+            }
+            if (emailEnabled && emailSubject && emailBody) {
+              await api.post(`/api/tenant-enquiries/${workflowEnquiry.id}/send-workflow-email`, {
+                subject: emailSubject, body_text: emailBody, template: 'follow_up',
+              }).catch(e => { communicationWarning = e instanceof Error ? e.message : 'Email could not be sent'; });
             }
           }
           break;
@@ -429,12 +473,18 @@ export default function Enquiries() {
           if (smsEnabled && workflowEnquiry.phone && smsBody) {
             await api.post('/api/sms/send', {
               enquiry_id: workflowEnquiry.id, to_phone: workflowEnquiry.phone, message_body: smsBody,
-            }).catch(() => {});
+            }).catch(e => { communicationWarning = e instanceof Error ? e.message : 'SMS could not be sent'; });
+          }
+          if (emailEnabled && emailSubject && emailBody) {
+            await api.post(`/api/tenant-enquiries/${workflowEnquiry.id}/send-workflow-email`, {
+              subject: emailSubject, body_text: emailBody, template: 'rejection',
+            }).catch(e => { communicationWarning = e instanceof Error ? e.message : 'Email could not be sent'; });
           }
           break;
       }
       setWorkflowEnquiry(null);
       await load();
+      if (communicationWarning) alert(`The enquiry was updated, but the communication failed: ${communicationWarning}`);
     } catch (error) {
       console.error('Failed to update enquiry workflow:', error);
       alert('Failed to update enquiry. Please try again.');
@@ -465,6 +515,20 @@ export default function Enquiries() {
     setIsDeleting(false);
   };
 
+  const handleBulkStatus = async (status: 'onboarding' | 'rejected') => {
+    if (selectedIds.length === 0) return;
+    const label = status === 'rejected' ? 'reject and archive' : 'move to onboarding';
+    if (!window.confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${selectedIds.length} selected enquiries?`)) return;
+    try {
+      await api.post('/api/tenant-enquiries/bulk-update', { ids: selectedIds, status });
+      setSelectedIds([]);
+      setEditMode(false);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to update enquiries');
+    }
+  };
+
   const toggleSelectEnquiry = (id: number) => {
     setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -472,10 +536,13 @@ export default function Enquiries() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === filtered.length) {
+    const selectable = viewMode === 'kanban'
+      ? filtered.filter(e => !['converted', 'rejected'].includes(e.status))
+      : filtered;
+    if (selectedIds.length === selectable.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filtered.map(e => e.id));
+      setSelectedIds(selectable.map(e => e.id));
     }
   };
 
@@ -596,7 +663,14 @@ export default function Enquiries() {
             onBulkDelete={handleBulkDelete}
             entityName="enquiry"
             isDeleting={isDeleting}
-          />
+          >
+            <button onClick={() => handleBulkStatus('onboarding')} className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm transition-colors">
+              Progress to Onboarding
+            </button>
+            <button onClick={() => handleBulkStatus('rejected')} className="px-4 py-2 rounded-lg border border-red-500/50 text-red-400 hover:bg-red-500/10 text-sm transition-colors">
+              Reject &amp; Archive
+            </button>
+          </BulkActions>
         )}
 
         {/* Content */}
@@ -605,6 +679,12 @@ export default function Enquiries() {
         ) : viewMode === 'kanban' ? (
           /* ==================== KANBAN VIEW ==================== */
           <DragDropContext onDragEnd={onDragEnd}>
+            {editMode && (
+              <label className="flex items-center gap-2 mb-3 text-sm text-[var(--text-secondary)] w-fit cursor-pointer">
+                <input type="checkbox" checked={selectedIds.length === filtered.filter(e => !['converted', 'rejected'].includes(e.status)).length && selectedIds.length > 0} onChange={toggleSelectAll} className="w-4 h-4 rounded accent-orange-500" />
+                {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all visible enquiries'}
+              </label>
+            )}
             <div className="flex gap-4 overflow-x-auto pb-4">
               {kanbanStatuses.filter(s => {
                 if (statusFilter === 'active') return true;
@@ -632,18 +712,29 @@ export default function Enquiries() {
                           {colEnquiries.length === 0 && !snapshot.isDraggingOver ? (
                             <p className="text-xs text-[var(--text-muted)] text-center py-8">No enquiries</p>
                           ) : colEnquiries.map((e, index) => (
-                            <Draggable key={e.id} draggableId={String(e.id)} index={index}>
+                            <Draggable key={e.id} draggableId={String(e.id)} index={index} isDragDisabled={editMode}>
                               {(provided, snapshot) => (
                                 <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
                                   style={provided.draggableProps.style}>
-                                  <GlassCard className={`p-4 cursor-grab active:cursor-grabbing hover:border-[var(--accent-orange)]/30 transition-colors ${snapshot.isDragging ? 'ring-2 ring-[var(--accent-orange)]/40 shadow-lg' : ''}`}
-                                    onClick={() => !snapshot.isDragging && navigate(`/enquiries/${e.id}`)}>
+                                  <GlassCard className={`p-4 ${editMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} hover:border-[var(--accent-orange)]/30 transition-colors ${selectedIds.includes(e.id) ? 'ring-2 ring-[var(--accent-orange)]/50' : ''} ${snapshot.isDragging ? 'ring-2 ring-[var(--accent-orange)]/40 shadow-lg' : ''}`}
+                                    onClick={() => {
+                                      if (snapshot.isDragging) return;
+                                      if (editMode) toggleSelectEnquiry(e.id);
+                                      else navigate(`/enquiries/${e.id}`);
+                                    }}>
                                     <div className="flex items-start gap-3">
+                                      {editMode && (
+                                        <input type="checkbox" checked={selectedIds.includes(e.id)} onChange={() => toggleSelectEnquiry(e.id)} onClick={ev => ev.stopPropagation()} className="w-4 h-4 mt-1 rounded accent-orange-500" />
+                                      )}
                                       <Avatar name={e.name} size="sm" />
                                       <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">{e.name}</p>
+                                        <div className="flex items-center gap-2">
+                                          <p className="text-sm font-medium truncate flex-1">{e.name}</p>
+                                          {e.is_joint_application && <span className="text-[10px] font-bold text-purple-400 shrink-0">Joint App</span>}
+                                        </div>
                                         {e.email && <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5"><Mail size={10} />{e.email}</p>}
                                         {e.phone && <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5"><Phone size={10} />{e.phone}</p>}
+                                        {e.address && <p className="text-xs text-[var(--text-muted)] flex items-start gap-1 mt-0.5"><Home size={10} className="mt-0.5 shrink-0" /><span className="line-clamp-2">{e.address}</span></p>}
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2 mt-3 pt-2 border-t border-[var(--border-subtle)]">
@@ -657,7 +748,7 @@ export default function Enquiries() {
                                           <Building2 size={10} />{propertyMap[e.linked_property_id].address.substring(0, 20)}...
                                         </span>
                                       )}
-                                      <button onClick={(ev) => openWorkflow(e, ev)}
+                                      <button onClick={(ev) => openWorkflow(e, ev)} disabled={editMode}
                                         className="ml-auto text-[10px] px-2.5 py-1 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-medium">
                                         Progress / Reject
                                       </button>
@@ -717,7 +808,10 @@ export default function Enquiries() {
                   <div className="flex items-center gap-3">
                     <Avatar name={e.name} size="sm" />
                     <div className="min-w-0">
-                      <p className="font-medium truncate">{e.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium truncate">{e.name}</p>
+                        {e.is_joint_application && <span className="text-[10px] font-bold text-purple-400 shrink-0">Joint App</span>}
+                      </div>
                       <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{e.email || e.phone}</p>
                     </div>
                   </div>
@@ -731,6 +825,12 @@ export default function Enquiries() {
                     {e.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} />{e.phone}</p>}
                   </div>
                 ),
+              },
+              {
+                key: 'address', header: 'Applicant Address', hideClass: 'hidden xl:table-cell',
+                render: (e) => e.address ? (
+                  <p className="text-xs text-[var(--text-secondary)] max-w-[240px] whitespace-normal">{e.address}</p>
+                ) : <span className="text-xs text-[var(--text-muted)]">—</span>,
               },
               {
                 key: 'property', header: 'Property', hideClass: 'hidden lg:table-cell',
@@ -836,7 +936,7 @@ export default function Enquiries() {
                   <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p><p className="text-xs text-[var(--text-muted)]">Select date, time & property</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <button onClick={() => { setWorkflowMode('follow_up'); setWfViewingWith(''); const fn = workflowEnquiry?.name?.split(' ')[0] || ''; setSmsBody(`Hi ${fn || '[name]'}, just following up on your property enquiry with Fleming Lettings. Are you still looking? Please let us know if you'd like to arrange a viewing or have any questions. Call us on 01902 212 415. - Fleming Lettings`); }}
+                <button onClick={() => { setWorkflowMode('follow_up'); setWfViewingWith(''); setSmsEnabled(false); prepareWorkflowEmail('follow_up'); const fn = workflowEnquiry?.name?.split(' ')[0] || ''; setSmsBody(`Hi ${fn || '[name]'}, just following up on your property enquiry with Fleming Lettings. Are you still looking? Please let us know if you'd like to arrange a viewing or have any questions. Call us on 01902 212 415. - Fleming Lettings`); }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><AwaitingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p><p className="text-xs text-[var(--text-muted)]">Schedule a follow-up date</p></div>
@@ -854,12 +954,12 @@ export default function Enquiries() {
                 }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center"><OnboardingIcon size={14} className="text-white" /></div>
-                  <div className="flex-1"><p className="text-sm font-medium">Start Onboarding</p><p className="text-xs text-[var(--text-muted)]">Begin tenant onboarding</p></div>
+                  <div className="flex-1"><p className="text-sm font-medium">{workflowEnquiry?.onboarding_started ? 'Continue Onboarding' : 'Start Onboarding'}</p><p className="text-xs text-[var(--text-muted)]">{workflowEnquiry?.onboarding_started ? 'Continue the tenant’s onboarding' : 'Begin tenant onboarding'}</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
                 <div className="h-px bg-[var(--border-subtle)] my-3" />
                 <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Archive</p>
-                <button onClick={() => { setWorkflowMode('reject'); setSmsEnabled(false); const fn = workflowEnquiry?.name?.split(' ')[0] || ''; setSmsBody(`Hi ${fn || '[name]'}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time. We wish you the best in your property search. - Fleming Lettings`); }}
+                <button onClick={() => { setWorkflowMode('reject'); setSmsEnabled(false); prepareWorkflowEmail('reject'); const fn = workflowEnquiry?.name?.split(' ')[0] || ''; setSmsBody(`Hi ${fn || '[name]'}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time. We wish you the best in your property search. - Fleming Lettings`); }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center"><XCircle size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium text-red-400">Reject & Archive</p><p className="text-xs text-[var(--text-muted)]">Archive this enquiry</p></div>
@@ -961,6 +1061,24 @@ export default function Enquiries() {
                           <p className="text-xs text-amber-400">No phone number on record — SMS cannot be sent</p>
                         </div>
                       )}
+                      <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                        <input type="checkbox" checked={emailEnabled} onChange={e => setEmailEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
+                        <Mail size={14} className="text-sky-400" />
+                        <div className="flex-1">
+                          <span className="text-sm font-medium text-[var(--text-primary)]">Send follow-up email</span>
+                          <p className="text-[10px] text-[var(--text-muted)]">From enquiries@fleminglettings.co.uk · unchecked by default</p>
+                        </div>
+                      </label>
+                      {emailEnabled && (
+                        <div className="space-y-2">
+                          <Input label="Email Subject" value={emailSubject} onChange={setEmailSubject} />
+                          <div>
+                            <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Email Preview</label>
+                            <textarea value={emailBody} onChange={e => setEmailBody(e.target.value)} rows={8}
+                              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-y" />
+                          </div>
+                        </div>
+                      )}
                     </>
                   );
                 })()}
@@ -1021,6 +1139,24 @@ export default function Enquiries() {
                       ) : (
                         <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
                           <p className="text-xs text-amber-400">No phone number on record — SMS cannot be sent</p>
+                        </div>
+                      )}
+                      <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                        <input type="checkbox" checked={emailEnabled} onChange={e => setEmailEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
+                        <Mail size={14} className="text-sky-400" />
+                        <div className="flex-1">
+                          <span className="text-sm font-medium text-[var(--text-primary)]">Send rejection email</span>
+                          <p className="text-[10px] text-[var(--text-muted)]">Joint applicants receive the same email · unchecked by default</p>
+                        </div>
+                      </label>
+                      {emailEnabled && (
+                        <div className="space-y-2">
+                          <Input label="Email Subject" value={emailSubject} onChange={setEmailSubject} />
+                          <div>
+                            <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Email Preview</label>
+                            <textarea value={emailBody} onChange={e => setEmailBody(e.target.value)} rows={10}
+                              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-y" />
+                          </div>
                         </div>
                       )}
                     </>

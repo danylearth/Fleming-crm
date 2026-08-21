@@ -128,11 +128,29 @@ function sanitizePublicStrings(body: any) {
   }
 }
 
+function normalizeDateInput(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const trimmed = value.trim();
+  const dmy = trimmed.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (!dmy) return trimmed;
+  const [, day, month, year] = dmy;
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
 // Pagination for list endpoints: ?limit= (default 500, max 1000) and ?offset=
 function pageParams(req: express.Request): { limit: number; offset: number } {
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? ''), 10) || 500, 1), 1000);
   const offset = Math.max(parseInt(String(req.query.offset ?? ''), 10) || 0, 0);
   return { limit, offset };
+}
+
+async function linkedEntityIds(entityType: string, entityId: number): Promise<number[]> {
+  if (entityType !== 'tenant_enquiry') return [entityId];
+  const record = await queryOne(
+    'SELECT id, joint_partner_id FROM tenant_enquiries WHERE id = $1',
+    [entityId]
+  );
+  return record ? [...new Set([record.id, record.joint_partner_id].filter(Boolean))] as number[] : [entityId];
 }
 
 // "£30,000" / "30,000" → 30000; anything non-numeric → null (never NaN into REAL columns)
@@ -448,10 +466,14 @@ app.put('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
       'marketing_sms','kyc_completed','landlord_type','referral_source','notes'
     ];
     const intFields = ['marketing_post','marketing_email','marketing_phone','marketing_sms','kyc_completed'];
+    const nullableDateFields = ['date_of_birth'];
     for (const key of allowed) {
       if (key in d) {
         fields.push(`${key}=$${idx++}`);
-        values.push(intFields.includes(key) ? (d[key] ? 1 : 0) : d[key]);
+        values.push(
+          intFields.includes(key) ? (d[key] ? 1 : 0) :
+          nullableDateFields.includes(key) && d[key] === '' ? null : d[key]
+        );
       }
     }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
@@ -756,7 +778,36 @@ app.put('/api/property-landlords/:linkId', authMiddleware, async (req: AuthReque
 // Remove landlord from property
 app.delete('/api/property-landlords/:linkId', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    await run('DELETE FROM property_landlords WHERE id = $1', [req.params.linkId]);
+    const link = await queryOne('SELECT * FROM property_landlords WHERE id = $1', [req.params.linkId]);
+    if (!link) return res.status(404).json({ error: 'Link not found' });
+
+    const alternatives = await query(
+      'SELECT * FROM property_landlords WHERE property_id = $1 AND id <> $2 ORDER BY is_primary DESC, id ASC',
+      [link.property_id, link.id]
+    );
+    if (link.is_primary && alternatives.length === 0) {
+      return res.status(409).json({ error: 'Assign another landlord before removing the property’s only landlord' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM property_landlords WHERE id = $1', [link.id]);
+      if (link.is_primary) {
+        const replacement = alternatives[0];
+        await client.query(
+          'UPDATE property_landlords SET is_primary = CASE WHEN id = $1 THEN 1 ELSE 0 END WHERE property_id = $2',
+          [replacement.id, link.property_id]
+        );
+        await client.query('UPDATE properties SET landlord_id = $1 WHERE id = $2', [replacement.landlord_id, link.property_id]);
+      }
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
     await logAudit(req.user?.id, req.user?.email, 'delete', 'property_landlord', parseInt(req.params.linkId as string));
     res.json({ success: true });
   } catch (err) {
@@ -1249,8 +1300,7 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
       linked_property_id: Number.isInteger(parseInt(property_id)) ? parseInt(property_id) : null,
       notes: notes || null,
       // Secret the form echoes back to authorise document uploads for this enquiry.
-      // The staff onboarding flow later regenerates this token when sending the
-      // application form, which invalidates the upload link — that's fine.
+      // Staff onboarding reuses this token so previously issued links remain valid.
       application_form_token: crypto.randomBytes(24).toString('hex'),
       status: 'new'
     };
@@ -1325,12 +1375,12 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
         to: data.email_1,
         subject: content.subject,
         html: content.html,
-        from: 'Fleming Lettings <accounts@fleminglettings.co.uk>',
+        from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>',
       });
       await insert(`
         INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
         VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'enquiry_confirmation', $6, NULL, NULL)
-      `, [result.id || null, id, data.email_1, 'accounts@fleminglettings.co.uk', content.subject,
+      `, [result.id || null, id, data.email_1, 'enquiries@fleminglettings.co.uk', content.subject,
           result.simulated ? 'simulated' : (result.success ? 'sent' : 'failed')]);
     })().catch(err => console.error('Enquiry confirmation email failed:', err));
 
@@ -1682,10 +1732,13 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
     const enquiryId = parseInt(req.params.id as string);
     // Fetch old record to detect status and onboarding field changes
     const oldRecord = await queryOne(`SELECT * FROM tenant_enquiries WHERE id=$1`, [enquiryId]);
+    if (d.status === 'awaiting_response' && oldRecord?.status !== 'awaiting_response' && !('follow_up_return_status' in d)) {
+      d.follow_up_return_status = oldRecord?.status || 'new';
+    }
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
-    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','postcode_1','years_at_address_1','employment_status_1','employer_1','income_1','nationality_1','contract_type_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','nationality_2','contract_type_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason','holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_token','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step','joint_partner_id','preferred_tenancy_type','preferred_property_type','preferred_bedrooms','max_rent','preferred_parking','marketing_preferences'];
+    const allowed = ['title_1','first_name_1','last_name_1','email_1','phone_1','date_of_birth_1','current_address_1','postcode_1','years_at_address_1','employment_status_1','employer_1','income_1','nationality_1','contract_type_1','is_joint_application','title_2','first_name_2','last_name_2','email_2','phone_2','date_of_birth_2','current_address_2','employment_status_2','employer_2','income_2','nationality_2','contract_type_2','kyc_completed_1','kyc_completed_2','status','follow_up_date','follow_up_return_status','viewing_date','viewing_with','linked_property_id','notes','rejection_reason','holding_deposit_requested','holding_deposit_received','holding_deposit_amount','holding_deposit_received_date','holding_deposit_received_amount','security_deposit_amount','monthly_rent_agreed','application_form_token','application_form_sent','application_form_completed','id_primary_verified_1','id_secondary_verified_1','id_primary_verified_2','id_secondary_verified_2','bank_statements_received','source_of_funds_verified','employment_check_completed','credit_check_completed','credit_score','credit_check_date','onboarding_step','joint_partner_id','preferred_tenancy_type','preferred_property_type','preferred_bedrooms','max_rent','preferred_parking','marketing_preferences'];
     for (const key of allowed) {
       if (key in d) {
         fields.push(`${key}=$${idx++}`);
@@ -1722,7 +1775,7 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
       await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, d);
     }
     // Sync shared fields to joint partner record if linked
-    const syncFields = ['status','follow_up_date','viewing_date','viewing_with','linked_property_id','notes','rejection_reason'];
+    const syncFields = ['status','follow_up_date','follow_up_return_status','viewing_date','viewing_with','linked_property_id','notes','rejection_reason'];
     const syncData: Record<string, any> = {};
     for (const key of syncFields) {
       if (key in d) syncData[key] = d[key];
@@ -1807,6 +1860,41 @@ app.post('/api/tenant-enquiries/bulk-delete', authMiddleware, requirePermission(
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to bulk delete tenant enquiries' });
+  }
+});
+
+app.post('/api/tenant-enquiries/bulk-update', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const ids = Array.isArray(req.body.ids)
+      ? req.body.ids.map(Number).filter((id: number) => Number.isInteger(id) && id > 0)
+      : [];
+    const status = String(req.body.status || '');
+    const allowedStatuses = ['new', 'viewing_booked', 'awaiting_response', 'onboarding', 'rejected'];
+    if (ids.length === 0 || !allowedStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Valid ids and status are required' });
+    }
+
+    const selected = await query(
+      'SELECT id, joint_partner_id FROM tenant_enquiries WHERE id = ANY($1::int[])',
+      [ids]
+    );
+    const expandedIds = [...new Set(selected.flatMap((row: any) => [row.id, row.joint_partner_id].filter(Boolean)))];
+    await run(
+      `UPDATE tenant_enquiries
+       SET status = $1,
+           rejection_reason = CASE WHEN $1 = 'rejected' THEN $2 ELSE rejection_reason END,
+           follow_up_date = CASE WHEN $1 = 'awaiting_response' THEN follow_up_date ELSE NULL END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ANY($3::int[])`,
+      [status, req.body.rejection_reason || null, expandedIds]
+    );
+    for (const enquiryId of expandedIds) {
+      await logAudit(req.user?.id, req.user?.email, 'status_changed', 'tenant_enquiry', enquiryId, { to: status, bulk: true });
+    }
+    res.json({ success: true, updated: expandedIds.length });
+  } catch (err) {
+    console.error('Bulk enquiry update failed:', err);
+    res.status(500).json({ error: 'Failed to update enquiries' });
   }
 });
 
@@ -1923,7 +2011,7 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
       'guarantor_kyc_completed','guarantor_deed_received',
       'holding_deposit_received','holding_deposit_amount','holding_deposit_date',
       'application_forms_completed','authority_to_contact','proof_of_income','deposit_scheme',
-      'income_amount','income_employer','income_contract_type',
+      'income_amount','income_employer','income_contract_type','income_frequency',
       'property_id','tenancy_start_date','tenancy_type','has_end_date','tenancy_end_date',
       'monthly_rent','notes','emergency_contact','status'
     ];
@@ -1932,12 +2020,20 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
       'kyc_primary_id','kyc_secondary_id','kyc_address_verification','kyc_personal_verification',
       'guarantor_required','guarantor_kyc_completed','guarantor_deed_received',
       'holding_deposit_received','application_forms_completed','authority_to_contact',
-      'has_end_date'
+      'proof_of_income','has_end_date'
     ];
+    const nullableDateFields = [
+      'date_of_birth_1','date_of_birth_2','holding_deposit_date',
+      'tenancy_start_date','tenancy_end_date'
+    ];
+    const nullableNumberFields = ['holding_deposit_amount','income_amount','property_id','monthly_rent'];
     for (const key of allowed) {
       if (key in d) {
         fields.push(`${key}=$${idx++}`);
-        values.push(boolFields.includes(key) ? (d[key] ? 1 : 0) : d[key]);
+        values.push(
+          boolFields.includes(key) ? (d[key] ? 1 : 0) :
+          (nullableDateFields.includes(key) || nullableNumberFields.includes(key)) && d[key] === '' ? null : d[key]
+        );
       }
     }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
@@ -2177,6 +2273,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       app_guarantor_name, app_guarantor_phone, app_guarantor_email, app_guarantor_address,
       app_signature, app_declaration_agreed,
       // Also allow updating basic info
+      first_name_1, last_name_1, email_1, phone_1,
       current_address_1, date_of_birth_1, employer_1, income_1, employment_status_1,
       // Employment detail fields
       app_employer_address, app_employer_contact, app_years_of_service,
@@ -2213,7 +2310,9 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
         app_decl_holding_deposit=$44, app_decl_info_accurate=$45, app_decl_gdpr=$46,
         app_decl_enquiries=$47, app_decl_documents=$48, app_decl_credit_check=$49,
         app_decl_terms=$50, app_decl_marketing=$51,
-        app_guarantor_name=$52, app_guarantor_phone=$53, app_guarantor_email=$54, app_guarantor_address=$55
+        app_guarantor_name=$52, app_guarantor_phone=$53, app_guarantor_email=$54, app_guarantor_address=$55,
+        first_name_1=COALESCE($56, first_name_1), last_name_1=COALESCE($57, last_name_1),
+        email_1=COALESCE($58, email_1), phone_1=COALESCE($59, phone_1)
       WHERE application_form_token=$36
     `, [
       app_ni_number || null, app_previous_address_1 || null, app_previous_address_2 || null,
@@ -2226,7 +2325,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       app_next_of_kin_name || null, app_next_of_kin_phone || null, app_next_of_kin_relationship || null, app_next_of_kin_address || null,
       app_next_of_kin_2_name || null, app_next_of_kin_2_phone || null, app_next_of_kin_2_relationship || null, app_next_of_kin_2_address || null,
       app_signature || null, app_declaration_agreed ? 1 : 0,
-      current_address_1 || null, date_of_birth_1 || null, employer_1 || null,
+      current_address_1 || null, normalizeDateInput(date_of_birth_1), employer_1 || null,
       income_1 || null, employment_status_1 || null, req.params.token,
       app_employer_address || null, app_employer_contact || null,
       app_years_of_service || null, app_pay_frequency || null,
@@ -2236,6 +2335,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       app_decl_enquiries ? 1 : 0, app_decl_documents ? 1 : 0, app_decl_credit_check ? 1 : 0,
       app_decl_terms ? 1 : 0, app_decl_marketing ? 1 : 0,
       app_guarantor_name || null, app_guarantor_phone || null, app_guarantor_email || null, app_guarantor_address || null,
+      first_name_1 || null, last_name_1 || null, email_1 || null, phone_1 || null,
     ]);
 
     // Log activity
@@ -3369,7 +3469,7 @@ app.post('/api/import/:entity', requirePermission('staff'), async (req: AuthRequ
 app.get('/api/landlords/:landlordId/properties', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const properties = await query(`
-      SELECT p.*, pl.is_primary, pl.ownership_percentage, pl.ownership_entity_type
+      SELECT p.*, pl.id as link_id, pl.is_primary, pl.ownership_percentage, pl.ownership_entity_type
       FROM properties p
       INNER JOIN property_landlords pl ON p.id = pl.property_id
       WHERE pl.landlord_id = $1
@@ -3465,30 +3565,27 @@ app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res)
     `, [taskTitle, taskDescription, enquiry_id || null, viewing_date, assigned_to || req.user?.name || null]);
 
     await logAudit(req.user?.id, req.user?.email, 'create', 'property_viewing', viewingId, { viewer_name, viewing_date, property_id });
-    res.json({ id: viewingId });
 
-    // Send SMS fire-and-forget after response — Twilio API call is slow and shouldn't block the user
+    let smsDelivery: { success: boolean; status: string; error?: string } | null = null;
     if (send_sms && viewer_phone && sms_message) {
       const { sendSms, normalizeUkPhone } = require('./sms');
       const normalizedPhone = normalizeUkPhone(viewer_phone);
-      sendSms({ to: normalizedPhone, body: sms_message })
-        .then(async (smsResult: { success: boolean; sid?: string; error?: string; simulated?: boolean }) => {
-          try {
-            await insert(`
-              INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            `, [
-              enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
-              sms_message, smsResult.simulated ? 'simulated' : (smsResult.success ? 'sent' : 'failed'), smsResult.sid || null,
-              smsResult.error || null, req.user?.id || null, req.user?.email || null
-            ]);
-            await logAudit(req.user?.id, req.user?.email, 'sms_sent', 'tenant_enquiry', enquiry_id || 0, { to_phone: normalizedPhone, message: sms_message.substring(0, 100) });
-          } catch (dbErr) {
-            console.error('[SMS] Failed to log SMS to database:', dbErr);
-          }
-        })
-        .catch((err: any) => console.error('[SMS] Fire-and-forget SMS failed:', err));
+      const smsResult = await sendSms({ to: normalizedPhone, body: sms_message });
+      const smsStatus = smsResult.simulated ? 'simulated' : (smsResult.success ? 'sent' : 'failed');
+      await insert(`
+        INSERT INTO sms_messages (enquiry_id, entity_type, entity_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
+        VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `, [
+        enquiry_id || null, enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
+        sms_message, smsStatus, smsResult.sid || null, smsResult.error || null,
+        req.user?.id || null, req.user?.email || null
+      ]);
+      await logAudit(req.user?.id, req.user?.email, smsResult.success ? 'sms_sent' : 'sms_failed', 'tenant_enquiry', enquiry_id || 0, {
+        to_phone: normalizedPhone, message: sms_message.substring(0, 100), error: smsResult.error || null,
+      });
+      smsDelivery = { success: smsResult.success, status: smsStatus, error: smsResult.error };
     }
+    res.json({ id: viewingId, sms: smsDelivery });
   } catch (err) {
     console.error('Error creating viewing:', err);
     res.status(500).json({ error: 'Failed to create viewing' });
@@ -3523,9 +3620,17 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
     const { monthly_rent, security_deposit, holding_deposit, follow_up_date } = req.body;
     const enquiryId = Number(req.params.id);
 
-    // Generate unique token for application form
-    const token = require('crypto').randomBytes(24).toString('hex');
+    const existing = await queryOne(
+      'SELECT application_form_token, joint_partner_id FROM tenant_enquiries WHERE id = $1',
+      [enquiryId]
+    );
+    if (!existing) return res.status(404).json({ error: 'Enquiry not found' });
+
+    // Keep an issued link stable. Rotating this token on every resend made all
+    // earlier application emails fail even though the application was active.
+    const token = existing.application_form_token || crypto.randomBytes(24).toString('hex');
     const applicationFormUrl = `https://apply.fleminglettings.co.uk/onboarding/${token}`;
+    let partnerApplicationFormUrl: string | null = null;
 
     // Update enquiry with financial details and token
     await run(`
@@ -3535,6 +3640,26 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
         onboarding_email_sent_at=NOW(), status='onboarding'
       WHERE id=$5
     `, [monthly_rent, security_deposit, holding_deposit, token, enquiryId]);
+
+    // Each joint applicant gets a separate stable token so completing one form
+    // never expires or completes the other applicant's form.
+    if (existing.joint_partner_id) {
+      const partner = await queryOne(
+        'SELECT application_form_token FROM tenant_enquiries WHERE id = $1',
+        [existing.joint_partner_id]
+      );
+      if (partner) {
+        const partnerToken = partner.application_form_token || crypto.randomBytes(24).toString('hex');
+        partnerApplicationFormUrl = `https://apply.fleminglettings.co.uk/onboarding/${partnerToken}`;
+        await run(`
+          UPDATE tenant_enquiries SET
+            monthly_rent_agreed=$1, security_deposit_amount=$2, holding_deposit_amount=$3,
+            application_form_token=$4, application_form_sent=1, holding_deposit_requested=1,
+            onboarding_email_sent_at=NOW(), status='onboarding'
+          WHERE id=$5
+        `, [monthly_rent, security_deposit, holding_deposit, partnerToken, existing.joint_partner_id]);
+      }
+    }
 
     // Get enquiry + property details for email
     const enquiry = await queryOne(`
@@ -3556,12 +3681,48 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
         to: enquiry.email_1,
         subject: emailContent.subject,
         html: emailContent.html,
-        from: 'Fleming Lettings Accounts <accounts@fleminglettings.co.uk>',
+        from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>',
       });
       await insert(`
         INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
         VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'holding_deposit_request', $6, $7, $8)
-      `, [emailResult.id || null, enquiryId, enquiry.email_1, 'accounts@fleminglettings.co.uk', emailContent.subject, emailResult.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null]);
+      `, [emailResult.id || null, enquiryId, enquiry.email_1, 'enquiries@fleminglettings.co.uk', emailContent.subject, emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed'), req.user?.id || null, req.user?.email || null]);
+
+      if (!emailResult.success) {
+        return res.status(502).json({ error: emailResult.error || 'Application email could not be sent' });
+      }
+
+      if (existing.joint_partner_id && partnerApplicationFormUrl) {
+        const partner = await queryOne(`
+          SELECT te.*, p.address as property_address, p.postcode as property_postcode
+          FROM tenant_enquiries te
+          LEFT JOIN properties p ON p.id = te.linked_property_id
+          WHERE te.id = $1
+        `, [existing.joint_partner_id]);
+        if (partner?.email_1) {
+          const partnerName = [partner.first_name_1, partner.last_name_1].filter(Boolean).join(' ');
+          const partnerAddress = [partner.property_address, partner.property_postcode].filter(Boolean).join(', ');
+          const partnerContent = holdingDepositRequestEmail(
+            partnerName, partnerAddress, monthly_rent, security_deposit, holding_deposit, partnerApplicationFormUrl
+          );
+          const partnerEmailResult = await sendEmail({
+            to: partner.email_1,
+            subject: partnerContent.subject,
+            html: partnerContent.html,
+            from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>',
+          });
+          await insert(`
+            INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
+            VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'holding_deposit_request', $6, $7, $8)
+          `, [partnerEmailResult.id || null, partner.id, partner.email_1, 'enquiries@fleminglettings.co.uk', partnerContent.subject, partnerEmailResult.simulated ? 'simulated' : (partnerEmailResult.success ? 'sent' : 'failed'), req.user?.id || null, req.user?.email || null]);
+          if (!partnerEmailResult.success) {
+            return res.status(502).json({ error: partnerEmailResult.error || 'Joint applicant email could not be sent' });
+          }
+          await logAudit(req.user?.id, req.user?.email, 'email_sent', 'tenant_enquiry', partner.id, {
+            to: partner.email_1, subject: partnerContent.subject,
+          });
+        }
+      }
 
       // Create follow-up task
       if (follow_up_date) {
@@ -3585,7 +3746,7 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
       });
     }
 
-    res.json({ success: true, token, applicationFormUrl });
+    res.json({ success: true, token, applicationFormUrl, partnerApplicationFormUrl });
   } catch (err) {
     console.error('Error requesting holding deposit:', err);
     res.status(500).json({ error: 'Failed to send holding deposit request' });
@@ -3608,12 +3769,16 @@ app.post('/api/tenant-enquiries/:id/send-application-email', authMiddleware, asy
       to: enquiry.email_1,
       subject,
       html: body_html,
-      from: 'Fleming Lettings Accounts <accounts@fleminglettings.co.uk>',
+      from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>',
     });
     await insert(`
       INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email)
       VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'tenancy_application', $6, $7, $8, $9)
-    `, [emailResult.id || null, enquiryId, enquiry.email_1, 'accounts@fleminglettings.co.uk', subject, body_html, emailResult.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null]);
+    `, [emailResult.id || null, enquiryId, enquiry.email_1, 'enquiries@fleminglettings.co.uk', subject, body_html, emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed'), req.user?.id || null, req.user?.email || null]);
+
+    if (!emailResult.success) {
+      return res.status(502).json({ error: emailResult.error || 'Application email could not be sent' });
+    }
 
     await logAudit(req.user?.id, req.user?.email, 'email_sent', 'tenant_enquiry', enquiryId, {
       to: enquiry.email_1, subject, template: 'tenancy_application',
@@ -3623,6 +3788,58 @@ app.post('/api/tenant-enquiries/:id/send-application-email', authMiddleware, asy
   } catch (err) {
     console.error('Error sending application email:', err);
     res.status(500).json({ error: 'Failed to send application email' });
+  }
+});
+
+// Send a workflow email and expose it on both records of a joint application.
+app.post('/api/tenant-enquiries/:id/send-workflow-email', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const enquiryId = Number(req.params.id);
+    const { subject, body_text, template } = req.body;
+    if (!subject || !body_text) return res.status(400).json({ error: 'subject and body_text required' });
+
+    const enquiry = await queryOne(
+      'SELECT id, email_1, joint_partner_id FROM tenant_enquiries WHERE id = $1',
+      [enquiryId]
+    );
+    if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
+
+    const records = [enquiry];
+    if (enquiry.joint_partner_id) {
+      const partner = await queryOne(
+        'SELECT id, email_1, joint_partner_id FROM tenant_enquiries WHERE id = $1',
+        [enquiry.joint_partner_id]
+      );
+      if (partner) records.push(partner);
+    }
+    const recipients = [...new Set(records.map((record: any) => record.email_1).filter(Boolean))];
+    if (recipients.length === 0) return res.status(400).json({ error: 'Enquiry has no email address' });
+
+    const escapedBody = String(body_text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+      .replace(/\r?\n/g, '<br/>');
+    const bodyHtml = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;line-height:1.6">${escapedBody}</div>`;
+    const { sendEmail } = require('./email');
+    const emailResult = await sendEmail({
+      to: recipients,
+      subject,
+      html: bodyHtml,
+      from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>',
+    });
+    const status = emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed');
+    for (const record of records) {
+      await insert(`
+        INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email)
+        VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `, [emailResult.id || null, record.id, recipients.join(', '), 'enquiries@fleminglettings.co.uk', subject, template || 'workflow', bodyHtml, status, req.user?.id || null, req.user?.email || null]);
+      await logAudit(req.user?.id, req.user?.email, emailResult.success ? 'email_sent' : 'email_failed', 'tenant_enquiry', record.id, { to: recipients, subject });
+    }
+    if (!emailResult.success) return res.status(502).json({ error: emailResult.error || 'Email could not be sent' });
+    res.json({ success: true, recipients });
+  } catch (err) {
+    console.error('Workflow email failed:', err);
+    res.status(500).json({ error: 'Failed to send workflow email' });
   }
 });
 
@@ -3648,6 +3865,9 @@ app.post('/api/sms/send', authMiddleware, async (req: AuthRequest, res) => {
     ]);
     if (resolvedEntityType && resolvedEntityId) {
       await logAudit(req.user?.id, req.user?.email, 'sms_sent', resolvedEntityType, resolvedEntityId, { to_phone: normalizedPhone, message: message_body.substring(0, 100) });
+    }
+    if (!smsResult.success) {
+      return res.status(502).json({ id: smsId, success: false, error: smsResult.error || 'SMS provider rejected the message' });
     }
     res.json({ id: smsId, success: smsResult.success, twilio_sid: smsResult.sid });
   } catch (err) {
@@ -3716,7 +3936,15 @@ app.post('/api/sms/inbound', validateTwilioWebhook, async (req, res) => {
 
 app.get('/api/sms/enquiry/:enquiryId', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const messages = await query('SELECT * FROM sms_messages WHERE enquiry_id = $1 ORDER BY created_at DESC', [req.params.enquiryId]);
+    const ids = await linkedEntityIds('tenant_enquiry', Number(req.params.enquiryId));
+    const messages = await query(
+      `SELECT DISTINCT ON (COALESCE(twilio_sid, 'row-' || id::text), message_body, created_at) *
+       FROM sms_messages
+       WHERE enquiry_id = ANY($1::int[]) OR (entity_type = 'tenant_enquiry' AND entity_id = ANY($1::int[]))
+       ORDER BY COALESCE(twilio_sid, 'row-' || id::text), message_body, created_at, id DESC`,
+      [ids]
+    );
+    messages.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     res.json(messages);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch SMS history' });
@@ -3726,7 +3954,12 @@ app.get('/api/sms/enquiry/:enquiryId', authMiddleware, async (req: AuthRequest, 
 // Generic SMS history by entity type (for BDM, landlord, tenant pages)
 app.get('/api/sms/:entityType/:entityId', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const messages = await query('SELECT * FROM sms_messages WHERE entity_type = $1 AND entity_id = $2 ORDER BY created_at DESC', [req.params.entityType, req.params.entityId]);
+    const entityType = String(req.params.entityType);
+    const ids = await linkedEntityIds(entityType, Number(req.params.entityId));
+    const messages = await query(
+      'SELECT * FROM sms_messages WHERE entity_type = $1 AND entity_id = ANY($2::int[]) ORDER BY created_at DESC',
+      [entityType, ids]
+    );
     res.json(messages);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch SMS history' });
@@ -3736,7 +3969,12 @@ app.get('/api/sms/:entityType/:entityId', authMiddleware, async (req: AuthReques
 // Generic email history by entity type (for all record pages)
 app.get('/api/email-history/:entityType/:entityId', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const messages = await query('SELECT * FROM email_messages WHERE entity_type = $1 AND entity_id = $2 ORDER BY created_at DESC', [req.params.entityType, req.params.entityId]);
+    const entityType = String(req.params.entityType);
+    const ids = await linkedEntityIds(entityType, Number(req.params.entityId));
+    const messages = await query(
+      'SELECT * FROM email_messages WHERE entity_type = $1 AND entity_id = ANY($2::int[]) ORDER BY created_at DESC',
+      [entityType, ids]
+    );
     res.json(messages);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch email history' });
@@ -3749,13 +3987,16 @@ app.post('/api/email/send-generic', authMiddleware, async (req: AuthRequest, res
     const { entity_type, entity_id, to_email, subject, body_html } = req.body;
     if (!to_email || !subject || !body_html) return res.status(400).json({ error: 'to_email, subject, and body_html required' });
     const { sendEmail } = require('./email');
-    const emailResult = await sendEmail({ to: to_email, subject, html: body_html, from: 'Fleming Lettings <accounts@fleminglettings.co.uk>' });
+    const emailResult = await sendEmail({ to: to_email, subject, html: body_html, from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>' });
     await insert(`
       INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email)
       VALUES ($1, $2, $3, $4, $5, $6, 'custom', $7, $8, $9, $10)
-    `, [emailResult.id || null, entity_type || null, entity_id || null, to_email, 'accounts@fleminglettings.co.uk', subject, body_html, emailResult.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null]);
+    `, [emailResult.id || null, entity_type || null, entity_id || null, to_email, 'enquiries@fleminglettings.co.uk', subject, body_html, emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed'), req.user?.id || null, req.user?.email || null]);
     if (entity_type && entity_id) {
       await logAudit(req.user?.id, req.user?.email, 'email_sent', entity_type, entity_id, { to: to_email, subject });
+    }
+    if (!emailResult.success) {
+      return res.status(502).json({ success: false, error: emailResult.error || 'Email provider rejected the message' });
     }
     res.json({ success: emailResult.success });
   } catch (err) {
@@ -3896,11 +4137,13 @@ app.get('/api/audit-log', authMiddleware, async (req: AuthRequest, res) => {
 
 app.get('/api/activity/:entityType/:entityId', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { entityType, entityId } = req.params;
+    const entityType = String(req.params.entityType);
+    const entityId = Number(req.params.entityId);
     const limit = Number(req.query.limit) || 50;
+    const ids = await linkedEntityIds(entityType, entityId);
     const logs = await query(
-      'SELECT * FROM audit_log WHERE entity_type = $1 AND entity_id = $2 ORDER BY created_at DESC LIMIT $3',
-      [entityType, entityId, limit]
+      'SELECT * FROM audit_log WHERE entity_type = $1 AND entity_id = ANY($2::int[]) ORDER BY created_at DESC LIMIT $3',
+      [entityType, ids, limit]
     );
     res.json(logs);
   } catch (err) {

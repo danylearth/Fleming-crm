@@ -32,6 +32,7 @@ interface Tenant {
   application_forms_completed?: number;
   authority_to_contact?: number; proof_of_income?: string; deposit_scheme?: string;
   income_amount?: string; income_employer?: string; income_contract_type?: string;
+  income_frequency?: string;
   property_id: number; property_address: string;
   property_landlord_id?: number; property_landlord_name?: string;
   tenancy_start_date?: string; tenancy_type?: string;
@@ -177,6 +178,7 @@ export default function TenantDetail() {
       kyc_address_verification: !!t.kyc_address_verification, kyc_personal_verification: !!t.kyc_personal_verification,
       proof_of_income: t.proof_of_income || '',
       income_amount: t.income_amount || '', income_employer: t.income_employer || '', income_contract_type: t.income_contract_type || '',
+      income_frequency: t.income_frequency || 'monthly',
       deposit_scheme: t.deposit_scheme || '',
       property_id: t.property_id, tenancy_start_date: t.tenancy_start_date || t.move_in_date || '',
       tenancy_type: t.tenancy_type || '', has_end_date: !!t.has_end_date, tenancy_end_date: t.tenancy_end_date || '',
@@ -189,7 +191,10 @@ export default function TenantDetail() {
       const t = await api.get(`/api/tenants/${id}`);
       setTenant(t);
       setForm(tenantToForm(t));
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : 'Failed to load tenant');
+    }
   };
 
   useEffect(() => {
@@ -226,7 +231,7 @@ export default function TenantDetail() {
       { label: 'Primary ID', done: !!form.kyc_primary_id },
       { label: 'Secondary ID', done: !!form.kyc_secondary_id },
       { label: 'Address Verification', done: !!form.kyc_address_verification },
-      { label: 'Personal Verification', done: !!form.kyc_personal_verification },
+      { label: 'In-person Identity Check', done: !!form.kyc_personal_verification },
     ];
     if (form.is_joint_tenancy) {
       items.push({ label: 'KYC — Applicant 2', done: !!form.kyc_completed_2 });
@@ -284,7 +289,10 @@ export default function TenantDetail() {
       setTenant(t);
       setForm(tenantToForm(t));
       setEditingSection(null);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : 'Failed to save tenant');
+    }
     setSaving(false);
   };
 
@@ -537,19 +545,25 @@ export default function TenantDetail() {
                     options={[{ value: '', label: 'No property linked' }, ...allProperties.map((p) => ({ value: String(p.id), label: `${p.address}, ${p.postcode}` }))]} />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <DatePicker label="Tenancy Start Date" value={form.tenancy_start_date} onChange={v => setForm({ ...form, tenancy_start_date: v })} />
-                    <Select label="Tenancy Type" value={form.tenancy_type} onChange={v => setForm({ ...form, tenancy_type: v })}
-                      options={[{ value: '', label: 'Select...' }, { value: 'AST', label: 'AST' }, { value: 'HMO', label: 'HMO' }, { value: 'Rolling', label: 'Rolling' }, { value: 'Other', label: 'Other' }]} />
+                    <Select label="Tenancy Type" value={form.tenancy_type} onChange={v => setForm({
+                      ...form,
+                      tenancy_type: v,
+                      has_end_date: v === 'Fixed Term',
+                      tenancy_end_date: v === 'Assured Periodic Tenancy' ? '' : form.tenancy_end_date,
+                    })}
+                      options={[
+                        { value: '', label: 'Select...' },
+                        ...(!['', 'Fixed Term', 'Assured Periodic Tenancy'].includes(form.tenancy_type) ? [{ value: form.tenancy_type, label: `${form.tenancy_type} (legacy)` }] : []),
+                        { value: 'Fixed Term', label: 'Fixed Term' },
+                        { value: 'Assured Periodic Tenancy', label: 'Assured Periodic Tenancy' },
+                      ]} />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <Input label="Monthly Rent (£)" value={form.monthly_rent} onChange={v => setForm({ ...form, monthly_rent: v })} placeholder="0.00" />
                     <Select label="Deposit Scheme" value={form.deposit_scheme} onChange={v => setForm({ ...form, deposit_scheme: v })}
                       options={[{ value: '', label: 'Select...' }, { value: 'tds', label: 'Tenancy Deposit Scheme' }, { value: 'gov_back', label: 'Gov Back Scheme' }, { value: 'paid_to_landlord', label: 'Paid to Landlord' }, { value: 'other', label: 'Other/TBF' }]} />
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-[var(--text-muted)]">Has End Date?</span>
-                    <YesNo value={!!form.has_end_date} onChange={v => setForm({ ...form, has_end_date: v })} />
-                  </div>
-                  {form.has_end_date && (
+                  {form.tenancy_type === 'Fixed Term' && (
                     <DatePicker label="End Date" value={form.tenancy_end_date} onChange={v => setForm({ ...form, tenancy_end_date: v })} />
                   )}
                   <Select label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })}
@@ -627,7 +641,10 @@ export default function TenantDetail() {
                   <YesNo value={!!form.kyc_address_verification} onChange={v => setForm({ ...form, kyc_address_verification: v })} disabled={!isEditing('checklist')} />
                 </div>
                 <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
-                  <span className="text-xs">Personal Verification</span>
+                  <div>
+                    <span className="text-xs">In-person Identity Check</span>
+                    <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Staff have checked the applicant matches their identity documents.</p>
+                  </div>
                   <YesNo value={!!form.kyc_personal_verification} onChange={v => setForm({ ...form, kyc_personal_verification: v })} disabled={!isEditing('checklist')} />
                 </div>
 
@@ -655,7 +672,11 @@ export default function TenantDetail() {
                   </div>
                   {isEditing('checklist') && (
                     <div className="mt-2 grid grid-cols-1 gap-2">
-                      <Input label="Monthly Amount (£)" value={form.income_amount || ''} onChange={v => setForm({ ...form, income_amount: v })} placeholder="e.g. 2500" />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input label="Income Amount (£)" value={form.income_amount || ''} onChange={v => setForm({ ...form, income_amount: v })} placeholder="e.g. 2500" />
+                        <Select label="Frequency" value={form.income_frequency || 'monthly'} onChange={v => setForm({ ...form, income_frequency: v })}
+                          options={[{ value: 'monthly', label: 'Monthly' }, { value: 'annual', label: 'Annually' }]} />
+                      </div>
                       <Input label="Employer" value={form.income_employer || ''} onChange={v => setForm({ ...form, income_employer: v })} placeholder="e.g. ABC Ltd" />
                       <Select label="Contract Type" value={form.income_contract_type || ''} onChange={v => setForm({ ...form, income_contract_type: v })}
                         options={[{ value: '', label: 'Select' }, { value: 'Full-time', label: 'Full-time' }, { value: 'Part-time', label: 'Part-time' }, { value: 'Contract', label: 'Contract' }, { value: 'Self-employed', label: 'Self-employed' }, { value: 'Other', label: 'Other' }]} />
@@ -663,7 +684,7 @@ export default function TenantDetail() {
                   )}
                   {!isEditing('checklist') && (form.income_amount || form.income_employer) && (
                     <div className="mt-1 text-xs text-[var(--text-secondary)] space-y-0.5">
-                      {form.income_amount && <p>£{Number(form.income_amount).toLocaleString()}/mo</p>}
+                      {form.income_amount && <p>£{Number(form.income_amount).toLocaleString()}/{form.income_frequency === 'annual' ? 'yr' : 'mo'}</p>}
                       {form.income_employer && <p>{form.income_employer}{form.income_contract_type ? ` · ${form.income_contract_type}` : ''}</p>}
                     </div>
                   )}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Card, GlassCard, Button, Input, Select, Avatar, ProgressRing, EmptyState, DatePicker } from '../components/ui';
@@ -24,12 +24,12 @@ const PRIORITY_COLORS: Record<string, string> = {
 const PRIORITY_LABELS: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High' };
 const TASK_TYPES = ['manual', 'viewing', 'follow_up', 'document', 'maintenance', 'onboarding', 'compliance', 'other'];
 
-const TEAM = [
-  { id: 'all', name: 'Everyone', role: 'All Team', color: 'from-orange-500 to-pink-500', initials: 'All' },
-  { id: 'danyl', name: 'Danyl', role: 'Director', color: 'from-violet-500 to-purple-500', initials: 'D' },
-  { id: 'sarah', name: 'Sarah Chen', role: 'Property Manager', color: 'from-cyan-500 to-blue-500', initials: 'SC' },
-  { id: 'alex', name: 'Alex Morgan', role: 'Lettings Negotiator', color: 'from-emerald-500 to-teal-500', initials: 'AM' },
-  { id: 'mike', name: 'Mike Ross', role: 'Maintenance Lead', color: 'from-amber-500 to-orange-500', initials: 'MR' },
+const TEAM_COLORS = [
+  'from-violet-500 to-purple-500',
+  'from-cyan-500 to-blue-500',
+  'from-emerald-500 to-teal-500',
+  'from-amber-500 to-orange-500',
+  'from-pink-500 to-rose-500',
 ];
 
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7); // 7AM–7PM
@@ -127,7 +127,7 @@ export default function Tasks() {
   const [editMode, setEditMode] = useState(false);
 
   // View mode
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
 
   // Calendar state
   const now = new Date();
@@ -137,6 +137,17 @@ export default function Tasks() {
   const [calMonth, setCalMonth] = useState(now.getMonth());
   const [selectedMember, setSelectedMember] = useState('all');
   const [calViewMode, setCalViewMode] = useState<'day' | 'week' | 'month'>('day');
+
+  const teamMembers = useMemo(() => [
+    { id: 'all', name: 'Everyone', role: 'All Team', color: 'from-orange-500 to-pink-500', initials: 'All' },
+    ...users.map((member, index) => ({
+      id: String(member.id),
+      name: member.name,
+      role: member.role,
+      color: TEAM_COLORS[index % TEAM_COLORS.length],
+      initials: member.name.split(' ').filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase() || '?',
+    })),
+  ], [users]);
 
   const load = useCallback(async () => {
     try {
@@ -190,7 +201,7 @@ export default function Tasks() {
     }
     // Team member filter
     if (selectedMember !== 'all') {
-      const member = TEAM.find(m => m.id === selectedMember);
+      const member = teamMembers.find(m => m.id === selectedMember);
       if (member && t.assigned_to) {
         const assignedLower = t.assigned_to.toLowerCase();
         const nameLower = member.name.toLowerCase();
@@ -283,7 +294,7 @@ export default function Tasks() {
   const isSelectedToday = selectedDate === todayStr;
 
   return (
-    <Layout title="Tasks" breadcrumb={[{ label: 'Tasks' }]}>
+    <Layout title="Team Calendar" breadcrumb={[{ label: 'Team Calendar' }]}>
       <div className="p-4 md:p-8 space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
@@ -515,7 +526,7 @@ export default function Tasks() {
                 {/* Team avatars */}
                 <div className="flex-1 flex items-center justify-center">
                   <div className="flex items-center gap-1">
-                    {TEAM.map(member => {
+                    {teamMembers.map(member => {
                       const active = selectedMember === member.id;
                       return (
                         <button key={member.id} onClick={() => setSelectedMember(member.id)}
@@ -708,7 +719,7 @@ export default function Tasks() {
                     <Card className="p-4">
                       <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Team</h3>
                       <div className="space-y-1">
-                        {TEAM.map(member => {
+                        {teamMembers.map(member => {
                           const active = selectedMember === member.id;
                           return (
                             <button key={member.id} onClick={() => setSelectedMember(member.id)}

@@ -251,7 +251,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         follow_up_date: hdFollowUpDate || null,
       });
       onUpdate();
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : 'Holding deposit email could not be sent');
+    }
     setSaving(false);
   };
 
@@ -382,8 +385,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
           Please ensure your application is completed by <strong>${deadlineStr}</strong>. Failure to complete within this timeframe may result in the property being offered to another applicant.
         </p>
         <p style="font-size: 14px; color: #555;">
-          Kind regards,<br/><strong>Fleming Lettings</strong><br/>
-          <span style="font-size: 12px; color: #888;">01902 212 415 | accounts@fleminglettings.co.uk</span>
+          Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
+          <span style="font-size: 12px; color: #888;">01902 212 415 | enquiries@fleminglettings.co.uk</span>
         </p>
       </div>
       <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
@@ -418,7 +421,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         <p style="font-size: 14px; color: #555; line-height: 1.6;">
           If you get stuck, need some help or if you would like our friendly team to guide you through the process then please do not hesitate to get in touch on <strong>01902 212 415</strong>.
         </p>
-        <p style="font-size: 14px; color: #555;">Kind Regards,<br/><br/><strong>Accounts Team</strong></p>
+        <p style="font-size: 14px; color: #555;">Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
       </div>
       <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
         <p style="font-size: 11px; color: #999; margin: 0;">
@@ -440,6 +443,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
       onUpdate();
     } catch (err) {
       console.error('Failed to send application email:', err);
+      alert(err instanceof Error ? err.message : 'Application email could not be sent');
     }
     setSendingEmail(false);
   };
@@ -514,7 +518,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                     </div>
                     <div>
                       <p className="text-[10px] text-[var(--text-muted)]">From</p>
-                      <p className="text-xs text-[var(--text-primary)]">accounts@fleminglettings.co.uk</p>
+                      <p className="text-xs text-[var(--text-primary)]">enquiries@fleminglettings.co.uk</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-[var(--text-muted)]">Subject</p>
@@ -585,7 +589,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                 <DatePicker label="Follow-up Date" value={hdFollowUpDate} onChange={setHdFollowUpDate} />
                 <div className="bg-[var(--bg-subtle)] rounded-lg p-3 text-[10px] text-[var(--text-muted)] space-y-1">
                   <p className="font-medium text-[var(--text-secondary)]">Will send to: {enquiry.email_1}</p>
-                  <p>From: accounts@fleminglettings.co.uk</p>
+                  <p>From: enquiries@fleminglettings.co.uk</p>
                   <p>Includes: Holding Deposit PDF + Application Form Link</p>
                 </div>
                 <Button variant="gradient" onClick={requestHoldingDeposit} disabled={saving || !hdMonthlyRent || !hdHoldingDeposit}>
@@ -990,7 +994,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         onSend={sendApplicationEmail}
         sending={sendingEmail}
         to={enquiry.email_1 || ''}
-        from="accounts@fleminglettings.co.uk"
+        from="enquiries@fleminglettings.co.uk"
         initialSubject={`Your Fleming Lettings Application Form`}
         initialBodyHtml={buildResendApplicationEmailHtml()}
         sendLabel="Resend Application Form Link"
@@ -1006,7 +1010,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
             </div>
             <div className="p-4 space-y-2 text-xs text-[var(--text-secondary)]">
               <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">To:</span><span>{enquiry.email_1}</span></div>
-              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">From:</span><span>accounts@fleminglettings.co.uk</span></div>
+              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">From:</span><span>enquiries@fleminglettings.co.uk</span></div>
               <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">Subject:</span><span className="font-medium">Tenancy Application – {propertyAddress || 'Property'}</span></div>
               <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">Sent:</span><span>{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at as string | number).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span></div>
             </div>

@@ -19,7 +19,7 @@ const navItems = [
   { to: '/enquiries', icon: EnquiriesIcon, label: 'Tenant Enquiries', roles: null },
   { to: '/bdm', icon: BdmIcon, label: 'Landlord Enquiries', roles: null },
   { to: '/maintenance', icon: MaintenanceIcon, label: 'Maintenance', roles: null },
-  { to: '/tasks', icon: TasksIcon, label: 'Tasks', roles: null },
+  { to: '/tasks', icon: TasksIcon, label: 'Team Calendar', roles: null },
   { to: '/financials', icon: FinancialsIcon, label: 'Financials', roles: null },
   { to: '/users', icon: Users, label: 'Team', roles: ['admin'] }, // Admin only
   { to: '/settings', icon: SettingsIcon, label: 'Settings', roles: null },

@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { getPropertyImage } from '../utils/propertyImages';
 import {
   Building2, Users, Wrench, MessageSquare, AlertTriangle,
-  Clock, CheckCircle2, ArrowRight
+  Clock, CheckCircle2, ArrowRight, CalendarDays
 } from 'lucide-react';
 
 interface MaintenanceItem {
@@ -28,12 +28,12 @@ interface DashboardData {
 interface Property {
   id: number; address: string; postcode: string; rent_amount: number;
   status: string; landlord_name: string; current_tenant: string | null;
-  bedrooms: number; property_type: string;
+  bedrooms: number; property_type: string; image_url?: string | null;
 }
 
 interface Task {
   id: number; title: string; description: string; status: string;
-  priority: string; due_date: string; property_address?: string;
+  priority: string; due_date: string; property_address?: string; assigned_to?: string;
 }
 
 interface Enquiry {
@@ -77,6 +77,28 @@ export default function Dashboard() {
   };
 
   const now = useMemo(() => Date.now(), []);
+
+  const calendarDays = useMemo(() => {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    return Array.from({ length: 7 }, (_, offset) => {
+      const date = new Date(start);
+      date.setDate(start.getDate() + offset);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      return {
+        key,
+        date,
+        tasks: tasks.filter(task => task.due_date?.slice(0, 10) === key && task.status !== 'completed'),
+      };
+    });
+  }, [now, tasks]);
+
+  const teamColors = ['bg-violet-400', 'bg-cyan-400', 'bg-emerald-400', 'bg-amber-400', 'bg-pink-400'];
+  const colorForMember = (name?: string) => {
+    if (!name) return 'bg-slate-400';
+    const hash = Array.from(name).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    return teamColors[hash % teamColors.length];
+  };
 
   const daysUntil = (date: string) => {
     const diff = (new Date(date).getTime() - now) / (1000 * 60 * 60 * 24);
@@ -222,6 +244,42 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        {/* Team Calendar */}
+        <Card className="p-6">
+          <SectionHeader title="Team Calendar" action={() => navigate('/tasks')} actionLabel="Open Calendar" />
+          <div className="grid grid-cols-7 gap-2">
+            {calendarDays.map(({ key, date, tasks: dayTasks }, index) => (
+              <button
+                key={key}
+                onClick={() => navigate('/tasks')}
+                className={`min-h-24 rounded-xl border p-2 text-left transition-colors hover:bg-[var(--bg-hover)] ${index === 0 ? 'border-orange-500/40 bg-orange-500/5' : 'border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40'}`}
+              >
+                <span className="block text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                  {date.toLocaleDateString('en-GB', { weekday: 'short' })}
+                </span>
+                <span className="block text-lg font-semibold mt-0.5">{date.getDate()}</span>
+                <div className="flex flex-wrap gap-1 mt-3" aria-label={`${dayTasks.length} open tasks`}>
+                  {dayTasks.slice(0, 6).map(task => (
+                    <span key={task.id} title={`${task.title}${task.assigned_to ? ` — ${task.assigned_to}` : ''}`} className={`w-2 h-2 rounded-full ${colorForMember(task.assigned_to)}`} />
+                  ))}
+                  {dayTasks.length > 6 && <span className="text-[9px] text-[var(--text-muted)]">+{dayTasks.length - 6}</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-xs text-[var(--text-muted)]">
+            <CalendarDays size={14} />
+            {[...new Set(calendarDays.flatMap(day => day.tasks.map(task => task.assigned_to).filter(Boolean)))].map(name => (
+              <span key={name} className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${colorForMember(name)}`} />{name}
+              </span>
+            ))}
+            {calendarDays.some(day => day.tasks.some(task => !task.assigned_to)) && (
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-400" />Unassigned</span>
+            )}
+          </div>
+        </Card>
+
         {/* Recent Tasks */}
         <Card className="p-6">
           <SectionHeader title="Recent Tasks" action={() => navigate('/tasks')} actionLabel="View All" />
@@ -268,7 +326,7 @@ export default function Dashboard() {
                   className="min-w-[280px] max-w-[280px] shrink-0 overflow-hidden"
                 >
                   <img
-                    src={getPropertyImage(prop.id, 400, 240)}
+                    src={getPropertyImage(prop.id, 400, 240, `${prop.address}, ${prop.postcode}`, prop.image_url)}
                     alt={prop.address}
                     className="h-36 w-full object-cover"
                     loading="lazy"

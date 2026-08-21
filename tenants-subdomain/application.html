@@ -638,7 +638,7 @@
         <!-- Header -->
         <div class="header">
             <img src="logo-white.png" alt="Fleming Lettings" class="logo" />
-            <a href="https://www.fleminglettings.co.uk" class="back-button">Back to Website</a>
+            <a href="tel:+441902212415" class="back-button">Need help? &#128222;</a>
         </div>
 
         <!-- Progress Bar -->
@@ -777,7 +777,7 @@
                         <div class="input-group">
                             <label>Date of Birth *</label>
                             <div class="date-picker-wrapper">
-                                <input type="text" id="f_dob" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_dob')" readonly>
+                                <input type="text" id="f_dob" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_dob')">
                                 <span class="calendar-icon">&#x1F4C5;</span>
                             </div>
                         </div>
@@ -1599,6 +1599,10 @@
                 const toNum = (id) => { const v = document.getElementById(id)?.value; return v ? Number(v) : null; };
 
                 const payload = {
+                    first_name_1: document.getElementById('f_first_name').value,
+                    last_name_1: document.getElementById('f_last_name').value,
+                    email_1: document.getElementById('f_email').value,
+                    phone_1: document.getElementById('f_phone').value,
                     current_address_1: document.getElementById('f_address').value,
                     date_of_birth_1: document.getElementById('f_dob').value,
                     employment_status_1: document.getElementById('f_employment_status').value,
