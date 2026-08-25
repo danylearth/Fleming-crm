@@ -67,7 +67,7 @@ export default function EmailPreviewModal({
       onClick={onClose}
     >
       <div
-        className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col"
+        className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -86,7 +86,7 @@ export default function EmailPreviewModal({
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto min-h-0">
           {/* Extra content slot (e.g. financial inputs, date pickers) */}
           {children}
 
@@ -166,17 +166,18 @@ export default function EmailPreviewModal({
             )}
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-wrap gap-3 pt-2">
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button
-              variant="gradient"
-              onClick={handleSend}
-              disabled={sending || !subject.trim()}
-            >
-              {sending ? 'Sending...' : sendLabel}
-            </Button>
-          </div>
+        </div>
+
+        {/* Actions stay visible at 100% browser zoom while the preview scrolls. */}
+        <div className="flex flex-wrap gap-3 p-6 pt-4 border-t border-[var(--border-subtle)] bg-[var(--bg-card)] shrink-0">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="gradient"
+            onClick={handleSend}
+            disabled={sending || !subject.trim()}
+          >
+            {sending ? 'Sending...' : sendLabel}
+          </Button>
         </div>
       </div>
     </div>

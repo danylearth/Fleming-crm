@@ -46,7 +46,7 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
 
 export function viewingConfirmationEmail(name: string, address: string, date: string): { subject: string; html: string } {
   return {
-    subject: `Viewing Confirmation - ${address}`,
+    subject: `Your viewing with Fleming Lettings at ${address}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">Viewing Confirmation</h2>
@@ -168,6 +168,9 @@ export function holdingDepositRequestEmail(
           <p style="font-size: 13px; color: #888; line-height: 1.6;">
             Please review the holding deposit information and financial summary above carefully before making any payment.
           </p>
+          <p style="font-size: 13px; color: #555; line-height: 1.6;">
+            Struggling to do it all at once? You can save your application and pick up where you left off at any time by opening this link again.
+          </p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">
             If you have any questions, please don't hesitate to contact us.
           </p>
@@ -261,6 +264,9 @@ export function tenancyApplicationEmail(
           </div>
           <p style="font-size: 13px; color: #888; line-height: 1.6;">
             Please ensure your application is completed by <strong>${deadlineStr}</strong>. Failure to complete within this timeframe may result in the property being offered to another applicant.
+          </p>
+          <p style="font-size: 13px; color: #555; line-height: 1.6;">
+            You can save your application and resume it later by reopening this same secure link.
           </p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">
             If you have any questions, please don't hesitate to contact our team.

@@ -425,9 +425,13 @@ export default function Enquiries() {
               viewer_phone: workflowEnquiry.phone, viewing_date: wfDate, viewing_time: wfTime,
               assigned_to: wfAssignedTo || null,
               send_sms: smsEnabled, sms_message: smsBody || null,
+              send_email: emailEnabled,
             });
             if (smsEnabled && viewingResult?.sms && !viewingResult.sms.success) {
               communicationWarning = viewingResult.sms.error || 'The viewing was booked, but the SMS could not be sent';
+            }
+            if (emailEnabled && viewingResult?.email && !viewingResult.email.success) {
+              communicationWarning = viewingResult.email.error || 'The viewing was booked, but the email could not be sent';
             }
             await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`, {
               ...raw, status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate, viewing_with: wfViewingWith || null,
@@ -993,8 +997,22 @@ export default function Enquiries() {
                       </div>
                       <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Key collection instructions" />
 
-                      {/* SMS Confirmation */}
+                      {/* Email and SMS confirmations */}
                       <div className="h-px bg-[var(--border-subtle)] my-1" />
+                      {workflowEnquiry?.email ? (
+                        <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                          <input type="checkbox" checked={emailEnabled} onChange={e => setEmailEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
+                          <Mail size={14} className="text-sky-400" />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-[var(--text-primary)]">Send email confirmation</span>
+                            <p className="text-[10px] text-[var(--text-muted)]">{workflowEnquiry.email}</p>
+                          </div>
+                        </label>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                          <p className="text-xs text-amber-400">No email address on record — email confirmation cannot be sent</p>
+                        </div>
+                      )}
                       {workflowEnquiry?.phone ? (
                         <div className="space-y-3">
                           <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">

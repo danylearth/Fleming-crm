@@ -11,6 +11,7 @@ interface Doc {
   mime_type: string;
   size: number;
   uploaded_at: string;
+  review_status?: 'pending' | 'approved' | 'rejected';
 }
 
 interface Props {
@@ -42,7 +43,7 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
     fetch(`${API_URL}/api/documents/${entityType}/${entityId}${appQuery}`, { headers })
       .then(r => r.json())
       .then((docs: Doc[]) => {
-        const match = docs.find(d => d.doc_type === docType);
+        const match = docs.find(d => d.doc_type === docType && d.review_status === 'approved');
         setDoc(match || null);
       })
       .catch(() => {})

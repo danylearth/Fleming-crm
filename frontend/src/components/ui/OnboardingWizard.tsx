@@ -183,9 +183,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
     const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
     const rent = enquiry.monthly_rent_agreed || prop?.rent_amount || 0;
     setHdMonthlyRent(String(rent || ''));
-    if (rent) {
-      setHdHoldingDeposit(String(Math.round(rent * 12 / 52)));
-    }
+    setHdSecurityDeposit(String(enquiry.security_deposit_amount || ''));
+    setHdHoldingDeposit(String(enquiry.holding_deposit_amount || (rent ? Math.round(rent * 12 / 52) : '')));
     setHdReceivedAmount(enquiry.holding_deposit_received_amount ? String(enquiry.holding_deposit_received_amount) : '');
     setCreditScore(enquiry.credit_score || '');
     setReviewNotes(enquiry.application_review_notes || '');
@@ -266,6 +265,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         holding_deposit: Number(hdHoldingDeposit),
         follow_up_date: hdFollowUpDate || null,
       });
+      fetchEmailHistory();
       onUpdate();
     } catch (err) {
       console.error(err);
@@ -279,12 +279,30 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
     try {
       const receivedDate = hdReceivedDate || new Date().toISOString().split('T')[0];
       const receivedAmount = Number(hdReceivedAmount) || enquiry.holding_deposit_amount;
+      const existingNotes: { id: string; text: string; author: string; created_at: string }[] = [];
+      if (enquiry.notes) {
+        try {
+          const parsed = JSON.parse(enquiry.notes);
+          if (Array.isArray(parsed)) existingNotes.push(...parsed);
+          else existingNotes.push({ id: `legacy-${Date.now()}`, text: String(enquiry.notes), author: 'System', created_at: new Date().toISOString() });
+        } catch {
+          existingNotes.push({ id: `legacy-${Date.now()}`, text: String(enquiry.notes), author: 'System', created_at: new Date().toISOString() });
+        }
+      }
+      const displayDate = receivedDate.split('-').reverse().join('/');
+      existingNotes.push({
+        id: `holding-deposit-${Date.now()}`,
+        text: `Holding deposit received of £${Number(receivedAmount).toLocaleString('en-GB')} on ${displayDate}.`,
+        author: 'System',
+        created_at: new Date().toISOString(),
+      });
       await api.put(`/api/tenant-enquiries/${enquiryId}`, {
         first_name_1: enquiry.first_name_1, last_name_1: enquiry.last_name_1,
         email_1: enquiry.email_1, status: enquiry.status,
         holding_deposit_received: 1,
         holding_deposit_received_date: receivedDate,
         holding_deposit_received_amount: receivedAmount,
+        notes: JSON.stringify(existingNotes),
       });
       api.post('/api/activity', {
         action: 'update', entity_type: 'tenant_enquiry', entity_id: enquiryId,
@@ -400,6 +418,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         <p style="font-size: 13px; color: #888; line-height: 1.6;">
           Please ensure your application is completed by <strong>${deadlineStr}</strong>. Failure to complete within this timeframe may result in the property being offered to another applicant.
         </p>
+        <p style="font-size: 13px; color: #555; line-height: 1.6;">
+          You can save your application and resume it later by reopening this same secure link.
+        </p>
         <p style="font-size: 14px; color: #555;">
           Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
           <span style="font-size: 12px; color: #888;">01902 212 415 | enquiries@fleminglettings.co.uk</span>
@@ -434,6 +455,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
             Complete Your Application
           </a>
         </div>
+        <p style="font-size: 13px; color: #555; line-height: 1.6;">
+          You can save your application and resume it later by reopening this same secure link.
+        </p>
         <p style="font-size: 14px; color: #555; line-height: 1.6;">
           If you get stuck, need some help or if you would like our friendly team to guide you through the process then please do not hesitate to get in touch on <strong>01902 212 415</strong>.
         </p>
@@ -492,6 +516,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
   const latestApplicationEmail = emailMessages.find(message =>
     message.template === 'tenancy_application' || message.template === 'holding_deposit_request'
   );
+  const latestHoldingEmail = emailMessages.find(message => message.template === 'holding_deposit_request');
   const answerLabel = (key: string) => key.replace(/^declaration_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const answerValue = (value: unknown) => typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value || '—');
 
@@ -530,6 +555,16 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                 <div className="text-xs text-emerald-400 flex items-center gap-2">
                   <CheckCircle size={14} /> Email sent to {enquiry.email_1} on {enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at as string | number).toLocaleDateString('en-GB') : 'N/A'}
                 </div>
+                {latestHoldingEmail && (
+                  <div className={`rounded-lg px-3 py-2 text-xs border ${['failed', 'bounced', 'complained'].includes(latestHoldingEmail.status)
+                    ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                    : latestHoldingEmail.status === 'delivered'
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                      : 'bg-blue-500/10 border-blue-500/20 text-blue-400'}`}>
+                    Delivery: <strong>{latestHoldingEmail.status === 'sent' ? 'accepted by provider' : latestHoldingEmail.status}</strong>
+                    {latestHoldingEmail.error_message && <span> — {latestHoldingEmail.error_message}</span>}
+                  </div>
+                )}
 
                 {/* Financial summary */}
                 <div className="bg-[var(--bg-subtle)] rounded-lg p-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -592,6 +627,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                   >
                     <Eye size={12} /> View Email Preview
                   </button>
+                  <Button variant="ghost" onClick={requestHoldingDeposit} disabled={saving || !enquiry.email_1} className="flex items-center gap-2">
+                    <Send size={14} /> {saving ? 'Sending...' : 'Resend Holding Deposit Email'}
+                  </Button>
                 </div>
 
                 {/* Deposit received status */}

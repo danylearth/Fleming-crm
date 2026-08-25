@@ -77,7 +77,7 @@ export default function ActivityTimeline({ entityType, entityId }: { entityType:
   }, []);
 
   return (
-    <div className="relative pl-6 border-l-2 border-[var(--border-subtle)] space-y-4">
+    <div className="relative pl-6 pr-2 border-l-2 border-[var(--border-subtle)] space-y-4 max-h-[390px] overflow-y-auto">
       {deduped.slice(0, 15).map(entry => {
         const config = ACTION_CONFIG[entry.action] || ACTION_CONFIG.view;
         const Icon = config.icon;

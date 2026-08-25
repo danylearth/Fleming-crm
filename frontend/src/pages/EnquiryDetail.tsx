@@ -222,6 +222,7 @@ export default function EnquiryDetail() {
   // SMS
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [smsBody, setSmsBody] = useState('');
+  const [viewingEmailEnabled, setViewingEmailEnabled] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [smsHistory, setSmsHistory] = useState<any[]>([]);
   const [smsCompose, setSmsCompose] = useState('');
@@ -251,7 +252,11 @@ export default function EnquiryDetail() {
     try {
       const docs = await api.get(`/api/documents/tenant_enquiry/${id}`);
       if (Array.isArray(docs)) {
-        setUploadedDocTypes(new Set(docs.map((d: { doc_type: string }) => d.doc_type)));
+        setUploadedDocTypes(new Set(
+          docs
+            .filter((d: { review_status?: string }) => d.review_status === 'approved')
+            .map((d: { doc_type: string }) => d.doc_type)
+        ));
       }
     } catch { /* docs fetch failed */ }
   }, [id, api]);
@@ -360,9 +365,13 @@ export default function EnquiryDetail() {
               viewer_phone: form.phone_1 || '', viewing_date: wfDate, viewing_time: wfTime,
               assigned_to: wfAssignedTo || null,
               send_sms: smsEnabled, sms_message: smsBody || null,
+              send_email: viewingEmailEnabled,
             });
             if (smsEnabled && viewingResult?.sms && !viewingResult.sms.success) {
               alert(viewingResult.sms.error || 'The viewing was booked, but the SMS could not be sent');
+            }
+            if (viewingEmailEnabled && viewingResult?.email && !viewingResult.email.success) {
+              alert(viewingResult.email.error || 'The viewing was booked, but the email could not be sent');
             }
             await saveSection({ status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate, viewing_with: wfViewingWith || null });
             if (smsEnabled) await loadSmsHistory();
@@ -437,11 +446,11 @@ export default function EnquiryDetail() {
     items.push({ label: 'Holding Deposit Received', done: !!form.holding_deposit_received, category: 'onboarding' });
     items.push({ label: 'Application Form Completed', done: !!form.application_form_completed, category: 'onboarding' });
     // ID Verification
-    items.push({ label: 'Primary ID — Applicant 1', done: uploadedDocTypes.has('Primary ID'), category: 'id_verification' });
-    items.push({ label: 'Secondary ID — Applicant 1', done: uploadedDocTypes.has('Secondary ID'), category: 'id_verification' });
+    items.push({ label: 'Primary ID — Applicant 1', done: uploadedDocTypes.has('Primary Identification'), category: 'id_verification' });
+    items.push({ label: 'Secondary ID — Applicant 1', done: uploadedDocTypes.has('Secondary Identification'), category: 'id_verification' });
     // Financial
     items.push({ label: 'Bank Statements', done: uploadedDocTypes.has('Bank Statements'), category: 'financial' });
-    items.push({ label: 'Proof of Employment', done: uploadedDocTypes.has('Proof of Employment'), category: 'financial' });
+    items.push({ label: 'Proof of Employment', done: uploadedDocTypes.has('Proof of Income or Employment'), category: 'financial' });
     items.push({ label: 'Credit Report', done: uploadedDocTypes.has('Credit Report'), category: 'financial' });
     return items;
   }
@@ -538,7 +547,7 @@ export default function EnquiryDetail() {
                 </Button>
               )}
               {!['converted', 'rejected'].includes(form.status) && (
-                <Button variant={form.status === 'onboarding' ? 'outline' : 'gradient'} size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); setSmsEnabled(false); setSmsBody(''); }}>
+                <Button variant={form.status === 'onboarding' ? 'outline' : 'gradient'} size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); setSmsEnabled(false); setSmsBody(''); setViewingEmailEnabled(false); }}>
                   <ArrowRight size={14} className="mr-1.5" /> Progress
                 </Button>
               )}
@@ -647,15 +656,15 @@ export default function EnquiryDetail() {
               <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
                 <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Identity Documents</p>
                 <div className="flex flex-wrap gap-3">
-                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Primary ID" label="Primary ID" applicantNumber={1} onDocChange={loadDocs} />
-                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Secondary ID" label="Secondary ID" applicantNumber={1} onDocChange={loadDocs} />
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Primary Identification" label="Primary ID" applicantNumber={1} onDocChange={loadDocs} />
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Secondary Identification" label="Secondary ID" applicantNumber={1} onDocChange={loadDocs} />
                 </div>
                 {hasLinkedPartner && (
                   <>
                     <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4 mb-3">Identity Documents — Applicant 2</p>
                     <div className="flex flex-wrap gap-3">
-                      <ContextualDocSlot entityType="tenant_enquiry" entityId={data.joint_partner_id} docType="Primary ID" label="Primary ID" applicantNumber={1} onDocChange={loadDocs} />
-                      <ContextualDocSlot entityType="tenant_enquiry" entityId={data.joint_partner_id} docType="Secondary ID" label="Secondary ID" applicantNumber={1} onDocChange={loadDocs} />
+                      <ContextualDocSlot entityType="tenant_enquiry" entityId={data.joint_partner_id} docType="Primary Identification" label="Primary ID" applicantNumber={1} onDocChange={loadDocs} />
+                      <ContextualDocSlot entityType="tenant_enquiry" entityId={data.joint_partner_id} docType="Secondary Identification" label="Secondary ID" applicantNumber={1} onDocChange={loadDocs} />
                     </div>
                   </>
                 )}
@@ -663,8 +672,8 @@ export default function EnquiryDetail() {
                   <>
                     <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4 mb-3">Identity Documents — Applicant 2</p>
                     <div className="flex flex-wrap gap-3">
-                      <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Primary ID" label="Primary ID" applicantNumber={2} onDocChange={loadDocs} />
-                      <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Secondary ID" label="Secondary ID" applicantNumber={2} onDocChange={loadDocs} />
+                      <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Primary Identification" label="Primary ID" applicantNumber={2} onDocChange={loadDocs} />
+                      <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Secondary Identification" label="Secondary ID" applicantNumber={2} onDocChange={loadDocs} />
                     </div>
                   </>
                 )}
@@ -718,7 +727,7 @@ export default function EnquiryDetail() {
                 <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Financial Documents</p>
                 <div className="flex flex-wrap gap-3">
                   <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Bank Statements" label="Bank Statements" applicantNumber={1} onDocChange={loadDocs} />
-                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Proof of Employment" label="Proof of Employment" applicantNumber={1} onDocChange={loadDocs} />
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Proof of Income or Employment" label="Proof of Employment" applicantNumber={1} onDocChange={loadDocs} />
                   <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Credit Report" label="Credit Report" applicantNumber={1} onDocChange={loadDocs} />
                 </div>
               </div>
@@ -974,21 +983,21 @@ export default function EnquiryDetail() {
 
                 <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
                   <span className="text-xs flex items-center gap-1.5">
-                    {uploadedDocTypes.has('Primary ID') && <CheckCircle size={12} className="text-green-400" />}
+                    {uploadedDocTypes.has('Primary Identification') && <CheckCircle size={12} className="text-green-400" />}
                     Primary ID — Applicant 1
                   </span>
-                  <span className={`text-[10px] font-medium ${uploadedDocTypes.has('Primary ID') ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
-                    {uploadedDocTypes.has('Primary ID') ? '✓' : '—'}
+                  <span className={`text-[10px] font-medium ${uploadedDocTypes.has('Primary Identification') ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {uploadedDocTypes.has('Primary Identification') ? '✓' : '—'}
                   </span>
                 </div>
 
                 <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
                   <span className="text-xs flex items-center gap-1.5">
-                    {uploadedDocTypes.has('Secondary ID') && <CheckCircle size={12} className="text-green-400" />}
+                    {uploadedDocTypes.has('Secondary Identification') && <CheckCircle size={12} className="text-green-400" />}
                     Secondary ID — Applicant 1
                   </span>
-                  <span className={`text-[10px] font-medium ${uploadedDocTypes.has('Secondary ID') ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
-                    {uploadedDocTypes.has('Secondary ID') ? '✓' : '—'}
+                  <span className={`text-[10px] font-medium ${uploadedDocTypes.has('Secondary Identification') ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                    {uploadedDocTypes.has('Secondary Identification') ? '✓' : '—'}
                   </span>
                 </div>
 
@@ -998,7 +1007,7 @@ export default function EnquiryDetail() {
 
                 {[
                   { label: 'Bank Statements', type: 'Bank Statements' },
-                  { label: 'Proof of Employment', type: 'Proof of Employment' },
+                  { label: 'Proof of Employment', type: 'Proof of Income or Employment' },
                   { label: 'Credit Report', type: 'Credit Report' },
                 ].map(item => (
                   <div key={item.type} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
@@ -1272,8 +1281,22 @@ export default function EnquiryDetail() {
                       </div>
                       <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Key collection instructions" />
 
-                      {/* SMS Confirmation */}
+                      {/* Email and SMS confirmations */}
                       <div className="h-px bg-[var(--border-subtle)] my-1" />
+                      {form.email_1 ? (
+                        <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                          <input type="checkbox" checked={viewingEmailEnabled} onChange={e => setViewingEmailEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
+                          <Mail size={14} className="text-sky-400" />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-[var(--text-primary)]">Send email confirmation</span>
+                            <p className="text-[10px] text-[var(--text-muted)]">{form.email_1}</p>
+                          </div>
+                        </label>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                          <p className="text-xs text-amber-400">No email address on record — email confirmation cannot be sent</p>
+                        </div>
+                      )}
                       {form.phone_1 ? (
                         <div className="space-y-3">
                           <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">

@@ -152,14 +152,14 @@ function missingApplicationFields(data: Record<string, any>): string[] {
     'first_name', 'last_name', 'email', 'phone', 'date_of_birth', 'ni_number',
     'current_address_line_1', 'current_address_city', 'current_address_postcode', 'years_at_current_address',
     'residency_status', 'marital_status', 'gross_annual_income', 'employment_status',
-    'joint_applicants', 'joint_relationships', 'loans', 'credit_cards',
+    'loans', 'credit_cards',
     'bank_account_name', 'bank_sort_code', 'bank_account_number',
     'property_address', 'preferred_start_date', 'rental_period', 'tenancy_duration', 'rental_amount',
     'other_occupants', 'pets', 'deposit_amount', 'next_of_kin_name', 'next_of_kin_address',
     'next_of_kin_phone', 'next_of_kin_relationship', 'legal_proceedings',
   ];
   const missing = required.filter((key) => data[key] === undefined || data[key] === null || String(data[key]).trim() === '');
-  const requiredChoices = ['has_employer_reference', 'has_landlord_reference', 'has_additional_income', 'deposit_contributor', 'has_guarantor'];
+  const requiredChoices = ['has_joint_applicants', 'has_employer_reference', 'has_landlord_reference', 'has_additional_income', 'deposit_contributor', 'has_guarantor'];
   for (const key of requiredChoices) if (typeof data[key] !== 'boolean') missing.push(key);
 
   if (Number(data.years_at_current_address) < 3) {
@@ -174,9 +174,16 @@ function missingApplicationFields(data: Record<string, any>): string[] {
     }
   }
   if (data.employment_status === 'Self-Employed') {
-    for (const key of ['business_name', 'accountant_name', 'accountant_address', 'accountant_email', 'accountant_phone']) {
-      if (!data[key]) missing.push(key);
+    if (!['sole_trader', 'contractor', 'limited_company'].includes(data.self_employed_type)) missing.push('self_employed_type');
+    if (typeof data.has_previous_self_assessments !== 'boolean') missing.push('has_previous_self_assessments');
+    if (typeof data.provide_accountant_details !== 'boolean') missing.push('provide_accountant_details');
+    if (data.self_employed_type === 'contractor') {
+      for (const key of ['contractor_annual_income', 'contractor_length_of_employment']) if (!data[key]) missing.push(key);
+    } else {
+      for (const key of ['business_name', 'self_employed_annual_income', 'years_trading']) if (!data[key]) missing.push(key);
+      if (data.self_employed_type === 'limited_company' && !data.company_number) missing.push('company_number');
     }
+    if (data.provide_accountant_details && !data.accountant_details) missing.push('accountant_details');
   }
   if (data.employment_status === 'Student') {
     for (const key of ['student_institution', 'student_address', 'student_course', 'student_graduation_year']) {
@@ -184,10 +191,12 @@ function missingApplicationFields(data: Record<string, any>): string[] {
     }
   }
   if (['Private tenant', 'Lodger', 'Housing association tenant', 'Council tenant'].includes(data.residency_status)) {
-    for (const key of ['current_landlord_name', 'current_landlord_phone', 'current_landlord_email', 'current_landlord_address', 'current_monthly_rent']) {
+    for (const key of ['current_landlord_name', 'current_landlord_phone', 'current_landlord_email', 'current_monthly_rent']) {
       if (!data[key]) missing.push(key);
     }
+    if (typeof data.landlord_contact_authority !== 'boolean') missing.push('landlord_contact_authority');
   }
+  if (data.has_joint_applicants && !data.joint_applicants) missing.push('joint_applicants');
   if (data.has_additional_income && !data.additional_income_details) missing.push('additional_income_details');
   if (String(data.legal_proceedings).toLowerCase() === 'yes' && !data.legal_proceedings_details) missing.push('legal_proceedings_details');
   if (data.has_employer_reference) {
@@ -1891,57 +1900,94 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
   }
 });
 
+async function deleteTenantEnquiries(requestedIds: number[]): Promise<number[]> {
+  const client = await pool.connect();
+  let filenames: string[] = [];
+  try {
+    await client.query('BEGIN');
+    const selected = await client.query(
+      'SELECT id, status FROM tenant_enquiries WHERE id = ANY($1::int[]) FOR UPDATE',
+      [requestedIds]
+    );
+    if (selected.rows.some((row: any) => row.status === 'converted')) {
+      throw new Error('Converted enquiries cannot be deleted');
+    }
+    const ids = selected.rows.map((row: any) => Number(row.id));
+    if (ids.length === 0) {
+      await client.query('ROLLBACK');
+      return [];
+    }
+
+    const documents = await client.query(
+      "SELECT filename FROM documents WHERE entity_type = 'tenant_enquiry' AND entity_id = ANY($1::int[])",
+      [ids]
+    );
+    filenames = documents.rows.map((row: any) => row.filename).filter(Boolean);
+
+    await client.query('UPDATE tenant_enquiries SET joint_partner_id = NULL WHERE joint_partner_id = ANY($1::int[])', [ids]);
+    await client.query('DELETE FROM property_viewings WHERE enquiry_id = ANY($1::int[])', [ids]);
+    await client.query(
+      "DELETE FROM sms_messages WHERE enquiry_id = ANY($1::int[]) OR (entity_type = 'tenant_enquiry' AND entity_id = ANY($1::int[]))",
+      [ids]
+    );
+    await client.query("DELETE FROM email_messages WHERE entity_type = 'tenant_enquiry' AND entity_id = ANY($1::int[])", [ids]);
+    await client.query("DELETE FROM tasks WHERE entity_type = 'tenant_enquiry' AND entity_id = ANY($1::int[])", [ids]);
+    await client.query("DELETE FROM documents WHERE entity_type = 'tenant_enquiry' AND entity_id = ANY($1::int[])", [ids]);
+    await client.query('DELETE FROM tenant_enquiries WHERE id = ANY($1::int[])', [ids]);
+    await client.query('COMMIT');
+
+    for (const filename of filenames) {
+      const filePath = path.join(uploadsDir, filename);
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (err) {
+        console.error(`Failed to remove deleted enquiry file ${filename}:`, err);
+      }
+    }
+    return ids;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 app.delete('/api/tenant-enquiries/:id', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
-    const id = req.params.id as string;
-    const enquiry = await queryOne('SELECT * FROM tenant_enquiries WHERE id = $1', [id]);
-    if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
-
-    // Clear joint_partner_id on linked partner so it doesn't reference a deleted record
-    if (enquiry.joint_partner_id) {
-      await run('UPDATE tenant_enquiries SET joint_partner_id = NULL WHERE id = $1', [enquiry.joint_partner_id]);
-    }
-    // Also clear any other enquiry that points to this one as its partner
-    await run('UPDATE tenant_enquiries SET joint_partner_id = NULL WHERE joint_partner_id = $1', [id]);
-
-    // Delete associated documents and their files
-    const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['tenant_enquiry', id]);
-    for (const doc of documents) {
-      const filePath = path.join(uploadsDir, doc.filename);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    }
-    await run('DELETE FROM documents WHERE entity_type = $1 AND entity_id = $2', ['tenant_enquiry', id]);
-
-    // Delete associated tasks
-    await run("DELETE FROM tasks WHERE entity_type = 'tenant_enquiry' AND entity_id = $1", [id]);
-
-    // Delete the enquiry
-    await run('DELETE FROM tenant_enquiries WHERE id = $1', [id]);
-    await logAudit(req.user?.id, req.user?.email, 'delete', 'tenant_enquiry', parseInt(id));
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid enquiry id' });
+    const deletedIds = await deleteTenantEnquiries([id]);
+    if (deletedIds.length === 0) return res.status(404).json({ error: 'Enquiry not found' });
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'tenant_enquiry', id);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
+    if (err instanceof Error && err.message === 'Converted enquiries cannot be deleted') {
+      return res.status(409).json({ error: err.message });
+    }
     res.status(500).json({ error: 'Failed to delete enquiry' });
   }
 });
 
 app.post('/api/tenant-enquiries/bulk-delete', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
-    const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
+    const ids: number[] = Array.isArray(req.body.ids)
+      ? [...new Set<number>(req.body.ids.map(Number).filter((id: number) => Number.isInteger(id) && id > 0))]
+      : [];
+    if (ids.length === 0) {
       return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
-
-    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-    const result = await run(`DELETE FROM tenant_enquiries WHERE id IN (${placeholders})`, ids);
-
-    for (const id of ids) {
+    const deletedIds = await deleteTenantEnquiries(ids);
+    for (const id of deletedIds) {
       await logAudit(req.user?.id, req.user?.email, 'bulk_delete', 'tenant_enquiry', id);
     }
-
-    res.json({ success: true, deleted: ids.length });
+    res.json({ success: true, deleted: deletedIds.length });
   } catch (err) {
     console.error(err);
+    if (err instanceof Error && err.message === 'Converted enquiries cannot be deleted') {
+      return res.status(409).json({ error: err.message });
+    }
     res.status(500).json({ error: 'Failed to bulk delete tenant enquiries' });
   }
 });
@@ -2410,6 +2456,31 @@ app.delete('/api/public/application-form/:token/documents/:documentId', publicDo
   } catch (err) {
     console.error('Error deleting application document:', err);
     res.status(500).json({ error: 'Failed to delete document' });
+  }
+});
+
+// Save an incomplete application against its stable token so the applicant can resume later.
+app.post('/api/public/application-form/:token/draft', publicSubmitLimiter, async (req, res) => {
+  try {
+    sanitizePublicStrings(req.body);
+    const formData = req.body?.app_form_data;
+    if (!formData || typeof formData !== 'object' || Array.isArray(formData)) {
+      return res.status(400).json({ error: 'Application details are required' });
+    }
+    const enquiry = await queryOne(
+      'SELECT id, status FROM tenant_enquiries WHERE application_form_token = $1',
+      [req.params.token]
+    );
+    if (!enquiry) return res.status(404).json({ error: 'Form not found' });
+    if (enquiry.status === 'converted') return res.status(410).json({ error: 'This application is now closed' });
+    await run(
+      'UPDATE tenant_enquiries SET app_form_data = $1::jsonb, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [JSON.stringify(formData), enquiry.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error saving application draft:', err);
+    res.status(500).json({ error: 'Draft could not be saved' });
   }
 });
 
@@ -3071,11 +3142,13 @@ app.post('/api/documents/:entityType/:entityId', authMiddleware, requirePermissi
     if (!file) return res.status(400).json({ error: 'No file uploaded' });
 
     const id = await insert(
-      'INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by, applicant_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+      `INSERT INTO documents
+       (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by, applicant_number, review_status, reviewed_at, reviewed_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'approved', NOW(), $8)`,
       [entityType, entityId, doc_type, file.filename, file.originalname, file.mimetype, file.size, req.user?.id, appNum]
     );
     await logAudit(req.user?.id, req.user?.email, 'document_upload', entityType as string, parseInt(entityId as string), { doc_type, original_name: file.originalname, size: file.size, applicant_number: appNum });
-    res.json({ id, doc_type, original_name: file.originalname });
+    res.json({ id, doc_type, original_name: file.originalname, review_status: 'approved' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to upload document' });
   }
@@ -3747,7 +3820,7 @@ app.get('/api/property-viewings', authMiddleware, async (req: AuthRequest, res) 
 
 app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to, send_sms, sms_message } = req.body;
+    const { property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to, send_sms, sms_message, send_email } = req.body;
     const viewingId = await insert(`
       INSERT INTO property_viewings (property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -3757,7 +3830,7 @@ app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res)
       await run("UPDATE tenant_enquiries SET status = 'viewing_booked', viewing_date = $1 WHERE id = $2", [viewing_date, enquiry_id]);
     }
 
-    const property = await queryOne('SELECT address FROM properties WHERE id = $1', [property_id]);
+    const property = await queryOne('SELECT address, postcode FROM properties WHERE id = $1', [property_id]);
     const taskTitle = `Property Viewing: ${viewer_name}`;
     const taskDescription = `Conduct property viewing at ${property?.address || 'Unknown Property'}\nTime: ${viewing_time || 'Not specified'}\nContact: ${viewer_phone || viewer_email}`;
 
@@ -3787,7 +3860,40 @@ app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res)
       });
       smsDelivery = { success: smsResult.success, status: smsStatus, error: smsResult.error };
     }
-    res.json({ id: viewingId, sms: smsDelivery });
+
+    let emailDelivery: { success: boolean; status: string; error?: string } | null = null;
+    if (send_email) {
+      if (!viewer_email) {
+        emailDelivery = { success: false, status: 'failed', error: 'No applicant email address is recorded' };
+      } else {
+        const { sendEmail, viewingConfirmationEmail } = require('./email');
+        const address = [property?.address, property?.postcode].filter(Boolean).join(', ');
+        const dateParts = String(viewing_date).split('-');
+        const displayDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : viewing_date;
+        const dateAndTime = `${displayDate}${viewing_time ? ` at ${viewing_time}` : ''}`;
+        const emailContent = viewingConfirmationEmail(viewer_name, address, dateAndTime);
+        const emailResult = await sendEmail({
+          to: viewer_email,
+          subject: emailContent.subject,
+          html: emailContent.html,
+          from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>',
+        });
+        const emailStatus = emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed');
+        await insert(`
+          INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
+          VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'viewing_confirmation', $6, $7, $8, $9, $10)
+        `, [
+          emailResult.id || null, enquiry_id || null, viewer_email, 'enquiries@fleminglettings.co.uk',
+          emailContent.subject, emailContent.html, emailStatus, req.user?.id || null,
+          req.user?.email || null, emailResult.error || null,
+        ]);
+        await logAudit(req.user?.id, req.user?.email, emailResult.success ? 'email_sent' : 'email_failed', 'tenant_enquiry', enquiry_id || 0, {
+          to: viewer_email, subject: emailContent.subject, error: emailResult.error || null,
+        });
+        emailDelivery = { success: emailResult.success, status: emailStatus, error: emailResult.error };
+      }
+    }
+    res.json({ id: viewingId, sms: smsDelivery, email: emailDelivery });
   } catch (err) {
     console.error('Error creating viewing:', err);
     res.status(500).json({ error: 'Failed to create viewing' });

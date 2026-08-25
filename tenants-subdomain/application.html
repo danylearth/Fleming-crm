@@ -164,7 +164,7 @@
 
         /* Input Groups */
         .input-group {
-            margin-bottom: 25px;
+            margin-bottom: 18px;
         }
 
         .two-col {
@@ -542,8 +542,8 @@
         /* Buttons */
         .button-group {
             display: flex;
-            gap: 15px;
-            margin-top: 40px;
+            gap: 12px;
+            margin-top: 28px;
         }
 
         .btn {
@@ -555,6 +555,7 @@
             cursor: pointer;
             transition: all 0.3s;
             font-family: 'Lufga', sans-serif;
+            flex: 1;
         }
 
         .btn-primary {
@@ -577,7 +578,7 @@
             background: white;
             color: #666;
             border: 2px solid #e0e0e0;
-            padding: 15px 30px;
+            padding: 15px 40px;
         }
         .btn-secondary:hover {
             border-color: #DC006D;
@@ -620,6 +621,20 @@
             padding: 18px;
             margin-bottom: 22px;
         }
+        .choice-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .choice-button {
+            min-height: 48px; border: 2px solid #e0e0e0; border-radius: 10px;
+            background: #fff; color: #555; font-size: 15px; font-weight: 600; cursor: pointer;
+        }
+        .choice-button:hover { border-color: #DC006D; color: #DC006D; }
+        .choice-button.active { border-color: #DC006D; background: rgba(220,0,109,0.08); color: #DC006D; }
+        .draft-toolbar {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            padding: 12px 40px; background: #fffafc; border-bottom: 1px solid #f2d9e6;
+        }
+        .draft-toolbar span { color: #666; font-size: 13px; }
+        .draft-toolbar button { border: 1px solid #DC006D; color: #DC006D; background: #fff; border-radius: 8px; padding: 9px 14px; font-weight: 600; cursor: pointer; }
+        .phone-icon { color: #fff; font-size: 18px; font-weight: 700; line-height: 1; }
         .document-card {
             border: 1px solid #e5e7eb;
             border-radius: 12px;
@@ -685,6 +700,8 @@
             .step h2 { font-size: 22px; }
             .logo { height: 35px; }
             .back-button { font-size: 12px; padding: 5px 12px; }
+            .draft-toolbar { padding: 10px 15px; align-items: stretch; flex-direction: column; }
+            .draft-toolbar button { width: 100%; }
         }
 
         @media (hover: none) and (pointer: coarse) {
@@ -693,10 +710,6 @@
             input[type="number"], select, textarea { min-height: 48px; }
             .checkbox-group input[type="checkbox"] { width: 24px; height: 24px; }
         }
-        /* Google Places autocomplete dropdown */
-        .pac-container { z-index: 10000 !important; font-family: 'Lufga', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-        .pac-item { padding: 8px 12px; font-size: 14px; cursor: pointer; }
-        .pac-item:hover { background: #f5f5f5; }
     </style>
 </head>
 <body>
@@ -704,7 +717,7 @@
         <!-- Header -->
         <div class="header">
             <img src="logo-white.png" alt="Fleming Lettings" class="logo" />
-            <a href="tel:+441902212415" class="back-button">Need help? &#128222;</a>
+            <a href="tel:+441902212415" class="back-button">Need help? <span class="phone-icon" aria-hidden="true">&#9742;</span></a>
         </div>
 
         <!-- Progress Bar -->
@@ -732,6 +745,10 @@
 
         <!-- Form -->
         <form id="application-form" style="display:none;" onsubmit="return false;">
+            <div class="draft-toolbar">
+                <span id="draft-status">Your answers can be saved and resumed from this link.</span>
+                <button type="button" id="save-draft-btn" onclick="saveDraft()">Save &amp; finish later</button>
+            </div>
 
             <!-- STEP 1: Holding Deposit Terms -->
             <div id="step-1" class="step active">
@@ -825,7 +842,7 @@
 
                     <div class="section-divider"><div class="dot"></div><span>ADDRESS HISTORY</span><div class="line"></div></div>
                     <div class="two-col">
-                        <div class="input-group full-width"><label>First line of current address *</label><input type="text" id="f_address_line_1" placeholder="Start typing an address or enter it manually" required /></div>
+                        <div class="input-group full-width"><label>First line of current address *</label><input type="text" id="f_address_line_1" placeholder="Enter your address" required /></div>
                         <div class="input-group"><label>City *</label><input type="text" id="f_address_city" required /></div>
                         <div class="input-group"><label>Postcode *</label><input type="text" id="f_address_postcode" required /></div>
                         <div class="input-group"><label>Years at this address *</label><input type="number" id="f_years_current" min="0" max="99" step="0.1" required oninput="updatePreviousAddressRequirement()" /></div>
@@ -850,14 +867,14 @@
                             <div class="input-group"><label>Contact number *</label><input type="tel" id="f_current_landlord_phone" /></div>
                             <div class="input-group"><label>Email *</label><input type="email" id="f_current_landlord_email" /></div>
                             <div class="input-group"><label>Monthly rent (&pound;) *</label><input type="number" id="f_current_rent" min="0" step="0.01" /></div>
-                            <div class="input-group full-width"><label>Address *</label><input type="text" id="f_current_landlord_address" /></div>
                         </div>
+                        <div class="input-group"><label>Do you authorise us to contact your current landlord / agent? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_landlord_contact_authority" data-value="yes" onclick="setYesNo('f_landlord_contact_authority','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_landlord_contact_authority" data-value="no" onclick="setYesNo('f_landlord_contact_authority','no')">No</button></div><input type="hidden" id="f_landlord_contact_authority" data-required-choice="true" /></div>
                     </div>
-                    <div class="two-col">
-                        <div class="input-group"><label>Other joint applicant names *</label><textarea id="f_joint_applicants" placeholder="Enter None if this is a sole application" required></textarea></div>
-                        <div class="input-group"><label>Their relationship(s) to you *</label><textarea id="f_joint_relationships" placeholder="Enter None if this is a sole application" required></textarea></div>
+                    <div class="input-group"><label>Are you submitting this application with someone else? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_joint_applicants" data-value="yes" onclick="setYesNo('f_has_joint_applicants','yes'); toggleJointApplicants()">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_joint_applicants" data-value="no" onclick="setYesNo('f_has_joint_applicants','no'); toggleJointApplicants()">No</button></div><input type="hidden" id="f_has_joint_applicants" data-required-choice="true" /></div>
+                    <div id="joint-applicant-fields" class="conditional-panel" style="display:none;">
+                        <div class="input-group"><label>Co-applicant full name(s) and date(s) of birth *</label><textarea id="f_joint_applicants" placeholder="For example: Alex Smith — 15/06/1991"></textarea></div>
+                        <p class="info-banner">Each joint applicant must complete and submit a separate application form.</p>
                     </div>
-                    <p class="info-banner">Each joint applicant must complete and submit a separate application form.</p>
 
                     <p id="step-2-error" class="error-text" style="display:none;"></p>
                     <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(1)">Back</button><button type="button" class="btn btn-primary" onclick="goToStep(3)">Continue</button></div>
@@ -876,7 +893,7 @@
                         <div class="two-col">
                             <div class="input-group"><label>Name of employer *</label><input type="text" id="f_employer" /></div>
                             <div class="input-group"><label>Job title *</label><input type="text" id="f_job_title" /></div>
-                            <div class="input-group"><label>Start date with employer *</label><input type="date" id="f_employment_start" /></div>
+                            <div class="input-group"><label>Start date with employer *</label><div class="date-picker-wrapper"><input type="text" id="f_employment_start" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_employment_start')" /><span class="calendar-icon">&#x1F4C5;</span></div></div>
                             <div class="input-group"><label>Contact name / department *</label><input type="text" id="f_employer_contact_name" /></div>
                             <div class="input-group full-width"><label>Address of employer *</label><input type="text" id="f_employer_address" /></div>
                             <div class="input-group"><label>Contact email *</label><input type="email" id="f_employer_contact_email" /></div>
@@ -884,13 +901,20 @@
                         </div>
                     </div>
                     <div id="employment-self-employed" class="conditional-panel" style="display:none;">
-                        <div class="two-col">
+                        <div class="input-group"><label>How are you self-employed? *</label><select id="f_self_employed_type" onchange="toggleSelfEmployedType()"><option value="">Select...</option><option value="sole_trader">Sole trader</option><option value="contractor">Contractor</option><option value="limited_company">Limited company</option></select></div>
+                        <div id="self-employed-business-fields" class="two-col" style="display:none;">
                             <div class="input-group"><label>Business name *</label><input type="text" id="f_business_name" /></div>
-                            <div class="input-group"><label>Name of accountant *</label><input type="text" id="f_accountant_name" /></div>
-                            <div class="input-group full-width"><label>Accountant address *</label><input type="text" id="f_accountant_address" /></div>
-                            <div class="input-group"><label>Accountant email *</label><input type="email" id="f_accountant_email" /></div>
-                            <div class="input-group"><label>Accountant phone *</label><input type="tel" id="f_accountant_phone" /></div>
+                            <div class="input-group" id="company-number-field" style="display:none;"><label>Company number *</label><input type="text" id="f_company_number" /></div>
+                            <div class="input-group"><label>Annual income (&pound;) *</label><input type="number" min="0" id="f_self_employed_income" /></div>
+                            <div class="input-group"><label>Years trading *</label><input type="number" min="0" step="0.1" id="f_years_trading" /></div>
                         </div>
+                        <div id="contractor-fields" class="two-col" style="display:none;">
+                            <div class="input-group"><label>Annual income (&pound;) *</label><input type="number" min="0" id="f_contractor_income" /></div>
+                            <div class="input-group"><label>Length of employment *</label><input type="text" id="f_contractor_length" placeholder="e.g. 2 years" /></div>
+                        </div>
+                        <div class="input-group"><label>Have you completed previous self-assessments? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_self_assessments" data-value="yes" onclick="setYesNo('f_has_self_assessments','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_self_assessments" data-value="no" onclick="setYesNo('f_has_self_assessments','no')">No</button></div><input type="hidden" id="f_has_self_assessments" data-required-choice="true" /></div>
+                        <div class="input-group"><label>Would you like to provide accountant details? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_provide_accountant_details" data-value="yes" onclick="setYesNo('f_provide_accountant_details','yes'); toggleAccountantDetails()">Yes</button><button type="button" class="choice-button" data-choice-for="f_provide_accountant_details" data-value="no" onclick="setYesNo('f_provide_accountant_details','no'); toggleAccountantDetails()">No</button></div><input type="hidden" id="f_provide_accountant_details" data-required-choice="true" /></div>
+                        <div id="accountant-details-fields" style="display:none;"><div class="input-group"><label>Accountant details *</label><textarea id="f_accountant_details" placeholder="Name, business, phone and email"></textarea></div></div>
                     </div>
                     <div id="employment-student" class="conditional-panel" style="display:none;">
                         <div class="two-col">
@@ -902,18 +926,18 @@
                     </div>
 
                     <div class="section-divider"><div class="dot"></div><span>ADDITIONAL FINANCIAL INFORMATION</span><div class="line"></div></div>
-                    <div class="input-group"><label>Do you have any additional income? *</label><select id="f_has_additional_income" required onchange="togglePanelFromYesNo('f_has_additional_income','additional-income-fields')"><option value="">Select Yes or No...</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+                    <div class="input-group"><label>Do you have any additional income? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_additional_income" data-value="yes" onclick="setYesNo('f_has_additional_income','yes'); togglePanelFromYesNo('f_has_additional_income','additional-income-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_additional_income" data-value="no" onclick="setYesNo('f_has_additional_income','no'); togglePanelFromYesNo('f_has_additional_income','additional-income-fields')">No</button></div><input type="hidden" id="f_has_additional_income" data-required-choice="true" /></div>
                     <div id="additional-income-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Amounts and sources of additional income *</label><textarea id="f_additional_income_details" placeholder="For example overtime, bonus, Universal Credit, housing benefit, pension, tax credits or other income"></textarea></div></div>
                     <div class="input-group"><label>Loan details *</label><textarea id="f_loans" placeholder="Lender, total loan, monthly repayment and expiry date. Enter None if not applicable." required></textarea></div>
                     <div class="input-group"><label>Credit or store card details *</label><textarea id="f_credit_cards" placeholder="Provider, credit limit and balance owing. Enter None if not applicable." required></textarea></div>
-                    <div class="input-group"><label>Have you or a joint applicant been insolvent, bankrupt, made arrangements with creditors, or been involved in criminal or civil court proceedings in the last six years? *</label><select id="f_legal_proceedings" required onchange="togglePanelFromYesNo('f_legal_proceedings','legal-details-fields')"><option value="">Select Yes or No...</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+                    <div class="input-group"><label>Have you or a joint applicant been insolvent, bankrupt, made arrangements with creditors, or been involved in criminal or civil court proceedings in the last six years? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_legal_proceedings" data-value="yes" onclick="setYesNo('f_legal_proceedings','yes'); togglePanelFromYesNo('f_legal_proceedings','legal-details-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_legal_proceedings" data-value="no" onclick="setYesNo('f_legal_proceedings','no'); togglePanelFromYesNo('f_legal_proceedings','legal-details-fields')">No</button></div><input type="hidden" id="f_legal_proceedings" data-required-choice="true" /></div>
                     <div id="legal-details-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Details *</label><textarea id="f_legal_details"></textarea></div></div>
 
                     <div class="section-divider"><div class="dot"></div><span>REFERENCES</span><div class="line"></div></div>
-                    <div class="input-group"><label>Do you have an employer reference? *</label><select id="f_has_employer_ref" required onchange="toggleRefSection('employer')"><option value="">Select Yes or No...</option><option value="yes">Yes</option><option value="no">No</option></select></div>
-                    <div id="employer-ref-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Name / department *</label><input type="text" id="f_emp_ref_name" /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_emp_ref_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_emp_ref_email" /></div><div class="input-group"><label>Employee ID / reference</label><input type="text" id="f_emp_ref_employee_id" /></div></div><div class="input-group"><label>May we contact this reference? *</label><select id="f_emp_ref_consent"><option value="">Select Yes or No...</option><option value="yes">Yes</option><option value="no">No</option></select></div></div>
-                    <div class="input-group"><label>Do you have a previous landlord reference? *</label><select id="f_has_landlord_ref" required onchange="toggleRefSection('landlord')"><option value="">Select Yes or No...</option><option value="yes">Yes</option><option value="no">No</option></select></div>
-                    <div id="landlord-ref-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Name / department *</label><input type="text" id="f_ll_ref_name" /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_ll_ref_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_ll_ref_email" /></div><div class="input-group"><label>Property address / reference</label><input type="text" id="f_ll_ref_property_address" /></div></div><div class="input-group"><label>May we contact this reference? *</label><select id="f_ll_ref_consent"><option value="">Select Yes or No...</option><option value="yes">Yes</option><option value="no">No</option></select></div></div>
+                    <div class="input-group"><label>Do you have an employer reference? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_employer_ref" data-value="yes" onclick="setYesNo('f_has_employer_ref','yes'); toggleRefSection('employer')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_employer_ref" data-value="no" onclick="setYesNo('f_has_employer_ref','no'); toggleRefSection('employer')">No</button></div><input type="hidden" id="f_has_employer_ref" data-required-choice="true" /></div>
+                    <div id="employer-ref-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Name / department *</label><input type="text" id="f_emp_ref_name" /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_emp_ref_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_emp_ref_email" /></div><div class="input-group"><label>Employee ID / reference</label><input type="text" id="f_emp_ref_employee_id" /></div></div><div class="input-group"><label>May we contact this reference? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_emp_ref_consent" data-value="yes" onclick="setYesNo('f_emp_ref_consent','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_emp_ref_consent" data-value="no" onclick="setYesNo('f_emp_ref_consent','no')">No</button></div><input type="hidden" id="f_emp_ref_consent" data-required-choice="true" /></div></div>
+                    <div class="input-group"><label>Do you have a previous landlord reference? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_landlord_ref" data-value="yes" onclick="setYesNo('f_has_landlord_ref','yes'); toggleRefSection('landlord')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_landlord_ref" data-value="no" onclick="setYesNo('f_has_landlord_ref','no'); toggleRefSection('landlord')">No</button></div><input type="hidden" id="f_has_landlord_ref" data-required-choice="true" /></div>
+                    <div id="landlord-ref-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Name / department *</label><input type="text" id="f_ll_ref_name" /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_ll_ref_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_ll_ref_email" /></div><div class="input-group"><label>Property address / reference</label><input type="text" id="f_ll_ref_property_address" /></div></div><div class="input-group"><label>May we contact this reference? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_ll_ref_consent" data-value="yes" onclick="setYesNo('f_ll_ref_consent','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_ll_ref_consent" data-value="no" onclick="setYesNo('f_ll_ref_consent','no')">No</button></div><input type="hidden" id="f_ll_ref_consent" data-required-choice="true" /></div></div>
                     <div class="two-col"><div class="input-group"><label>Personal reference name</label><input type="text" id="f_personal_ref_name" /></div><div class="input-group"><label>Personal reference phone</label><input type="tel" id="f_personal_ref_phone" /></div><div class="input-group"><label>Personal reference email</label><input type="email" id="f_personal_ref_email" /></div><div class="input-group"><label>Personal reference address</label><input type="text" id="f_personal_ref_address" /></div></div>
 
                     <div class="section-divider"><div class="dot"></div><span>BANK DETAILS</span><div class="line"></div></div>
@@ -921,16 +945,16 @@
                     <div class="two-col three"><div class="input-group"><label>Account name *</label><input type="text" id="f_bank_account_name" required /></div><div class="input-group"><label>Sort code *</label><input type="text" id="f_bank_sort" placeholder="00-00-00" required /></div><div class="input-group"><label>Account number *</label><input type="text" id="f_bank_account" placeholder="00000000" required /></div></div>
 
                     <div class="section-divider"><div class="dot"></div><span>TENANCY INFORMATION</span><div class="line"></div></div>
-                    <div class="two-col"><div class="input-group full-width"><label>Property address *</label><input type="text" id="f_property_address" class="pre-filled" readonly required /></div><div class="input-group"><label>Preferred start date *</label><input type="date" id="f_preferred_start" required /></div><div class="input-group"><label>Rental period *</label><select id="f_rental_period" required><option value="">Select...</option><option>Monthly</option><option>Quarterly</option><option>Other</option></select></div><div class="input-group"><label>Preferred tenancy duration *</label><input type="text" id="f_tenancy_duration" placeholder="e.g. 12 months" required /></div><div class="input-group"><label>Rental amount (&pound;) *</label><input type="number" id="f_rental_amount" min="0" step="0.01" required /></div></div>
+                    <div class="two-col"><div class="input-group full-width"><label>Property address *</label><input type="text" id="f_property_address" required /></div><div class="input-group"><label>Preferred start date *</label><div class="date-picker-wrapper"><input type="text" id="f_preferred_start" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_preferred_start')" /><span class="calendar-icon">&#x1F4C5;</span></div></div><div class="input-group"><label>Rental period *</label><select id="f_rental_period" required><option value="">Select...</option><option>Monthly</option><option>Quarterly</option><option>Other</option></select></div><div class="input-group"><label>Preferred tenancy duration *</label><input type="text" id="f_tenancy_duration" placeholder="e.g. 12 months" required /></div><div class="input-group"><label>Rental amount (&pound;) *</label><input type="number" id="f_rental_amount" min="0" step="0.01" required /></div></div>
                     <div class="input-group"><label>Other occupants, including children or dependants *</label><textarea id="f_other_occupants" placeholder="Names, ages and relationship to you. Enter None if there are no other occupants." required></textarea></div>
                     <div class="input-group"><label>Pets *</label><textarea id="f_pets" placeholder="Name, animal type, breed and age. Enter None if there are no pets." required></textarea></div>
-                    <div class="two-col"><div class="input-group"><label>Security deposit amount (&pound;) *</label><input type="number" id="f_deposit_amount" min="0" step="0.01" required /></div><div class="input-group"><label>Will anyone else contribute to the deposit? *</label><select id="f_deposit_contributor" required onchange="togglePanelFromYesNo('f_deposit_contributor','deposit-contributor-fields')"><option value="">Select Yes or No...</option><option value="yes">Yes</option><option value="no">No</option></select></div></div>
+                    <div class="two-col"><div class="input-group"><label>Security deposit amount (&pound;) *</label><input type="number" id="f_deposit_amount" min="0" step="0.01" required /></div><div class="input-group"><label>Will anyone else contribute to the deposit? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_deposit_contributor" data-value="yes" onclick="setYesNo('f_deposit_contributor','yes'); togglePanelFromYesNo('f_deposit_contributor','deposit-contributor-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_deposit_contributor" data-value="no" onclick="setYesNo('f_deposit_contributor','no'); togglePanelFromYesNo('f_deposit_contributor','deposit-contributor-fields')">No</button></div><input type="hidden" id="f_deposit_contributor" data-required-choice="true" /></div></div>
                     <div id="deposit-contributor-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Contributor names, addresses and amounts *</label><textarea id="f_deposit_contributor_details"></textarea></div></div>
                     <div class="input-group"><label>Forwarding address for end-of-tenancy deposit correspondence</label><input type="text" id="f_forwarding_address" /></div>
 
                     <div class="section-divider"><div class="dot"></div><span>GUARANTOR &amp; NEXT OF KIN</span><div class="line"></div></div>
-                    <div class="input-group"><label>Will you have a guarantor for this application? *</label><select id="f_has_guarantor" required onchange="toggleGuarantorSection()"><option value="">Select Yes or No...</option><option value="yes">Yes</option><option value="no">No</option></select></div>
-                    <div id="guarantor-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Full name *</label><input type="text" id="f_guarantor_name" /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_guarantor_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_guarantor_email" /></div><div class="input-group"><label>Address *</label><input type="text" id="f_guarantor_address" /></div><div class="input-group"><label>Annual income (&pound;) *</label><input type="number" id="f_guarantor_income" min="0" /></div><div class="input-group"><label>Employment type *</label><select id="f_guarantor_employment"><option value="">Select...</option><option>Employed</option><option>Part-time Employed</option><option>Self-Employed</option><option>Retired</option><option>Other</option></select></div></div><div class="input-group"><label>May we contact this guarantor? *</label><select id="f_guarantor_consent"><option value="">Select Yes or No...</option><option value="yes">Yes</option><option value="no">No</option></select></div></div>
+                    <div class="input-group"><label>Will you have a guarantor for this application? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_guarantor" data-value="yes" onclick="setYesNo('f_has_guarantor','yes'); toggleGuarantorSection()">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_guarantor" data-value="no" onclick="setYesNo('f_has_guarantor','no'); toggleGuarantorSection()">No</button></div><input type="hidden" id="f_has_guarantor" data-required-choice="true" /></div>
+                    <div id="guarantor-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Full name *</label><input type="text" id="f_guarantor_name" /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_guarantor_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_guarantor_email" /></div><div class="input-group"><label>Address *</label><input type="text" id="f_guarantor_address" /></div><div class="input-group"><label>Annual income (&pound;) *</label><input type="number" id="f_guarantor_income" min="0" /></div><div class="input-group"><label>Employment type *</label><select id="f_guarantor_employment"><option value="">Select...</option><option>Employed</option><option>Part-time Employed</option><option>Self-Employed</option><option>Retired</option><option>Other</option></select></div></div><div class="input-group"><label>May we contact this guarantor? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="yes" onclick="setYesNo('f_guarantor_consent','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="no" onclick="setYesNo('f_guarantor_consent','no')">No</button></div><input type="hidden" id="f_guarantor_consent" data-required-choice="true" /></div></div>
                     <div class="two-col"><div class="input-group"><label>Next of kin full name *</label><input type="text" id="f_nok_name" required /></div><div class="input-group"><label>Relationship *</label><input type="text" id="f_nok_rel" required /></div><div class="input-group"><label>Address *</label><input type="text" id="f_nok_address" required /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_nok_phone" required /></div></div>
 
                     <p id="step-3-error" class="error-text" style="display:none;"></p>
@@ -1034,10 +1058,6 @@
                 ? 'http://localhost:3001'
                 : 'https://fleming-crm-api.fly.dev'
         );
-
-        // Google Places API key — set this to enable address autocomplete
-        // Same key as VITE_GOOGLE_PLACES_API_KEY used in the React frontend
-        const GOOGLE_PLACES_API_KEY = 'AIzaSyAolxeq3QhpLfGKY8oI47TLlVaTgz_gnyk';
 
         let formData = null;
         let hasSigned = false;
@@ -1268,11 +1288,13 @@
             years_at_current_address: 'f_years_current', previous_address_line_1: 'f_prev_address_line_1', previous_address_city: 'f_prev_address_city',
             previous_address_postcode: 'f_prev_address_postcode', years_at_previous_address: 'f_years_previous', residency_status: 'f_residency_status',
             current_landlord_name: 'f_current_landlord_name', current_landlord_phone: 'f_current_landlord_phone', current_landlord_email: 'f_current_landlord_email',
-            current_landlord_address: 'f_current_landlord_address', current_monthly_rent: 'f_current_rent', joint_applicants: 'f_joint_applicants',
-            joint_relationships: 'f_joint_relationships', employment_status: 'f_employment_status', employer_name: 'f_employer', job_title: 'f_job_title',
+            current_monthly_rent: 'f_current_rent', landlord_contact_authority: 'f_landlord_contact_authority', has_joint_applicants: 'f_has_joint_applicants',
+            joint_applicants: 'f_joint_applicants', employment_status: 'f_employment_status', employer_name: 'f_employer', job_title: 'f_job_title',
             employment_start_date: 'f_employment_start', employer_address: 'f_employer_address', employer_contact_name: 'f_employer_contact_name',
-            employer_contact_email: 'f_employer_contact_email', employer_contact_phone: 'f_employer_contact_phone', business_name: 'f_business_name',
-            accountant_name: 'f_accountant_name', accountant_address: 'f_accountant_address', accountant_email: 'f_accountant_email', accountant_phone: 'f_accountant_phone',
+            employer_contact_email: 'f_employer_contact_email', employer_contact_phone: 'f_employer_contact_phone', self_employed_type: 'f_self_employed_type',
+            business_name: 'f_business_name', company_number: 'f_company_number', self_employed_annual_income: 'f_self_employed_income', years_trading: 'f_years_trading',
+            contractor_annual_income: 'f_contractor_income', contractor_length_of_employment: 'f_contractor_length', has_previous_self_assessments: 'f_has_self_assessments',
+            provide_accountant_details: 'f_provide_accountant_details', accountant_details: 'f_accountant_details',
             student_institution: 'f_student_institution', student_address: 'f_student_address', student_course: 'f_student_course', student_graduation_year: 'f_student_graduation_year',
             has_additional_income: 'f_has_additional_income', additional_income_details: 'f_additional_income_details', loans: 'f_loans', credit_cards: 'f_credit_cards',
             legal_proceedings: 'f_legal_proceedings', legal_proceedings_details: 'f_legal_details', has_employer_reference: 'f_has_employer_ref',
@@ -1290,7 +1312,17 @@
             next_of_kin_name: 'f_nok_name', next_of_kin_relationship: 'f_nok_rel', next_of_kin_address: 'f_nok_address', next_of_kin_phone: 'f_nok_phone',
             supporting_information: 'f_further_info'
         };
-        const BOOLEAN_SELECT_KEYS = new Set(['has_additional_income', 'has_employer_reference', 'employer_reference_consent', 'has_landlord_reference', 'landlord_reference_consent', 'deposit_contributor', 'has_guarantor', 'guarantor_contact_consent']);
+        const BOOLEAN_SELECT_KEYS = new Set(['landlord_contact_authority', 'has_joint_applicants', 'has_previous_self_assessments', 'provide_accountant_details', 'has_additional_income', 'has_employer_reference', 'employer_reference_consent', 'has_landlord_reference', 'landlord_reference_consent', 'deposit_contributor', 'has_guarantor', 'guarantor_contact_consent']);
+
+        function setYesNo(inputId, value) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            input.value = value;
+            document.querySelectorAll(`[data-choice-for="${inputId}"]`).forEach(button => {
+                button.classList.toggle('active', button.dataset.value === value);
+                button.setAttribute('aria-pressed', button.dataset.value === value ? 'true' : 'false');
+            });
+        }
 
         function setRequired(ids, required) {
             ids.forEach(id => {
@@ -1334,9 +1366,35 @@
             document.getElementById('employment-self-employed').style.display = selfEmployed ? 'block' : 'none';
             document.getElementById('employment-student').style.display = student ? 'block' : 'none';
             setRequired(['f_employer', 'f_job_title', 'f_employment_start', 'f_employer_address', 'f_employer_contact_name', 'f_employer_contact_email', 'f_employer_contact_phone'], employed);
-            setRequired(['f_business_name', 'f_accountant_name', 'f_accountant_address', 'f_accountant_email', 'f_accountant_phone'], selfEmployed);
+            setRequired(['f_self_employed_type'], selfEmployed);
             setRequired(['f_student_institution', 'f_student_address', 'f_student_course', 'f_student_graduation_year'], student);
             document.getElementById('income-document-card').style.display = ['Student', 'Unemployed'].includes(status) ? 'none' : 'block';
+            toggleSelfEmployedType();
+            toggleAccountantDetails();
+        }
+
+        function toggleSelfEmployedType() {
+            const type = document.getElementById('f_self_employed_type').value;
+            const business = type === 'sole_trader' || type === 'limited_company';
+            const contractor = type === 'contractor';
+            document.getElementById('self-employed-business-fields').style.display = business ? 'grid' : 'none';
+            document.getElementById('company-number-field').style.display = type === 'limited_company' ? 'block' : 'none';
+            document.getElementById('contractor-fields').style.display = contractor ? 'grid' : 'none';
+            setRequired(['f_business_name', 'f_self_employed_income', 'f_years_trading'], business);
+            setRequired(['f_company_number'], type === 'limited_company');
+            setRequired(['f_contractor_income', 'f_contractor_length'], contractor);
+        }
+
+        function toggleAccountantDetails() {
+            const yes = document.getElementById('f_provide_accountant_details').value === 'yes';
+            document.getElementById('accountant-details-fields').style.display = yes ? 'block' : 'none';
+            setRequired(['f_accountant_details'], yes);
+        }
+
+        function toggleJointApplicants() {
+            const yes = document.getElementById('f_has_joint_applicants').value === 'yes';
+            document.getElementById('joint-applicant-fields').style.display = yes ? 'block' : 'none';
+            setRequired(['f_joint_applicants'], yes);
         }
 
         function togglePrevAddress(forceOpen) {
@@ -1360,7 +1418,7 @@
         function toggleCurrentLandlord() {
             const rented = ['Private tenant', 'Lodger', 'Housing association tenant', 'Council tenant'].includes(document.getElementById('f_residency_status').value);
             document.getElementById('current-landlord-fields').style.display = rented ? 'block' : 'none';
-            setRequired(['f_current_landlord_name', 'f_current_landlord_phone', 'f_current_landlord_email', 'f_current_rent', 'f_current_landlord_address'], rented);
+            setRequired(['f_current_landlord_name', 'f_current_landlord_phone', 'f_current_landlord_email', 'f_current_rent'], rented);
         }
 
         function togglePanelFromYesNo(selectId, panelId) {
@@ -1403,8 +1461,9 @@
             Object.entries(FIELD_MAP).forEach(([key, id]) => {
                 const el = document.getElementById(id);
                 if (!el || stored[key] === undefined || stored[key] === null) return;
-                if (BOOLEAN_SELECT_KEYS.has(key)) el.value = stored[key] ? 'yes' : 'no';
-                else if (key === 'legal_proceedings') el.value = String(stored[key]).toLowerCase() === 'yes' ? 'yes' : 'no';
+                if (BOOLEAN_SELECT_KEYS.has(key)) setYesNo(id, stored[key] ? 'yes' : 'no');
+                else if (key === 'legal_proceedings') setYesNo(id, String(stored[key]).toLowerCase() === 'yes' ? 'yes' : 'no');
+                else if (['date_of_birth', 'employment_start_date', 'preferred_start_date'].includes(key)) el.value = isoToDDMMYYYY(String(stored[key]));
                 else el.value = stored[key];
             });
             document.getElementById('f_first_name').value = stored.first_name || formData.first_name_1 || '';
@@ -1434,7 +1493,7 @@
             Object.entries(declarationMap).forEach(([key, id]) => { document.getElementById(id).checked = stored[key] === true; });
 
             if (stored.previous_address_line_1) togglePrevAddress(true);
-            toggleCurrentLandlord(); toggleEmploymentFields(); toggleRefSection('employer'); toggleRefSection('landlord'); toggleGuarantorSection();
+            toggleCurrentLandlord(); toggleJointApplicants(); toggleEmploymentFields(); toggleRefSection('employer'); toggleRefSection('landlord'); toggleGuarantorSection();
             togglePanelFromYesNo('f_has_additional_income', 'additional-income-fields');
             togglePanelFromYesNo('f_legal_proceedings', 'legal-details-fields');
             togglePanelFromYesNo('f_deposit_contributor', 'deposit-contributor-fields');
@@ -1447,8 +1506,17 @@
 
         function validateStep(step) {
             const container = document.getElementById(`step-${step}`);
-            const invalid = visibleRequiredFieldInvalid(container);
+            const missingChoice = Array.from(container.querySelectorAll('[data-required-choice="true"]')).find(input => {
+                const group = input.closest('.input-group');
+                return group && group.offsetParent !== null && !input.value;
+            });
             const error = document.getElementById(`step-${step}-error`);
+            if (missingChoice) {
+                if (error) { error.textContent = 'Please answer every Yes or No question before continuing.'; error.style.display = 'block'; }
+                missingChoice.closest('.input-group').querySelector('.choice-button')?.focus();
+                return false;
+            }
+            const invalid = visibleRequiredFieldInvalid(container);
             if (!invalid) { if (error) error.style.display = 'none'; return true; }
             invalid.reportValidity(); invalid.focus();
             if (error) { error.textContent = 'Please complete all mandatory fields before continuing.'; error.style.display = 'block'; }
@@ -1530,7 +1598,10 @@
         function renderDocuments() {
             document.querySelectorAll('[data-doc-list]').forEach(list => {
                 list.replaceChildren();
-                applicationDocuments.filter(doc => doc.doc_type === list.dataset.docList).forEach(doc => {
+                const matchingDocuments = applicationDocuments.filter(doc => doc.doc_type === list.dataset.docList);
+                const uploadLabel = list.closest('.document-card')?.querySelector('.upload-button');
+                if (uploadLabel) uploadLabel.textContent = matchingDocuments.length ? '+ Add another' : 'Choose files';
+                matchingDocuments.forEach(doc => {
                     const item = document.createElement('li');
                     const name = document.createElement('span'); name.textContent = doc.original_name;
                     const status = document.createElement('strong'); status.className = `status-pill ${doc.review_status || 'pending'}`; status.textContent = doc.review_status || 'pending';
@@ -1557,6 +1628,30 @@
             data.declaration_terms = document.getElementById('f_decl_terms').checked;
             data.marketing_consent = document.getElementById('f_decl_marketing').checked;
             return data;
+        }
+
+        async function saveDraft() {
+            const button = document.getElementById('save-draft-btn');
+            const status = document.getElementById('draft-status');
+            button.disabled = true;
+            button.textContent = 'Saving...';
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/public/application-form/${token}/draft`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ app_form_data: collectApplicationData() })
+                });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error || 'Draft could not be saved');
+                status.textContent = 'Draft saved. Reopen this same link to resume.';
+                button.textContent = 'Saved';
+            } catch (err) {
+                status.textContent = err.message || 'Draft could not be saved. Please try again.';
+                button.textContent = 'Try again';
+            } finally {
+                button.disabled = false;
+                setTimeout(() => { if (button.textContent === 'Saved') button.textContent = 'Save & finish later'; }, 1800);
+            }
         }
 
         async function submitForm() {
@@ -1588,49 +1683,7 @@
             }
         }
 
-        // ===== GOOGLE PLACES AUTOCOMPLETE =====
-        const ADDRESS_FIELD_IDS = [
-            'f_address_line_1',
-            'f_prev_address_line_1',
-            'f_current_landlord_address',
-            'f_employer_address',
-            'f_accountant_address',
-            'f_student_address',
-            'f_personal_ref_address',
-            'f_forwarding_address',
-            'f_nok_address',
-            'f_guarantor_address'
-        ];
-
-        function loadGooglePlaces() {
-            if (!GOOGLE_PLACES_API_KEY) return;
-            const script = document.createElement('script');
-            script.src = 'https://maps.googleapis.com/maps/api/js?key=' + GOOGLE_PLACES_API_KEY + '&libraries=places&callback=initAddressAutocomplete';
-            script.async = true;
-            script.defer = true;
-            document.head.appendChild(script);
-        }
-
-        function initAddressAutocomplete() {
-            ADDRESS_FIELD_IDS.forEach(function(id) {
-                const input = document.getElementById(id);
-                if (!input) return;
-                const ac = new google.maps.places.Autocomplete(input, {
-                    componentRestrictions: { country: 'gb' },
-                    fields: ['address_components', 'formatted_address'],
-                    types: ['address']
-                });
-                ac.addListener('place_changed', function() {
-                    const place = ac.getPlace();
-                    if (place && place.formatted_address) {
-                        input.value = place.formatted_address;
-                    }
-                });
-            });
-        }
-
         // Init
-        loadGooglePlaces();
         if (token && token !== 'onboarding') {
             loadForm();
         } else {
