@@ -1,14 +1,14 @@
 import { Resend } from 'resend';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const EMAIL_FROM = process.env.EMAIL_FROM || 'Fleming Lettings <enquiries@fleminglettings.co.uk>';
+export const OUTBOUND_EMAIL_ADDRESS = 'contact@tenancies.fleminglettings.co.uk';
+export const EMAIL_FROM = `Fleming Lettings <${OUTBOUND_EMAIL_ADDRESS}>`;
 const ALLOW_SIMULATED_MESSAGES = process.env.ALLOW_SIMULATED_MESSAGES === 'true' && process.env.NODE_ENV !== 'production';
 
 export interface SendEmailParams {
   to: string | string[];
   subject: string;
   html: string;
-  from?: string;
 }
 
 export async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; id?: string; error?: string; simulated?: boolean }> {
@@ -24,10 +24,11 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
 
   try {
     const { data, error } = await resend.emails.send({
-      from: params.from || EMAIL_FROM,
+      from: EMAIL_FROM,
       to: params.to,
       subject: params.subject,
       html: params.html,
+      replyTo: OUTBOUND_EMAIL_ADDRESS,
     });
 
     if (error) {
@@ -57,7 +58,7 @@ export function viewingConfirmationEmail(name: string, address: string, date: st
           <span style="color: #666;">Date: ${date}</span>
         </div>
         <p>Please arrive on time. If you need to reschedule, reply to this email or call us.</p>
-        <p>Best regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
+        <p>Best regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>contact@tenancies.fleminglettings.co.uk | 01902 212 415</p>
       </div>
     `,
   };
@@ -73,7 +74,7 @@ export function referenceChaseEmail(landlordName: string, tenantName: string, pr
         <p>We are writing regarding a reference request for <strong>${tenantName}</strong>, who has applied for a property at <strong>${propertyAddress}</strong>.</p>
         <p>We would greatly appreciate it if you could provide a landlord reference at your earliest convenience. We kindly request a response within <strong>48 hours</strong>.</p>
         <p>If you have any questions, please don't hesitate to get in touch.</p>
-        <p>Kind regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
+        <p>Kind regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>contact@tenancies.fleminglettings.co.uk | 01902 212 415</p>
       </div>
     `,
   };
@@ -94,7 +95,7 @@ export function rentReminderEmail(tenantName: string, amount: number, address: s
         </div>
         <p>If you have already made this payment, please disregard this message. Otherwise, please arrange payment as soon as possible.</p>
         <p>If you are experiencing difficulties, please contact us to discuss your options.</p>
-        <p>Kind regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
+        <p>Kind regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>contact@tenancies.fleminglettings.co.uk | 01902 212 415</p>
       </div>
     `,
   };
@@ -117,7 +118,7 @@ export function statusUpdateEmail(name: string, address: string, status: string)
         <p>Hi ${name},</p>
         <p>We wanted to let you know that regarding your application for <strong>${address}</strong>, ${statusMessages[status] || 'your application status has been updated'}.</p>
         <p>If you have any questions, please don't hesitate to get in touch.</p>
-        <p>Best regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
+        <p>Best regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>contact@tenancies.fleminglettings.co.uk | 01902 212 415</p>
       </div>
     `,
   };
@@ -176,7 +177,7 @@ export function holdingDepositRequestEmail(
           </p>
           <p style="font-size: 14px; color: #555;">
             Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
-            <span style="font-size: 12px; color: #888;">01902 212 415 | enquiries@fleminglettings.co.uk</span>
+            <span style="font-size: 12px; color: #888;">01902 212 415 | contact@tenancies.fleminglettings.co.uk</span>
           </p>
         </div>
         <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
@@ -273,7 +274,7 @@ export function tenancyApplicationEmail(
           </p>
           <p style="font-size: 14px; color: #555;">
             Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
-            <span style="font-size: 12px; color: #888;">01902 212 415 | enquiries@fleminglettings.co.uk</span>
+            <span style="font-size: 12px; color: #888;">01902 212 415 | contact@tenancies.fleminglettings.co.uk</span>
           </p>
         </div>
         <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
@@ -289,7 +290,7 @@ export function tenancyApplicationEmail(
 
 export function enquiryConfirmationEmail(name: string, reference: string, propertyAddress?: string | null): { subject: string; html: string } {
   return {
-    subject: `We've received your enquiry — ${reference}`,
+    subject: 'Welcome to Fleming Lettings!',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
@@ -297,20 +298,23 @@ export function enquiryConfirmationEmail(name: string, reference: string, proper
           <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px;">Enquiry Received</p>
         </div>
         <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
-          <p style="font-size: 15px; color: #333;">Dear ${name},</p>
+          <p style="font-size: 15px; color: #333;">Hi there ${name}!</p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">
-            Thank you for registering with Fleming Lettings. We have received your enquiry${propertyAddress ? ` regarding <strong>${propertyAddress}</strong>` : ''} and our team will review it and contact you shortly.
+            Thank you for registering with Fleming Lettings. We have received your application${propertyAddress ? ` regarding <strong>${propertyAddress}</strong>` : ''} and our lettings team will review it in due course.
           </p>
           <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 16px 0;">
             <span style="font-size: 13px; color: #666;">Your reference:</span>
             <strong style="font-size: 15px; color: #333;"> ${reference}</strong>
           </div>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">
-            If you have any questions in the meantime, please call us on <strong>01902 212 415</strong> quoting your reference.
+            We retain your information in line with our <a href="https://fleminglettings.co.uk/privacy-policy" style="color: #DC006D;">Privacy Policy</a> to support your property application and help find other suitable properties. You can ask us to remove your information at any time, subject to our legal obligations.
+          </p>
+          <p style="font-size: 14px; color: #555; line-height: 1.6;">
+            If you have any questions, reply to this email or call us on <strong>01902 212 415</strong> quoting your reference.
           </p>
           <p style="font-size: 14px; color: #555;">
             Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
-            <span style="font-size: 12px; color: #888;">01902 212 415 | enquiries@fleminglettings.co.uk</span>
+            <span style="font-size: 12px; color: #888;">01902 212 415 | contact@tenancies.fleminglettings.co.uk</span>
           </p>
         </div>
         <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
@@ -318,6 +322,28 @@ export function enquiryConfirmationEmail(name: string, reference: string, proper
             Fleming Lettings and Developments UK Limited<br/>
             Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG
           </p>
+        </div>
+      </div>
+    `,
+  };
+}
+
+export function applicationConfirmationEmail(name: string): { subject: string; html: string } {
+  return {
+    subject: 'Thank you for completing your application form',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
+          <h1 style="color: #fff; margin: 0; font-size: 22px;">Fleming Lettings</h1>
+          <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px;">Application received</p>
+        </div>
+        <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
+          <p style="font-size: 15px; color: #333;">Dear ${name},</p>
+          <p style="font-size: 14px; color: #555; line-height: 1.6;">Thank you for completing your application form.</p>
+          <p style="font-size: 14px; color: #555; line-height: 1.6;">Our office team will review your application and be in touch with you within the next 48 hours.</p>
+          <p style="font-size: 14px; color: #555; line-height: 1.6;">Please note that we may still require additional information or documentation from you to complete our checks. If so, a member of our team will contact you.</p>
+          <p style="font-size: 14px; color: #555; line-height: 1.6;">If you have any questions, reply to this email or call us on <strong>01902 212 415</strong>.</p>
+          <p style="font-size: 14px; color: #555;">Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/><span style="font-size: 12px; color: #888;">01902 212 415 | ${OUTBOUND_EMAIL_ADDRESS}</span></p>
         </div>
       </div>
     `,
@@ -333,7 +359,7 @@ export function genericEmail(name: string, topic: string): { subject: string; ht
         <p>Hi ${name},</p>
         <p>Thank you for your enquiry. We wanted to follow up regarding ${topic.toLowerCase()}.</p>
         <p>Please don't hesitate to get in touch if you have any questions.</p>
-        <p>Best regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
+        <p>Best regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>contact@tenancies.fleminglettings.co.uk | 01902 212 415</p>
       </div>
     `,
   };

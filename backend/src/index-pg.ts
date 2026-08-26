@@ -16,6 +16,7 @@ import crypto from 'crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { startScheduler } from './scheduler-pg';
 import { coerceImportValue } from './import-utils';
+import { applicationFormIssues, isValidEmail, isValidUkMobile, normalizePropertyTypes } from './public-form-validation';
 
 // Validate required environment variables
 if (!process.env.DATABASE_URL) {
@@ -146,76 +147,6 @@ const PUBLIC_APPLICATION_DOCUMENT_TYPES = [
   'Bank Statements',
   'Other Financial Document',
 ] as const;
-
-function missingApplicationFields(data: Record<string, any>): string[] {
-  const required = [
-    'first_name', 'last_name', 'email', 'phone', 'date_of_birth', 'ni_number',
-    'current_address_line_1', 'current_address_city', 'current_address_postcode', 'years_at_current_address',
-    'residency_status', 'marital_status', 'gross_annual_income', 'employment_status',
-    'loans', 'credit_cards',
-    'bank_account_name', 'bank_sort_code', 'bank_account_number',
-    'property_address', 'preferred_start_date', 'rental_period', 'tenancy_duration', 'rental_amount',
-    'other_occupants', 'pets', 'deposit_amount', 'next_of_kin_name', 'next_of_kin_address',
-    'next_of_kin_phone', 'next_of_kin_relationship', 'legal_proceedings',
-  ];
-  const missing = required.filter((key) => data[key] === undefined || data[key] === null || String(data[key]).trim() === '');
-  const requiredChoices = ['has_joint_applicants', 'has_employer_reference', 'has_landlord_reference', 'has_additional_income', 'deposit_contributor', 'has_guarantor'];
-  for (const key of requiredChoices) if (typeof data[key] !== 'boolean') missing.push(key);
-
-  if (Number(data.years_at_current_address) < 3) {
-    for (const key of ['previous_address_line_1', 'previous_address_city', 'previous_address_postcode', 'years_at_previous_address']) {
-      if (!data[key]) missing.push(key);
-    }
-  }
-
-  if (['Employed', 'Part-time Employed'].includes(data.employment_status)) {
-    for (const key of ['employer_name', 'job_title', 'employment_start_date', 'employer_address', 'employer_contact_name', 'employer_contact_email', 'employer_contact_phone']) {
-      if (!data[key]) missing.push(key);
-    }
-  }
-  if (data.employment_status === 'Self-Employed') {
-    if (!['sole_trader', 'contractor', 'limited_company'].includes(data.self_employed_type)) missing.push('self_employed_type');
-    if (typeof data.has_previous_self_assessments !== 'boolean') missing.push('has_previous_self_assessments');
-    if (typeof data.provide_accountant_details !== 'boolean') missing.push('provide_accountant_details');
-    if (data.self_employed_type === 'contractor') {
-      for (const key of ['contractor_annual_income', 'contractor_length_of_employment']) if (!data[key]) missing.push(key);
-    } else {
-      for (const key of ['business_name', 'self_employed_annual_income', 'years_trading']) if (!data[key]) missing.push(key);
-      if (data.self_employed_type === 'limited_company' && !data.company_number) missing.push('company_number');
-    }
-    if (data.provide_accountant_details && !data.accountant_details) missing.push('accountant_details');
-  }
-  if (data.employment_status === 'Student') {
-    for (const key of ['student_institution', 'student_address', 'student_course', 'student_graduation_year']) {
-      if (!data[key]) missing.push(key);
-    }
-  }
-  if (['Private tenant', 'Lodger', 'Housing association tenant', 'Council tenant'].includes(data.residency_status)) {
-    for (const key of ['current_landlord_name', 'current_landlord_phone', 'current_landlord_email', 'current_monthly_rent']) {
-      if (!data[key]) missing.push(key);
-    }
-    if (typeof data.landlord_contact_authority !== 'boolean') missing.push('landlord_contact_authority');
-  }
-  if (data.has_joint_applicants && !data.joint_applicants) missing.push('joint_applicants');
-  if (data.has_additional_income && !data.additional_income_details) missing.push('additional_income_details');
-  if (String(data.legal_proceedings).toLowerCase() === 'yes' && !data.legal_proceedings_details) missing.push('legal_proceedings_details');
-  if (data.has_employer_reference) {
-    for (const key of ['employer_reference_name', 'employer_reference_phone', 'employer_reference_email']) if (!data[key]) missing.push(key);
-    if (typeof data.employer_reference_consent !== 'boolean') missing.push('employer_reference_consent');
-  }
-  if (data.has_landlord_reference) {
-    for (const key of ['landlord_reference_name', 'landlord_reference_phone', 'landlord_reference_email']) if (!data[key]) missing.push(key);
-    if (typeof data.landlord_reference_consent !== 'boolean') missing.push('landlord_reference_consent');
-  }
-  if (data.deposit_contributor && !data.deposit_contributor_details) missing.push('deposit_contributor_details');
-  if (data.has_guarantor) {
-    for (const key of ['guarantor_name', 'guarantor_phone', 'guarantor_email', 'guarantor_address', 'guarantor_annual_income', 'guarantor_employment_status']) {
-      if (!data[key]) missing.push(key);
-    }
-    if (typeof data.guarantor_contact_consent !== 'boolean') missing.push('guarantor_contact_consent');
-  }
-  return [...new Set(missing)];
-}
 
 function normalizeDateInput(value: unknown): string | null {
   if (typeof value !== 'string' || !value.trim()) return null;
@@ -1323,17 +1254,35 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
       });
     }
 
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(form_email)) {
+    if (!isValidEmail(form_email)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid email address'
       });
     }
+    if (!isValidUkMobile(contactNumber)) {
+      return res.status(400).json({ success: false, error: 'Invalid UK mobile number' });
+    }
 
     // Determine if joint application
     const is_joint = registration_type === 'Joint' ? 1 : 0;
+    if (is_joint && !isValidEmail(form_email2)) {
+      return res.status(400).json({ success: false, error: 'Invalid second applicant email address' });
+    }
+    if (is_joint && !isValidUkMobile(contactNumber2)) {
+      return res.status(400).json({ success: false, error: 'Invalid second applicant UK mobile number' });
+    }
+    const incomeStatuses = ['Full-Time Employed', 'Part-Time Employed', 'Self-Employed', 'Retired'];
+    if (incomeStatuses.includes(EmploymentStatus) && !parsePublicNumber(AnnualSalary)) {
+      return res.status(400).json({ success: false, error: 'Annual income is required' });
+    }
+    if (is_joint && incomeStatuses.includes(EmploymentStatus2) && !parsePublicNumber(AnnualSalary2)) {
+      return res.status(400).json({ success: false, error: 'Annual income is required for the second applicant' });
+    }
+    const preferredPropertyTypes = normalizePropertyTypes(typeofproperty);
+    if (!preferredPropertyTypes) {
+      return res.status(400).json({ success: false, error: 'Please select at least one property type' });
+    }
 
     // Get client IP for audit
     const client_ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -1381,7 +1330,7 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
       contract_type_1: contract_type || null,
       is_joint_application: is_joint,
       preferred_tenancy_type: tenancylookingfor || null,
-      preferred_property_type: typeofproperty || null,
+      preferred_property_type: preferredPropertyTypes,
       preferred_bedrooms: noofbedrooms || null,
       preferred_parking: roadparking || null,
       max_rent: parsePublicNumber(rent_max),
@@ -1459,17 +1408,17 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
         const prop = await queryOne('SELECT address FROM properties WHERE id = $1', [data.linked_property_id]);
         propertyAddress = prop?.address || null;
       }
-      const content = enquiryConfirmationEmail(`${data.first_name_1} ${data.last_name_1}`, `ENQ-${id}`, propertyAddress);
+      const applicantNames = [FirstName, is_joint ? FirstName2 : null].filter(Boolean).join(' and ');
+      const content = enquiryConfirmationEmail(applicantNames, `ENQ-${id}`, propertyAddress);
       const result = await sendEmail({
         to: data.email_1,
         subject: content.subject,
         html: content.html,
-        from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>',
       });
       await insert(`
         INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
         VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'enquiry_confirmation', $6, NULL, NULL)
-      `, [result.id || null, id, data.email_1, 'enquiries@fleminglettings.co.uk', content.subject,
+      `, [result.id || null, id, data.email_1, 'contact@tenancies.fleminglettings.co.uk', content.subject,
           result.simulated ? 'simulated' : (result.success ? 'sent' : 'failed')]);
     })().catch(err => console.error('Enquiry confirmation email failed:', err));
 
@@ -2503,7 +2452,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
     if (!formData || typeof formData !== 'object' || Array.isArray(formData)) {
       return res.status(400).json({ error: 'Application details are required' });
     }
-    const missing = missingApplicationFields(formData);
+    const missing = applicationFormIssues(formData);
     if (missing.length) return res.status(400).json({ error: 'Please complete all mandatory fields', missing_fields: missing });
 
     const declarationKeys = [
@@ -2516,6 +2465,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
     }
     const signatureName = String(req.body?.app_signature_name || '').trim();
     if (!signatureName) return res.status(400).json({ error: 'Please type your full legal name' });
+    if (!rawSignature) return res.status(400).json({ error: 'Please add or generate your signature' });
 
     const documents = await query(
       `SELECT DISTINCT doc_type FROM documents WHERE entity_type = 'tenant_enquiry' AND entity_id = $1`,
@@ -2564,8 +2514,8 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       formData.has_landlord_reference ? 1 : 0, formData.landlord_reference_name || null,
       formData.landlord_reference_phone || null, formData.landlord_reference_email || null,
       formData.landlord_reference_property || null, formData.landlord_reference_consent ? 1 : 0,
-      formData.has_employer_reference ? 1 : 0, formData.employer_contact_name || null,
-      formData.employer_contact_phone || null, formData.employer_contact_email || null,
+      formData.has_employer_reference ? 1 : 0, formData.employer_reference_name || null,
+      formData.employer_reference_phone || null, formData.employer_reference_email || null,
       formData.employee_reference || null, formData.employer_reference_consent ? 1 : 0,
       formData.bank_account_name, formData.bank_sort_code, formData.bank_account_number,
       formData.next_of_kin_name, formData.next_of_kin_phone, formData.next_of_kin_relationship, formData.next_of_kin_address,
@@ -2583,6 +2533,19 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       action: enquiry.application_form_completed ? 'application_form_revised' : 'application_form_completed',
       ip: req.ip || null,
     })]);
+
+    if (!enquiry.application_form_completed) {
+      (async () => {
+        const { sendEmail, applicationConfirmationEmail, OUTBOUND_EMAIL_ADDRESS } = require('./email');
+        const content = applicationConfirmationEmail(`${formData.first_name} ${formData.last_name}`.trim());
+        const result = await sendEmail({ to: formData.email, subject: content.subject, html: content.html });
+        await insert(`
+          INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
+          VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'application_confirmation', $6, $7, NULL, NULL, $8)
+        `, [result.id || null, enquiry.id, formData.email, OUTBOUND_EMAIL_ADDRESS, content.subject, content.html,
+          result.simulated ? 'simulated' : (result.success ? 'sent' : 'failed'), result.error || null]);
+      })().catch(err => console.error('Application confirmation email failed:', err));
+    }
 
     res.json({ success: true, message: enquiry.application_form_completed ? 'Application updated successfully' : 'Application submitted successfully' });
   } catch (err) {
@@ -3876,14 +3839,13 @@ app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res)
           to: viewer_email,
           subject: emailContent.subject,
           html: emailContent.html,
-          from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>',
         });
         const emailStatus = emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed');
         await insert(`
           INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
           VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'viewing_confirmation', $6, $7, $8, $9, $10)
         `, [
-          emailResult.id || null, enquiry_id || null, viewer_email, 'enquiries@fleminglettings.co.uk',
+          emailResult.id || null, enquiry_id || null, viewer_email, 'contact@tenancies.fleminglettings.co.uk',
           emailContent.subject, emailContent.html, emailStatus, req.user?.id || null,
           req.user?.email || null, emailResult.error || null,
         ]);
@@ -4034,12 +3996,11 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
         to: enquiry.email_1,
         subject: emailContent.subject,
         html: emailContent.html,
-        from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>',
       });
       await insert(`
         INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
         VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'holding_deposit_request', $6, $7, $8, $9, $10)
-      `, [emailResult.id || null, enquiryId, enquiry.email_1, 'enquiries@fleminglettings.co.uk', emailContent.subject, emailContent.html, emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed'), req.user?.id || null, req.user?.email || null, emailResult.error || null]);
+      `, [emailResult.id || null, enquiryId, enquiry.email_1, 'contact@tenancies.fleminglettings.co.uk', emailContent.subject, emailContent.html, emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed'), req.user?.id || null, req.user?.email || null, emailResult.error || null]);
 
       if (!emailResult.success) {
         return res.status(502).json({ error: emailResult.error || 'Application email could not be sent' });
@@ -4066,12 +4027,11 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
             to: partner.email_1,
             subject: partnerContent.subject,
             html: partnerContent.html,
-            from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>',
           });
           await insert(`
             INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
             VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'holding_deposit_request', $6, $7, $8, $9, $10)
-          `, [partnerEmailResult.id || null, partner.id, partner.email_1, 'enquiries@fleminglettings.co.uk', partnerContent.subject, partnerContent.html, partnerEmailResult.simulated ? 'simulated' : (partnerEmailResult.success ? 'sent' : 'failed'), req.user?.id || null, req.user?.email || null, partnerEmailResult.error || null]);
+          `, [partnerEmailResult.id || null, partner.id, partner.email_1, 'contact@tenancies.fleminglettings.co.uk', partnerContent.subject, partnerContent.html, partnerEmailResult.simulated ? 'simulated' : (partnerEmailResult.success ? 'sent' : 'failed'), req.user?.id || null, req.user?.email || null, partnerEmailResult.error || null]);
           if (!partnerEmailResult.success) {
             return res.status(502).json({ error: partnerEmailResult.error || 'Joint applicant email could not be sent' });
           }
@@ -4130,12 +4090,11 @@ app.post('/api/tenant-enquiries/:id/send-application-email', authMiddleware, asy
       to: enquiry.email_1,
       subject,
       html: body_html,
-      from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>',
     });
     await insert(`
       INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
       VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'tenancy_application', $6, $7, $8, $9, $10)
-    `, [emailResult.id || null, enquiryId, enquiry.email_1, 'enquiries@fleminglettings.co.uk', subject, body_html, emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed'), req.user?.id || null, req.user?.email || null, emailResult.error || null]);
+    `, [emailResult.id || null, enquiryId, enquiry.email_1, 'contact@tenancies.fleminglettings.co.uk', subject, body_html, emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed'), req.user?.id || null, req.user?.email || null, emailResult.error || null]);
 
     if (!emailResult.success) {
       return res.status(502).json({ error: emailResult.error || 'Application email could not be sent' });
@@ -4191,14 +4150,13 @@ app.post('/api/tenant-enquiries/:id/send-workflow-email', authMiddleware, async 
       to: recipients,
       subject,
       html: bodyHtml,
-      from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>',
     });
     const status = emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed');
     for (const record of records) {
       await insert(`
         INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
         VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      `, [emailResult.id || null, record.id, recipients.join(', '), 'enquiries@fleminglettings.co.uk', subject, template || 'workflow', bodyHtml, status, req.user?.id || null, req.user?.email || null, emailResult.error || null]);
+      `, [emailResult.id || null, record.id, recipients.join(', '), 'contact@tenancies.fleminglettings.co.uk', subject, template || 'workflow', bodyHtml, status, req.user?.id || null, req.user?.email || null, emailResult.error || null]);
       await logAudit(req.user?.id, req.user?.email, emailResult.success ? 'email_sent' : 'email_failed', 'tenant_enquiry', record.id, { to: recipients, subject });
     }
     if (!emailResult.success) return res.status(502).json({ error: emailResult.error || 'Email could not be sent' });
@@ -4355,11 +4313,11 @@ app.post('/api/email/send-generic', authMiddleware, async (req: AuthRequest, res
     const { entity_type, entity_id, to_email, subject, body_html } = req.body;
     if (!to_email || !subject || !body_html) return res.status(400).json({ error: 'to_email, subject, and body_html required' });
     const { sendEmail } = require('./email');
-    const emailResult = await sendEmail({ to: to_email, subject, html: body_html, from: 'Fleming Lettings <enquiries@fleminglettings.co.uk>' });
+    const emailResult = await sendEmail({ to: to_email, subject, html: body_html });
     await insert(`
       INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
       VALUES ($1, $2, $3, $4, $5, $6, 'custom', $7, $8, $9, $10, $11)
-    `, [emailResult.id || null, entity_type || null, entity_id || null, to_email, 'enquiries@fleminglettings.co.uk', subject, body_html, emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed'), req.user?.id || null, req.user?.email || null, emailResult.error || null]);
+    `, [emailResult.id || null, entity_type || null, entity_id || null, to_email, 'contact@tenancies.fleminglettings.co.uk', subject, body_html, emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed'), req.user?.id || null, req.user?.email || null, emailResult.error || null]);
     if (entity_type && entity_id) {
       await logAudit(req.user?.id, req.user?.email, emailResult.success ? 'email_sent' : 'email_failed', entity_type, entity_id, {
         to: to_email, subject, error: emailResult.error || null,

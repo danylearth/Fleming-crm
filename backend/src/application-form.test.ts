@@ -25,4 +25,20 @@ describe('tenant application form feedback', () => {
     expect(formHtml.match(/type="file"[^>]*multiple/g)?.length).toBeGreaterThanOrEqual(5);
     expect(formHtml).toContain("uploadLabel.textContent = matchingDocuments.length ? '+ Add another' : 'Choose files'");
   });
+
+  it('implements the 26 August conditional questions and mandatory signature', () => {
+    for (const id of ['f_has_loans', 'f_has_credit_cards', 'f_has_personal_ref', 'f_has_other_occupants', 'f_has_pets', 'f_generate_signature']) {
+      expect(formHtml).toContain(`id="${id}"`);
+    }
+    expect(formHtml).toContain('Please add or generate your signature.');
+    expect(formHtml).not.toContain('Optional drawn signature');
+    expect(formHtml).not.toContain('updatePreviousAddressRequirement()');
+    expect(formHtml).toContain("['Private tenant', 'Housing association tenant', 'Council tenant']");
+  });
+
+  it('formats stored dates and bank details safely', () => {
+    expect(formHtml).toContain("match(/^(\\d{4})-(\\d{2})-(\\d{2})/)");
+    expect(formHtml).toContain('oninput="formatSortCode(this)"');
+    expect(formHtml).toContain('maxlength="8" pattern="\\d{8}"');
+  });
 });

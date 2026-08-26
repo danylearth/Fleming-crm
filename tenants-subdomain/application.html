@@ -845,7 +845,7 @@
                         <div class="input-group full-width"><label>First line of current address *</label><input type="text" id="f_address_line_1" placeholder="Enter your address" required /></div>
                         <div class="input-group"><label>City *</label><input type="text" id="f_address_city" required /></div>
                         <div class="input-group"><label>Postcode *</label><input type="text" id="f_address_postcode" required /></div>
-                        <div class="input-group"><label>Years at this address *</label><input type="number" id="f_years_current" min="0" max="99" step="0.1" required oninput="updatePreviousAddressRequirement()" /></div>
+                        <div class="input-group"><label>Years at this address *</label><input type="number" id="f_years_current" min="0" max="99" step="1" inputmode="numeric" required /></div>
                         <div class="input-group" style="display:flex;align-items:center;"><button type="button" id="btn_add_prev_address" onclick="togglePrevAddress()" class="upload-button" style="width:100%;">+ Add a previous address</button></div>
                     </div>
                     <div id="prev-address-group" class="conditional-panel" style="display:none;">
@@ -853,7 +853,7 @@
                             <div class="input-group full-width"><label>First line of previous address</label><input type="text" id="f_prev_address_line_1" /></div>
                             <div class="input-group"><label>City</label><input type="text" id="f_prev_address_city" /></div>
                             <div class="input-group"><label>Postcode</label><input type="text" id="f_prev_address_postcode" /></div>
-                            <div class="input-group"><label>Years at previous address</label><input type="number" id="f_years_previous" min="0" max="99" step="0.1" /></div>
+                            <div class="input-group"><label>Years at previous address</label><input type="number" id="f_years_previous" min="0" max="99" step="1" inputmode="numeric" /></div>
                         </div>
                         <button type="button" onclick="togglePrevAddress()" class="upload-button">Remove previous address</button>
                     </div>
@@ -894,11 +894,11 @@
                             <div class="input-group"><label>Name of employer *</label><input type="text" id="f_employer" /></div>
                             <div class="input-group"><label>Job title *</label><input type="text" id="f_job_title" /></div>
                             <div class="input-group"><label>Start date with employer *</label><div class="date-picker-wrapper"><input type="text" id="f_employment_start" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_employment_start')" /><span class="calendar-icon">&#x1F4C5;</span></div></div>
-                            <div class="input-group"><label>Contact name / department *</label><input type="text" id="f_employer_contact_name" /></div>
+                            <div class="input-group"><label>Department *</label><input type="text" id="f_employer_department" /></div>
                             <div class="input-group full-width"><label>Address of employer *</label><input type="text" id="f_employer_address" /></div>
-                            <div class="input-group"><label>Contact email *</label><input type="email" id="f_employer_contact_email" /></div>
-                            <div class="input-group"><label>Contact phone *</label><input type="tel" id="f_employer_contact_phone" /></div>
                         </div>
+                        <div class="input-group"><label>Is there any further information you would like to provide us with regarding this employment? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_employment_further_info" data-value="yes" onclick="setYesNo('f_has_employment_further_info','yes'); togglePanelFromYesNo('f_has_employment_further_info','employment-further-info-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_employment_further_info" data-value="no" onclick="setYesNo('f_has_employment_further_info','no'); togglePanelFromYesNo('f_has_employment_further_info','employment-further-info-fields')">No</button></div><input type="hidden" id="f_has_employment_further_info" data-required-choice="true" /></div>
+                        <div id="employment-further-info-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Further employment information *</label><textarea id="f_employment_further_info"></textarea></div></div>
                     </div>
                     <div id="employment-self-employed" class="conditional-panel" style="display:none;">
                         <div class="input-group"><label>How are you self-employed? *</label><select id="f_self_employed_type" onchange="toggleSelfEmployedType()"><option value="">Select...</option><option value="sole_trader">Sole trader</option><option value="contractor">Contractor</option><option value="limited_company">Limited company</option></select></div>
@@ -928,8 +928,10 @@
                     <div class="section-divider"><div class="dot"></div><span>ADDITIONAL FINANCIAL INFORMATION</span><div class="line"></div></div>
                     <div class="input-group"><label>Do you have any additional income? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_additional_income" data-value="yes" onclick="setYesNo('f_has_additional_income','yes'); togglePanelFromYesNo('f_has_additional_income','additional-income-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_additional_income" data-value="no" onclick="setYesNo('f_has_additional_income','no'); togglePanelFromYesNo('f_has_additional_income','additional-income-fields')">No</button></div><input type="hidden" id="f_has_additional_income" data-required-choice="true" /></div>
                     <div id="additional-income-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Amounts and sources of additional income *</label><textarea id="f_additional_income_details" placeholder="For example overtime, bonus, Universal Credit, housing benefit, pension, tax credits or other income"></textarea></div></div>
-                    <div class="input-group"><label>Loan details *</label><textarea id="f_loans" placeholder="Lender, total loan, monthly repayment and expiry date. Enter None if not applicable." required></textarea></div>
-                    <div class="input-group"><label>Credit or store card details *</label><textarea id="f_credit_cards" placeholder="Provider, credit limit and balance owing. Enter None if not applicable." required></textarea></div>
+                    <div class="input-group"><label>Do you have any loans? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_loans" data-value="yes" onclick="setYesNo('f_has_loans','yes'); togglePanelFromYesNo('f_has_loans','loan-details-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_loans" data-value="no" onclick="setYesNo('f_has_loans','no'); togglePanelFromYesNo('f_has_loans','loan-details-fields')">No</button></div><input type="hidden" id="f_has_loans" data-required-choice="true" /></div>
+                    <div id="loan-details-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Loan details *</label><textarea id="f_loans" placeholder="Lender, total loan, monthly repayment and expiry date"></textarea></div></div>
+                    <div class="input-group"><label>Do you have any credit or store cards? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_credit_cards" data-value="yes" onclick="setYesNo('f_has_credit_cards','yes'); togglePanelFromYesNo('f_has_credit_cards','credit-card-details-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_credit_cards" data-value="no" onclick="setYesNo('f_has_credit_cards','no'); togglePanelFromYesNo('f_has_credit_cards','credit-card-details-fields')">No</button></div><input type="hidden" id="f_has_credit_cards" data-required-choice="true" /></div>
+                    <div id="credit-card-details-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Credit or store card details *</label><textarea id="f_credit_cards" placeholder="Provider, credit limit and balance owing"></textarea></div></div>
                     <div class="input-group"><label>Have you or a joint applicant been insolvent, bankrupt, made arrangements with creditors, or been involved in criminal or civil court proceedings in the last six years? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_legal_proceedings" data-value="yes" onclick="setYesNo('f_legal_proceedings','yes'); togglePanelFromYesNo('f_legal_proceedings','legal-details-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_legal_proceedings" data-value="no" onclick="setYesNo('f_legal_proceedings','no'); togglePanelFromYesNo('f_legal_proceedings','legal-details-fields')">No</button></div><input type="hidden" id="f_legal_proceedings" data-required-choice="true" /></div>
                     <div id="legal-details-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Details *</label><textarea id="f_legal_details"></textarea></div></div>
 
@@ -938,16 +940,19 @@
                     <div id="employer-ref-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Name / department *</label><input type="text" id="f_emp_ref_name" /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_emp_ref_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_emp_ref_email" /></div><div class="input-group"><label>Employee ID / reference</label><input type="text" id="f_emp_ref_employee_id" /></div></div><div class="input-group"><label>May we contact this reference? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_emp_ref_consent" data-value="yes" onclick="setYesNo('f_emp_ref_consent','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_emp_ref_consent" data-value="no" onclick="setYesNo('f_emp_ref_consent','no')">No</button></div><input type="hidden" id="f_emp_ref_consent" data-required-choice="true" /></div></div>
                     <div class="input-group"><label>Do you have a previous landlord reference? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_landlord_ref" data-value="yes" onclick="setYesNo('f_has_landlord_ref','yes'); toggleRefSection('landlord')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_landlord_ref" data-value="no" onclick="setYesNo('f_has_landlord_ref','no'); toggleRefSection('landlord')">No</button></div><input type="hidden" id="f_has_landlord_ref" data-required-choice="true" /></div>
                     <div id="landlord-ref-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Name / department *</label><input type="text" id="f_ll_ref_name" /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_ll_ref_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_ll_ref_email" /></div><div class="input-group"><label>Property address / reference</label><input type="text" id="f_ll_ref_property_address" /></div></div><div class="input-group"><label>May we contact this reference? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_ll_ref_consent" data-value="yes" onclick="setYesNo('f_ll_ref_consent','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_ll_ref_consent" data-value="no" onclick="setYesNo('f_ll_ref_consent','no')">No</button></div><input type="hidden" id="f_ll_ref_consent" data-required-choice="true" /></div></div>
-                    <div class="two-col"><div class="input-group"><label>Personal reference name</label><input type="text" id="f_personal_ref_name" /></div><div class="input-group"><label>Personal reference phone</label><input type="tel" id="f_personal_ref_phone" /></div><div class="input-group"><label>Personal reference email</label><input type="email" id="f_personal_ref_email" /></div><div class="input-group"><label>Personal reference address</label><input type="text" id="f_personal_ref_address" /></div></div>
+                    <div class="input-group"><label>Do you have a personal referee to support your application? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_personal_ref" data-value="yes" onclick="setYesNo('f_has_personal_ref','yes'); togglePersonalReference()">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_personal_ref" data-value="no" onclick="setYesNo('f_has_personal_ref','no'); togglePersonalReference()">No</button></div><input type="hidden" id="f_has_personal_ref" data-required-choice="true" /></div>
+                    <div id="personal-ref-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Personal referee name *</label><input type="text" id="f_personal_ref_name" /></div><div class="input-group"><label>Personal referee phone *</label><input type="tel" id="f_personal_ref_phone" /></div><div class="input-group"><label>Personal referee email *</label><input type="email" id="f_personal_ref_email" /></div><div class="input-group"><label>Personal referee address *</label><input type="text" id="f_personal_ref_address" /></div></div></div>
 
                     <div class="section-divider"><div class="dot"></div><span>BANK DETAILS</span><div class="line"></div></div>
                     <p>The account below should be the main account into which your salary, pension or benefits are paid.</p>
-                    <div class="two-col three"><div class="input-group"><label>Account name *</label><input type="text" id="f_bank_account_name" required /></div><div class="input-group"><label>Sort code *</label><input type="text" id="f_bank_sort" placeholder="00-00-00" required /></div><div class="input-group"><label>Account number *</label><input type="text" id="f_bank_account" placeholder="00000000" required /></div></div>
+                    <div class="two-col three"><div class="input-group"><label>Account name *</label><input type="text" id="f_bank_account_name" required /></div><div class="input-group"><label>Sort code *</label><input type="text" id="f_bank_sort" placeholder="00-00-00" inputmode="numeric" maxlength="8" pattern="\d{2}-\d{2}-\d{2}" oninput="formatSortCode(this)" required /></div><div class="input-group"><label>Account number *</label><input type="text" id="f_bank_account" placeholder="00000000" inputmode="numeric" maxlength="8" pattern="\d{8}" oninput="formatAccountNumber(this)" required /></div></div>
 
                     <div class="section-divider"><div class="dot"></div><span>TENANCY INFORMATION</span><div class="line"></div></div>
                     <div class="two-col"><div class="input-group full-width"><label>Property address *</label><input type="text" id="f_property_address" required /></div><div class="input-group"><label>Preferred start date *</label><div class="date-picker-wrapper"><input type="text" id="f_preferred_start" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_preferred_start')" /><span class="calendar-icon">&#x1F4C5;</span></div></div><div class="input-group"><label>Rental period *</label><select id="f_rental_period" required><option value="">Select...</option><option>Monthly</option><option>Quarterly</option><option>Other</option></select></div><div class="input-group"><label>Preferred tenancy duration *</label><input type="text" id="f_tenancy_duration" placeholder="e.g. 12 months" required /></div><div class="input-group"><label>Rental amount (&pound;) *</label><input type="number" id="f_rental_amount" min="0" step="0.01" required /></div></div>
-                    <div class="input-group"><label>Other occupants, including children or dependants *</label><textarea id="f_other_occupants" placeholder="Names, ages and relationship to you. Enter None if there are no other occupants." required></textarea></div>
-                    <div class="input-group"><label>Pets *</label><textarea id="f_pets" placeholder="Name, animal type, breed and age. Enter None if there are no pets." required></textarea></div>
+                    <div class="input-group"><label>Will there be any other occupants, including children or dependants? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_other_occupants" data-value="yes" onclick="setYesNo('f_has_other_occupants','yes'); togglePanelFromYesNo('f_has_other_occupants','other-occupants-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_other_occupants" data-value="no" onclick="setYesNo('f_has_other_occupants','no'); togglePanelFromYesNo('f_has_other_occupants','other-occupants-fields')">No</button></div><input type="hidden" id="f_has_other_occupants" data-required-choice="true" /></div>
+                    <div id="other-occupants-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Other occupant details *</label><textarea id="f_other_occupants" placeholder="Names, ages and relationship to you"></textarea></div></div>
+                    <div class="input-group"><label>Do you have any pets? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_pets" data-value="yes" onclick="setYesNo('f_has_pets','yes'); togglePanelFromYesNo('f_has_pets','pet-details-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_pets" data-value="no" onclick="setYesNo('f_has_pets','no'); togglePanelFromYesNo('f_has_pets','pet-details-fields')">No</button></div><input type="hidden" id="f_has_pets" data-required-choice="true" /></div>
+                    <div id="pet-details-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Pet details *</label><textarea id="f_pets" placeholder="Name, animal type, breed and age"></textarea></div></div>
                     <div class="two-col"><div class="input-group"><label>Security deposit amount (&pound;) *</label><input type="number" id="f_deposit_amount" min="0" step="0.01" required /></div><div class="input-group"><label>Will anyone else contribute to the deposit? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_deposit_contributor" data-value="yes" onclick="setYesNo('f_deposit_contributor','yes'); togglePanelFromYesNo('f_deposit_contributor','deposit-contributor-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_deposit_contributor" data-value="no" onclick="setYesNo('f_deposit_contributor','no'); togglePanelFromYesNo('f_deposit_contributor','deposit-contributor-fields')">No</button></div><input type="hidden" id="f_deposit_contributor" data-required-choice="true" /></div></div>
                     <div id="deposit-contributor-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Contributor names, addresses and amounts *</label><textarea id="f_deposit_contributor_details"></textarea></div></div>
                     <div class="input-group"><label>Forwarding address for end-of-tenancy deposit correspondence</label><input type="text" id="f_forwarding_address" /></div>
@@ -981,7 +986,7 @@
             <div id="step-5" class="step" style="display:none;">
                 <div class="form-wrapper">
                     <h2>Declaration &amp; signature</h2>
-                    <p class="step-description">Review the statements below, then type your legal name. Drawing a signature is optional.</p>
+                    <p class="step-description">Review the statements below, type your legal name, then add or generate your signature.</p>
                     <div class="input-group"><label>Supporting information</label><textarea id="f_further_info" placeholder="Include anything else that may assist us in assessing your application"></textarea></div>
                     <h3 style="font-size:16px;">Declarations</h3>
                     <div class="checkbox-group"><input type="checkbox" id="f_decl_holding_deposit" required /><span>I have read and agree to the Holding Deposit Terms above and understand when the holding deposit may be retained.</span></div>
@@ -993,9 +998,10 @@
                     <div class="checkbox-group"><input type="checkbox" id="f_decl_terms" required /><span>I have read and accept the <a href="https://fleminglettings.co.uk/terms-and-conditions" target="_blank" rel="noopener">Terms and Conditions</a>.</span></div>
                     <div class="checkbox-group"><input type="checkbox" id="f_decl_marketing" /><span>Optional: I consent to receiving marketing about related Fleming Lettings services.</span></div>
                     <p class="info-banner">Right to Rent checks are required for all adult occupiers in England. <a href="https://www.gov.uk/government/publications/right-to-rent-document-checks-a-user-guide" target="_blank" rel="noopener">Read the government guidance</a>.</p>
-                    <div class="input-group"><label>Typed full legal name *</label><input type="text" id="f_typed_name" required /></div>
-                    <div class="input-group"><label>Optional drawn signature</label><p>Use a mouse or finger if you also want to draw your signature.</p></div>
-                    <div class="signature-area" id="sig-pad"><canvas id="sig-canvas"></canvas><span class="signature-hint">Optional signature</span><button type="button" class="clear-sig" onclick="clearSignature()" style="display:none;" id="clear-btn">Clear</button></div>
+                    <div class="input-group"><label>Typed full legal name *</label><input type="text" id="f_typed_name" required oninput="refreshGeneratedSignature()" /></div>
+                    <div class="input-group"><label>Do you want to generate a digital signature below? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_generate_signature" data-value="yes" onclick="setYesNo('f_generate_signature','yes'); generateSignature()">Yes</button><button type="button" class="choice-button" data-choice-for="f_generate_signature" data-value="no" onclick="setYesNo('f_generate_signature','no'); clearSignature()">No</button></div><input type="hidden" id="f_generate_signature" data-required-choice="true" /></div>
+                    <div class="input-group"><label>Signature *</label><p>Select Yes above to generate a signature, or select No and sign using a mouse or finger.</p></div>
+                    <div class="signature-area" id="sig-pad"><canvas id="sig-canvas"></canvas><span class="signature-hint">Sign here</span><button type="button" class="clear-sig" onclick="clearSignature()" style="display:none;" id="clear-btn">Clear</button></div>
                     <div class="input-group" style="margin-top:16px;"><label>Date</label><input type="text" id="f_date" readonly class="pre-filled" /></div>
                     <p id="submit-error" class="error-text" style="display:none;"></p>
                     <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(4)">Back</button><button type="button" class="btn btn-primary" onclick="submitForm()" id="submit-btn">Submit application</button></div>
@@ -1261,13 +1267,18 @@
 
         function isoToDDMMYYYY(isoStr) {
             if (!isoStr) return '';
-            // Handle YYYY-MM-DD format
-            const parts = isoStr.split('-');
-            if (parts.length === 3 && parts[0].length === 4) {
-                return parts[2] + '/' + parts[1] + '/' + parts[0];
-            }
-            // Already in DD/MM/YYYY or other format, return as-is
+            const match = String(isoStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (match) return match[3] + '/' + match[2] + '/' + match[1];
             return isoStr;
+        }
+
+        function formatSortCode(input) {
+            const digits = input.value.replace(/\D/g, '').slice(0, 6);
+            input.value = digits.match(/.{1,2}/g)?.join('-') || '';
+        }
+
+        function formatAccountNumber(input) {
+            input.value = input.value.replace(/\D/g, '').slice(0, 8);
         }
 
         document.addEventListener('click', function(e) {
@@ -1290,29 +1301,29 @@
             current_landlord_name: 'f_current_landlord_name', current_landlord_phone: 'f_current_landlord_phone', current_landlord_email: 'f_current_landlord_email',
             current_monthly_rent: 'f_current_rent', landlord_contact_authority: 'f_landlord_contact_authority', has_joint_applicants: 'f_has_joint_applicants',
             joint_applicants: 'f_joint_applicants', employment_status: 'f_employment_status', employer_name: 'f_employer', job_title: 'f_job_title',
-            employment_start_date: 'f_employment_start', employer_address: 'f_employer_address', employer_contact_name: 'f_employer_contact_name',
-            employer_contact_email: 'f_employer_contact_email', employer_contact_phone: 'f_employer_contact_phone', self_employed_type: 'f_self_employed_type',
+            employment_start_date: 'f_employment_start', employer_address: 'f_employer_address', employer_department: 'f_employer_department',
+            has_employment_further_info: 'f_has_employment_further_info', employment_further_info: 'f_employment_further_info', self_employed_type: 'f_self_employed_type',
             business_name: 'f_business_name', company_number: 'f_company_number', self_employed_annual_income: 'f_self_employed_income', years_trading: 'f_years_trading',
             contractor_annual_income: 'f_contractor_income', contractor_length_of_employment: 'f_contractor_length', has_previous_self_assessments: 'f_has_self_assessments',
             provide_accountant_details: 'f_provide_accountant_details', accountant_details: 'f_accountant_details',
             student_institution: 'f_student_institution', student_address: 'f_student_address', student_course: 'f_student_course', student_graduation_year: 'f_student_graduation_year',
-            has_additional_income: 'f_has_additional_income', additional_income_details: 'f_additional_income_details', loans: 'f_loans', credit_cards: 'f_credit_cards',
+            has_additional_income: 'f_has_additional_income', additional_income_details: 'f_additional_income_details', has_loans: 'f_has_loans', loans: 'f_loans', has_credit_cards: 'f_has_credit_cards', credit_cards: 'f_credit_cards',
             legal_proceedings: 'f_legal_proceedings', legal_proceedings_details: 'f_legal_details', has_employer_reference: 'f_has_employer_ref',
             employer_reference_name: 'f_emp_ref_name', employer_reference_phone: 'f_emp_ref_phone', employer_reference_email: 'f_emp_ref_email',
             employee_reference: 'f_emp_ref_employee_id', employer_reference_consent: 'f_emp_ref_consent', has_landlord_reference: 'f_has_landlord_ref',
             landlord_reference_name: 'f_ll_ref_name', landlord_reference_phone: 'f_ll_ref_phone', landlord_reference_email: 'f_ll_ref_email',
-            landlord_reference_property: 'f_ll_ref_property_address', landlord_reference_consent: 'f_ll_ref_consent', personal_reference_name: 'f_personal_ref_name',
+            landlord_reference_property: 'f_ll_ref_property_address', landlord_reference_consent: 'f_ll_ref_consent', has_personal_reference: 'f_has_personal_ref', personal_reference_name: 'f_personal_ref_name',
             personal_reference_phone: 'f_personal_ref_phone', personal_reference_email: 'f_personal_ref_email', personal_reference_address: 'f_personal_ref_address',
             bank_account_name: 'f_bank_account_name', bank_sort_code: 'f_bank_sort', bank_account_number: 'f_bank_account', property_address: 'f_property_address',
             preferred_start_date: 'f_preferred_start', rental_period: 'f_rental_period', tenancy_duration: 'f_tenancy_duration', rental_amount: 'f_rental_amount',
-            other_occupants: 'f_other_occupants', pets: 'f_pets', deposit_amount: 'f_deposit_amount', deposit_contributor: 'f_deposit_contributor',
+            has_other_occupants: 'f_has_other_occupants', other_occupants: 'f_other_occupants', has_pets: 'f_has_pets', pets: 'f_pets', deposit_amount: 'f_deposit_amount', deposit_contributor: 'f_deposit_contributor',
             deposit_contributor_details: 'f_deposit_contributor_details', forwarding_address: 'f_forwarding_address', has_guarantor: 'f_has_guarantor',
             guarantor_name: 'f_guarantor_name', guarantor_phone: 'f_guarantor_phone', guarantor_email: 'f_guarantor_email', guarantor_address: 'f_guarantor_address',
             guarantor_annual_income: 'f_guarantor_income', guarantor_employment_status: 'f_guarantor_employment', guarantor_contact_consent: 'f_guarantor_consent',
             next_of_kin_name: 'f_nok_name', next_of_kin_relationship: 'f_nok_rel', next_of_kin_address: 'f_nok_address', next_of_kin_phone: 'f_nok_phone',
-            supporting_information: 'f_further_info'
+            supporting_information: 'f_further_info', generate_digital_signature: 'f_generate_signature'
         };
-        const BOOLEAN_SELECT_KEYS = new Set(['landlord_contact_authority', 'has_joint_applicants', 'has_previous_self_assessments', 'provide_accountant_details', 'has_additional_income', 'has_employer_reference', 'employer_reference_consent', 'has_landlord_reference', 'landlord_reference_consent', 'deposit_contributor', 'has_guarantor', 'guarantor_contact_consent']);
+        const BOOLEAN_SELECT_KEYS = new Set(['landlord_contact_authority', 'has_joint_applicants', 'has_employment_further_info', 'has_previous_self_assessments', 'provide_accountant_details', 'has_additional_income', 'has_loans', 'has_credit_cards', 'has_employer_reference', 'employer_reference_consent', 'has_landlord_reference', 'landlord_reference_consent', 'has_personal_reference', 'has_other_occupants', 'has_pets', 'deposit_contributor', 'has_guarantor', 'guarantor_contact_consent', 'generate_digital_signature']);
 
         function setYesNo(inputId, value) {
             const input = document.getElementById(inputId);
@@ -1365,12 +1376,13 @@
             document.getElementById('employment-employed').style.display = employed ? 'block' : 'none';
             document.getElementById('employment-self-employed').style.display = selfEmployed ? 'block' : 'none';
             document.getElementById('employment-student').style.display = student ? 'block' : 'none';
-            setRequired(['f_employer', 'f_job_title', 'f_employment_start', 'f_employer_address', 'f_employer_contact_name', 'f_employer_contact_email', 'f_employer_contact_phone'], employed);
+            setRequired(['f_employer', 'f_job_title', 'f_employment_start', 'f_employer_address', 'f_employer_department', 'f_has_employment_further_info'], employed);
             setRequired(['f_self_employed_type'], selfEmployed);
             setRequired(['f_student_institution', 'f_student_address', 'f_student_course', 'f_student_graduation_year'], student);
             document.getElementById('income-document-card').style.display = ['Student', 'Unemployed'].includes(status) ? 'none' : 'block';
             toggleSelfEmployedType();
             toggleAccountantDetails();
+            togglePanelFromYesNo('f_has_employment_further_info', 'employment-further-info-fields');
         }
 
         function toggleSelfEmployedType() {
@@ -1402,21 +1414,14 @@
             const group = document.getElementById('prev-address-group');
             const ids = ['f_prev_address_line_1', 'f_prev_address_city', 'f_prev_address_postcode', 'f_years_previous'];
             const open = typeof forceOpen === 'boolean' ? forceOpen : group.style.display === 'none';
-            const years = document.getElementById('f_years_current').value;
-            if (!open && years !== '' && Number(years) < 3) return;
             group.style.display = open ? 'block' : 'none';
             btn.parentElement.style.display = open ? 'none' : 'flex';
             setRequired(ids, open);
             if (!open) ids.forEach(id => document.getElementById(id).value = '');
         }
 
-        function updatePreviousAddressRequirement() {
-            const years = document.getElementById('f_years_current').value;
-            if (years !== '' && Number(years) < 3) togglePrevAddress(true);
-        }
-
         function toggleCurrentLandlord() {
-            const rented = ['Private tenant', 'Lodger', 'Housing association tenant', 'Council tenant'].includes(document.getElementById('f_residency_status').value);
+            const rented = ['Private tenant', 'Housing association tenant', 'Council tenant'].includes(document.getElementById('f_residency_status').value);
             document.getElementById('current-landlord-fields').style.display = rented ? 'block' : 'none';
             setRequired(['f_current_landlord_name', 'f_current_landlord_phone', 'f_current_landlord_email', 'f_current_rent'], rented);
         }
@@ -1426,10 +1431,24 @@
             document.getElementById(panelId).style.display = yes ? 'block' : 'none';
             const requiredByPanel = {
                 'additional-income-fields': ['f_additional_income_details'],
+                'employment-further-info-fields': ['f_employment_further_info'],
+                'loan-details-fields': ['f_loans'],
+                'credit-card-details-fields': ['f_credit_cards'],
+                'other-occupants-fields': ['f_other_occupants'],
+                'pet-details-fields': ['f_pets'],
                 'legal-details-fields': ['f_legal_details'],
                 'deposit-contributor-fields': ['f_deposit_contributor_details']
             };
             setRequired(requiredByPanel[panelId] || [], yes);
+            if (!yes) (requiredByPanel[panelId] || []).forEach(id => { document.getElementById(id).value = ''; });
+        }
+
+        function togglePersonalReference() {
+            const yes = document.getElementById('f_has_personal_ref').value === 'yes';
+            document.getElementById('personal-ref-fields').style.display = yes ? 'block' : 'none';
+            const ids = ['f_personal_ref_name', 'f_personal_ref_phone', 'f_personal_ref_email', 'f_personal_ref_address'];
+            setRequired(ids, yes);
+            if (!yes) ids.forEach(id => { document.getElementById(id).value = ''; });
         }
 
         function toggleRefSection(type) {
@@ -1470,7 +1489,7 @@
             document.getElementById('f_last_name').value = stored.last_name || formData.last_name_1 || '';
             document.getElementById('f_email').value = stored.email || formData.email_1 || '';
             document.getElementById('f_phone').value = stored.phone || formData.phone_1 || '';
-            document.getElementById('f_dob').value = stored.date_of_birth || isoToDDMMYYYY(formData.date_of_birth_1);
+            document.getElementById('f_dob').value = stored.date_of_birth ? isoToDDMMYYYY(String(stored.date_of_birth)) : isoToDDMMYYYY(formData.date_of_birth_1);
             document.getElementById('f_typed_name').value = formData.app_signature_name || '';
 
             const address = [formData.property_address, formData.property_postcode].filter(Boolean).join(', ');
@@ -1493,8 +1512,12 @@
             Object.entries(declarationMap).forEach(([key, id]) => { document.getElementById(id).checked = stored[key] === true; });
 
             if (stored.previous_address_line_1) togglePrevAddress(true);
-            toggleCurrentLandlord(); toggleJointApplicants(); toggleEmploymentFields(); toggleRefSection('employer'); toggleRefSection('landlord'); toggleGuarantorSection();
+            toggleCurrentLandlord(); toggleJointApplicants(); toggleEmploymentFields(); toggleRefSection('employer'); toggleRefSection('landlord'); togglePersonalReference(); toggleGuarantorSection();
             togglePanelFromYesNo('f_has_additional_income', 'additional-income-fields');
+            togglePanelFromYesNo('f_has_loans', 'loan-details-fields');
+            togglePanelFromYesNo('f_has_credit_cards', 'credit-card-details-fields');
+            togglePanelFromYesNo('f_has_other_occupants', 'other-occupants-fields');
+            togglePanelFromYesNo('f_has_pets', 'pet-details-fields');
             togglePanelFromYesNo('f_legal_proceedings', 'legal-details-fields');
             togglePanelFromYesNo('f_deposit_contributor', 'deposit-contributor-fields');
             renderDocuments();
@@ -1565,12 +1588,34 @@
             const end = () => { isDrawing = false; };
             canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move); canvas.addEventListener('mouseup', end); canvas.addEventListener('mouseleave', end);
             canvas.addEventListener('touchstart', start, { passive: false }); canvas.addEventListener('touchmove', move, { passive: false }); canvas.addEventListener('touchend', end);
+            refreshGeneratedSignature();
         }
 
         function clearSignature() {
             const canvas = document.getElementById('sig-canvas');
             if (sigCtx) sigCtx.clearRect(0, 0, canvas.width, canvas.height);
             hasSigned = false; document.getElementById('sig-pad').classList.remove('signed'); document.getElementById('clear-btn').style.display = 'none';
+        }
+
+        function generateSignature() {
+            initSignature();
+            const name = document.getElementById('f_typed_name').value.trim();
+            if (!name) return;
+            const canvas = document.getElementById('sig-canvas');
+            sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+            const fontSize = Math.min(48, Math.max(28, canvas.width / Math.max(name.length * 0.65, 8)));
+            sigCtx.fillStyle = '#1a1a2e';
+            sigCtx.textAlign = 'center';
+            sigCtx.textBaseline = 'middle';
+            sigCtx.font = `italic ${fontSize}px "Brush Script MT", "Segoe Script", cursive`;
+            sigCtx.fillText(name, canvas.width / 2, canvas.height / 2);
+            hasSigned = true;
+            document.getElementById('sig-pad').classList.add('signed');
+            document.getElementById('clear-btn').style.display = 'block';
+        }
+
+        function refreshGeneratedSignature() {
+            if (document.getElementById('f_generate_signature').value === 'yes' && signatureInitialised) generateSignature();
         }
 
         async function uploadDocuments(input, docType) {
@@ -1660,6 +1705,9 @@
             const declarationIds = ['f_decl_holding_deposit', 'f_decl_info_accurate', 'f_decl_gdpr', 'f_decl_enquiries', 'f_decl_documents', 'f_decl_credit_check', 'f_decl_terms'];
             if (!declarationIds.every(id => document.getElementById(id).checked)) {
                 errEl.textContent = 'Please agree to every mandatory declaration.'; errEl.style.display = 'block'; return;
+            }
+            if (!hasSigned) {
+                errEl.textContent = 'Please add or generate your signature.'; errEl.style.display = 'block'; return;
             }
             if (!validateDocuments()) { goToStep(4); return; }
             const btn = document.getElementById('submit-btn'); btn.disabled = true; btn.textContent = 'Submitting...';

@@ -197,7 +197,8 @@
             position: relative;
         }
 
-        .radio-option input[type="radio"] {
+        .radio-option input[type="radio"],
+        .radio-option input[name="typeofproperty"] {
             position: absolute;
             opacity: 0;
         }
@@ -213,7 +214,8 @@
             color: #333;
         }
 
-        .radio-option input[type="radio"]:checked + label {
+        .radio-option input[type="radio"]:checked + label,
+        .radio-option input[name="typeofproperty"]:checked + label {
             background: linear-gradient(135deg, #DC006D 0%, #25073B 100%);
             color: white;
             border-color: #DC006D;
@@ -1248,6 +1250,7 @@
                             <option value="Full-Time Employed">Full-Time Employed</option>
                             <option value="Part-Time Employed">Part-Time Employed</option>
                             <option value="Self-Employed">Self-Employed</option>
+                            <option value="Retired">Retired</option>
                             <option value="Student">Student</option>
                             <option value="Unemployed">Unemployed</option>
                         </select>
@@ -1260,8 +1263,8 @@
                         </div>
 
                         <div class="input-group">
-                            <label>Annual Salary (£)</label>
-                            <input type="text" name="AnnualSalary" placeholder="e.g. 30000" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                            <label>Annual Income (£)</label>
+                            <input type="text" name="AnnualSalary" id="annualIncome" placeholder="e.g. 30000" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                         </div>
 
                         <div class="input-group">
@@ -1300,12 +1303,12 @@
 
                     <div class="input-group">
                         <label>Email Address</label>
-                        <input type="email" name="form_email2">
+                        <input type="email" name="form_email2" required>
                     </div>
 
                     <div class="input-group">
                         <label>Contact Number</label>
-                        <input type="tel" name="contactNumber2">
+                        <input type="tel" name="contactNumber2" required inputmode="numeric" placeholder="e.g. 07123456789" oninput="this.value = this.value.replace(/[^0-9+\s-]/g, '')">
                     </div>
 
                     <div class="two-col">
@@ -1342,6 +1345,7 @@
                             <option value="Full-Time Employed">Full-Time Employed</option>
                             <option value="Part-Time Employed">Part-Time Employed</option>
                             <option value="Self-Employed">Self-Employed</option>
+                            <option value="Retired">Retired</option>
                             <option value="Student">Student</option>
                             <option value="Unemployed">Unemployed</option>
                         </select>
@@ -1354,8 +1358,8 @@
                                 <input type="text" name="job_title2">
                             </div>
                             <div class="input-group">
-                                <label>Annual Salary (£)</label>
-                                <input type="text" name="AnnualSalary2" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                                <label>Annual Income (£)</label>
+                                <input type="text" name="AnnualSalary2" id="annualIncome2" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                             </div>
                         </div>
                         <div class="input-group">
@@ -1407,27 +1411,27 @@
                         <label>Property Type *</label>
                         <div class="radio-group-compact">
                             <div class="radio-option">
-                                <input type="radio" name="typeofproperty" id="house" value="House" required>
+                                <input type="checkbox" name="typeofproperty" id="house" value="House" required>
                                 <label for="house">House</label>
                             </div>
                             <div class="radio-option">
-                                <input type="radio" name="typeofproperty" id="flat" value="Apartment/Flat">
+                                <input type="checkbox" name="typeofproperty" id="flat" value="Apartment/Flat">
                                 <label for="flat">Apartment/Flat</label>
                             </div>
                             <div class="radio-option">
-                                <input type="radio" name="typeofproperty" id="bungalow" value="Bungalow">
+                                <input type="checkbox" name="typeofproperty" id="bungalow" value="Bungalow">
                                 <label for="bungalow">Bungalow</label>
                             </div>
                             <div class="radio-option">
-                                <input type="radio" name="typeofproperty" id="studio" value="Studio">
+                                <input type="checkbox" name="typeofproperty" id="studio" value="Studio">
                                 <label for="studio">Studio</label>
                             </div>
                             <div class="radio-option">
-                                <input type="radio" name="typeofproperty" id="bedsit" value="Bedsit">
+                                <input type="checkbox" name="typeofproperty" id="bedsit" value="Bedsit">
                                 <label for="bedsit">Bedsit</label>
                             </div>
                             <div class="radio-option">
-                                <input type="radio" name="typeofproperty" id="other" value="Other">
+                                <input type="checkbox" name="typeofproperty" id="other" value="Other">
                                 <label for="other">Other</label>
                             </div>
                         </div>
@@ -1884,7 +1888,9 @@
             if (!select) return;
             select.addEventListener('change', function() {
                 const details = document.getElementById(detailsId);
-                const employed = ['Full-Time Employed', 'Part-Time Employed', 'Self-Employed'].includes(this.value);
+                const employed = ['Full-Time Employed', 'Part-Time Employed', 'Self-Employed', 'Retired'].includes(this.value);
+                const annualIncome = document.getElementById(selectId === 'employmentStatus' ? 'annualIncome' : 'annualIncome2');
+                if (annualIncome) annualIncome.required = employed;
                 if (employed) {
                     details.classList.add('visible');
                     // Re-init custom selects inside the revealed section
@@ -1956,7 +1962,7 @@
             let valid = true;
 
             inputs.forEach(input => {
-                if (input.type === 'radio') {
+                if (input.type === 'radio' || (input.type === 'checkbox' && input.name === 'typeofproperty')) {
                     const radioGroup = currentStepEl.querySelectorAll(`input[name="${input.name}"]`);
                     const checked = Array.from(radioGroup).some(r => r.checked);
                     if (!checked) {
@@ -1965,7 +1971,7 @@
                             r.closest('.radio-option').querySelector('label').style.borderColor = '#f44';
                         });
                     }
-                } else if (!input.value) {
+                } else if (!input.value || !input.checkValidity()) {
                     valid = false;
                     input.style.borderColor = '#f44';
                 } else {
@@ -1986,6 +1992,26 @@
                     document.getElementById('dob').style.borderColor = '#f44';
                     return;
                 }
+                if (!isValidUkMobile(document.querySelector('[name="contactNumber"]').value)) {
+                    showError('Enter a valid UK mobile number, such as 07700 900123 or +44 7700 900123.');
+                    document.querySelector('[name="contactNumber"]').focus();
+                    return;
+                }
+            }
+
+            if (currentStep === 5) {
+                const email = document.querySelector('[name="form_email2"]');
+                const phone = document.querySelector('[name="contactNumber2"]');
+                if (email.value && !email.checkValidity()) {
+                    showError('Enter a valid email address for the second applicant.');
+                    email.focus();
+                    return;
+                }
+                if (phone.value && !isValidUkMobile(phone.value)) {
+                    showError('Enter a valid UK mobile number for the second applicant.');
+                    phone.focus();
+                    return;
+                }
             }
 
             hideError();
@@ -2002,6 +2028,11 @@
             } else if (currentStep < totalSteps) {
                 showStep(currentStep + 1);
             }
+        }
+
+        function isValidUkMobile(value) {
+            const compact = String(value || '').replace(/[\s()-]/g, '');
+            return /^07\d{9}$/.test(compact) || /^\+447\d{9}$/.test(compact);
         }
 
         function prevStep() {
@@ -2121,10 +2152,11 @@
             const formData = new FormData(document.getElementById('tenantForm'));
             const data = {};
             formData.forEach((value, key) => {
-                if (key !== 'documents') {
+                if (key !== 'documents' && key !== 'typeofproperty') {
                     data[key] = value;
                 }
             });
+            data.typeofproperty = formData.getAll('typeofproperty');
 
             // Convert DD/MM/YYYY dates to YYYY-MM-DD for backend
             function convertDateForBackend(ddmmyyyy) {
