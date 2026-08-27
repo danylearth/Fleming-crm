@@ -41,6 +41,21 @@ describe('email provider safety', () => {
     expect(email.subject).toBe('Your viewing with Fleming Lettings at 10 High Street, WV1 1AA');
     expect(email.html).toContain('Lettings Support Team | fleminglettings.co.uk');
     expect(email.html).toContain('contact@tenancies.fleminglettings.co.uk');
+    expect(email.html).toContain('company number 13943597');
+  });
+
+  it('does not repeat a postcode already present in a property address', async () => {
+    const { normalizePropertyAddress } = await import('./email');
+    expect(normalizePropertyAddress('40 Spring Road, Ettingshall, WV4 6LQ', 'WV4 6LQ'))
+      .toBe('40 Spring Road, Ettingshall, WV4 6LQ');
+  });
+
+  it('builds the requested changes email with requirements and a secure link', async () => {
+    const { applicationChangesRequestedEmail } = await import('./email');
+    const email = applicationChangesRequestedEmail('Sam', 'Please upload a clearer passport scan.', 'https://apply.example.test/token');
+    expect(email.html).toContain('What we need to complete your application:');
+    expect(email.html).toContain('Please upload a clearer passport scan.');
+    expect(email.html).toContain('https://apply.example.test/token');
   });
 
   it('tells applicants that their holding-deposit application can be resumed', async () => {

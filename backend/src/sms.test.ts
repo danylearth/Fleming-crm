@@ -57,16 +57,11 @@ describe('SMS templates', () => {
     expect(msg).toContain('Fleming Lettings');
   });
 
-  it('rejectionSms includes reason when provided', () => {
-    const msg = rejectionSms('Bob', 'Failed credit check');
-    expect(msg).toContain('Bob');
-    expect(msg).toContain('Failed credit check');
-  });
-
-  it('rejectionSms works without reason', () => {
+  it('rejectionSms uses the agreed applicant wording', () => {
     const msg = rejectionSms('Bob');
     expect(msg).toContain('Bob');
-    expect(msg).not.toContain('Reason:');
+    expect(msg).toContain('continue to search for similar properties');
+    expect(msg).toContain('All the very best in your search!');
   });
 
   it('rentReminderSms includes amount and due date', () => {

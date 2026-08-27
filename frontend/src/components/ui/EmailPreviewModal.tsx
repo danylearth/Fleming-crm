@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './index';
 import { X, Mail, Pencil, Eye } from 'lucide-react';
 
@@ -37,23 +37,10 @@ export default function EmailPreviewModal({
   const [bodyHtml, setBodyHtml] = useState(initialBodyHtml);
   const [editingSubject, setEditingSubject] = useState(false);
   const [editingBody, setEditingBody] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Sync props when they change (e.g. financial inputs update the template)
   useEffect(() => { setSubject(initialSubject); }, [initialSubject]);
   useEffect(() => { setBodyHtml(initialBodyHtml); }, [initialBodyHtml]);
-
-  // Write HTML into sandboxed iframe whenever bodyHtml changes
-  useEffect(() => {
-    if (!editingBody && iframeRef.current) {
-      const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        doc.open();
-        doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:0;font-family:Arial,sans-serif;}</style></head><body>${bodyHtml}</body></html>`);
-        doc.close();
-      }
-    }
-  }, [bodyHtml, editingBody, open]);
 
   if (!open) return null;
 
@@ -157,9 +144,9 @@ export default function EmailPreviewModal({
             ) : (
               <div className="bg-white rounded-xl border border-[var(--border-subtle)] overflow-hidden">
                 <iframe
-                  ref={iframeRef}
                   title="Email preview"
                   sandbox=""
+                  srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:0;font-family:Arial,sans-serif;}</style></head><body>${bodyHtml}</body></html>`}
                   className="w-full h-64 border-0"
                 />
               </div>

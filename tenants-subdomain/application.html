@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/">
     <title>Tenant Application - Fleming Lettings</title>
+    <link rel="icon" type="image/png" href="https://crm.fleminglettings.co.uk/logo-icon.png">
     <style>
         @font-face { font-family: 'Lufga'; font-weight: 400; src: url('/fonts/Lufga-Regular.otf') format('opentype'); }
         @font-face { font-family: 'Lufga'; font-weight: 500; src: url('/fonts/Lufga-Medium.otf') format('opentype'); }
@@ -1535,14 +1536,18 @@
             });
             const error = document.getElementById(`step-${step}-error`);
             if (missingChoice) {
-                if (error) { error.textContent = 'Please answer every Yes or No question before continuing.'; error.style.display = 'block'; }
-                missingChoice.closest('.input-group').querySelector('.choice-button')?.focus();
+                const group = missingChoice.closest('.input-group');
+                const question = group?.querySelector('label')?.textContent?.replace(/\s*\*\s*$/, '').trim() || 'the highlighted Yes or No question';
+                if (error) { error.textContent = `Please answer: “${question}”.`; error.style.display = 'block'; }
+                group?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                group?.querySelector('.choice-button')?.focus();
                 return false;
             }
             const invalid = visibleRequiredFieldInvalid(container);
             if (!invalid) { if (error) error.style.display = 'none'; return true; }
-            invalid.reportValidity(); invalid.focus();
-            if (error) { error.textContent = 'Please complete all mandatory fields before continuing.'; error.style.display = 'block'; }
+            const label = invalid.closest('.input-group, .checkbox-group')?.querySelector('label')?.textContent?.replace(/\s*\*\s*$/, '').trim();
+            invalid.reportValidity(); invalid.focus(); invalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (error) { error.textContent = label ? `Please complete: “${label}”.` : 'Please complete the highlighted mandatory field.'; error.style.display = 'block'; }
             return false;
         }
 

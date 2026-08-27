@@ -19,7 +19,19 @@ describe('tenant enquiry form feedback', () => {
   it('validates emails and UK mobile numbers before advancing', () => {
     expect(formHtml).toContain('!input.checkValidity()');
     expect(formHtml).toContain('function isValidUkMobile(value)');
-    expect(formHtml).toContain('Enter a valid email address for the second applicant.');
+    expect(formHtml).toContain('Please enter a valid email address.');
+    expect(formHtml).toContain('Please enter a valid email address for the second applicant.');
     expect(formHtml).toContain('Enter a valid UK mobile number');
+  });
+
+  it('requires job title and annual income for applicable employment statuses', () => {
+    expect(formHtml).toContain('if (jobTitle) jobTitle.required = employed');
+    expect(formHtml).toContain('if (annualIncome) annualIncome.required = employed');
+  });
+
+  it('checks duplicates using email only and uses the CRM favicon', () => {
+    expect(formHtml).toContain('new URLSearchParams({ email: data.form_email })');
+    expect(formHtml).not.toContain('new URLSearchParams({ email: data.form_email, phone:');
+    expect(formHtml).toContain('crm.fleminglettings.co.uk/logo-icon.png');
   });
 });

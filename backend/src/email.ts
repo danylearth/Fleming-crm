@@ -11,6 +11,69 @@ export interface SendEmailParams {
   html: string;
 }
 
+function emailSignature(): string {
+  return `
+    <div style="margin-top:28px;padding-top:20px;border-top:1px solid #eee;color:#555;font-size:13px;line-height:1.6">
+      <strong style="color:#25073B">Lettings Support Team | fleminglettings.co.uk</strong><br/>
+      <a href="mailto:${OUTBOUND_EMAIL_ADDRESS}" style="color:#DC006D;text-decoration:none">${OUTBOUND_EMAIL_ADDRESS}</a> | 01902 212 415
+    </div>
+    <div style="margin-top:18px;background:linear-gradient(135deg,#25073B,#DC006D);padding:20px;text-align:center;color:#fff;border-radius:8px">
+      <strong style="font-size:17px">All of your property needs</strong><br/>
+      <span style="font-size:14px">Without any of the hassle</span>
+    </div>`;
+}
+
+function emailDisclaimer(): string {
+  return `
+    <div style="background:#f5f5f5;padding:16px;border-radius:0 0 12px 12px;border:1px solid #eee;border-top:none">
+      <p style="font-size:10px;color:#888;line-height:1.5;margin:0">
+        This email and any attachments are confidential and intended only for the named recipient. If you received it in error, please delete it and notify us. Fleming Lettings and Developments UK Limited, company number 13943597. Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG.
+      </p>
+    </div>`;
+}
+
+export function brandedEmailHtml(title: string, content: string): string {
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333">
+      <div style="background:linear-gradient(135deg,#25073B,#DC006D);padding:30px;border-radius:12px 12px 0 0;text-align:center">
+        <div style="color:#fff;font-size:24px;font-weight:700">Fleming Lettings</div>
+        <div style="color:rgba(255,255,255,.85);font-size:13px;margin-top:5px">${title}</div>
+      </div>
+      <div style="background:#fff;padding:32px;border:1px solid #eee;border-top:none;font-size:14px;line-height:1.65">
+        ${content}
+        ${emailSignature()}
+      </div>
+      ${emailDisclaimer()}
+    </div>`;
+}
+
+export function normalizePropertyAddress(address: string, postcode?: string | null): string {
+  const cleanAddress = String(address || '').trim().replace(/,\s*$/, '');
+  const cleanPostcode = String(postcode || '').trim();
+  if (!cleanPostcode) return cleanAddress;
+  const compactAddress = cleanAddress.replace(/\s/g, '').toLowerCase();
+  const compactPostcode = cleanPostcode.replace(/\s/g, '').toLowerCase();
+  return compactAddress.endsWith(compactPostcode) ? cleanAddress : `${cleanAddress}, ${cleanPostcode}`;
+}
+
+export function applicationChangesRequestedEmail(name: string, changes: string, applicationUrl: string): { subject: string; html: string } {
+  const escapedChanges = String(changes)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/\r?\n/g, '<br/>');
+  return {
+    subject: 'Changes required for your Fleming Lettings application',
+    html: brandedEmailHtml('Application Review', `
+      <p>Hi ${name || 'there'},</p>
+      <p>Thank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you.</p>
+      <h3 style="font-size:15px;color:#25073B;margin:24px 0 10px">What we need to complete your application:</h3>
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px">${escapedChanges}</div>
+      <p>Please use your secure link to update the application:</p>
+      <p><a href="${applicationUrl}" style="display:inline-block;background:#DC006D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">Update your application</a></p>
+      <p>If you need any help, please contact our office on 01902 212 415.</p>
+    `),
+  };
+}
+
 export async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; id?: string; error?: string; simulated?: boolean }> {
   if (!resend) {
     if (ALLOW_SIMULATED_MESSAGES) {
@@ -46,21 +109,18 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
 // ── Email Templates ──
 
 export function viewingConfirmationEmail(name: string, address: string, date: string): { subject: string; html: string } {
+  const cleanAddress = normalizePropertyAddress(address);
   return {
-    subject: `Your viewing with Fleming Lettings at ${address}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Viewing Confirmation</h2>
+    subject: `Your viewing with Fleming Lettings at ${cleanAddress}`,
+    html: brandedEmailHtml('Viewing Confirmation', `
         <p>Hi ${name},</p>
         <p>This is to confirm your viewing at:</p>
         <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 16px 0;">
-          <strong>${address}</strong><br/>
+          <strong>${cleanAddress}</strong><br/>
           <span style="color: #666;">Date: ${date}</span>
         </div>
         <p>Please arrive on time. If you need to reschedule, reply to this email or call us.</p>
-        <p>Best regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>contact@tenancies.fleminglettings.co.uk | 01902 212 415</p>
-      </div>
-    `,
+      `),
   };
 }
 
@@ -112,15 +172,11 @@ export function statusUpdateEmail(name: string, address: string, status: string)
 
   return {
     subject: `Application Update - ${address}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Application Update</h2>
+    html: brandedEmailHtml('Application Update', `
         <p>Hi ${name},</p>
         <p>We wanted to let you know that regarding your application for <strong>${address}</strong>, ${statusMessages[status] || 'your application status has been updated'}.</p>
         <p>If you have any questions, please don't hesitate to get in touch.</p>
-        <p>Best regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>contact@tenancies.fleminglettings.co.uk | 01902 212 415</p>
-      </div>
-    `,
+      `),
   };
 }
 
@@ -291,13 +347,7 @@ export function tenancyApplicationEmail(
 export function enquiryConfirmationEmail(name: string, reference: string, propertyAddress?: string | null): { subject: string; html: string } {
   return {
     subject: 'Welcome to Fleming Lettings!',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
-          <h1 style="color: #fff; margin: 0; font-size: 22px;">Fleming Lettings</h1>
-          <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px;">Enquiry Received</p>
-        </div>
-        <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
+    html: brandedEmailHtml('Enquiry Received', `
           <p style="font-size: 15px; color: #333;">Hi there ${name}!</p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">
             Thank you for registering with Fleming Lettings. We have received your application${propertyAddress ? ` regarding <strong>${propertyAddress}</strong>` : ''} and our lettings team will review it in due course.
@@ -312,41 +362,20 @@ export function enquiryConfirmationEmail(name: string, reference: string, proper
           <p style="font-size: 14px; color: #555; line-height: 1.6;">
             If you have any questions, reply to this email or call us on <strong>01902 212 415</strong> quoting your reference.
           </p>
-          <p style="font-size: 14px; color: #555;">
-            Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
-            <span style="font-size: 12px; color: #888;">01902 212 415 | contact@tenancies.fleminglettings.co.uk</span>
-          </p>
-        </div>
-        <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
-          <p style="font-size: 11px; color: #999; margin: 0;">
-            Fleming Lettings and Developments UK Limited<br/>
-            Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG
-          </p>
-        </div>
-      </div>
-    `,
+      `),
   };
 }
 
 export function applicationConfirmationEmail(name: string): { subject: string; html: string } {
   return {
     subject: 'Thank you for completing your application form',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
-          <h1 style="color: #fff; margin: 0; font-size: 22px;">Fleming Lettings</h1>
-          <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px;">Application received</p>
-        </div>
-        <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
+    html: brandedEmailHtml('Application Received', `
           <p style="font-size: 15px; color: #333;">Dear ${name},</p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">Thank you for completing your application form.</p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">Our office team will review your application and be in touch with you within the next 48 hours.</p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">Please note that we may still require additional information or documentation from you to complete our checks. If so, a member of our team will contact you.</p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">If you have any questions, reply to this email or call us on <strong>01902 212 415</strong>.</p>
-          <p style="font-size: 14px; color: #555;">Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/><span style="font-size: 12px; color: #888;">01902 212 415 | ${OUTBOUND_EMAIL_ADDRESS}</span></p>
-        </div>
-      </div>
-    `,
+      `),
   };
 }
 

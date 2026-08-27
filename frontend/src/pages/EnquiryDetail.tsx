@@ -8,13 +8,15 @@ import ActivityTimeline from '../components/ui/ActivityTimeline';
 import AddressAutocomplete from '../components/ui/AddressAutocomplete';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import {
   Pencil, X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle,
   Calendar, ExternalLink, CheckCircle, Circle, Clock, Mail, Phone, ChevronRight,
-  MessageSquare, Plus, ShieldCheck, AlertTriangle, Send
+  MessageSquare, Plus, ShieldCheck, AlertTriangle, Send, Trash2
 } from 'lucide-react';
 import { BookingIcon, AwaitingIcon, OnboardingIcon, ConvertedIcon } from '../components/ui/icons/FlemingIcons';
 import { calculateSmsSegments } from '../utils/sms';
+import { rejectionSms } from '../utils/messages';
 import OnboardingWizard from '../components/ui/OnboardingWizard';
 import EmailPreviewModal from '../components/ui/EmailPreviewModal';
 
@@ -90,7 +92,7 @@ function buildHoldingDepositEmailHtml(
       </p>
       <p style="font-size: 14px; color: #555;">
         Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
-        <span style="font-size: 12px; color: #888;">01902 212 415 | enquiries@fleminglettings.co.uk</span>
+        <span style="font-size: 12px; color: #888;">01902 212 415 | contact@tenancies.fleminglettings.co.uk</span>
       </p>
     </div>
     <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
@@ -193,6 +195,7 @@ export default function EnquiryDetail() {
   const navigate = useNavigate();
   const api = useApi();
   const { user } = useAuth();
+  const { canDelete } = usePermissions();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<Record<string, any> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -202,6 +205,7 @@ export default function EnquiryDetail() {
   const [loading, setLoading] = useState(true);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Notes
   const [notes, setNotes] = useState<{ id: string; text: string; author: string; created_at: string }[]>([]);
@@ -459,6 +463,18 @@ export default function EnquiryDetail() {
   const completedCount = checklistItems.filter(i => i.done).length;
   const completionPercent = checklistItems.length ? Math.round((completedCount / checklistItems.length) * 100) : 0;
 
+  const deleteEnquiry = async () => {
+    if (!id || !data || !window.confirm(`Delete the enquiry for ${[data.first_name_1, data.last_name_1].filter(Boolean).join(' ')}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/api/tenant-enquiries/${id}`);
+      navigate('/enquiries');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'The enquiry could not be deleted');
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout title="Enquiry" breadcrumb={[{ label: 'Tenant Enquiries', to: '/enquiries' }, { label: 'Loading...' }]}>
@@ -551,9 +567,22 @@ export default function EnquiryDetail() {
                   <ArrowRight size={14} className="mr-1.5" /> Progress
                 </Button>
               )}
+              {canDelete() && form.status !== 'converted' && (
+                <Button variant="ghost" size="sm" onClick={deleteEnquiry} disabled={deleting} className="text-red-400">
+                  <Trash2 size={14} className="mr-1.5" /> {deleting ? 'Deleting...' : 'Delete'}
+                </Button>
+              )}
             </div>
           </div>
         </GlassCard>
+
+        {form.application_form_completed && form.application_review_status === 'pending' && (
+          <button onClick={() => setShowOnboardingWizard(true)} className="w-full text-left rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-center gap-3">
+            <AlertTriangle size={18} className="text-amber-400 shrink-0" />
+            <div className="flex-1"><p className="text-sm font-semibold text-amber-300">Application ready for review</p><p className="text-xs text-[var(--text-muted)]">The applicant has completed and signed the form. Review their answers and supporting documents.</p></div>
+            <ChevronRight size={16} className="text-amber-400" />
+          </button>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* ==================== LEFT COLUMN ==================== */}
@@ -1166,7 +1195,7 @@ export default function EnquiryDetail() {
             </div>
             <div className="px-5 py-3 space-y-1 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)]">
               <div className="flex gap-3 text-xs"><span className="text-[var(--text-muted)] w-14">To:</span><span>{viewingEmail.to_email}</span></div>
-              <div className="flex gap-3 text-xs"><span className="text-[var(--text-muted)] w-14">From:</span><span>{viewingEmail.from_email || 'enquiries@fleminglettings.co.uk'}</span></div>
+              <div className="flex gap-3 text-xs"><span className="text-[var(--text-muted)] w-14">From:</span><span>{viewingEmail.from_email || 'contact@tenancies.fleminglettings.co.uk'}</span></div>
               <div className="flex gap-3 text-xs"><span className="text-[var(--text-muted)] w-14">Subject:</span><span className="font-medium">{viewingEmail.subject}</span></div>
               <div className="flex gap-3 text-xs">
                 <span className="text-[var(--text-muted)] w-14">Sent:</span>
@@ -1240,7 +1269,7 @@ export default function EnquiryDetail() {
                   </>
                 )}
                 <div className="h-px bg-[var(--border-subtle)] my-3" />
-                <button onClick={() => { setWorkflowMode('reject'); setSmsEnabled(false); const fn = form.first_name_1 || '[name]'; setSmsBody(`Hi ${fn}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time. We wish you the best in your property search. - Fleming Lettings`); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left">
+                <button onClick={() => { setWorkflowMode('reject'); setSmsEnabled(false); setSmsBody(rejectionSms(form.first_name_1 || '[name]')); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center"><XCircle size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium text-red-400">Reject & Archive</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
@@ -1379,9 +1408,7 @@ export default function EnquiryDetail() {
                         <textarea value={wfReason} onChange={e => {
                           setWfReason(e.target.value);
                           if (smsEnabled) {
-                            const base = `Hi ${firstName}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time.`;
-                            const reasonLine = e.target.value ? ` Reason: ${e.target.value}.` : '';
-                            setSmsBody(`${base}${reasonLine} We wish you the best in your property search. - Fleming Lettings`);
+                            setSmsBody(rejectionSms(firstName));
                           }
                         }} rows={3}
                           className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none"
@@ -1396,9 +1423,7 @@ export default function EnquiryDetail() {
                             <input type="checkbox" checked={smsEnabled} onChange={e => {
                               setSmsEnabled(e.target.checked);
                               if (e.target.checked && !smsBody) {
-                                const base = `Hi ${firstName}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time.`;
-                                const reasonLine = wfReason ? ` Reason: ${wfReason}.` : '';
-                                setSmsBody(`${base}${reasonLine} We wish you the best in your property search. - Fleming Lettings`);
+                                setSmsBody(rejectionSms(firstName));
                               }
                             }} className="w-4 h-4 rounded accent-orange-500" />
                             <Phone size={14} className="text-teal-400" />
@@ -1444,7 +1469,7 @@ export default function EnquiryDetail() {
         open={showHoldingDeposit}
         onClose={() => setShowHoldingDeposit(false)}
         to={data?.email_1 || ''}
-        from="enquiries@fleminglettings.co.uk"
+        from="contact@tenancies.fleminglettings.co.uk"
         initialSubject={`Holding Deposit Request - ${selectedProp?.address || 'Property'}`}
         initialBodyHtml={buildHoldingDepositEmailHtml(
           [data?.first_name_1, data?.last_name_1].filter(Boolean).join(' ') || 'Applicant',

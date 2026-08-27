@@ -30,6 +30,8 @@ export default function Users() {
   const [saving, setSaving] = useState(false);
   const [tempPassword, setTempPassword] = useState('');
   const [error, setError] = useState('');
+  const [teamCredentials, setTeamCredentials] = useState<Array<{ email: string; name: string; tempPassword: string }>>([]);
+  const [settingUpTeam, setSettingUpTeam] = useState(false);
 
   // Redirect if not admin
   useEffect(() => {
@@ -134,6 +136,21 @@ export default function Users() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     alert('Copied to clipboard!');
+  };
+
+  const setupRequestedTeam = async () => {
+    if (!confirm('Add the five requested Fleming team accounts? Existing accounts will be left unchanged.')) return;
+    setSettingUpTeam(true);
+    try {
+      const result = await api.post('/api/users/setup-fleming-team', {});
+      setTeamCredentials(result.created || []);
+      await load();
+      if (!(result.created || []).length) alert('All requested team accounts already exist.');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'The team accounts could not be created');
+    } finally {
+      setSettingUpTeam(false);
+    }
   };
 
   const roleColors: Record<string, string> = {
@@ -264,12 +281,25 @@ export default function Users() {
               placeholder="Search users..."
               className="w-full md:w-80"
             />
-            <Button variant="primary" size="sm" onClick={handleOpenCreate}>
-              <Plus size={16} className="mr-2" />
-              Add User
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="ghost" size="sm" onClick={setupRequestedTeam} disabled={settingUpTeam}>
+                <UsersIcon size={16} className="mr-2" /> {settingUpTeam ? 'Setting up...' : 'Set up requested team'}
+              </Button>
+              <Button variant="primary" size="sm" onClick={handleOpenCreate}>
+                <Plus size={16} className="mr-2" /> Add User
+              </Button>
+            </div>
           </div>
         </GlassCard>
+
+        {teamCredentials.length > 0 && (
+          <GlassCard className="p-4 border-amber-500/30">
+            <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-amber-300">Save these temporary passwords now</p><p className="text-xs text-[var(--text-muted)]">They are shown only in this session.</p></div><button onClick={() => setTeamCredentials([])}><X size={16} /></button></div>
+            <div className="mt-3 grid gap-2">
+              {teamCredentials.map(account => <div key={account.email} className="rounded-lg bg-[var(--bg-subtle)] px-3 py-2 text-xs flex flex-wrap items-center gap-2"><span className="font-medium">{account.name}</span><span className="text-[var(--text-muted)]">{account.email}</span><code className="ml-auto">{account.tempPassword}</code><button onClick={() => copyToClipboard(account.tempPassword)} title="Copy password"><Copy size={13} /></button></div>)}
+            </div>
+          </GlassCard>
+        )}
 
         {/* Users Table */}
         <GlassCard className="overflow-hidden">

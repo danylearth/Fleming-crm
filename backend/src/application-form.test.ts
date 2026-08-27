@@ -26,6 +26,12 @@ describe('tenant application form feedback', () => {
     expect(formHtml).toContain("uploadLabel.textContent = matchingDocuments.length ? '+ Add another' : 'Choose files'");
   });
 
+  it('identifies the exact missing answer and uses the CRM favicon', () => {
+    expect(formHtml).toContain('Please answer: “${question}”.');
+    expect(formHtml).toContain("scrollIntoView({ behavior: 'smooth', block: 'center' })");
+    expect(formHtml).toContain('crm.fleminglettings.co.uk/logo-icon.png');
+  });
+
   it('implements the 26 August conditional questions and mandatory signature', () => {
     for (const id of ['f_has_loans', 'f_has_credit_cards', 'f_has_personal_ref', 'f_has_other_occupants', 'f_has_pets', 'f_generate_signature']) {
       expect(formHtml).toContain(`id="${id}"`);

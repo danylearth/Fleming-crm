@@ -469,6 +469,16 @@ export async function initDb() {
       END $$;
     `);
 
+    // Keep document review columns outside the grouped migration above. A legacy
+    // database can make an earlier ALTER fail; PostgreSQL then skips the rest of
+    // that DO block, which previously left document reviews unusable.
+    await client.query(`
+      ALTER TABLE documents ADD COLUMN IF NOT EXISTS review_status TEXT DEFAULT 'pending';
+      ALTER TABLE documents ADD COLUMN IF NOT EXISTS review_notes TEXT;
+      ALTER TABLE documents ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP;
+      ALTER TABLE documents ADD COLUMN IF NOT EXISTS reviewed_by INTEGER;
+    `);
+
     // Sprint 2: KYC breakdown, structured income, status
     await client.query(`
       DO $$ BEGIN

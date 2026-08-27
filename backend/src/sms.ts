@@ -114,10 +114,8 @@ export function followUpSms(name: string): string {
   return `Hi ${name}! Just following up on your recent property enquiry with Fleming Lettings. When you get five, please call our team back on 01902 212 415. Speak soon, the team at Fleming's.`;
 }
 
-export function rejectionSms(name: string, reason?: string): string {
-  const base = `Hi ${name}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time.`;
-  const reasonLine = reason ? ` Reason: ${reason}.` : '';
-  return `${base}${reasonLine} We wish you the best in your property search. - Fleming Lettings`;
+export function rejectionSms(name: string): string {
+  return `Hi ${name}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time. If you would like us to continue to search for similar properties that meet your requirements, then please let us know. All the very best in your search!`;
 }
 
 export function rentReminderSms(name: string, amount: string, dueDate: string): string {

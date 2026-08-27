@@ -12,6 +12,7 @@ import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 import { SearchDropdown } from '../components/ui/SearchDropdown';
 import OnboardingWizard from '../components/ui/OnboardingWizard';
 import { calculateSmsSegments } from '../utils/sms';
+import { rejectionSms } from '../utils/messages';
 import { usePermissions } from '../hooks/usePermissions';
 
 interface EnquiryRaw {
@@ -43,6 +44,7 @@ interface Enquiry {
   is_joint_application?: boolean;
   joint_partner_id?: number | null;
   onboarding_started?: boolean;
+  application_ready_for_review?: boolean;
 }
 
 function mapEnquiry(raw: EnquiryRaw): Enquiry {
@@ -60,6 +62,7 @@ function mapEnquiry(raw: EnquiryRaw): Enquiry {
     is_joint_application: !!raw.is_joint_application,
     joint_partner_id: raw.joint_partner_id || null,
     onboarding_started: !!(raw.holding_deposit_requested || raw.application_form_sent || raw.onboarding_step),
+    application_ready_for_review: !!raw.application_form_completed && raw.application_review_status === 'pending',
   };
 }
 
@@ -400,10 +403,10 @@ export default function Enquiries() {
     setEmailEnabled(false);
     if (mode === 'reject') {
       setEmailSubject('Your application with Fleming Lettings');
-      setEmailBody(`Hi there ${greeting},\n\nThank you for registering and showing your interest in our latest listing.\n\nUnfortunately, we are not going to be able to take your application any further at this point. This can be for a number of reasons, including affordability checks, landlord’s discretion or that the property has already been let or taken off market.\n\nWe understand how disappointing this news might be, but rest assured we’re on hand to help with any future listings that might be suitable.\n\nKind regards,\nLettings Support Team | fleminglettings.co.uk\nenquiries@fleminglettings.co.uk | 01902 212 415`);
+      setEmailBody(`Hi there ${greeting},\n\nThank you for registering and showing your interest in our latest listing.\n\nUnfortunately, we are not going to be able to take your application any further at this point. This can be for a number of reasons, including affordability checks, landlord’s discretion or that the property has already been let or taken off market.\n\nWe understand how disappointing this news might be, but rest assured we’re on hand to help with any future listings that might be suitable.\n\nKind regards,\nLettings Support Team | fleminglettings.co.uk\ncontact@tenancies.fleminglettings.co.uk | 01902 212 415`);
     } else {
       setEmailSubject('Following up on your property enquiry');
-      setEmailBody(`Hi there ${greeting},\n\nWe’re following up on your recent property enquiry with Fleming Lettings. Please let us know if you are still looking, would like to arrange a viewing, or have any questions.\n\nYou can reply to this email or call us on 01902 212 415.\n\nKind regards,\nLettings Support Team | fleminglettings.co.uk\nenquiries@fleminglettings.co.uk | 01902 212 415`);
+      setEmailBody(`Hi there ${greeting},\n\nWe’re following up on your recent property enquiry with Fleming Lettings. Please let us know if you are still looking, would like to arrange a viewing, or have any questions.\n\nYou can reply to this email or call us on 01902 212 415.\n\nKind regards,\nLettings Support Team | fleminglettings.co.uk\ncontact@tenancies.fleminglettings.co.uk | 01902 212 415`);
     }
   };
 
@@ -551,7 +554,11 @@ export default function Enquiries() {
   };
 
   // Kanban columns — reuse STATUSES minus converted/rejected
-  const kanbanStatuses = STATUSES.filter(s => !['converted', 'rejected'].includes(s.key));
+  const kanbanStatuses = STATUSES.filter(s =>
+    statusFilter === 'rejected' ? s.key === 'rejected'
+      : statusFilter === 'converted' ? s.key === 'converted'
+        : !['converted', 'rejected'].includes(s.key)
+  );
 
   const onDragEnd = async (result: DropResult) => {
     const { draggableId, destination, source } = result;
@@ -736,6 +743,7 @@ export default function Enquiries() {
                                           <p className="text-sm font-medium truncate flex-1">{e.name}</p>
                                           {e.is_joint_application && <span className="text-[10px] font-bold text-purple-400 shrink-0">Joint App</span>}
                                         </div>
+                                        {e.application_ready_for_review && <span className="inline-flex mt-1 text-[10px] font-semibold text-amber-400">Application ready for review</span>}
                                         {e.email && <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5"><Mail size={10} />{e.email}</p>}
                                         {e.phone && <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5"><Phone size={10} />{e.phone}</p>}
                                         {e.address && <p className="text-xs text-[var(--text-muted)] flex items-start gap-1 mt-0.5"><Home size={10} className="mt-0.5 shrink-0" /><span className="line-clamp-2">{e.address}</span></p>}
@@ -815,6 +823,7 @@ export default function Enquiries() {
                       <div className="flex items-center gap-2">
                         <p className="font-medium truncate">{e.name}</p>
                         {e.is_joint_application && <span className="text-[10px] font-bold text-purple-400 shrink-0">Joint App</span>}
+                        {e.application_ready_for_review && <span className="text-[10px] font-semibold text-amber-400 shrink-0">Review application</span>}
                       </div>
                       <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{e.email || e.phone}</p>
                     </div>
@@ -963,7 +972,7 @@ export default function Enquiries() {
                 </button>
                 <div className="h-px bg-[var(--border-subtle)] my-3" />
                 <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Archive</p>
-                <button onClick={() => { setWorkflowMode('reject'); setSmsEnabled(false); prepareWorkflowEmail('reject'); const fn = workflowEnquiry?.name?.split(' ')[0] || ''; setSmsBody(`Hi ${fn || '[name]'}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time. We wish you the best in your property search. - Fleming Lettings`); }}
+                <button onClick={() => { setWorkflowMode('reject'); setSmsEnabled(false); prepareWorkflowEmail('reject'); const fn = workflowEnquiry?.name?.split(' ')[0] || ''; setSmsBody(rejectionSms(fn)); }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center"><XCircle size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium text-red-400">Reject & Archive</p><p className="text-xs text-[var(--text-muted)]">Archive this enquiry</p></div>
@@ -1084,7 +1093,7 @@ export default function Enquiries() {
                         <Mail size={14} className="text-sky-400" />
                         <div className="flex-1">
                           <span className="text-sm font-medium text-[var(--text-primary)]">Send follow-up email</span>
-                          <p className="text-[10px] text-[var(--text-muted)]">From enquiries@fleminglettings.co.uk · unchecked by default</p>
+                          <p className="text-[10px] text-[var(--text-muted)]">From contact@tenancies.fleminglettings.co.uk · unchecked by default</p>
                         </div>
                       </label>
                       {emailEnabled && (
@@ -1117,9 +1126,7 @@ export default function Enquiries() {
                         <textarea value={wfReason} onChange={e => {
                           setWfReason(e.target.value);
                           if (smsEnabled) {
-                            const base = `Hi ${firstName || '[name]'}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time.`;
-                            const reasonLine = e.target.value ? ` Reason: ${e.target.value}.` : '';
-                            setSmsBody(`${base}${reasonLine} We wish you the best in your property search. - Fleming Lettings`);
+                            setSmsBody(rejectionSms(firstName));
                           }
                         }} rows={3}
                           className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none"
@@ -1134,9 +1141,7 @@ export default function Enquiries() {
                             <input type="checkbox" checked={smsEnabled} onChange={e => {
                               setSmsEnabled(e.target.checked);
                               if (e.target.checked && !smsBody) {
-                                const base = `Hi ${firstName || '[name]'}, thank you for your enquiry with Fleming Lettings. Unfortunately, we are unable to proceed with your application at this time.`;
-                                const reasonLine = wfReason ? ` Reason: ${wfReason}.` : '';
-                                setSmsBody(`${base}${reasonLine} We wish you the best in your property search. - Fleming Lettings`);
+                                setSmsBody(rejectionSms(firstName));
                               }
                             }} className="w-4 h-4 rounded accent-orange-500" />
                             <Phone size={14} className="text-teal-400" />

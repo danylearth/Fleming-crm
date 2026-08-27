@@ -6,7 +6,7 @@ import EmailPreviewModal from './EmailPreviewModal';
 import {
   CheckCircle, Circle, Clock, Mail, FileText, Shield, CreditCard,
   ChevronDown, AlertTriangle, User, X, Send,
-  Eye, PoundSterling
+  Eye, Download, PoundSterling
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -91,6 +91,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
   // Step 5: Credit check
   const [creditScore, setCreditScore] = useState('');
   const [reviewNotes, setReviewNotes] = useState('');
+  const [changesRequired, setChangesRequired] = useState('');
+  const [sendReviewSms, setSendReviewSms] = useState(false);
+  const [sendReviewEmail, setSendReviewEmail] = useState(false);
   const [reviewError, setReviewError] = useState('');
 
   // Application email modal
@@ -154,22 +157,37 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
     URL.revokeObjectURL(href);
   };
 
+  const viewDocument = async (docId: number) => {
+    if (!token) return;
+    const response = await fetch(`${API_URL}/api/documents/download/${docId}?disposition=inline`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      setReviewError('Document preview failed');
+      return;
+    }
+    const href = URL.createObjectURL(await response.blob());
+    window.open(href, '_blank', 'noopener,noreferrer');
+    window.setTimeout(() => URL.revokeObjectURL(href), 60_000);
+  };
+
   const updateApplicationReview = async (status: 'approved' | 'changes_requested') => {
     setSaving(true);
     setReviewError('');
     try {
-      await api.post(`/api/tenant-enquiries/${enquiryId}/application-review`, {
+      const result = await api.post(`/api/tenant-enquiries/${enquiryId}/application-review`, {
         status,
         notes: reviewNotes || null,
+        changes_required: status === 'changes_requested' ? changesRequired : null,
+        send_sms: status === 'changes_requested' && sendReviewSms,
+        send_email: status === 'changes_requested' && sendReviewEmail,
       });
-      if (status === 'changes_requested') {
-        const escapedNotes = escapeHtml(reviewNotes || 'Please review your application and supporting documents.');
-        await api.post(`/api/tenant-enquiries/${enquiryId}/send-application-email`, {
-          subject: 'Changes requested for your Fleming Lettings application',
-          body_html: buildChangesRequestedEmailHtml(escapedNotes),
-        });
-        fetchEmailHistory();
+      const delivery = (result?.delivery || {}) as Record<string, { success: boolean; error?: string }>;
+      const failedDeliveries = Object.values(delivery).filter(item => !item.success);
+      if (failedDeliveries.length) {
+        setReviewError(`Review saved, but communication failed: ${failedDeliveries.map(item => item.error).join('; ')}`);
       }
+      fetchEmailHistory();
       onUpdate();
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : 'Application review could not be updated');
@@ -187,7 +205,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
     setHdHoldingDeposit(String(enquiry.holding_deposit_amount || (rent ? Math.round(rent * 12 / 52) : '')));
     setHdReceivedAmount(enquiry.holding_deposit_received_amount ? String(enquiry.holding_deposit_received_amount) : '');
     setCreditScore(enquiry.credit_score || '');
-    setReviewNotes(enquiry.application_review_notes || '');
+    setReviewNotes('');
+    setChangesRequired(enquiry.application_review_status === 'changes_requested' ? enquiry.application_review_notes || '' : '');
     // Set active step based on progress
     if (!enquiry.holding_deposit_requested) setActiveStep(0);
     else if (!enquiry.holding_deposit_received) setActiveStep(1);
@@ -423,7 +442,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         </p>
         <p style="font-size: 14px; color: #555;">
           Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
-          <span style="font-size: 12px; color: #888;">01902 212 415 | enquiries@fleminglettings.co.uk</span>
+          <span style="font-size: 12px; color: #888;">01902 212 415 | contact@tenancies.fleminglettings.co.uk</span>
         </p>
       </div>
       <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
@@ -461,7 +480,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         <p style="font-size: 14px; color: #555; line-height: 1.6;">
           If you get stuck, need some help or if you would like our friendly team to guide you through the process then please do not hesitate to get in touch on <strong>01902 212 415</strong>.
         </p>
-        <p style="font-size: 14px; color: #555;">Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
+        <p style="font-size: 14px; color: #555;">Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>contact@tenancies.fleminglettings.co.uk | 01902 212 415</p>
       </div>
       <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
         <p style="font-size: 11px; color: #999; margin: 0;">
@@ -469,21 +488,6 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
           Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG
         </p>
       </div>
-    </div>`;
-  };
-
-  const buildChangesRequestedEmailHtml = (escapedNotes: string): string => {
-    const formUrl = enquiry.application_form_token
-      ? `https://apply.fleminglettings.co.uk/onboarding/${enquiry.application_form_token}`
-      : '#';
-    return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;line-height:1.6">
-      <h2 style="color:#25073B">Application changes requested</h2>
-      <p>Hi ${escapeHtml(enquiry.first_name_1 || 'there')},</p>
-      <p>We have reviewed your tenancy application and need the following updates:</p>
-      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px">${escapedNotes}</div>
-      <p>You can edit your answers and replace supporting documents using your existing secure link:</p>
-      <p><a href="${formUrl}" style="display:inline-block;background:#DC006D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">Update your application</a></p>
-      <p>Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>enquiries@fleminglettings.co.uk | 01902 212 415</p>
     </div>`;
   };
 
@@ -598,7 +602,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                     </div>
                     <div>
                       <p className="text-[10px] text-[var(--text-muted)]">From</p>
-                      <p className="text-xs text-[var(--text-primary)]">enquiries@fleminglettings.co.uk</p>
+                      <p className="text-xs text-[var(--text-primary)]">contact@tenancies.fleminglettings.co.uk</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-[var(--text-muted)]">Subject</p>
@@ -672,7 +676,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                 <DatePicker label="Follow-up Date" value={hdFollowUpDate} onChange={setHdFollowUpDate} />
                 <div className="bg-[var(--bg-subtle)] rounded-lg p-3 text-[10px] text-[var(--text-muted)] space-y-1">
                   <p className="font-medium text-[var(--text-secondary)]">Will send to: {enquiry.email_1}</p>
-                  <p>From: enquiries@fleminglettings.co.uk</p>
+                  <p>From: contact@tenancies.fleminglettings.co.uk</p>
                   <p>Includes: Holding Deposit Summary + Application Form Link</p>
                 </div>
                 <Button variant="gradient" onClick={requestHoldingDeposit} disabled={saving || !hdMonthlyRent || !hdHoldingDeposit}>
@@ -955,13 +959,15 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                           {docs.map(doc => (
                             <div key={doc.id} className="flex items-center gap-2 bg-[var(--bg-subtle)] rounded px-2 py-2">
                               <FileText size={12} className="text-[var(--text-muted)] shrink-0" />
-                              <button onClick={() => downloadDocument(doc.id, doc.original_name)} className="text-left min-w-0 flex-1">
+                              <div className="text-left min-w-0 flex-1">
                                 <p className="text-[11px] text-[var(--text-primary)] truncate">{doc.original_name}</p>
                                 <p className="text-[10px] text-[var(--text-muted)]">{new Date(doc.uploaded_at).toLocaleDateString('en-GB')}</p>
-                              </button>
+                              </div>
                               <span className={`text-[10px] font-medium ${doc.review_status === 'approved' ? 'text-emerald-400' : doc.review_status === 'rejected' ? 'text-red-400' : 'text-amber-400'}`}>
                                 {doc.review_status || 'pending'}
                               </span>
+                              <button onClick={() => viewDocument(doc.id)} className="px-2 py-1 rounded text-[10px] bg-sky-500/15 text-sky-400 flex items-center gap-1"><Eye size={10} />View</button>
+                              <button onClick={() => downloadDocument(doc.id, doc.original_name)} className="px-2 py-1 rounded text-[10px] bg-[var(--bg-hover)] text-[var(--text-secondary)] flex items-center gap-1"><Download size={10} />Download</button>
                               <button onClick={() => reviewDocument(doc.id, 'approved')} disabled={saving} className="px-2 py-1 rounded text-[10px] bg-emerald-500/15 text-emerald-400">Approve</button>
                               <button onClick={() => reviewDocument(doc.id, 'rejected')} disabled={saving} className="px-2 py-1 rounded text-[10px] bg-red-500/15 text-red-400">Reject</button>
                             </div>
@@ -972,14 +978,27 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                   </div>
 
                   <div>
-                    <label className="block text-[10px] text-[var(--text-muted)] mb-1">Review notes / changes required</label>
+                    <label className="block text-[10px] text-[var(--text-muted)] mb-1">Internal notes (added to the enquiry record)</label>
                     <textarea value={reviewNotes} onChange={event => setReviewNotes(event.target.value)} rows={3}
                       className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none" />
                   </div>
+                  <div>
+                    <label className="block text-[10px] text-[var(--text-muted)] mb-1">Changes / information required</label>
+                    <textarea value={changesRequired} onChange={event => setChangesRequired(event.target.value)} rows={3}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 rounded-lg bg-[var(--bg-subtle)] px-3 py-2 text-xs cursor-pointer">
+                      <input type="checkbox" checked={sendReviewSms} onChange={event => setSendReviewSms(event.target.checked)} className="accent-orange-500" /> Send SMS
+                    </label>
+                    <label className="flex items-center gap-2 rounded-lg bg-[var(--bg-subtle)] px-3 py-2 text-xs cursor-pointer">
+                      <input type="checkbox" checked={sendReviewEmail} onChange={event => setSendReviewEmail(event.target.checked)} className="accent-orange-500" /> Send email
+                    </label>
+                  </div>
                   {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={() => updateApplicationReview('changes_requested')} disabled={saving || !reviewNotes.trim()}>
-                      Request Changes &amp; Email Applicant
+                    <Button variant="outline" size="sm" onClick={() => updateApplicationReview('changes_requested')} disabled={saving || !changesRequired.trim()}>
+                      Request Changes
                     </Button>
                     <Button variant="gradient" size="sm" onClick={() => updateApplicationReview('approved')} disabled={saving || !allRequiredDocsApproved}>
                       Approve Application
@@ -1052,7 +1071,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         onSend={sendApplicationEmail}
         sending={sendingEmail}
         to={enquiry.email_1 || ''}
-        from="enquiries@fleminglettings.co.uk"
+        from="contact@tenancies.fleminglettings.co.uk"
         initialSubject={`Your Fleming Lettings Application Form`}
         initialBodyHtml={buildResendApplicationEmailHtml()}
         sendLabel="Resend Application Form Link"
@@ -1068,7 +1087,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
             </div>
             <div className="p-4 space-y-2 text-xs text-[var(--text-secondary)]">
               <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">To:</span><span>{enquiry.email_1}</span></div>
-              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">From:</span><span>enquiries@fleminglettings.co.uk</span></div>
+              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">From:</span><span>contact@tenancies.fleminglettings.co.uk</span></div>
               <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">Subject:</span><span className="font-medium">Tenancy Application – {propertyAddress || 'Property'}</span></div>
               <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">Sent:</span><span>{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at as string | number).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span></div>
             </div>

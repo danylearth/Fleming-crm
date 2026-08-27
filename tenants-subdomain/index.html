@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="https://crm.fleminglettings.co.uk/logo-icon.png">
     <title>Tenant Registration - Fleming Lettings</title>
     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 
@@ -1258,12 +1259,12 @@
 
                     <div id="employmentDetails" class="employment-fields">
                         <div class="input-group">
-                            <label>Job Title</label>
+                            <label>Job Title *</label>
                             <input type="text" name="job_title" placeholder="e.g. Software Engineer">
                         </div>
 
                         <div class="input-group">
-                            <label>Annual Income (£)</label>
+                            <label>Annual Income (£) *</label>
                             <input type="text" name="AnnualSalary" id="annualIncome" placeholder="e.g. 30000" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                         </div>
 
@@ -1340,7 +1341,7 @@
 
                     <div class="input-group">
                         <label>Employment Status</label>
-                        <select name="EmploymentStatus2" id="employmentStatus2">
+                        <select name="EmploymentStatus2" id="employmentStatus2" required>
                             <option value="">Please select</option>
                             <option value="Full-Time Employed">Full-Time Employed</option>
                             <option value="Part-Time Employed">Part-Time Employed</option>
@@ -1354,11 +1355,11 @@
                     <div id="employmentDetails2" class="employment-fields">
                         <div class="two-col">
                             <div class="input-group">
-                                <label>Job Title</label>
+                                <label>Job Title *</label>
                                 <input type="text" name="job_title2">
                             </div>
                             <div class="input-group">
-                                <label>Annual Income (£)</label>
+                                <label>Annual Income (£) *</label>
                                 <input type="text" name="AnnualSalary2" id="annualIncome2" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                             </div>
                         </div>
@@ -1889,8 +1890,11 @@
             select.addEventListener('change', function() {
                 const details = document.getElementById(detailsId);
                 const employed = ['Full-Time Employed', 'Part-Time Employed', 'Self-Employed', 'Retired'].includes(this.value);
-                const annualIncome = document.getElementById(selectId === 'employmentStatus' ? 'annualIncome' : 'annualIncome2');
+                const isPrimary = selectId === 'employmentStatus';
+                const annualIncome = document.getElementById(isPrimary ? 'annualIncome' : 'annualIncome2');
+                const jobTitle = document.querySelector(`[name="${isPrimary ? 'job_title' : 'job_title2'}"]`);
                 if (annualIncome) annualIncome.required = employed;
+                if (jobTitle) jobTitle.required = employed;
                 if (employed) {
                     details.classList.add('visible');
                     // Re-init custom selects inside the revealed section
@@ -1958,6 +1962,22 @@
 
         function nextStep() {
             const currentStepEl = document.querySelector(`[data-step="${currentStep}"]`);
+            if (currentStep === 2) {
+                const email = document.querySelector('[name="form_email"]');
+                if (email.value && !email.checkValidity()) {
+                    showError('Please enter a valid email address.');
+                    email.focus();
+                    return;
+                }
+            }
+            if (currentStep === 5) {
+                const email = document.querySelector('[name="form_email2"]');
+                if (email.value && !email.checkValidity()) {
+                    showError('Please enter a valid email address for the second applicant.');
+                    email.focus();
+                    return;
+                }
+            }
             const inputs = currentStepEl.querySelectorAll('input[required], select[required]');
             let valid = true;
 
@@ -2180,12 +2200,12 @@
                 // Check for duplicates first (fail open if endpoint errors)
                 try {
                     submitBtn.textContent = 'Checking...';
-                    const dupParams = new URLSearchParams({ email: data.form_email, phone: data.contactNumber });
+                    const dupParams = new URLSearchParams({ email: data.form_email });
                     const dupCheck = await fetch(`${API_BASE_URL}/api/public/check-duplicates?${dupParams}`);
                     if (dupCheck.ok) {
                         const dupResult = await dupCheck.json();
                         if (dupResult.duplicates && dupResult.duplicates.length > 0) {
-                            showError('It looks like you may have already submitted an application with this email or phone number. If this is a new enquiry, please contact us directly.');
+                            showError('It looks like you may have already submitted an application with this email address. If this is a new enquiry, please contact us directly.');
                             submitBtn.disabled = false;
                             submitBtn.textContent = 'Submit Application ✓';
                             return;

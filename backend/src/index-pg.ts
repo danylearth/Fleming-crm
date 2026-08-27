@@ -1056,7 +1056,7 @@ app.post('/api/public/landlord-enquiries', publicSubmitLimiter, async (req, res)
     if (!emailRegex.test(email)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid email address'
+        error: 'Please enter a valid email address.'
       });
     }
 
@@ -1257,7 +1257,7 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
     if (!isValidEmail(form_email)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid email address'
+        error: 'Please enter a valid email address.'
       });
     }
     if (!isValidUkMobile(contactNumber)) {
@@ -1273,8 +1273,14 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
       return res.status(400).json({ success: false, error: 'Invalid second applicant UK mobile number' });
     }
     const incomeStatuses = ['Full-Time Employed', 'Part-Time Employed', 'Self-Employed', 'Retired'];
+    if (incomeStatuses.includes(EmploymentStatus) && !String(job_title || '').trim()) {
+      return res.status(400).json({ success: false, error: 'Job title is required' });
+    }
     if (incomeStatuses.includes(EmploymentStatus) && !parsePublicNumber(AnnualSalary)) {
       return res.status(400).json({ success: false, error: 'Annual income is required' });
+    }
+    if (is_joint && incomeStatuses.includes(EmploymentStatus2) && !String(job_title2 || '').trim()) {
+      return res.status(400).json({ success: false, error: 'Job title is required for the second applicant' });
     }
     if (is_joint && incomeStatuses.includes(EmploymentStatus2) && !parsePublicNumber(AnnualSalary2)) {
       return res.status(400).json({ success: false, error: 'Annual income is required for the second applicant' });
@@ -2207,8 +2213,8 @@ app.post('/api/tenants/bulk-delete', authMiddleware, requirePermission('manager'
 // Public duplicate check for enquiry forms
 app.get('/api/public/check-duplicates', publicReadLimiter, async (req, res) => {
   try {
-    const { email, phone } = req.query;
-    if (!email && !phone) {
+    const { email } = req.query;
+    if (!email) {
       return res.json({ duplicates: [] });
     }
 
@@ -2222,14 +2228,6 @@ app.get('/api/public/check-duplicates', publicReadLimiter, async (req, res) => {
       );
       duplicates.push(...emailMatches);
     }
-    if (phone) {
-      const phoneMatches = await query(
-        `SELECT id, first_name_1, last_name_1, 'tenant_enquiry' as source, 'phone' as match_type FROM tenant_enquiries WHERE phone_1 = $1`,
-        [phone]
-      );
-      duplicates.push(...phoneMatches);
-    }
-
     // Check tenants
     if (email) {
       const tenantEmail = await query(
@@ -2535,6 +2533,14 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
     })]);
 
     if (!enquiry.application_form_completed) {
+      await insert(`
+        INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, task_type, due_date)
+        VALUES ($1, $2, 'pending', 'high', 'tenant_enquiry', $3, 'manual', CURRENT_DATE)
+      `, [
+        `Review completed application: ${formData.first_name} ${formData.last_name}`.trim(),
+        'The applicant has completed and signed their tenancy application. Review the submitted answers and supporting documents.',
+        enquiry.id,
+      ]);
       (async () => {
         const { sendEmail, applicationConfirmationEmail, OUTBOUND_EMAIL_ADDRESS } = require('./email');
         const content = applicationConfirmationEmail(`${formData.first_name} ${formData.last_name}`.trim());
@@ -3070,7 +3076,9 @@ app.get('/api/documents/download/:id', authMiddleware, async (req: AuthRequest, 
     const filePath = path.join(uploadsDir, doc.filename);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
 
-    res.setHeader('Content-Disposition', `attachment; filename="${doc.original_name}"`);
+    const disposition = req.query.disposition === 'inline' ? 'inline' : 'attachment';
+    res.setHeader('Content-Disposition', `${disposition}; filename="${doc.original_name}"`);
+    if (doc.mime_type) res.type(doc.mime_type);
     res.sendFile(filePath);
   } catch (err) {
     res.status(500).json({ error: 'Failed to download' });
@@ -3359,6 +3367,40 @@ app.post('/api/users', authMiddleware, requireRole('admin'), async (req: AuthReq
       return res.status(400).json({ error: 'Email already exists' });
     }
     res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+app.post('/api/users/setup-fleming-team', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
+  try {
+    const requestedTeam = [
+      { email: 'marie@fleminglettings.co.uk', name: 'Marie Ellis', role: 'staff' },
+      { email: 'sam@fleminglettings.co.uk', name: 'Sam Fleming', role: 'staff' },
+      { email: 'robert@fleminglettings.co.uk', name: 'Robert Fleming', role: 'staff' },
+      { email: 'admin@fleminglettings.co.uk', name: 'Master Account', role: 'admin' },
+      { email: 'danyl@fleminglettings.co.uk', name: 'Danyl Goodall', role: 'staff' },
+    ];
+    const created: Array<{ email: string; name: string; role: string; tempPassword: string }> = [];
+    const existing: string[] = [];
+    for (const member of requestedTeam) {
+      const found = await queryOne('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [member.email]);
+      if (found) {
+        existing.push(member.email);
+        continue;
+      }
+      const tempPassword = crypto.randomBytes(9).toString('base64url');
+      const hashedPassword = await bcrypt.hash(tempPassword, 10);
+      const id = await insert(
+        `INSERT INTO users (email, password, name, role, department, last_password_change)
+         VALUES ($1, $2, $3, $4, 'Lettings', CURRENT_TIMESTAMP)`,
+        [member.email, hashedPassword, member.name, member.role]
+      );
+      await logAudit(req.user?.id, req.user?.email, 'create', 'user', id, { ...member, source: 'requested_team_setup' });
+      created.push({ ...member, tempPassword });
+    }
+    res.json({ created, existing });
+  } catch (err) {
+    console.error('Fleming team setup failed:', err);
+    res.status(500).json({ error: 'Failed to set up the Fleming team' });
   }
 });
 
@@ -3829,8 +3871,8 @@ app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res)
       if (!viewer_email) {
         emailDelivery = { success: false, status: 'failed', error: 'No applicant email address is recorded' };
       } else {
-        const { sendEmail, viewingConfirmationEmail } = require('./email');
-        const address = [property?.address, property?.postcode].filter(Boolean).join(', ');
+        const { sendEmail, viewingConfirmationEmail, normalizePropertyAddress } = require('./email');
+        const address = normalizePropertyAddress(property?.address || '', property?.postcode);
         const dateParts = String(viewing_date).split('-');
         const displayDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : viewing_date;
         const dateAndTime = `${displayDate}${viewing_time ? ` at ${viewing_time}` : ''}`;
@@ -3893,7 +3935,8 @@ app.post('/api/tenant-enquiries/:id/application-review', authMiddleware, require
       return res.status(400).json({ error: 'status must be pending, changes_requested, or approved' });
     }
     const enquiry = await queryOne(`
-      SELECT id, application_form_completed, app_form_data
+      SELECT id, application_form_completed, app_form_data, first_name_1, last_name_1,
+        email_1, phone_1, application_form_token, notes
       FROM tenant_enquiries WHERE id = $1
     `, [enquiryId]);
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
@@ -3916,16 +3959,63 @@ app.post('/api/tenant-enquiries/:id/application-review', authMiddleware, require
       }
     }
 
+    const internalNotes = String(req.body.notes || '').trim();
+    const changesRequired = String(req.body.changes_required || '').trim();
+    const sendSmsRequested = req.body.send_sms === true;
+    const sendEmailRequested = req.body.send_email === true;
+    if (status === 'changes_requested' && !changesRequired) {
+      return res.status(400).json({ error: 'Please describe the changes or information required' });
+    }
+
     await run(`
       UPDATE tenant_enquiries SET application_review_status = $1, application_review_notes = $2,
+        notes = CASE WHEN $5 = '' THEN notes ELSE CONCAT_WS(E'\n\n', NULLIF(notes, ''), $5) END,
         application_reviewed_at = CASE WHEN $1 = 'approved' THEN NOW() ELSE NULL END,
         application_reviewed_by = CASE WHEN $1 = 'approved' THEN $3 ELSE NULL END
       WHERE id = $4
-    `, [status, req.body.notes || null, req.user?.id || null, enquiryId]);
+    `, [status, changesRequired || internalNotes || null, req.user?.id || null, enquiryId, internalNotes]);
     await logAudit(req.user?.id, req.user?.email, 'application_review', 'tenant_enquiry', enquiryId, {
-      status, notes: req.body.notes || null,
+      status, notes: internalNotes || null, changes_required: changesRequired || null,
     });
-    res.json({ success: true, status });
+
+    const delivery: Record<string, any> = {};
+    if (status === 'changes_requested') {
+      const firstName = enquiry.first_name_1 || 'there';
+      const applicationUrl = `https://apply.fleminglettings.co.uk/onboarding/${enquiry.application_form_token}`;
+      if (sendSmsRequested) {
+        if (!enquiry.phone_1) {
+          delivery.sms = { success: false, error: 'No applicant phone number is recorded' };
+        } else {
+          const { sendSms, normalizeUkPhone } = require('./sms');
+          const smsBody = `Hi there ${firstName}, thank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you. Please click on this link to jump back in: ${applicationUrl}. If you need any help, then please contact our office on 01902 212 415.`;
+          const smsResult = await sendSms({ to: normalizeUkPhone(enquiry.phone_1), body: smsBody });
+          await insert(`INSERT INTO sms_messages (enquiry_id, entity_type, entity_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
+            VALUES ($1, 'tenant_enquiry', $1, $2, $3, $4, $5, $6, $7, $8, $9)`, [
+            enquiryId, normalizeUkPhone(enquiry.phone_1), process.env.TWILIO_PHONE_NUMBER || null, smsBody,
+            smsResult.simulated ? 'simulated' : (smsResult.success ? 'sent' : 'failed'), smsResult.sid || null,
+            smsResult.error || null, req.user?.id || null, req.user?.email || null,
+          ]);
+          delivery.sms = { success: smsResult.success, error: smsResult.error };
+        }
+      }
+      if (sendEmailRequested) {
+        if (!enquiry.email_1) {
+          delivery.email = { success: false, error: 'No applicant email address is recorded' };
+        } else {
+          const { sendEmail, applicationChangesRequestedEmail, OUTBOUND_EMAIL_ADDRESS } = require('./email');
+          const content = applicationChangesRequestedEmail(firstName, changesRequired, applicationUrl);
+          const emailResult = await sendEmail({ to: enquiry.email_1, subject: content.subject, html: content.html });
+          await insert(`INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
+            VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'application_changes_requested', $6, $7, $8, $9, $10)`, [
+            emailResult.id || null, enquiryId, enquiry.email_1, OUTBOUND_EMAIL_ADDRESS, content.subject, content.html,
+            emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed'), req.user?.id || null,
+            req.user?.email || null, emailResult.error || null,
+          ]);
+          delivery.email = { success: emailResult.success, error: emailResult.error };
+        }
+      }
+    }
+    res.json({ success: true, status, delivery });
   } catch (err) {
     console.error('Application review failed:', err);
     res.status(500).json({ error: 'Failed to update application review' });
@@ -4144,8 +4234,8 @@ app.post('/api/tenant-enquiries/:id/send-workflow-email', authMiddleware, async 
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
       .replace(/\r?\n/g, '<br/>');
-    const bodyHtml = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;line-height:1.6">${escapedBody}</div>`;
-    const { sendEmail } = require('./email');
+    const { sendEmail, brandedEmailHtml } = require('./email');
+    const bodyHtml = brandedEmailHtml(template === 'rejection' ? 'Application Update' : 'Enquiry Update', escapedBody);
     const emailResult = await sendEmail({
       to: recipients,
       subject,
