@@ -5,6 +5,7 @@ import type { Request, Response, NextFunction } from 'express';
 let twilioClient: any = null;
 let twilioLib: any = null;
 const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER || '';
+export const SMS_FROM = process.env.TWILIO_SENDER_ID || TWILIO_PHONE;
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
 const ALLOW_SIMULATED_MESSAGES = process.env.ALLOW_SIMULATED_MESSAGES === 'true' && process.env.NODE_ENV !== 'production';
 
@@ -68,7 +69,7 @@ export async function sendSms(params: SendSmsParams): Promise<{ success: boolean
   try {
     const createOpts: Record<string, string> = {
       body: params.body,
-      from: TWILIO_PHONE,
+      from: SMS_FROM,
       to: params.to,
     };
     // Only set statusCallback when BASE_URL is configured (Twilio can't reach localhost)

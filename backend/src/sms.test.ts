@@ -78,6 +78,24 @@ describe('SMS templates', () => {
 });
 
 describe('SMS provider safety', () => {
+  it('prefers the branded sender ID when configured', async () => {
+    vi.stubEnv('TWILIO_SENDER_ID', 'FlemingLets');
+    vi.stubEnv('TWILIO_PHONE_NUMBER', '+441902212415');
+    vi.resetModules();
+    const { SMS_FROM } = await import('./sms');
+    expect(SMS_FROM).toBe('FlemingLets');
+    vi.unstubAllEnvs();
+  });
+
+  it('falls back to the Twilio phone number without a branded sender ID', async () => {
+    vi.stubEnv('TWILIO_SENDER_ID', '');
+    vi.stubEnv('TWILIO_PHONE_NUMBER', '+441902212415');
+    vi.resetModules();
+    const { SMS_FROM } = await import('./sms');
+    expect(SMS_FROM).toBe('+441902212415');
+    vi.unstubAllEnvs();
+  });
+
   it('does not report a successful send when Twilio is not configured', async () => {
     vi.stubEnv('TWILIO_ACCOUNT_SID', '');
     vi.stubEnv('TWILIO_AUTH_TOKEN', '');

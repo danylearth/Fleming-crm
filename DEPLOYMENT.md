@@ -37,6 +37,8 @@ Secrets (set once, via `flyctl secrets set -a fleming-crm-api KEY=value`):
 `DATABASE_URL`, `JWT_SECRET`, plus optional integrations (`RESEND_API_KEY`,
 `TWILIO_*`, `EPC_API_KEY`, `COMPANIES_HOUSE_API_KEY`, `COUNCIL_TAX_API_KEY`,
 `SENTRY_DSN`). `PORT`, `NODE_ENV`, `UPLOADS_PATH` come from `fly.toml [env]`.
+Set `TWILIO_SENDER_ID=FlemingLets` only after Twilio approves that alphanumeric
+sender; until then, SMS sends continue to use `TWILIO_PHONE_NUMBER`.
 
 ### Frontend + forms (Vercel)
 

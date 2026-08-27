@@ -11,7 +11,7 @@ import multer from 'multer';
 import pool, { initDb, query, queryOne, insert, run } from './db-pg';
 import { generateToken, authMiddleware, AuthRequest, requireRole, requirePermission } from './auth';
 import { registerInventoryRoutes } from './inventory-routes';
-import { validateTwilioWebhook, normalizeUkPhone as normalizePhone } from './sms';
+import { SMS_FROM, validateTwilioWebhook, normalizeUkPhone as normalizePhone } from './sms';
 import crypto from 'crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { startScheduler } from './scheduler-pg';
@@ -3856,7 +3856,7 @@ app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res)
         INSERT INTO sms_messages (enquiry_id, entity_type, entity_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
         VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, $6, $7, $8, $9, $10)
       `, [
-        enquiry_id || null, enquiry_id || null, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
+        enquiry_id || null, enquiry_id || null, normalizedPhone, SMS_FROM || null,
         sms_message, smsStatus, smsResult.sid || null, smsResult.error || null,
         req.user?.id || null, req.user?.email || null
       ]);
@@ -3991,7 +3991,7 @@ app.post('/api/tenant-enquiries/:id/application-review', authMiddleware, require
           const smsResult = await sendSms({ to: normalizeUkPhone(enquiry.phone_1), body: smsBody });
           await insert(`INSERT INTO sms_messages (enquiry_id, entity_type, entity_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
             VALUES ($1, 'tenant_enquiry', $1, $2, $3, $4, $5, $6, $7, $8, $9)`, [
-            enquiryId, normalizeUkPhone(enquiry.phone_1), process.env.TWILIO_PHONE_NUMBER || null, smsBody,
+            enquiryId, normalizeUkPhone(enquiry.phone_1), SMS_FROM || null, smsBody,
             smsResult.simulated ? 'simulated' : (smsResult.success ? 'sent' : 'failed'), smsResult.sid || null,
             smsResult.error || null, req.user?.id || null, req.user?.email || null,
           ]);
@@ -4273,7 +4273,7 @@ app.post('/api/sms/send', authMiddleware, async (req: AuthRequest, res) => {
       INSERT INTO sms_messages (enquiry_id, entity_type, entity_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `, [
-      enquiry_id || null, resolvedEntityType, resolvedEntityId, normalizedPhone, process.env.TWILIO_PHONE_NUMBER || null,
+      enquiry_id || null, resolvedEntityType, resolvedEntityId, normalizedPhone, SMS_FROM || null,
       message_body, smsResult.simulated ? 'simulated' : (smsResult.success ? 'sent' : 'failed'), smsResult.sid || null,
       smsResult.error || null, req.user?.id || null, req.user?.email || null
     ]);
