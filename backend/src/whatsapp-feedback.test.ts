@@ -33,4 +33,15 @@ describe('31 August CRM feedback regressions', () => {
     expect(apiSource).toContain("app.post('/api/tenant-enquiries/:id/schedule-handover'");
     expect(apiSource).toContain("'Signed Tenancy Agreement'");
   });
+
+  it('blocks agreements until property compliance is current and attaches the certificates', () => {
+    expect(apiSource).toContain("app.get('/api/tenant-enquiries/:id/tenancy-agreement-compliance'");
+    expect(apiSource).toContain('Complete the property compliance checks before issuing the agreement');
+    expect(apiSource).toContain('attachments: complianceAttachments');
+  });
+
+  it('requires an explicit gas-connection answer for every new property', () => {
+    expect(apiSource).toContain("typeof d.has_gas !== 'boolean'");
+    expect(apiSource).toContain('Confirm whether the property has a gas connection');
+  });
 });

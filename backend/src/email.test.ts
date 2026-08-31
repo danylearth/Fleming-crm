@@ -26,10 +26,12 @@ describe('email provider safety', () => {
     vi.stubEnv('RESEND_API_KEY', 'test-key');
     vi.resetModules();
     const { sendEmail } = await import('./email');
-    const result = await sendEmail({ to: 'applicant@example.test', subject: 'Test', html: '<p>Test</p>' });
+    const attachments = [{ filename: 'EPC.pdf', content: Buffer.from('certificate'), contentType: 'application/pdf' }];
+    const result = await sendEmail({ to: 'applicant@example.test', subject: 'Test', html: '<p>Test</p>', attachments });
     expect(result.success).toBe(true);
     expect(sentPayload.from).toBe('Fleming Lettings <contact@tenancies.fleminglettings.co.uk>');
     expect(sentPayload.replyTo).toBe('contact@tenancies.fleminglettings.co.uk');
+    expect(sentPayload.attachments).toEqual(attachments);
     vi.doUnmock('resend');
     vi.unstubAllEnvs();
     vi.resetModules();

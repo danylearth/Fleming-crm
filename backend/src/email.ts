@@ -9,6 +9,11 @@ export interface SendEmailParams {
   to: string | string[];
   subject: string;
   html: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+  }>;
 }
 
 function emailSignature(): string {
@@ -92,6 +97,7 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
       subject: params.subject,
       html: params.html,
       replyTo: OUTBOUND_EMAIL_ADDRESS,
+      attachments: params.attachments,
     });
 
     if (error) {

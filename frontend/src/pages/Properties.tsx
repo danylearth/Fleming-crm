@@ -28,7 +28,7 @@ interface TenantOption {
 interface PropertyForm {
   landlord_id: string; address: string; postcode: string; property_type: string;
   bedrooms: string; rent_amount: string; status: string; service_type: string;
-  council_tax_band: string; has_gas: boolean;
+  council_tax_band: string; has_gas: boolean | null;
 }
 
 const STATUSES = [
@@ -58,9 +58,9 @@ export default function Properties() {
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<PropertyForm>({
     landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
-    rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: false,
+    rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: null,
   });
   const [llDropOpen, setLlDropOpen] = useState(false);
   const [llSearch, setLlSearch] = useState('');
@@ -394,6 +394,7 @@ export default function Properties() {
           saving={saving}
           onClose={() => { setShowAdd(false); resetForm(); }}
           onSubmit={async () => {
+            if (form.has_gas === null) return;
             setSaving(true);
             try {
               const res = await api.post('/api/properties', {
@@ -415,7 +416,7 @@ export default function Properties() {
   );
 
   function resetForm() {
-    setForm({ landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1', rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: false });
+    setForm({ landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1', rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: null });
     setLlSearch('');
     setLlDropOpen(false);
   }
@@ -558,9 +559,30 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
             options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
         </div>
 
+        <div>
+          <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Is there a gas connection? *</label>
+          <div className="grid grid-cols-2 gap-2">
+            {([{ value: true, label: 'Yes' }, { value: false, label: 'No' }] as const).map(option => (
+              <button
+                key={option.label}
+                type="button"
+                onClick={() => setForm((f: PropertyForm) => ({ ...f, has_gas: option.value }))}
+                className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+                  form.has_gas === option.value
+                    ? 'border-[var(--accent-orange)] bg-[var(--accent-orange)]/10 text-[var(--text-primary)]'
+                    : 'border-[var(--border-input)] bg-[var(--bg-input)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {form.has_gas === null && <p className="mt-1.5 text-[10px] text-amber-400">Choose Yes or No before creating the property.</p>}
+        </div>
+
         <div className="flex gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.address || !form.status}>
+          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.address || !form.status || form.has_gas === null}>
             {saving ? 'Creating...' : 'Create Property'}
           </Button>
         </div>

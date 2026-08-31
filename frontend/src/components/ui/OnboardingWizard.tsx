@@ -93,6 +93,11 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [creditScore, setCreditScore] = useState('');
   const [creditReport, setCreditReport] = useState<File | null>(null);
   const [agreement, setAgreement] = useState<{ id: number; agreement_type: string; original_name: string; status: string; requires_landlord_signature: number; tenant_signed_at?: string; landlord_signed_at?: string } | null>(null);
+  const [agreementCompliance, setAgreementCompliance] = useState<{
+    ready: boolean;
+    propertyLinked: boolean;
+    items: Array<{ docType: string; label: string; expiryDate: string | null; ready: boolean; reason: string | null }>;
+  } | null>(null);
   const [agreementFile, setAgreementFile] = useState<File | null>(null);
   const [agreementType, setAgreementType] = useState<'internal' | 'client'>('internal');
   const [agreementSendEmail, setAgreementSendEmail] = useState(false);
@@ -146,8 +151,15 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     } catch { setAgreement(null); }
   };
 
+  const fetchAgreementCompliance = async () => {
+    try {
+      const data = await api.get(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement-compliance`);
+      setAgreementCompliance(data || null);
+    } catch { setAgreementCompliance(null); }
+  };
+
   // Fetch documents for this enquiry
-  useEffect(() => { fetchDocs(); fetchEmailHistory(); fetchAgreement(); }, [enquiryId, token]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchDocs(); fetchEmailHistory(); fetchAgreement(); fetchAgreementCompliance(); }, [enquiryId, token]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => {
     if (documentPreview) URL.revokeObjectURL(documentPreview.url);
   }, [documentPreview]);
@@ -440,7 +452,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       const failures = Object.values(result.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
       if (failures.length) setReviewError(`Agreement issued, but ${failures.length} communication${failures.length === 1 ? '' : 's'} failed. Check the email/SMS history.`);
       setAgreementFile(null);
-      await Promise.all([fetchAgreement(), fetchEmailHistory(), onUpdate()]);
+      await Promise.all([fetchAgreement(), fetchAgreementCompliance(), fetchEmailHistory(), onUpdate()]);
     } catch (err) { setReviewError(err instanceof Error ? err.message : 'Agreement could not be issued'); }
     finally { setSaving(false); }
   };
@@ -1194,6 +1206,22 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 </div>}
                 {agreement && agreement.status !== 'completed' && <Button variant="ghost" size="sm" onClick={fetchAgreement}>Refresh Signatures</Button>}
                 {agreement?.status !== 'completed' && <>
+                  <div className={`rounded-lg border p-3 ${agreementCompliance?.ready ? 'border-emerald-500/20 bg-emerald-500/10' : 'border-amber-500/20 bg-amber-500/10'}`}>
+                    <p className="text-xs font-medium">Property compliance</p>
+                    {!agreementCompliance?.propertyLinked ? (
+                      <p className="mt-1 text-[10px] text-amber-400">Link a property before issuing the agreement.</p>
+                    ) : (
+                      <div className="mt-2 space-y-1">
+                        {agreementCompliance.items.map(item => (
+                          <p key={item.docType} className={`flex items-center gap-1.5 text-[10px] ${item.ready ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {item.ready ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+                            {item.ready ? `${item.label} valid to ${new Date(`${item.expiryDate}T00:00:00`).toLocaleDateString('en-GB')}` : item.reason}
+                          </p>
+                        ))}
+                        {agreementCompliance.ready && <p className="pt-1 text-[10px] text-emerald-400">These documents will be attached when the signing link is emailed.</p>}
+                      </div>
+                    )}
+                  </div>
                   <label className="block text-[10px] text-[var(--text-muted)]">Agreement type</label>
                   <select value={agreementType} onChange={event => setAgreementType(event.target.value as 'internal' | 'client')} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs">
                     <option value="internal">Fleming internal portfolio — tenant signature</option>
@@ -1204,7 +1232,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendEmail} onChange={e => setAgreementSendEmail(e.target.checked)} /> Email signing link</label>
                     <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendSms} onChange={e => setAgreementSendSms(e.target.checked)} /> SMS tenant link</label>
                   </div>
-                  <Button variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || !agreementFile}>{saving ? 'Issuing...' : agreement ? 'Issue Replacement Agreement' : 'Issue Agreement'}</Button>
+                  <Button variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || !agreementFile || agreementCompliance?.ready !== true}>{saving ? 'Issuing...' : agreement ? 'Issue Replacement Agreement' : 'Issue Agreement'}</Button>
                 </>}
                 {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
               </div>

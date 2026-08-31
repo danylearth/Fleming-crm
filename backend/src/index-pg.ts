@@ -20,6 +20,7 @@ import { applicationFormIssues, isValidEmail, isValidUkMobile, normalizeProperty
 import { generateCompletedApplicationPdf } from './application-pdf';
 import { normalizePropertyAddress } from './email';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { propertyCompliance } from './property-compliance';
 
 // Validate required environment variables
 if (!process.env.DATABASE_URL) {
@@ -2815,6 +2816,9 @@ app.get('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
 app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
+    if (typeof d.has_gas !== 'boolean') {
+      return res.status(400).json({ error: 'Confirm whether the property has a gas connection' });
+    }
     const client = await pool.connect();
     let id: number;
     try {
@@ -2841,7 +2845,7 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
         d.has_live_tenancy ? 1 : 0, d.tenancy_start_date || null, d.tenancy_type || null,
         d.has_end_date ? 1 : 0, d.tenancy_end_date || null,
         d.rent_review_date || null, d.eicr_expiry_date || null, d.epc_grade || null, d.epc_expiry_date || null,
-        d.has_gas ? 1 : 0, d.gas_safety_expiry_date || null, d.status || 'to_let',
+        d.has_gas ? 1 : 0, d.has_gas ? d.gas_safety_expiry_date || null : null, d.status || 'to_let',
         d.onboarded_date || null, d.notes || null, d.amenities || null,
         d.tenant_id || null, d.image_url || null
       ]);
@@ -4212,6 +4216,49 @@ app.post('/api/tenant-enquiries/:id/credit-check', authMiddleware, requirePermis
   }
 });
 
+const AGREEMENT_COMPLIANCE_TYPES = ['EPC', 'EICR', 'Gas Safety Certificate'];
+
+async function loadAgreementCompliance(propertyId: number) {
+  const property = await queryOne(`
+    SELECT id, has_gas, epc_expiry_date, eicr_expiry_date, gas_safety_expiry_date
+    FROM properties WHERE id = $1
+  `, [propertyId]);
+  if (!property) return null;
+
+  const uploadedDocuments = await query(`
+    SELECT doc_type, filename, original_name, mime_type
+    FROM documents
+    WHERE entity_type = 'property' AND entity_id = $1
+      AND doc_type = ANY($2::text[])
+      AND COALESCE(review_status, 'approved') = 'approved'
+    ORDER BY uploaded_at DESC
+  `, [propertyId, AGREEMENT_COMPLIANCE_TYPES]);
+  const attachments: Array<{ doc_type: string; filename: string; original_name: string; mime_type: string }> = [];
+  const selectedTypes = new Set<string>();
+  for (const document of uploadedDocuments) {
+    if (selectedTypes.has(document.doc_type)) continue;
+    if (!fs.existsSync(path.join(uploadsDir, document.filename))) continue;
+    selectedTypes.add(document.doc_type);
+    attachments.push(document);
+  }
+
+  const compliance = propertyCompliance({ ...property, documents: attachments });
+  return { ...compliance, attachments };
+}
+
+app.get('/api/tenant-enquiries/:id/tenancy-agreement-compliance', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const enquiry = await queryOne('SELECT linked_property_id FROM tenant_enquiries WHERE id = $1', [req.params.id]);
+    if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
+    if (!enquiry.linked_property_id) return res.json({ ready: false, propertyLinked: false, items: [] });
+    const compliance = await loadAgreementCompliance(Number(enquiry.linked_property_id));
+    if (!compliance) return res.json({ ready: false, propertyLinked: false, items: [] });
+    res.json({ ready: compliance.ready, propertyLinked: true, items: compliance.items });
+  } catch (err) {
+    res.status(500).json({ error: 'Property compliance could not be loaded' });
+  }
+});
+
 app.get('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const agreement = await queryOne(`
@@ -4254,6 +4301,15 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
       if (uploadedPath && fs.existsSync(uploadedPath)) fs.unlinkSync(uploadedPath);
       return res.status(409).json({ error: 'Link a property before issuing the tenancy agreement' });
     }
+    const compliance = await loadAgreementCompliance(Number(enquiry.linked_property_id));
+    if (!compliance?.ready) {
+      if (uploadedPath && fs.existsSync(uploadedPath)) fs.unlinkSync(uploadedPath);
+      const reasons = compliance?.items.filter(item => !item.ready).map(item => item.reason).filter(Boolean) || [];
+      return res.status(409).json({
+        error: `Complete the property compliance checks before issuing the agreement${reasons.length ? `: ${reasons.join('; ')}` : ''}`,
+        compliance: compliance ? { ready: false, items: compliance.items } : null,
+      });
+    }
     const requiresLandlord = agreementType === 'client';
     if (requiresLandlord && !enquiry.landlord_email) {
       if (uploadedPath && fs.existsSync(uploadedPath)) fs.unlinkSync(uploadedPath);
@@ -4273,6 +4329,11 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
     const landlordUrl = landlordToken ? `https://apply.fleminglettings.co.uk/agreement/${landlordToken}` : null;
     const delivery: Record<string, unknown> = {};
     const { sendEmail, brandedEmailHtml, OUTBOUND_EMAIL_ADDRESS } = require('./email');
+    const complianceAttachments = compliance.attachments.map(document => ({
+      filename: document.original_name,
+      content: fs.readFileSync(path.join(uploadsDir, document.filename)),
+      contentType: document.mime_type || undefined,
+    }));
     if (req.body.send_email === 'true') {
       if (!enquiry.email_1) delivery.tenant_email = { success: false, error: 'No tenant email is recorded' };
       else {
@@ -4280,9 +4341,10 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
         const html = brandedEmailHtml('Tenancy Agreement', `
           <p>Hi ${escapeHtmlText(enquiry.first_name_1 || 'there')},</p>
           <p>Your tenancy agreement for <strong>${escapeHtmlText(normalizePropertyAddress(enquiry.address, enquiry.postcode))}</strong> is ready to review and sign.</p>
+          <p>The property compliance documents are attached for your records.</p>
           <p><a href="${tenantUrl}" style="display:inline-block;background:#DC006D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">Review and sign agreement</a></p>
         `);
-        const result = await sendEmail({ to: enquiry.email_1, subject, html });
+        const result = await sendEmail({ to: enquiry.email_1, subject, html, attachments: complianceAttachments });
         await insert(`INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
           VALUES ($1,'tenant_enquiry',$2,$3,$4,$5,'tenancy_agreement',$6,$7,$8,$9,$10)`, [result.id || null, enquiryId, enquiry.email_1, OUTBOUND_EMAIL_ADDRESS, subject, html, result.simulated ? 'simulated' : result.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null, result.error || null]);
         delivery.tenant_email = result;
@@ -4292,9 +4354,10 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
         const html = brandedEmailHtml('Tenancy Agreement', `
           <p>Hi ${escapeHtmlText(enquiry.landlord_name || 'there')},</p>
           <p>The tenancy agreement for <strong>${escapeHtmlText(normalizePropertyAddress(enquiry.address, enquiry.postcode))}</strong> is ready for your review and signature.</p>
+          <p>The current property compliance documents are attached.</p>
           <p><a href="${landlordUrl}" style="display:inline-block;background:#DC006D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">Review and sign agreement</a></p>
         `);
-        const result = await sendEmail({ to: enquiry.landlord_email, subject, html });
+        const result = await sendEmail({ to: enquiry.landlord_email, subject, html, attachments: complianceAttachments });
         delivery.landlord_email = result;
         await insert(`INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
           VALUES ($1,'tenant_enquiry',$2,$3,$4,$5,'landlord_tenancy_agreement',$6,$7,$8,$9,$10)`, [result.id || null, enquiryId, enquiry.landlord_email, OUTBOUND_EMAIL_ADDRESS, subject, html, result.simulated ? 'simulated' : result.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null, result.error || null]);
