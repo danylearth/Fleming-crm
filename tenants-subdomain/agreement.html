@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tenancy Agreement | Fleming Lettings</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f5f3f7;color:#29232d;font-family:Arial,sans-serif}.shell{max-width:980px;margin:28px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 18px 55px #25073b1a}.header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px 28px;background:linear-gradient(135deg,#25073b,#dc006d);color:#fff}.header img{height:46px}.help{color:#fff;text-decoration:none;border:1px solid #ffffff66;border-radius:22px;padding:9px 16px;white-space:nowrap}.content{padding:28px}.notice{padding:14px 16px;border:1px solid #fed7aa;background:#fff7ed;color:#9a3412;border-radius:10px;margin:0 0 18px}.grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,.8fr);gap:22px}iframe{width:100%;height:680px;border:1px solid #ddd;border-radius:12px}.panel{border:1px solid #e6e0e8;border-radius:12px;padding:18px;align-self:start}.panel h2{color:#25073b;margin-top:0}.meta{font-size:13px;color:#6b6570;line-height:1.6}.field{margin:18px 0}.field label{display:block;font-size:12px;font-weight:700;margin-bottom:6px}.field input{width:100%;padding:12px;border:1px solid #d6cfd9;border-radius:8px;font-size:15px}.sig{height:150px;border:2px dashed #c8bccc;border-radius:10px;position:relative;background:#fff}.sig canvas{width:100%;height:100%;touch-action:none}.hint{position:absolute;inset:0;display:grid;place-items:center;color:#aaa;pointer-events:none}.actions{display:flex;gap:8px;margin-top:8px}.button{border:0;border-radius:9px;padding:11px 15px;font-weight:700;cursor:pointer}.primary{background:#dc006d;color:#fff;width:100%;margin-top:18px}.secondary{background:#f1edf3;color:#25073b}.error{color:#b91c1c;font-size:13px}.success{text-align:center;padding:70px 28px}.success h1{color:#25073b}@media(max-width:760px){.shell{margin:0;border-radius:0;min-height:100vh}.header{padding:15px}.header img{height:36px}.content{padding:18px}.grid{grid-template-columns:1fr}iframe{height:480px}.help{padding:8px 11px;font-size:13px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="header"><img src="logo-white.png" alt="Fleming Lettings"><a class="help" href="tel:+441902212415">Need help? ☎</a></header>
+    <section id="loading" class="content">Loading your agreement…</section>
+    <section id="error" class="content" hidden><h2>Unable to load agreement</h2><p id="error-message"></p></section>
+    <section id="success" class="success" hidden><h1>Agreement signed</h1><p>Thank you. Your electronic signature has been recorded and Fleming Lettings has been notified.</p></section>
+    <section id="content" class="content" hidden>
+      <div class="notice">Read the full agreement before signing. Your typed name, signature, date, IP address and browser details form part of the electronic signature record.</div>
+      <div class="grid">
+        <iframe id="agreement-pdf" title="Tenancy agreement"></iframe>
+        <aside class="panel"><h2>Review &amp; sign</h2><p class="meta" id="agreement-meta"></p>
+          <div class="field"><label for="signature-name">Full legal name</label><input id="signature-name" autocomplete="name"></div>
+          <div class="field"><label>Signature</label><div class="sig" id="sig"><canvas id="canvas"></canvas><span class="hint" id="hint">Sign here</span></div><div class="actions"><button class="button secondary" id="generate" type="button">Generate</button><button class="button secondary" id="clear" type="button">Clear</button></div></div>
+          <label class="meta"><input type="checkbox" id="confirm"> I confirm that I have read and agree to this tenancy agreement and intend this electronic signature to be binding.</label>
+          <p class="error" id="sign-error"></p><button class="button primary" id="submit" type="button">Sign agreement</button>
+        </aside>
+      </div>
+    </section>
+  </main>
+  <script>
+    const API=location.hostname==='localhost'?'http://localhost:3001':'https://fleming-crm-api.fly.dev',token=location.pathname.split('/').filter(Boolean).pop();
+    const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');let drawing=false,signed=false;
+    function sizeCanvas(){const r=document.getElementById('sig').getBoundingClientRect();canvas.width=r.width;canvas.height=r.height;ctx.strokeStyle='#25073b';ctx.lineWidth=2.5;ctx.lineCap='round'}
+    function pos(e){const r=canvas.getBoundingClientRect(),p=e.touches?e.touches[0]:e;return{x:(p.clientX-r.left)*canvas.width/r.width,y:(p.clientY-r.top)*canvas.height/r.height}}
+    function start(e){drawing=true;const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);e.preventDefault()}function move(e){if(!drawing)return;const p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();signed=true;document.getElementById('hint').hidden=true;e.preventDefault()}function end(){drawing=false}
+    ['mousedown','touchstart'].forEach(x=>canvas.addEventListener(x,start,{passive:false}));['mousemove','touchmove'].forEach(x=>canvas.addEventListener(x,move,{passive:false}));['mouseup','mouseleave','touchend'].forEach(x=>canvas.addEventListener(x,end));
+    document.getElementById('clear').onclick=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);signed=false;document.getElementById('hint').hidden=false};
+    document.getElementById('generate').onclick=()=>{const n=document.getElementById('signature-name').value.trim();if(!n)return;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#25073b';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`italic ${Math.min(42,Math.max(25,canvas.width/Math.max(n.length*.7,8)))}px cursive`;ctx.fillText(n,canvas.width/2,canvas.height/2);signed=true;document.getElementById('hint').hidden=true};
+    function show(id){['loading','error','success','content'].forEach(x=>document.getElementById(x).hidden=x!==id)}
+    async function load(){try{const r=await fetch(`${API}/api/public/tenancy-agreements/${token}`),d=await r.json();if(!r.ok)throw new Error(d.error);if(d.status==='completed')return show('success');document.getElementById('agreement-pdf').src=`${API}/api/public/tenancy-agreements/${token}/pdf`;document.getElementById('agreement-meta').textContent=`${d.signer_role==='landlord'?'Landlord':'Tenant'} signature · ${d.property_address||''} · ${d.original_name}`;show('content');setTimeout(sizeCanvas)}catch(e){document.getElementById('error-message').textContent=e.message||'This secure link is invalid.';show('error')}}
+    document.getElementById('submit').onclick=async()=>{const name=document.getElementById('signature-name').value.trim(),error=document.getElementById('sign-error');error.textContent='';if(!name||!signed||!document.getElementById('confirm').checked){error.textContent='Enter your name, add your signature and tick the confirmation.';return}const b=document.getElementById('submit');b.disabled=true;b.textContent='Signing…';try{const r=await fetch(`${API}/api/public/tenancy-agreements/${token}/sign`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({signature_name:name,signature:canvas.toDataURL('image/png')})}),d=await r.json();if(!r.ok)throw new Error(d.error);show('success')}catch(e){error.textContent=e.message||'Agreement could not be signed.';b.disabled=false;b.textContent='Sign agreement'}};load();
+  </script>
+</body>
+</html>

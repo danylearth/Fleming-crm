@@ -61,6 +61,11 @@
             text-decoration: none;
             font-weight: 500;
             font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            white-space: nowrap;
         }
         .back-button:hover { background: rgba(255,255,255,0.3); }
 
@@ -674,6 +679,10 @@
         .status-pill { font-size: 10px; text-transform: uppercase; font-weight: 700; color: #92400e; }
         .status-pill.approved { color: #047857; }
         .status-pill.rejected { color: #b91c1c; }
+        .document-card.approved-locked { background: #f3f4f6; border-color: #d1d5db; opacity: 0.78; }
+        .document-card.approved-locked .upload-button { display: none; }
+        .document-card.needs-action { background: #fff7ed; border: 2px solid #f97316; }
+        .revision-request { margin: 18px 20px 0; background: #fff7ed; border-color: #fdba74; color: #9a3412; }
         .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
 
         /* Responsive */
@@ -701,6 +710,8 @@
             .step h2 { font-size: 22px; }
             .logo { height: 35px; }
             .back-button { font-size: 12px; padding: 5px 12px; }
+            .back-button { min-width: 112px; text-align: center; }
+            .phone-icon { flex: 0 0 auto; }
             .draft-toolbar { padding: 10px 15px; align-items: stretch; flex-direction: column; }
             .draft-toolbar button { width: 100%; }
         }
@@ -746,6 +757,7 @@
 
         <!-- Form -->
         <form id="application-form" style="display:none;" onsubmit="return false;">
+            <div id="changes-request-banner" class="info-banner revision-request" style="display:none;"></div>
             <div class="draft-toolbar">
                 <span id="draft-status">Your answers can be saved and resumed from this link.</span>
                 <button type="button" id="save-draft-btn" onclick="saveDraft()">Save &amp; finish later</button>
@@ -999,10 +1011,13 @@
                     <div class="checkbox-group"><input type="checkbox" id="f_decl_terms" required /><span>I have read and accept the <a href="https://fleminglettings.co.uk/terms-and-conditions" target="_blank" rel="noopener">Terms and Conditions</a>.</span></div>
                     <div class="checkbox-group"><input type="checkbox" id="f_decl_marketing" /><span>Optional: I consent to receiving marketing about related Fleming Lettings services.</span></div>
                     <p class="info-banner">Right to Rent checks are required for all adult occupiers in England. <a href="https://www.gov.uk/government/publications/right-to-rent-document-checks-a-user-guide" target="_blank" rel="noopener">Read the government guidance</a>.</p>
-                    <div class="input-group"><label>Typed full legal name *</label><input type="text" id="f_typed_name" required oninput="refreshGeneratedSignature()" /></div>
-                    <div class="input-group"><label>Do you want to generate a digital signature below? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_generate_signature" data-value="yes" onclick="setYesNo('f_generate_signature','yes'); generateSignature()">Yes</button><button type="button" class="choice-button" data-choice-for="f_generate_signature" data-value="no" onclick="setYesNo('f_generate_signature','no'); clearSignature()">No</button></div><input type="hidden" id="f_generate_signature" data-required-choice="true" /></div>
-                    <div class="input-group"><label>Signature *</label><p>Select Yes above to generate a signature, or select No and sign using a mouse or finger.</p></div>
-                    <div class="signature-area" id="sig-pad"><canvas id="sig-canvas"></canvas><span class="signature-hint">Sign here</span><button type="button" class="clear-sig" onclick="clearSignature()" style="display:none;" id="clear-btn">Clear</button></div>
+                    <div id="signature-controls">
+                      <div class="input-group"><label>Typed full legal name *</label><input type="text" id="f_typed_name" required oninput="refreshGeneratedSignature()" /></div>
+                      <div class="input-group"><label>Do you want to generate a digital signature below? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_generate_signature" data-value="yes" onclick="setYesNo('f_generate_signature','yes'); generateSignature()">Yes</button><button type="button" class="choice-button" data-choice-for="f_generate_signature" data-value="no" onclick="setYesNo('f_generate_signature','no'); clearSignature()">No</button></div><input type="hidden" id="f_generate_signature" data-required-choice="true" /></div>
+                      <div class="input-group"><label>Signature *</label><p>Select Yes above to generate a signature, or select No and sign using a mouse or finger.</p></div>
+                      <div class="signature-area" id="sig-pad"><canvas id="sig-canvas"></canvas><span class="signature-hint">Sign here</span><button type="button" class="clear-sig" onclick="clearSignature()" style="display:none;" id="clear-btn">Clear</button></div>
+                    </div>
+                    <div id="signature-retained" class="info-banner" style="display:none;">Your original signature is retained. You do not need to sign the application again.</div>
                     <div class="input-group" style="margin-top:16px;"><label>Date</label><input type="text" id="f_date" readonly class="pre-filled" /></div>
                     <p id="submit-error" class="error-text" style="display:none;"></p>
                     <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(4)">Back</button><button type="button" class="btn btn-primary" onclick="submitForm()" id="submit-btn">Submit application</button></div>
@@ -1073,6 +1088,7 @@
         let signatureInitialised = false;
         let currentStep = 1;
         let applicationDocuments = [];
+        let isRevision = false;
 
         // ===== CUSTOM DATE PICKER =====
         const dpMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -1344,6 +1360,15 @@
             });
         }
 
+        function formatPropertyAddress(address, postcode) {
+            const cleanAddress = String(address || '').trim().replace(/,\s*$/, '');
+            const cleanPostcode = String(postcode || '').trim();
+            if (!cleanPostcode) return cleanAddress;
+            const compactAddress = cleanAddress.replace(/\s/g, '').toLowerCase();
+            const compactPostcode = cleanPostcode.replace(/\s/g, '').toLowerCase();
+            return compactAddress.endsWith(compactPostcode) ? cleanAddress : `${cleanAddress}, ${cleanPostcode}`;
+        }
+
         function updateProgress(step) {
             document.getElementById('progress-bar').style.width = Math.round(((step - 1) / 4) * 100) + '%';
         }
@@ -1492,8 +1517,19 @@
             document.getElementById('f_phone').value = stored.phone || formData.phone_1 || '';
             document.getElementById('f_dob').value = stored.date_of_birth ? isoToDDMMYYYY(String(stored.date_of_birth)) : isoToDDMMYYYY(formData.date_of_birth_1);
             document.getElementById('f_typed_name').value = formData.app_signature_name || '';
+            isRevision = formData.application_review_status === 'changes_requested' && !!formData.application_form_completed;
+            if (isRevision) {
+                const requested = document.getElementById('changes-request-banner');
+                requested.textContent = `Changes requested by Fleming Lettings: ${formData.application_review_notes || 'Please update the highlighted items below.'}`;
+                requested.style.display = 'block';
+                document.getElementById('signature-controls').style.display = 'none';
+                document.getElementById('signature-retained').style.display = 'block';
+                document.getElementById('f_typed_name').removeAttribute('required');
+                document.getElementById('f_generate_signature').removeAttribute('data-required-choice');
+                hasSigned = true;
+            }
 
-            const address = [formData.property_address, formData.property_postcode].filter(Boolean).join(', ');
+            const address = formatPropertyAddress(formData.property_address, formData.property_postcode);
             document.getElementById('property-display').textContent = address || 'Property details pending';
             document.getElementById('property-badge').style.display = address ? 'inline-flex' : 'none';
             document.getElementById('f_property_address').value = stored.property_address || address;
@@ -1558,7 +1594,7 @@
         }
 
         function validateDocuments() {
-            const uploaded = new Set(applicationDocuments.map(doc => doc.doc_type));
+            const uploaded = new Set(applicationDocuments.filter(doc => doc.review_status !== 'rejected').map(doc => doc.doc_type));
             const missing = requiredDocumentTypes().filter(type => !uploaded.has(type));
             const error = document.getElementById('document-error');
             if (!missing.length) { error.style.display = 'none'; return true; }
@@ -1576,7 +1612,7 @@
                 el.classList.toggle('active', s === n);
             });
             currentStep = n; updateProgress(n); window.scrollTo({ top: 0, behavior: 'smooth' });
-            if (n === 5) initSignature();
+            if (n === 5 && !isRevision) initSignature();
         }
 
         function initSignature() {
@@ -1648,17 +1684,36 @@
         function renderDocuments() {
             document.querySelectorAll('[data-doc-list]').forEach(list => {
                 list.replaceChildren();
-                const matchingDocuments = applicationDocuments.filter(doc => doc.doc_type === list.dataset.docList);
-                const uploadLabel = list.closest('.document-card')?.querySelector('.upload-button');
+                const matchingDocuments = applicationDocuments
+                    .filter(doc => doc.doc_type === list.dataset.docList)
+                    .sort((a, b) => (a.review_status === 'rejected' ? -1 : 0) - (b.review_status === 'rejected' ? -1 : 0));
+                const card = list.closest('.document-card');
+                const approved = matchingDocuments.some(doc => doc.review_status === 'approved');
+                const rejected = matchingDocuments.some(doc => doc.review_status === 'rejected');
+                card?.classList.toggle('approved-locked', isRevision && approved);
+                card?.classList.toggle('needs-action', isRevision && rejected && !approved);
+                const fileInput = card?.querySelector('input[type="file"]');
+                if (fileInput) fileInput.disabled = isRevision && approved;
+                const uploadLabel = card?.querySelector('.upload-button');
                 if (uploadLabel) uploadLabel.textContent = matchingDocuments.length ? '+ Add another' : 'Choose files';
                 matchingDocuments.forEach(doc => {
                     const item = document.createElement('li');
                     const name = document.createElement('span'); name.textContent = doc.original_name;
                     const status = document.createElement('strong'); status.className = `status-pill ${doc.review_status || 'pending'}`; status.textContent = doc.review_status || 'pending';
-                    const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Remove'; remove.onclick = () => deleteDocument(doc.id);
-                    item.append(name, status, remove); list.append(item);
+                    item.append(name, status);
+                    if (doc.review_status !== 'approved') {
+                        const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Remove'; remove.onclick = () => deleteDocument(doc.id);
+                        item.append(remove);
+                    }
+                    list.append(item);
                 });
             });
+            const documentSection = document.querySelector('#step-4 .form-wrapper');
+            const firstCard = documentSection?.querySelector('.document-card');
+            const needsAction = documentSection?.querySelector('.document-card.needs-action');
+            if (documentSection && firstCard && needsAction && firstCard !== needsAction) {
+                documentSection.insertBefore(needsAction, firstCard);
+            }
         }
 
         function collectApplicationData() {
@@ -1711,7 +1766,7 @@
             if (!declarationIds.every(id => document.getElementById(id).checked)) {
                 errEl.textContent = 'Please agree to every mandatory declaration.'; errEl.style.display = 'block'; return;
             }
-            if (!hasSigned) {
+            if (!hasSigned && !isRevision) {
                 errEl.textContent = 'Please add or generate your signature.'; errEl.style.display = 'block'; return;
             }
             if (!validateDocuments()) { goToStep(4); return; }
@@ -1721,7 +1776,7 @@
                 const payload = {
                     app_form_data: collectApplicationData(),
                     app_signature_name: document.getElementById('f_typed_name').value.trim(),
-                    app_signature: hasSigned ? canvas.toDataURL('image/png') : null
+                    app_signature: isRevision ? null : (hasSigned ? canvas.toDataURL('image/png') : null)
                 };
                 const res = await fetch(`${API_BASE_URL}/api/public/application-form/${token}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 const result = await res.json();

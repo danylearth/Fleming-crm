@@ -15,6 +15,7 @@ import { calculateSmsSegments } from '../utils/sms';
 import { rejectionSms } from '../utils/messages';
 import { usePermissions } from '../hooks/usePermissions';
 import { viewingEmailPreview, viewingSmsPreview } from '../utils/viewingMessages';
+import { formatPropertyAddress } from '../utils/propertyAddress';
 
 interface EnquiryRaw {
   id: number;
@@ -299,6 +300,7 @@ export default function Enquiries() {
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
+  const [emailRecipient, setEmailRecipient] = useState('');
   const [allUsers, setAllUsers] = useState<{ id: number; name: string; email: string }[]>([]);
   // Onboarding wizard
   const [onboardingEnquiryId, setOnboardingEnquiryId] = useState<number | null>(null);
@@ -370,7 +372,7 @@ export default function Enquiries() {
 
   const viewingLocation = (propId: string, customLocation: string) => {
     const prop = properties.find(p => p.id === Number(propId));
-    return customLocation.trim() || (prop ? `${prop.address}${prop.postcode ? `, ${prop.postcode}` : ''}` : '');
+    return customLocation.trim() || (prop ? formatPropertyAddress(prop.address, prop.postcode) : '');
   };
 
   const generateViewingSms = (firstName: string, propId: string, date: string, time: string, customLocation = wfCustomLocation) => {
@@ -384,7 +386,7 @@ export default function Enquiries() {
     const propId = e.linked_property_id ? String(e.linked_property_id) : '';
     setWfDate(''); setWfTime('10:00'); setWfPropId(propId); setWfCustomLocation(''); setWfReason('');
     setWfAssignedTo(''); setWfViewingWith(''); setSmsEnabled(false); setEmailEnabled(false);
-    setEmailSubject(''); setEmailBody('');
+    setEmailSubject(''); setEmailBody(''); setEmailRecipient(e.email || '');
     const fn = e.name?.split(' ')[0] || '';
     setSmsBody(generateViewingSms(fn, propId, '', '10:00', ''));
   };
@@ -405,10 +407,10 @@ export default function Enquiries() {
     setEmailEnabled(false);
     if (mode === 'reject') {
       setEmailSubject('Your application with Fleming Lettings');
-      setEmailBody(`Hi there ${greeting},\n\nThank you for registering and showing your interest in our latest listing.\n\nUnfortunately, we are not going to be able to take your application any further at this point. This can be for a number of reasons, including affordability checks, landlord’s discretion or that the property has already been let or taken off market.\n\nWe understand how disappointing this news might be, but rest assured we’re on hand to help with any future listings that might be suitable.\n\nKind regards,\nLettings Support Team | fleminglettings.co.uk\ncontact@tenancies.fleminglettings.co.uk | 01902 212 415`);
+      setEmailBody(`Hi there ${greeting},\n\nThank you for registering and showing your interest in our latest listing.\n\nUnfortunately, we are not going to be able to take your application any further at this point. This can be for a number of reasons, including affordability checks, landlord’s discretion or that the property has already been let or taken off market.\n\nWe understand how disappointing this news might be, but rest assured we’re on hand to help with any future listings that might be suitable.`);
     } else {
       setEmailSubject('Following up on your property enquiry');
-      setEmailBody(`Hi there ${greeting},\n\nWe’re following up on your recent property enquiry with Fleming Lettings. Please let us know if you are still looking, would like to arrange a viewing, or have any questions.\n\nYou can reply to this email or call us on 01902 212 415.\n\nKind regards,\nLettings Support Team | fleminglettings.co.uk\ncontact@tenancies.fleminglettings.co.uk | 01902 212 415`);
+      setEmailBody(`Hi there ${greeting},\n\nWe’re following up on your recent property enquiry with Fleming Lettings. Please let us know if you are still looking, would like to arrange a viewing, or have any questions.\n\nYou can reply to this email or call us on 01902 212 415.`);
     }
   };
 
@@ -468,7 +470,7 @@ export default function Enquiries() {
             }
             if (emailEnabled && emailSubject && emailBody) {
               await api.post(`/api/tenant-enquiries/${workflowEnquiry.id}/send-workflow-email`, {
-                subject: emailSubject, body_text: emailBody, template: 'follow_up',
+                subject: emailSubject, body_text: emailBody, template: 'follow_up', to_email: emailRecipient,
               }).catch(e => { communicationWarning = e instanceof Error ? e.message : 'Email could not be sent'; });
             }
           }
@@ -490,7 +492,7 @@ export default function Enquiries() {
           }
           if (emailEnabled && emailSubject && emailBody) {
             await api.post(`/api/tenant-enquiries/${workflowEnquiry.id}/send-workflow-email`, {
-              subject: emailSubject, body_text: emailBody, template: 'rejection',
+              subject: emailSubject, body_text: emailBody, template: 'rejection', to_email: emailRecipient,
             }).catch(e => { communicationWarning = e instanceof Error ? e.message : 'Email could not be sent'; });
           }
           break;
@@ -1116,6 +1118,7 @@ export default function Enquiries() {
                       </label>
                       {emailEnabled && (
                         <div className="space-y-2">
+                          <Input label="Recipient Email" value={emailRecipient} onChange={setEmailRecipient} type="email" />
                           <Input label="Email Subject" value={emailSubject} onChange={setEmailSubject} />
                           <div>
                             <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Email Preview</label>
@@ -1192,6 +1195,7 @@ export default function Enquiries() {
                       </label>
                       {emailEnabled && (
                         <div className="space-y-2">
+                          <Input label="Recipient Email" value={emailRecipient} onChange={setEmailRecipient} type="email" />
                           <Input label="Email Subject" value={emailSubject} onChange={setEmailSubject} />
                           <div>
                             <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Email Preview</label>

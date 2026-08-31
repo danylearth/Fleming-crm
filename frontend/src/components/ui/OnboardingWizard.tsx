@@ -6,8 +6,9 @@ import EmailPreviewModal from './EmailPreviewModal';
 import {
   CheckCircle, Circle, Clock, Mail, FileText, Shield, CreditCard,
   ChevronDown, AlertTriangle, User, X, Send,
-  Eye, Download, PoundSterling
+  Eye, Download, PoundSterling, FileSignature, CalendarDays
 } from 'lucide-react';
+import { formatPropertyAddress } from '../../utils/propertyAddress';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -72,7 +73,7 @@ interface OnboardingWizardProps {
   onUpdate: () => void | Promise<void>;
 }
 
-export default function OnboardingWizard({ enquiryId, enquiry, properties, onClose, onUpdate }: OnboardingWizardProps) {
+export default function OnboardingWizard({ enquiryId, enquiry, properties, users, onClose, onUpdate }: OnboardingWizardProps) {
   const api = useApi();
   const { token } = useAuth();
   const [saving, setSaving] = useState(false);
@@ -90,6 +91,18 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
 
   // Step 5: Credit check
   const [creditScore, setCreditScore] = useState('');
+  const [creditReport, setCreditReport] = useState<File | null>(null);
+  const [agreement, setAgreement] = useState<{ id: number; agreement_type: string; original_name: string; status: string; requires_landlord_signature: number; tenant_signed_at?: string; landlord_signed_at?: string } | null>(null);
+  const [agreementFile, setAgreementFile] = useState<File | null>(null);
+  const [agreementType, setAgreementType] = useState<'internal' | 'client'>('internal');
+  const [agreementSendEmail, setAgreementSendEmail] = useState(false);
+  const [agreementSendSms, setAgreementSendSms] = useState(false);
+  const [balanceSendEmail, setBalanceSendEmail] = useState(false);
+  const [handoverDate, setHandoverDate] = useState('');
+  const [handoverTime, setHandoverTime] = useState('10:00');
+  const [handoverAssignedTo, setHandoverAssignedTo] = useState('');
+  const [handoverSendEmail, setHandoverSendEmail] = useState(false);
+  const [handoverSendSms, setHandoverSendSms] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
   const [changesRequired, setChangesRequired] = useState('');
   const [sendReviewSms, setSendReviewSms] = useState(false);
@@ -108,24 +121,33 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
   const [enquiryDocs, setEnquiryDocs] = useState<{ id: number; doc_type: string; original_name: string; mime_type: string; size: number; uploaded_at: string; review_status?: string; review_notes?: string; reviewed_at?: string }[]>([]);
   const [emailMessages, setEmailMessages] = useState<{ id: number; template: string; status: string; error_message?: string; created_at: string }[]>([]);
 
-  const fetchDocs = () => {
+  const fetchDocs = async () => {
     if (!token) return;
-    fetch(`${API_URL}/api/documents/tenant_enquiry/${enquiryId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.json())
-      .then(d => { if (Array.isArray(d)) setEnquiryDocs(d); })
-      .catch(() => {});
+    try {
+      const response = await fetch(`${API_URL}/api/documents/tenant_enquiry/${enquiryId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (Array.isArray(data)) setEnquiryDocs(data);
+    } catch { /* document refresh is non-blocking */ }
   };
 
-  const fetchEmailHistory = () => {
-    api.get(`/api/email-history/tenant_enquiry/${enquiryId}`)
-      .then(data => { if (Array.isArray(data)) setEmailMessages(data); })
-      .catch(() => {});
+  const fetchEmailHistory = async () => {
+    try {
+      const data = await api.get(`/api/email-history/tenant_enquiry/${enquiryId}`);
+      if (Array.isArray(data)) setEmailMessages(data);
+    } catch { /* email refresh is non-blocking */ }
+  };
+
+  const fetchAgreement = async () => {
+    try {
+      const data = await api.get(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement`);
+      setAgreement(data || null);
+    } catch { setAgreement(null); }
   };
 
   // Fetch documents for this enquiry
-  useEffect(() => { fetchDocs(); fetchEmailHistory(); }, [enquiryId, token]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchDocs(); fetchEmailHistory(); fetchAgreement(); }, [enquiryId, token]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => {
     if (documentPreview) URL.revokeObjectURL(documentPreview.url);
   }, [documentPreview]);
@@ -135,8 +157,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
     setReviewError('');
     try {
       await api.put(`/api/documents/${docId}/review`, { status, notes: reviewNotes || null });
-      fetchDocs();
-      onUpdate();
+      await Promise.all([fetchDocs(), onUpdate()]);
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : 'Document review could not be saved');
     } finally {
@@ -196,8 +217,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
       if (failedDeliveries.length) {
         setReviewError(`Review saved, but communication failed: ${failedDeliveries.map(item => item.error).join('; ')}`);
       }
-      fetchEmailHistory();
-      onUpdate();
+      await Promise.all([fetchEmailHistory(), fetchDocs(), onUpdate()]);
+      setActiveStep(status === 'changes_requested' ? 3 : 4);
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : 'Application review could not be updated');
     } finally {
@@ -214,6 +235,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
     setHdHoldingDeposit(String(enquiry.holding_deposit_amount || (rent ? Math.round(rent * 12 / 52) : '')));
     setHdReceivedAmount(enquiry.holding_deposit_received_amount ? String(enquiry.holding_deposit_received_amount) : '');
     setCreditScore(enquiry.credit_score || '');
+    setHandoverDate(enquiry.handover_date ? String(enquiry.handover_date).slice(0, 10) : '');
+    setHandoverTime(enquiry.handover_time ? String(enquiry.handover_time).slice(0, 5) : '10:00');
+    setHandoverAssignedTo(enquiry.handover_assigned_to || '');
     setReviewNotes('');
     setChangesRequired(enquiry.application_review_status === 'changes_requested' ? enquiry.application_review_notes || '' : '');
     // Set active step based on progress
@@ -222,8 +246,11 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
     else if (!enquiry.application_form_completed) setActiveStep(2);
     else if (enquiry.application_review_status !== 'approved') setActiveStep(3);
     else if (!enquiry.credit_check_completed) setActiveStep(4);
-    else setActiveStep(5);
-  }, [enquiry, properties]);
+    else if (agreement?.status !== 'completed') setActiveStep(5);
+    else if (!enquiry.balance_payment_received) setActiveStep(6);
+    else if (!enquiry.handover_date) setActiveStep(7);
+    else setActiveStep(8);
+  }, [enquiry, properties, agreement]);
 
   const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
   const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
@@ -266,6 +293,24 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
       icon: CreditCard,
       getStatus: () => enquiry.credit_check_completed ? 'green' : 'red',
       desc: enquiry.credit_check_completed ? `Credit check completed${enquiry.credit_score ? ` — ${enquiry.credit_score}` : ''}` : 'Run after the application is approved',
+    },
+    {
+      label: 'Issue Tenancy Agreement',
+      icon: FileSignature,
+      getStatus: () => agreement?.status === 'completed' ? 'green' : agreement ? 'amber' : 'red',
+      desc: agreement?.status === 'completed' ? 'Agreement signed and stored' : agreement ? 'Waiting for required signatures' : 'Upload and issue the agreement for e-signature',
+    },
+    {
+      label: 'Final Balance',
+      icon: PoundSterling,
+      getStatus: () => enquiry.balance_payment_received ? 'green' : enquiry.balance_payment_requested ? 'amber' : 'red',
+      desc: enquiry.balance_payment_received ? 'Payment received' : enquiry.balance_payment_requested ? `Waiting for £${Number(enquiry.balance_due_amount || 0).toLocaleString()}` : 'Request deposit and first rent balance',
+    },
+    {
+      label: 'Schedule Handover',
+      icon: CalendarDays,
+      getStatus: () => enquiry.handover_date ? 'green' : 'red',
+      desc: enquiry.handover_date ? `${String(enquiry.handover_date).slice(0, 10)} at ${String(enquiry.handover_time || '').slice(0, 5)}` : 'Assign the property handover to the team calendar',
     },
     {
       label: 'Convert to Tenant',
@@ -337,20 +382,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         action: 'update', entity_type: 'tenant_enquiry', entity_id: enquiryId,
         changes: { action: 'holding_deposit_received', amount: receivedAmount, date: receivedDate },
       }).catch(() => {});
-      onUpdate();
-    } catch (err) { console.error(err); }
-    setSaving(false);
-  };
-
-  const updateField = async (fields: Record<string, string | number | boolean | null>) => {
-    setSaving(true);
-    try {
-      await api.put(`/api/tenant-enquiries/${enquiryId}`, {
-        first_name_1: enquiry.first_name_1, last_name_1: enquiry.last_name_1,
-        email_1: enquiry.email_1, status: enquiry.status,
-        ...fields,
-      });
-      onUpdate();
+      await onUpdate();
     } catch (err) { console.error(err); }
     setSaving(false);
   };
@@ -362,15 +394,94 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         property_id: enquiry.linked_property_id,
         tenancy_start_date: new Date().toISOString().split('T')[0],
       });
-      onUpdate();
+      await onUpdate();
       onClose();
     } catch (err) { console.error(err); }
     setSaving(false);
   };
 
+  const saveCreditCheck = async () => {
+    if (!token || !creditScore.trim() || !creditReport) return;
+    setSaving(true);
+    setReviewError('');
+    try {
+      const body = new FormData();
+      body.append('score', creditScore.trim());
+      body.append('report', creditReport);
+      const response = await fetch(`${API_URL}/api/tenant-enquiries/${enquiryId}/credit-check`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body,
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Credit check could not be saved');
+      setCreditReport(null);
+      await Promise.all([fetchDocs(), onUpdate()]);
+      setActiveStep(5);
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Credit check could not be saved');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const issueAgreement = async () => {
+    if (!token || !agreementFile) return;
+    setSaving(true); setReviewError('');
+    try {
+      const body = new FormData();
+      body.append('agreement', agreementFile);
+      body.append('agreement_type', agreementType);
+      body.append('send_email', String(agreementSendEmail));
+      body.append('send_sms', String(agreementSendSms));
+      const response = await fetch(`${API_URL}/api/tenant-enquiries/${enquiryId}/tenancy-agreement`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body,
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Agreement could not be issued');
+      const failures = Object.values(result.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (failures.length) setReviewError(`Agreement issued, but ${failures.length} communication${failures.length === 1 ? '' : 's'} failed. Check the email/SMS history.`);
+      setAgreementFile(null);
+      await Promise.all([fetchAgreement(), fetchEmailHistory(), onUpdate()]);
+    } catch (err) { setReviewError(err instanceof Error ? err.message : 'Agreement could not be issued'); }
+    finally { setSaving(false); }
+  };
+
+  const requestBalance = async () => {
+    setSaving(true); setReviewError('');
+    try {
+      const result = await api.post(`/api/tenant-enquiries/${enquiryId}/request-balance`, { send_email: balanceSendEmail });
+      const failures = Object.values(result?.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (failures.length) setReviewError('Balance request saved, but the email failed. Check the email history.');
+      await Promise.all([fetchEmailHistory(), onUpdate()]);
+    } catch (err) { setReviewError(err instanceof Error ? err.message : 'Balance request could not be saved'); }
+    finally { setSaving(false); }
+  };
+
+  const confirmBalance = async () => {
+    setSaving(true); setReviewError('');
+    try {
+      await api.post(`/api/tenant-enquiries/${enquiryId}/confirm-balance`, {});
+      await onUpdate();
+    } catch (err) { setReviewError(err instanceof Error ? err.message : 'Balance receipt could not be saved'); }
+    finally { setSaving(false); }
+  };
+
+  const scheduleHandover = async () => {
+    setSaving(true); setReviewError('');
+    try {
+      const result = await api.post(`/api/tenant-enquiries/${enquiryId}/schedule-handover`, {
+        handover_date: handoverDate, handover_time: handoverTime, assigned_to: handoverAssignedTo,
+        send_email: handoverSendEmail, send_sms: handoverSendSms,
+      });
+      const failures = Object.values(result?.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (failures.length) setReviewError(`Handover saved, but ${failures.length} communication${failures.length === 1 ? '' : 's'} failed.`);
+      await onUpdate();
+    } catch (err) { setReviewError(err instanceof Error ? err.message : 'Handover could not be scheduled'); }
+    finally { setSaving(false); }
+  };
+
   const propertyAddress = (() => {
     const prop = properties.find(p => p.id === enquiry.linked_property_id);
-    return prop ? [prop.address, prop.postcode].filter(Boolean).join(', ') : '';
+    return prop ? formatPropertyAddress(prop.address, prop.postcode) : '';
   })();
 
   const applicantName = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
@@ -548,7 +659,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
           <div className="flex-1">
             <h3 className="text-lg font-bold">{name}</h3>
             <p className="text-xs text-[var(--text-muted)]">
-              {prop ? `${prop.address}${prop.postcode ? `, ${prop.postcode}` : ''}` : 'No property linked'}
+              {prop ? formatPropertyAddress(prop.address, prop.postcode) : 'No property linked'}
             </p>
           </div>
           {/* Progress */}
@@ -1046,20 +1157,24 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                 </div>
               )}
               <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Credit Check Result</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] text-[var(--text-muted)] mb-1">Credit Score</label>
                   <input type="text" value={creditScore} onChange={e => setCreditScore(e.target.value)} placeholder="e.g. 720"
                     className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
                 </div>
-                <div className="flex items-end">
-                  <Button variant={enquiry.credit_check_completed ? 'outline' : 'gradient'} size="sm" onClick={() => updateField({
-                    credit_check_completed: 1, credit_score: creditScore, credit_check_date: new Date().toISOString().split('T')[0],
-                  })} disabled={saving || !creditScore || enquiry.application_review_status !== 'approved'}>
-                    {enquiry.credit_check_completed ? 'Updated' : 'Save Score'}
-                  </Button>
+                <div>
+                  <label className="block text-[10px] text-[var(--text-muted)] mb-1">NRLA / credit report *</label>
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={event => setCreditReport(event.target.files?.[0] || null)}
+                    className="block w-full text-xs text-[var(--text-secondary)] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--bg-hover)] file:px-3 file:py-2 file:text-xs file:text-[var(--text-primary)]" />
                 </div>
               </div>
+              <Button variant={enquiry.credit_check_completed ? 'outline' : 'gradient'} size="sm" onClick={saveCreditCheck}
+                disabled={saving || !creditScore.trim() || !creditReport || enquiry.application_review_status !== 'approved'}>
+                {saving ? 'Saving...' : enquiry.credit_check_completed ? 'Replace Credit Check' : 'Save Score & Report'}
+              </Button>
+              {!enquiry.credit_check_completed && <p className="text-[10px] text-amber-400">A score and uploaded report are both required before onboarding can continue.</p>}
+              {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
               {enquiry.credit_score && (
                 <div className="text-xs text-emerald-400 flex items-center gap-2">
                   <CheckCircle size={14} /> Credit score: {enquiry.credit_score}
@@ -1069,24 +1184,72 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
             </div>
           </StepCard>
 
-          {/* Step 6: Convert to Tenant */}
+          {/* Step 6: Tenancy Agreement */}
           <StepCard idx={5} step={steps[5]} {...stepCardProps}>
             {allPreviousComplete(5) ? (
               <div className="space-y-3">
-                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                  <p className="text-sm font-medium text-emerald-400">All checks complete</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{name} is ready to be converted to a tenant.</p>
-                </div>
-                <Button variant="gradient" onClick={convertToTenant} disabled={saving}>
-                  {saving ? 'Converting...' : 'Convert to Tenant'}
-                </Button>
+                {agreement && <div className={`p-3 rounded-lg border ${agreement.status === 'completed' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
+                  <p className="text-sm font-medium">{agreement.original_name}</p>
+                  <p className="text-xs mt-1">{agreement.status === 'completed' ? 'All required signatures completed; signed PDF stored in Documents.' : `Status: ${agreement.status.replace('_', ' ')}${agreement.requires_landlord_signature ? ' · tenant and landlord signatures required' : ''}`}</p>
+                </div>}
+                {agreement && agreement.status !== 'completed' && <Button variant="ghost" size="sm" onClick={fetchAgreement}>Refresh Signatures</Button>}
+                {agreement?.status !== 'completed' && <>
+                  <label className="block text-[10px] text-[var(--text-muted)]">Agreement type</label>
+                  <select value={agreementType} onChange={event => setAgreementType(event.target.value as 'internal' | 'client')} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs">
+                    <option value="internal">Fleming internal portfolio — tenant signature</option>
+                    <option value="client">Client property — tenant and landlord signatures</option>
+                  </select>
+                  <input type="file" accept="application/pdf,.pdf" onChange={event => setAgreementFile(event.target.files?.[0] || null)} className="block w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--bg-hover)] file:px-3 file:py-2 file:text-xs" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendEmail} onChange={e => setAgreementSendEmail(e.target.checked)} /> Email signing link</label>
+                    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendSms} onChange={e => setAgreementSendSms(e.target.checked)} /> SMS tenant link</label>
+                  </div>
+                  <Button variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || !agreementFile}>{saving ? 'Issuing...' : agreement ? 'Issue Replacement Agreement' : 'Issue Agreement'}</Button>
+                </>}
+                {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
               </div>
             ) : (
-              <div className="text-xs text-[var(--text-muted)] flex items-center gap-2">
-                <AlertTriangle size={14} className="text-amber-400" />
-                Complete all previous steps before converting to tenant
-              </div>
+              <div className="text-xs text-[var(--text-muted)] flex items-center gap-2"><AlertTriangle size={14} className="text-amber-400" />Complete the credit check first</div>
             )}
+          </StepCard>
+
+          {/* Step 7: Final Balance */}
+          <StepCard idx={6} step={steps[6]} {...stepCardProps}>
+            {allPreviousComplete(6) ? <div className="space-y-3">
+              <div className="p-3 rounded-lg bg-[var(--bg-subtle)] text-xs">Security deposit + first month’s rent − holding deposit = <strong>£{Number(enquiry.balance_due_amount || (Number(enquiry.security_deposit_amount || 0) + Number(enquiry.monthly_rent_agreed || 0) - Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0))).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
+              {!enquiry.balance_payment_requested && <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={balanceSendEmail} onChange={e => setBalanceSendEmail(e.target.checked)} /> Email payment request</label>}
+              {!enquiry.balance_payment_requested ? <Button variant="gradient" size="sm" onClick={requestBalance} disabled={saving}>Request Final Balance</Button>
+                : !enquiry.balance_payment_received ? <Button variant="gradient" size="sm" onClick={confirmBalance} disabled={saving}>Confirm Payment Received</Button>
+                : <p className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle size={14} /> Final balance received</p>}
+              {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
+            </div> : <p className="text-xs text-[var(--text-muted)]">Complete the signed agreement first.</p>}
+          </StepCard>
+
+          {/* Step 8: Handover */}
+          <StepCard idx={7} step={steps[7]} {...stepCardProps}>
+            {allPreviousComplete(7) ? <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input type="date" value={handoverDate} onChange={e => setHandoverDate(e.target.value)} className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                <input type="time" value={handoverTime} onChange={e => setHandoverTime(e.target.value)} className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+              </div>
+              <select value={handoverAssignedTo} onChange={e => setHandoverAssignedTo(e.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs">
+                <option value="">Assign team member…</option>{users.map(user => <option key={user.id} value={user.name}>{user.name}</option>)}
+              </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={handoverSendEmail} onChange={e => setHandoverSendEmail(e.target.checked)} /> Email tenant</label>
+                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={handoverSendSms} onChange={e => setHandoverSendSms(e.target.checked)} /> SMS tenant</label>
+              </div>
+              <Button variant="gradient" size="sm" onClick={scheduleHandover} disabled={saving || !handoverDate || !handoverTime || !handoverAssignedTo}>{enquiry.handover_date ? 'Update Handover' : 'Add to Team Calendar'}</Button>
+              {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
+            </div> : <p className="text-xs text-[var(--text-muted)]">Confirm the final balance first.</p>}
+          </StepCard>
+
+          {/* Step 9: Convert to Tenant */}
+          <StepCard idx={8} step={steps[8]} {...stepCardProps}>
+            {allPreviousComplete(8) ? <div className="space-y-3">
+              <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20"><p className="text-sm font-medium text-emerald-400">All onboarding stages complete</p><p className="text-xs text-[var(--text-muted)] mt-1">{name} is ready to be converted to a tenant.</p></div>
+              <Button variant="gradient" onClick={convertToTenant} disabled={saving}>{saving ? 'Converting...' : 'Convert to Tenant'}</Button>
+            </div> : <p className="text-xs text-[var(--text-muted)]">Complete all previous stages before converting.</p>}
           </StepCard>
 
         </div>

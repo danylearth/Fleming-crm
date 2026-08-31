@@ -280,11 +280,14 @@ export default function EnquiryDetail() {
       setUsers(Array.isArray(usersList) ? usersList : []);
       // Parse notes
       if (d.notes) {
+        let parsedNotes = false;
         try {
           const parsed = JSON.parse(d.notes);
-          if (Array.isArray(parsed)) { setNotes(parsed); return; }
+          if (Array.isArray(parsed)) { setNotes(parsed); parsedNotes = true; }
         } catch { /* notes not valid JSON */ }
-        if (d.notes.trim()) setNotes([{ id: '1', text: d.notes, author: 'System', created_at: new Date().toISOString() }]);
+        if (!parsedNotes && d.notes.trim()) {
+          setNotes([{ id: '1', text: d.notes, author: 'System', created_at: new Date().toISOString() }]);
+        }
       } else {
         setNotes([]);
       }

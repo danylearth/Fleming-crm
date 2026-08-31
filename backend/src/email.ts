@@ -127,25 +127,19 @@ export function viewingConfirmationEmail(name: string, address: string, date: st
 export function referenceChaseEmail(landlordName: string, tenantName: string, propertyAddress: string): { subject: string; html: string } {
   return {
     subject: `Reference Request - ${tenantName}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Landlord Reference Request</h2>
+    html: brandedEmailHtml('Landlord Reference Request', `
         <p>Dear ${landlordName},</p>
         <p>We are writing regarding a reference request for <strong>${tenantName}</strong>, who has applied for a property at <strong>${propertyAddress}</strong>.</p>
         <p>We would greatly appreciate it if you could provide a landlord reference at your earliest convenience. We kindly request a response within <strong>48 hours</strong>.</p>
         <p>If you have any questions, please don't hesitate to get in touch.</p>
-        <p>Kind regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>contact@tenancies.fleminglettings.co.uk | 01902 212 415</p>
-      </div>
-    `,
+    `),
   };
 }
 
 export function rentReminderEmail(tenantName: string, amount: number, address: string, dueDate: string): { subject: string; html: string } {
   return {
     subject: `Rent Payment Reminder - ${address}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Rent Payment Reminder</h2>
+    html: brandedEmailHtml('Rent Payment Reminder', `
         <p>Dear ${tenantName},</p>
         <p>This is a friendly reminder that your rent payment is outstanding:</p>
         <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 16px 0;">
@@ -155,9 +149,7 @@ export function rentReminderEmail(tenantName: string, amount: number, address: s
         </div>
         <p>If you have already made this payment, please disregard this message. Otherwise, please arrange payment as soon as possible.</p>
         <p>If you are experiencing difficulties, please contact us to discuss your options.</p>
-        <p>Kind regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>contact@tenancies.fleminglettings.co.uk | 01902 212 415</p>
-      </div>
-    `,
+    `),
   };
 }
 
@@ -382,14 +374,10 @@ export function applicationConfirmationEmail(name: string): { subject: string; h
 export function genericEmail(name: string, topic: string): { subject: string; html: string } {
   return {
     subject: topic,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">${topic}</h2>
+    html: brandedEmailHtml(topic, `
         <p>Hi ${name},</p>
         <p>Thank you for your enquiry. We wanted to follow up regarding ${topic.toLowerCase()}.</p>
         <p>Please don't hesitate to get in touch if you have any questions.</p>
-        <p>Best regards,<br/>Lettings Support Team | fleminglettings.co.uk<br/>contact@tenancies.fleminglettings.co.uk | 01902 212 415</p>
-      </div>
-    `,
+    `),
   };
 }

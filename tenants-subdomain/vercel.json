@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/onboarding/:token", "destination": "/application.html" },
+    { "source": "/agreement/:token", "destination": "/agreement.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
