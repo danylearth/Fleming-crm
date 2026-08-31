@@ -377,7 +377,8 @@ export async function initDb() {
       -- PROPERTY VIEWINGS
       CREATE TABLE IF NOT EXISTS property_viewings (
         id SERIAL PRIMARY KEY,
-        property_id INTEGER NOT NULL REFERENCES properties(id),
+        property_id INTEGER REFERENCES properties(id),
+        viewing_location TEXT,
         enquiry_id INTEGER REFERENCES tenant_enquiries(id),
         viewer_name TEXT NOT NULL,
         viewer_email TEXT,
@@ -615,6 +616,8 @@ export async function initDb() {
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE property_viewings ADD COLUMN IF NOT EXISTS assigned_to TEXT;
+        ALTER TABLE property_viewings ADD COLUMN IF NOT EXISTS viewing_location TEXT;
+        ALTER TABLE property_viewings ALTER COLUMN property_id DROP NOT NULL;
       EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);

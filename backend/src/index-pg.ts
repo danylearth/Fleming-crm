@@ -17,6 +17,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { startScheduler } from './scheduler-pg';
 import { coerceImportValue } from './import-utils';
 import { applicationFormIssues, isValidEmail, isValidUkMobile, normalizePropertyTypes } from './public-form-validation';
+import { generateCompletedApplicationPdf } from './application-pdf';
 
 // Validate required environment variables
 if (!process.env.DATABASE_URL) {
@@ -2439,10 +2440,13 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       : null;
     if (req.body) delete req.body.app_signature;
     sanitizePublicStrings(req.body);
-    const enquiry = await queryOne(
-      'SELECT id, status, application_form_completed FROM tenant_enquiries WHERE application_form_token = $1',
-      [req.params.token]
-    );
+    const enquiry = await queryOne(`
+      SELECT te.id, te.status, te.application_form_completed,
+        p.address AS property_address, p.postcode AS property_postcode
+      FROM tenant_enquiries te
+      LEFT JOIN properties p ON p.id = te.linked_property_id
+      WHERE te.application_form_token = $1
+    `, [req.params.token]);
     if (!enquiry) return res.status(404).json({ error: 'Form not found' });
     if (enquiry.status === 'converted') return res.status(410).json({ error: 'This application is now closed' });
 
@@ -2482,7 +2486,28 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
     const previousAddress = [formData.previous_address_line_1, formData.previous_address_city, formData.previous_address_postcode]
       .filter(Boolean).join(', ') || null;
 
-    await run(`
+    const submittedAt = new Date();
+    const applicantName = `${formData.first_name} ${formData.last_name}`.trim();
+    const propertyAddress = [enquiry.property_address, enquiry.property_postcode].filter(Boolean).join(', ')
+      || String(formData.property_address || 'Not specified');
+    const completedPdf = await generateCompletedApplicationPdf({
+      enquiryId: enquiry.id,
+      applicantName,
+      propertyAddress,
+      submittedAt,
+      formData,
+      signatureName,
+      signatureDataUrl: rawSignature,
+    });
+    const completedPdfFilename = `completed-application-${enquiry.id}-${Date.now()}.pdf`;
+    const completedPdfPath = path.join(uploadsDir, completedPdfFilename);
+    fs.writeFileSync(completedPdfPath, completedPdf);
+
+    const client = await pool.connect();
+    let previousCompletedDocuments: Array<{ filename: string }> = [];
+    try {
+      await client.query('BEGIN');
+      await client.query(`
       UPDATE tenant_enquiries SET
         app_form_data=$1::jsonb, app_signature_name=$2, app_signature_ip=$3, app_signature_user_agent=$4,
         app_signature=$5, app_signed_at=NOW(), app_revision=COALESCE(app_revision, 0) + 1,
@@ -2523,14 +2548,44 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       formData.marketing_consent ? 1 : 0, req.params.token,
     ]);
 
-    // Log activity
-    await run(`
-      INSERT INTO audit_log (user_email, action, entity_type, entity_id, changes)
-      VALUES ($1, $2, $3, $4, $5)
-    `, ['tenant-self-service', 'update', 'tenant_enquiry', enquiry.id, JSON.stringify({
-      action: enquiry.application_form_completed ? 'application_form_revised' : 'application_form_completed',
-      ip: req.ip || null,
-    })]);
+      const previousDocumentsResult = await client.query(`
+        SELECT filename FROM documents
+        WHERE entity_type = 'tenant_enquiry' AND entity_id = $1 AND doc_type = 'Completed Tenancy Application'
+      `, [enquiry.id]);
+      previousCompletedDocuments = previousDocumentsResult.rows;
+      await client.query(`
+        DELETE FROM documents
+        WHERE entity_type = 'tenant_enquiry' AND entity_id = $1 AND doc_type = 'Completed Tenancy Application'
+      `, [enquiry.id]);
+      await client.query(`
+        INSERT INTO documents
+          (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, applicant_number, review_status)
+        VALUES ('tenant_enquiry', $1, 'Completed Tenancy Application', $2, $3, 'application/pdf', $4, 1, 'approved')
+      `, [enquiry.id, completedPdfFilename, `Completed Tenancy Application - ${applicantName}.pdf`, completedPdf.length]);
+      await client.query(`
+        INSERT INTO audit_log (user_email, action, entity_type, entity_id, changes)
+        VALUES ($1, $2, $3, $4, $5)
+      `, ['tenant-self-service', 'update', 'tenant_enquiry', enquiry.id, JSON.stringify({
+        action: enquiry.application_form_completed ? 'application_form_revised' : 'application_form_completed',
+        completed_application_pdf: completedPdfFilename,
+        ip: req.ip || null,
+      })]);
+      await client.query('COMMIT');
+    } catch (transactionError) {
+      await client.query('ROLLBACK');
+      if (fs.existsSync(completedPdfPath)) fs.unlinkSync(completedPdfPath);
+      throw transactionError;
+    } finally {
+      client.release();
+    }
+    for (const previousDocument of previousCompletedDocuments) {
+      const previousPath = path.join(uploadsDir, previousDocument.filename);
+      try {
+        if (fs.existsSync(previousPath)) fs.unlinkSync(previousPath);
+      } catch (cleanupError) {
+        console.error('Old completed application PDF could not be removed:', cleanupError);
+      }
+    }
 
     if (!enquiry.application_form_completed) {
       await insert(`
@@ -3136,7 +3191,7 @@ app.put('/api/documents/:id/review', authMiddleware, requirePermission('staff'),
     await run(`
       UPDATE documents SET review_status = $1, review_notes = $2,
         reviewed_at = CASE WHEN $1 = 'pending' THEN NULL ELSE NOW() END,
-        reviewed_by = CASE WHEN $1 = 'pending' THEN NULL ELSE $3 END
+        reviewed_by = CASE WHEN $1 = 'pending' THEN NULL ELSE $3::INTEGER END
       WHERE id = $4
     `, [status, req.body.notes || null, req.user?.id || null, document.id]);
     if (document.entity_type === 'tenant_enquiry') {
@@ -3376,7 +3431,6 @@ app.post('/api/users/setup-fleming-team', authMiddleware, requireRole('admin'), 
       { email: 'marie@fleminglettings.co.uk', name: 'Marie Ellis', role: 'staff' },
       { email: 'sam@fleminglettings.co.uk', name: 'Sam Fleming', role: 'staff' },
       { email: 'robert@fleminglettings.co.uk', name: 'Robert Fleming', role: 'staff' },
-      { email: 'admin@fleminglettings.co.uk', name: 'Master Account', role: 'admin' },
       { email: 'danyl@fleminglettings.co.uk', name: 'Danyl Goodall', role: 'staff' },
     ];
     const created: Array<{ email: string; name: string; role: string; tempPassword: string }> = [];
@@ -3813,8 +3867,8 @@ app.delete('/api/property-expenses/:id', authMiddleware, async (req: AuthRequest
 app.get('/api/property-viewings', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const viewings = await query(`
-      SELECT v.*, p.address FROM property_viewings v
-      JOIN properties p ON p.id = v.property_id
+      SELECT v.*, COALESCE(v.viewing_location, p.address) AS address FROM property_viewings v
+      LEFT JOIN properties p ON p.id = v.property_id
       ORDER BY v.viewing_date DESC
     `);
     res.json(viewings);
@@ -3825,26 +3879,31 @@ app.get('/api/property-viewings', authMiddleware, async (req: AuthRequest, res) 
 
 app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to, send_sms, sms_message, send_email } = req.body;
+    const { property_id, viewing_location, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to, send_sms, sms_message, send_email } = req.body;
+    const customLocation = String(viewing_location || '').trim();
+    if (!property_id && !customLocation) return res.status(400).json({ error: 'Choose a property or enter a viewing location' });
     const viewingId = await insert(`
-      INSERT INTO property_viewings (property_id, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    `, [property_id, enquiry_id || null, viewer_name, viewer_email || null, viewer_phone || null, viewing_date, viewing_time || null, notes || null, assigned_to || null]);
+      INSERT INTO property_viewings (property_id, viewing_location, enquiry_id, viewer_name, viewer_email, viewer_phone, viewing_date, viewing_time, notes, assigned_to)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `, [property_id || null, customLocation || null, enquiry_id || null, viewer_name, viewer_email || null, viewer_phone || null, viewing_date, viewing_time || null, notes || null, assigned_to || null]);
 
     if (enquiry_id) {
       await run("UPDATE tenant_enquiries SET status = 'viewing_booked', viewing_date = $1 WHERE id = $2", [viewing_date, enquiry_id]);
     }
 
-    const property = await queryOne('SELECT address, postcode FROM properties WHERE id = $1', [property_id]);
+    const property = property_id
+      ? await queryOne('SELECT address, postcode FROM properties WHERE id = $1', [property_id])
+      : null;
+    const location = customLocation || [property?.address, property?.postcode].filter(Boolean).join(', ');
     const taskTitle = `Property Viewing: ${viewer_name}`;
-    const taskDescription = `Conduct property viewing at ${property?.address || 'Unknown Property'}\nTime: ${viewing_time || 'Not specified'}\nContact: ${viewer_phone || viewer_email}`;
+    const taskDescription = `Conduct property viewing at ${location}\nTime: ${viewing_time || 'Not specified'}\nContact: ${viewer_phone || viewer_email}`;
 
     await insert(`
       INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, task_type, due_date, assigned_to)
       VALUES ($1, $2, 'pending', 'high', 'tenant_enquiry', $3, 'viewing', $4, $5)
     `, [taskTitle, taskDescription, enquiry_id || null, viewing_date, assigned_to || req.user?.name || null]);
 
-    await logAudit(req.user?.id, req.user?.email, 'create', 'property_viewing', viewingId, { viewer_name, viewing_date, property_id });
+    await logAudit(req.user?.id, req.user?.email, 'create', 'property_viewing', viewingId, { viewer_name, viewing_date, property_id: property_id || null, viewing_location: customLocation || null });
 
     let smsDelivery: { success: boolean; status: string; error?: string } | null = null;
     if (send_sms && viewer_phone && sms_message) {
@@ -3872,7 +3931,7 @@ app.post('/api/property-viewings', authMiddleware, async (req: AuthRequest, res)
         emailDelivery = { success: false, status: 'failed', error: 'No applicant email address is recorded' };
       } else {
         const { sendEmail, viewingConfirmationEmail, normalizePropertyAddress } = require('./email');
-        const address = normalizePropertyAddress(property?.address || '', property?.postcode);
+        const address = customLocation || normalizePropertyAddress(property?.address || '', property?.postcode);
         const dateParts = String(viewing_date).split('-');
         const displayDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : viewing_date;
         const dateAndTime = `${displayDate}${viewing_time ? ` at ${viewing_time}` : ''}`;
@@ -3971,7 +4030,7 @@ app.post('/api/tenant-enquiries/:id/application-review', authMiddleware, require
       UPDATE tenant_enquiries SET application_review_status = $1, application_review_notes = $2,
         notes = CASE WHEN $5 = '' THEN notes ELSE CONCAT_WS(E'\n\n', NULLIF(notes, ''), $5) END,
         application_reviewed_at = CASE WHEN $1 = 'approved' THEN NOW() ELSE NULL END,
-        application_reviewed_by = CASE WHEN $1 = 'approved' THEN $3 ELSE NULL END
+        application_reviewed_by = CASE WHEN $1 = 'approved' THEN $3::INTEGER ELSE NULL END
       WHERE id = $4
     `, [status, changesRequired || internalNotes || null, req.user?.id || null, enquiryId, internalNotes]);
     await logAudit(req.user?.id, req.user?.email, 'application_review', 'tenant_enquiry', enquiryId, {

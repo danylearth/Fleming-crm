@@ -139,7 +139,7 @@ export default function Users() {
   };
 
   const setupRequestedTeam = async () => {
-    if (!confirm('Add the five requested Fleming team accounts? Existing accounts will be left unchanged.')) return;
+    if (!confirm('Add the four requested Fleming team accounts? Existing accounts will be left unchanged.')) return;
     setSettingUpTeam(true);
     try {
       const result = await api.post('/api/users/setup-fleming-team', {});

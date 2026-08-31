@@ -80,6 +80,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
   const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ') || 'Unknown';
   const [mode, setMode] = useState<'choose' | 'viewing' | 'awaiting' | 'onboarding' | 'reject'>('choose');
   const [propertyId, setPropertyId] = useState(enquiry.linked_property_id?.toString() || '');
+  const [customLocation, setCustomLocation] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('10:00');
   const [reason, setReason] = useState('');
@@ -91,7 +92,8 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
       switch (mode) {
         case 'viewing':
           await onAction(enquiry.id, 'viewing_booked', {
-            linked_property_id: propertyId ? Number(propertyId) : null,
+            linked_property_id: propertyId ? Number(propertyId) : enquiry.linked_property_id || null,
+            viewing_location: customLocation.trim() || null,
             viewing_date: date,
             viewing_time: time,
           });
@@ -186,10 +188,17 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
 
             {mode === 'viewing' && (
               <>
-                <Select label="Link to Property" value={propertyId} onChange={setPropertyId}
+                <Select label="Link to Property (optional)" value={propertyId} onChange={(value) => {
+                  setPropertyId(value);
+                  if (value) setCustomLocation('');
+                }}
                   options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({
                     value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}${p.rent_amount ? ` — £${p.rent_amount}/mo` : ''}`
                   }))]} />
+                <Input label="Or enter another location" value={customLocation} onChange={(value) => {
+                  setCustomLocation(value);
+                  if (value.trim()) setPropertyId('');
+                }} placeholder="e.g. Fleming Lettings office" />
                 <DatePicker label="Viewing Date" value={date} onChange={setDate} />
                 <Input label="Viewing Time" value={time} onChange={setTime} type="time" />
                 <p className="text-xs text-[var(--text-muted)]">
@@ -235,7 +244,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
               <Button
                 variant={mode === 'reject' ? 'outline' : 'gradient'}
                 onClick={handleSubmit}
-                disabled={loading || (mode === 'viewing' && (!date || !propertyId)) || (mode === 'awaiting' && !date)}
+                disabled={loading || (mode === 'viewing' && (!date || (!propertyId && !customLocation.trim()))) || (mode === 'awaiting' && !date)}
                 className={mode === 'reject' ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : ''}
               >
                 {loading ? 'Saving...' : mode === 'reject' ? 'Reject & Archive' : 'Confirm'}
@@ -494,12 +503,13 @@ export default function EnquiriesKanban() {
     const payload: Record<string, string | number | null> = { status, ...data };
 
     // If booking a viewing, also create a property viewing record
-    if (status === 'viewing_booked' && data.linked_property_id && data.viewing_date) {
+    if (status === 'viewing_booked' && (data.linked_property_id || data.viewing_location) && data.viewing_date) {
       const enq = enquiries.find(e => e.id === id);
       const name = [enq?.first_name_1, enq?.last_name_1].filter(Boolean).join(' ');
       try {
         await api.post('/api/property-viewings', {
-          property_id: data.linked_property_id,
+          property_id: data.viewing_location ? null : data.linked_property_id,
+          viewing_location: data.viewing_location || null,
           enquiry_id: id,
           viewer_name: name,
           viewer_email: enq?.email_1 || '',

@@ -69,7 +69,7 @@ interface OnboardingWizardProps {
   properties: { id: number; address: string; postcode?: string; rent_amount?: number }[];
   users: { id: number; name: string; email: string }[];
   onClose: () => void;
-  onUpdate: () => void;
+  onUpdate: () => void | Promise<void>;
 }
 
 export default function OnboardingWizard({ enquiryId, enquiry, properties, onClose, onUpdate }: OnboardingWizardProps) {
@@ -95,6 +95,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
   const [sendReviewSms, setSendReviewSms] = useState(false);
   const [sendReviewEmail, setSendReviewEmail] = useState(false);
   const [reviewError, setReviewError] = useState('');
+  const [documentPreview, setDocumentPreview] = useState<{ url: string; name: string; mimeType: string } | null>(null);
 
   // Application email modal
   const [showApplicationEmail, setShowApplicationEmail] = useState(false);
@@ -125,6 +126,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
 
   // Fetch documents for this enquiry
   useEffect(() => { fetchDocs(); fetchEmailHistory(); }, [enquiryId, token]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => {
+    if (documentPreview) URL.revokeObjectURL(documentPreview.url);
+  }, [documentPreview]);
 
   const reviewDocument = async (docId: number, status: 'approved' | 'rejected') => {
     setSaving(true);
@@ -157,7 +161,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
     URL.revokeObjectURL(href);
   };
 
-  const viewDocument = async (docId: number) => {
+  const viewDocument = async (docId: number, originalName: string) => {
     if (!token) return;
     const response = await fetch(`${API_URL}/api/documents/download/${docId}?disposition=inline`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -166,9 +170,14 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
       setReviewError('Document preview failed');
       return;
     }
-    const href = URL.createObjectURL(await response.blob());
-    window.open(href, '_blank', 'noopener,noreferrer');
-    window.setTimeout(() => URL.revokeObjectURL(href), 60_000);
+    const blob = await response.blob();
+    const href = URL.createObjectURL(blob);
+    setDocumentPreview({ url: href, name: originalName, mimeType: blob.type });
+  };
+
+  const closeDocumentPreview = () => {
+    if (documentPreview) URL.revokeObjectURL(documentPreview.url);
+    setDocumentPreview(null);
   };
 
   const updateApplicationReview = async (status: 'approved' | 'changes_requested') => {
@@ -285,7 +294,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         follow_up_date: hdFollowUpDate || null,
       });
       fetchEmailHistory();
-      onUpdate();
+      setActiveStep(1);
+      await onUpdate();
     } catch (err) {
       console.error(err);
       alert(err instanceof Error ? err.message : 'Holding deposit email could not be sent');
@@ -523,6 +533,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
   const latestHoldingEmail = emailMessages.find(message => message.template === 'holding_deposit_request');
   const answerLabel = (key: string) => key.replace(/^declaration_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const answerValue = (value: unknown) => typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value || '—');
+  const applicationUrl = `https://apply.fleminglettings.co.uk/onboarding/${enquiry.application_form_token || ''}`;
+  const reviewSmsPreview = `Hi there ${enquiry.first_name_1 || 'there'}, thank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you. Please click on this link to jump back in: ${applicationUrl}. If you need any help, then please contact our office on 01902 212 415.`;
+  const reviewEmailPreview = `Subject: Changes required for your Fleming Lettings application\n\nHi ${enquiry.first_name_1 || 'there'},\n\nThank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you.\n\nWhat we need to complete your application:\n${changesRequired || '[Enter the changes or information required above]'}\n\nUpdate your application: ${applicationUrl}\n\nIf you need any help, please contact our office on 01902 212 415.`;
 
   return (
     <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -966,7 +979,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                               <span className={`text-[10px] font-medium ${doc.review_status === 'approved' ? 'text-emerald-400' : doc.review_status === 'rejected' ? 'text-red-400' : 'text-amber-400'}`}>
                                 {doc.review_status || 'pending'}
                               </span>
-                              <button onClick={() => viewDocument(doc.id)} className="px-2 py-1 rounded text-[10px] bg-sky-500/15 text-sky-400 flex items-center gap-1"><Eye size={10} />View</button>
+                              <button onClick={() => viewDocument(doc.id, doc.original_name)} className="px-2 py-1 rounded text-[10px] bg-sky-500/15 text-sky-400 flex items-center gap-1"><Eye size={10} />View</button>
                               <button onClick={() => downloadDocument(doc.id, doc.original_name)} className="px-2 py-1 rounded text-[10px] bg-[var(--bg-hover)] text-[var(--text-secondary)] flex items-center gap-1"><Download size={10} />Download</button>
                               <button onClick={() => reviewDocument(doc.id, 'approved')} disabled={saving} className="px-2 py-1 rounded text-[10px] bg-emerald-500/15 text-emerald-400">Approve</button>
                               <button onClick={() => reviewDocument(doc.id, 'rejected')} disabled={saving} className="px-2 py-1 rounded text-[10px] bg-red-500/15 text-red-400">Reject</button>
@@ -995,6 +1008,20 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
                       <input type="checkbox" checked={sendReviewEmail} onChange={event => setSendReviewEmail(event.target.checked)} className="accent-orange-500" /> Send email
                     </label>
                   </div>
+                  {sendReviewSms && (
+                    <div>
+                      <label className="block text-[10px] text-[var(--text-muted)] mb-1">SMS preview</label>
+                      <textarea readOnly value={reviewSmsPreview} rows={5}
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] resize-none" />
+                    </div>
+                  )}
+                  {sendReviewEmail && (
+                    <div>
+                      <label className="block text-[10px] text-[var(--text-muted)] mb-1">Email preview</label>
+                      <textarea readOnly value={reviewEmailPreview} rows={8}
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] resize-none" />
+                    </div>
+                  )}
                   {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
                   <div className="flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" onClick={() => updateApplicationReview('changes_requested')} disabled={saving || !changesRequired.trim()}>
@@ -1076,6 +1103,28 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, onClo
         initialBodyHtml={buildResendApplicationEmailHtml()}
         sendLabel="Resend Application Form Link"
       />
+
+      {documentPreview && (
+        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-[70] p-4" onClick={closeDocumentPreview}>
+          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-4xl h-[86vh] overflow-hidden flex flex-col" onClick={event => event.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border-subtle)]">
+              <h4 className="text-sm font-bold text-[var(--text-primary)] truncate">{documentPreview.name}</h4>
+              <button onClick={closeDocumentPreview} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Close document preview"><X size={18} /></button>
+            </div>
+            <div className="flex-1 min-h-0 bg-white">
+              {documentPreview.mimeType.startsWith('image/') ? (
+                <img src={documentPreview.url} alt={documentPreview.name} className="w-full h-full object-contain" />
+              ) : documentPreview.mimeType === 'application/pdf' ? (
+                <iframe src={documentPreview.url} title={documentPreview.name} className="w-full h-full border-0" />
+              ) : (
+                <div className="h-full flex items-center justify-center p-8 text-center text-sm text-slate-600">
+                  This file type cannot be previewed in the browser. Use Download to open it in its native app.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Holding deposit email preview (read-only) */}
       {showHDEmailPreview && (

@@ -14,6 +14,7 @@ import OnboardingWizard from '../components/ui/OnboardingWizard';
 import { calculateSmsSegments } from '../utils/sms';
 import { rejectionSms } from '../utils/messages';
 import { usePermissions } from '../hooks/usePermissions';
+import { viewingEmailPreview, viewingSmsPreview } from '../utils/viewingMessages';
 
 interface EnquiryRaw {
   id: number;
@@ -288,6 +289,7 @@ export default function Enquiries() {
   const [wfDate, setWfDate] = useState('');
   const [wfTime, setWfTime] = useState('10:00');
   const [wfPropId, setWfPropId] = useState('');
+  const [wfCustomLocation, setWfCustomLocation] = useState('');
   const [wfReason, setWfReason] = useState('');
   const [wfLoading, setWfLoading] = useState(false);
   const [wfAssignedTo, setWfAssignedTo] = useState('');
@@ -366,13 +368,13 @@ export default function Enquiries() {
     setSaving(false);
   };
 
-  const generateViewingSms = (firstName: string, propId: string, date: string, time: string) => {
+  const viewingLocation = (propId: string, customLocation: string) => {
     const prop = properties.find(p => p.id === Number(propId));
-    const addr = prop?.address || '[property address]';
-    let d = '[date]';
-    if (date) { const parts = date.split('-'); if (parts.length === 3) d = `${parts[2]}/${parts[1]}/${parts[0]}`; }
-    const t = time ? ' at ' + time : '';
-    return `Hi ${firstName || '[name]'}, your appointment has been booked to view ${addr} on ${d}${t}. If you are running late or need to reschedule then please call our offices on 01902 212 415. See you soon!`;
+    return customLocation.trim() || (prop ? `${prop.address}${prop.postcode ? `, ${prop.postcode}` : ''}` : '');
+  };
+
+  const generateViewingSms = (firstName: string, propId: string, date: string, time: string, customLocation = wfCustomLocation) => {
+    return viewingSmsPreview(firstName, viewingLocation(propId, customLocation), date, time);
   };
 
   const openWorkflow = (e: Enquiry, ev: React.MouseEvent) => {
@@ -380,11 +382,11 @@ export default function Enquiries() {
     setWorkflowEnquiry(e);
     setWorkflowMode('choose');
     const propId = e.linked_property_id ? String(e.linked_property_id) : '';
-    setWfDate(''); setWfTime('10:00'); setWfPropId(propId); setWfReason('');
+    setWfDate(''); setWfTime('10:00'); setWfPropId(propId); setWfCustomLocation(''); setWfReason('');
     setWfAssignedTo(''); setWfViewingWith(''); setSmsEnabled(false); setEmailEnabled(false);
     setEmailSubject(''); setEmailBody('');
     const fn = e.name?.split(' ')[0] || '';
-    setSmsBody(generateViewingSms(fn, propId, '', '10:00'));
+    setSmsBody(generateViewingSms(fn, propId, '', '10:00', ''));
   };
 
   const applicantFirstNames = (enquiry: Enquiry) => {
@@ -420,10 +422,12 @@ export default function Enquiries() {
 
       switch (workflowMode) {
         case 'viewing':
-          if (wfPropId && wfDate) {
+          if ((wfPropId || wfCustomLocation.trim()) && wfDate) {
             const name = workflowEnquiry.name;
             const viewingResult = await api.post('/api/property-viewings', {
-              property_id: Number(wfPropId), enquiry_id: workflowEnquiry.id,
+              property_id: wfPropId ? Number(wfPropId) : null,
+              viewing_location: wfCustomLocation.trim() || null,
+              enquiry_id: workflowEnquiry.id,
               viewer_name: name, viewer_email: workflowEnquiry.email,
               viewer_phone: workflowEnquiry.phone, viewing_date: wfDate, viewing_time: wfTime,
               assigned_to: wfAssignedTo || null,
@@ -437,7 +441,9 @@ export default function Enquiries() {
               communicationWarning = viewingResult.email.error || 'The viewing was booked, but the email could not be sent';
             }
             await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`, {
-              ...raw, status: 'viewing_booked', linked_property_id: Number(wfPropId), viewing_date: wfDate, viewing_with: wfViewingWith || null,
+              ...raw, status: 'viewing_booked',
+              ...(wfPropId ? { linked_property_id: Number(wfPropId) } : {}),
+              viewing_date: wfDate, viewing_with: wfViewingWith || null,
             });
           }
           break;
@@ -943,7 +949,7 @@ export default function Enquiries() {
             {workflowMode === 'choose' ? (
               <>
                 <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Progress</p>
-                <button onClick={() => { setWorkflowMode('viewing'); if (workflowEnquiry) { const fn = workflowEnquiry.name?.split(' ')[0] || ''; setSmsBody(generateViewingSms(fn, wfPropId, wfDate, wfTime)); } }}
+                <button onClick={() => { setWorkflowMode('viewing'); if (workflowEnquiry) { const fn = workflowEnquiry.name?.split(' ')[0] || ''; setSmsBody(generateViewingSms(fn, wfPropId, wfDate, wfTime, wfCustomLocation)); } }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><BookingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p><p className="text-xs text-[var(--text-muted)]">Select date, time & property</p></div>
@@ -988,11 +994,17 @@ export default function Enquiries() {
                     <>
                       <Select label="Assign To (Agent)" value={wfAssignedTo} onChange={setWfAssignedTo} searchable
                         options={[{ value: '', label: 'Unassigned' }, ...allUsers.map(u => ({ value: u.name, label: u.name }))]} />
-                      <Select label="Property *" searchable value={wfPropId} onChange={(v) => {
+                      <Select label="Property (optional)" searchable value={wfPropId} onChange={(v) => {
                         setWfPropId(v);
-                        setSmsBody(generateViewingSms(firstName, v, wfDate, wfTime));
+                        if (v) setWfCustomLocation('');
+                        setSmsBody(generateViewingSms(firstName, v, wfDate, wfTime, ''));
                       }}
                         options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
+                      <Input label="Or enter another location" value={wfCustomLocation} onChange={(value) => {
+                        setWfCustomLocation(value);
+                        if (value.trim()) setWfPropId('');
+                        setSmsBody(generateViewingSms(firstName, '', wfDate, wfTime, value));
+                      }} placeholder="e.g. Fleming Lettings office" />
                       <div className="grid grid-cols-2 gap-3">
                         <DatePicker label="Viewing Date *" value={wfDate} onChange={(v) => {
                           setWfDate(v);
@@ -1009,14 +1021,20 @@ export default function Enquiries() {
                       {/* Email and SMS confirmations */}
                       <div className="h-px bg-[var(--border-subtle)] my-1" />
                       {workflowEnquiry?.email ? (
-                        <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
-                          <input type="checkbox" checked={emailEnabled} onChange={e => setEmailEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
-                          <Mail size={14} className="text-sky-400" />
-                          <div className="flex-1">
-                            <span className="text-sm font-medium text-[var(--text-primary)]">Send email confirmation</span>
-                            <p className="text-[10px] text-[var(--text-muted)]">{workflowEnquiry.email}</p>
-                          </div>
-                        </label>
+                        <div className="space-y-3">
+                          <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                            <input type="checkbox" checked={emailEnabled} onChange={e => setEmailEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
+                            <Mail size={14} className="text-sky-400" />
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-[var(--text-primary)]">Send email confirmation</span>
+                              <p className="text-[10px] text-[var(--text-muted)]">{workflowEnquiry.email}</p>
+                            </div>
+                          </label>
+                          {emailEnabled && (
+                            <textarea readOnly rows={7} value={viewingEmailPreview(workflowEnquiry.name, viewingLocation(wfPropId, wfCustomLocation), wfDate, wfTime)}
+                              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] resize-none" />
+                          )}
+                        </div>
                       ) : (
                         <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
                           <p className="text-xs text-amber-400">No email address on record — email confirmation cannot be sent</p>
@@ -1190,7 +1208,7 @@ export default function Enquiries() {
                   <Button
                     variant={workflowMode === 'reject' ? 'outline' : 'gradient'}
                     onClick={doWorkflowAction}
-                    disabled={wfLoading || (workflowMode === 'viewing' && (!wfDate || !wfPropId)) || (workflowMode === 'follow_up' && !wfDate)}
+                    disabled={wfLoading || (workflowMode === 'viewing' && (!wfDate || (!wfPropId && !wfCustomLocation.trim()))) || (workflowMode === 'follow_up' && !wfDate)}
                     className={workflowMode === 'reject' ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : ''}
                   >
                     {wfLoading ? 'Saving...' : workflowMode === 'reject' ? 'Reject & Archive' : 'Confirm'}
