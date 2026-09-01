@@ -12,6 +12,13 @@ import { formatPropertyAddress } from '../../utils/propertyAddress';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+function dateInputValue(value: unknown): string {
+  const text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  const uk = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
+  return uk ? `${uk[3]}-${uk[2]}-${uk[1]}` : '';
+}
+
 // Traffic light colours
 const STATUS = {
   red: { bg: 'bg-red-500/15', border: 'border-red-500/30', text: 'text-red-400', dot: 'bg-red-500' },
@@ -97,10 +104,23 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     ready: boolean;
     propertyLinked: boolean;
     items: Array<{ docType: string; label: string; expiryDate: string | null; ready: boolean; reason: string | null }>;
+    agreementType?: 'internal' | 'client';
+    serviceType?: string | null;
+    paymentRoute?: 'fleming_operating' | 'fleming_client_money' | 'landlord';
+    landlordName?: string | null;
+    defaults?: { tenancyStartDate?: string; rent?: string | number; deposit?: string | number; permittedOccupiers?: string; sharedFacilities?: string; parking?: string };
   } | null>(null);
-  const [agreementFile, setAgreementFile] = useState<File | null>(null);
-  const [agreementType, setAgreementType] = useState<'internal' | 'client'>('internal');
-  const [agreementSendEmail, setAgreementSendEmail] = useState(false);
+  const [agreementStartDate, setAgreementStartDate] = useState('');
+  const [agreementRent, setAgreementRent] = useState('');
+  const [agreementDeposit, setAgreementDeposit] = useState('');
+  const [agreementOccupiers, setAgreementOccupiers] = useState('');
+  const [agreementFacilities, setAgreementFacilities] = useState('');
+  const [agreementParking, setAgreementParking] = useState('');
+  const [landlordBankSortCode, setLandlordBankSortCode] = useState('');
+  const [landlordBankAccountNumber, setLandlordBankAccountNumber] = useState('');
+  const [landlordBankAccountName, setLandlordBankAccountName] = useState('');
+  const [landlordBankName, setLandlordBankName] = useState('');
+  const [agreementSendEmail, setAgreementSendEmail] = useState(true);
   const [agreementSendSms, setAgreementSendSms] = useState(false);
   const [balanceSendEmail, setBalanceSendEmail] = useState(false);
   const [handoverDate, setHandoverDate] = useState('');
@@ -155,6 +175,14 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     try {
       const data = await api.get(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement-compliance`);
       setAgreementCompliance(data || null);
+      if (data?.defaults) {
+        setAgreementStartDate(current => current || dateInputValue(data.defaults.tenancyStartDate));
+        setAgreementRent(current => current || String(data.defaults.rent || ''));
+        setAgreementDeposit(current => current || String(data.defaults.deposit || ''));
+        setAgreementOccupiers(current => current || String(data.defaults.permittedOccupiers || ''));
+        setAgreementFacilities(current => current || String(data.defaults.sharedFacilities || ''));
+        setAgreementParking(current => current || String(data.defaults.parking || ''));
+      }
     } catch { setAgreementCompliance(null); }
   };
 
@@ -310,7 +338,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       label: 'Issue Tenancy Agreement',
       icon: FileSignature,
       getStatus: () => agreement?.status === 'completed' ? 'green' : agreement ? 'amber' : 'red',
-      desc: agreement?.status === 'completed' ? 'Agreement signed and stored' : agreement ? 'Waiting for required signatures' : 'Upload and issue the agreement for e-signature',
+      desc: agreement?.status === 'completed' ? 'Agreement signed and stored' : agreement ? 'Waiting for required signatures' : 'Generate and issue the agreement for e-signature',
     },
     {
       label: 'Final Balance',
@@ -436,22 +464,25 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   };
 
   const issueAgreement = async () => {
-    if (!token || !agreementFile) return;
+    if (!token) return;
     setSaving(true); setReviewError('');
     try {
-      const body = new FormData();
-      body.append('agreement', agreementFile);
-      body.append('agreement_type', agreementType);
-      body.append('send_email', String(agreementSendEmail));
-      body.append('send_sms', String(agreementSendSms));
-      const response = await fetch(`${API_URL}/api/tenant-enquiries/${enquiryId}/tenancy-agreement`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body,
+      const result = await api.post(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement`, {
+        tenancy_start_date: agreementStartDate,
+        rent: agreementRent,
+        deposit: agreementDeposit,
+        permitted_occupiers: agreementOccupiers,
+        shared_facilities: agreementFacilities,
+        parking: agreementParking,
+        landlord_bank_sort_code: landlordBankSortCode,
+        landlord_bank_account_number: landlordBankAccountNumber,
+        landlord_bank_account_name: landlordBankAccountName,
+        landlord_bank_name: landlordBankName,
+        send_email: agreementSendEmail,
+        send_sms: agreementSendSms,
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Agreement could not be issued');
       const failures = Object.values(result.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
       if (failures.length) setReviewError(`Agreement issued, but ${failures.length} communication${failures.length === 1 ? '' : 's'} failed. Check the email/SMS history.`);
-      setAgreementFile(null);
       await Promise.all([fetchAgreement(), fetchAgreementCompliance(), fetchEmailHistory(), onUpdate()]);
     } catch (err) { setReviewError(err instanceof Error ? err.message : 'Agreement could not be issued'); }
     finally { setSaving(false); }
@@ -659,6 +690,11 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const applicationUrl = `https://apply.fleminglettings.co.uk/onboarding/${enquiry.application_form_token || ''}`;
   const reviewSmsPreview = `Hi there ${enquiry.first_name_1 || 'there'}, thank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you. Please click on this link to jump back in: ${applicationUrl}. If you need any help, then please contact our office on 01902 212 415.`;
   const reviewEmailPreview = `Subject: Changes required for your Fleming Lettings application\n\nHi ${enquiry.first_name_1 || 'there'},\n\nThank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you.\n\nWhat we need to complete your application:\n${changesRequired || '[Enter the changes or information required above]'}\n\nUpdate your application: ${applicationUrl}\n\nIf you need any help, please contact our office on 01902 212 415.`;
+  const landlordBankComplete = agreementCompliance?.paymentRoute !== 'landlord' || Boolean(
+    landlordBankSortCode.trim() && landlordBankAccountNumber.trim() && landlordBankAccountName.trim() && landlordBankName.trim()
+  );
+  const agreementServiceComplete = agreementCompliance?.agreementType !== 'client' || ['let_only', 'rent_collection', 'full_management'].includes(String(agreementCompliance?.serviceType || ''));
+  const agreementDetailsComplete = Boolean(agreementStartDate && agreementRent && agreementDeposit !== '' && landlordBankComplete && agreementServiceComplete);
 
   return (
     <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -1222,17 +1258,55 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       </div>
                     )}
                   </div>
-                  <label className="block text-[10px] text-[var(--text-muted)]">Agreement type</label>
-                  <select value={agreementType} onChange={event => setAgreementType(event.target.value as 'internal' | 'client')} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs">
-                    <option value="internal">Fleming internal portfolio — tenant signature</option>
-                    <option value="client">Client property — tenant and landlord signatures</option>
-                  </select>
-                  <input type="file" accept="application/pdf,.pdf" onChange={event => setAgreementFile(event.target.files?.[0] || null)} className="block w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--bg-hover)] file:px-3 file:py-2 file:text-xs" />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendEmail} onChange={e => setAgreementSendEmail(e.target.checked)} /> Email signing link</label>
-                    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendSms} onChange={e => setAgreementSendSms(e.target.checked)} /> SMS tenant link</label>
+                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3 text-xs space-y-1">
+                    <p className="font-medium text-[var(--text-primary)]">
+                      {agreementCompliance?.agreementType === 'client' ? `Client agreement · ${agreementCompliance.landlordName || 'landlord'}` : 'Fleming-owned agreement'}
+                    </p>
+                    <p className="text-[var(--text-muted)]">
+                      {agreementCompliance?.paymentRoute === 'landlord'
+                        ? 'Let-only: first month to Fleming client money; future rent direct to the landlord.'
+                        : agreementCompliance?.paymentRoute === 'fleming_client_money'
+                          ? 'Rent collection/full management: rent paid to Fleming client money.'
+                          : 'Fleming-owned: rent paid to the Fleming operating account.'}
+                    </p>
+                    {agreementCompliance?.agreementType === 'client' && <p className="text-[var(--text-muted)]">Signing order: landlord first, then tenant automatically.</p>}
+                    {!agreementServiceComplete && <p className="text-amber-400">Set the service type on the property before generating the agreement.</p>}
                   </div>
-                  <Button variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || !agreementFile || agreementCompliance?.ready !== true}>{saving ? 'Issuing...' : agreement ? 'Issue Replacement Agreement' : 'Issue Agreement'}</Button>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-[var(--text-muted)] mb-1">Tenancy start *</label>
+                      <input type="date" value={agreementStartDate} onChange={event => setAgreementStartDate(event.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-[var(--text-muted)] mb-1">Monthly rent *</label>
+                      <input type="number" min="0.01" step="0.01" value={agreementRent} onChange={event => setAgreementRent(event.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-[var(--text-muted)] mb-1">Security deposit *</label>
+                      <input type="number" min="0" step="0.01" value={agreementDeposit} onChange={event => setAgreementDeposit(event.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input type="text" value={agreementOccupiers} onChange={event => setAgreementOccupiers(event.target.value)} placeholder="Permitted occupiers (or none)" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                    <input type="text" value={agreementFacilities} onChange={event => setAgreementFacilities(event.target.value)} placeholder="Shared facilities (or none)" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                    <input type="text" value={agreementParking} onChange={event => setAgreementParking(event.target.value)} placeholder="Parking (or none)" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                  </div>
+                  {agreementCompliance?.paymentRoute === 'landlord' && (
+                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 space-y-2">
+                      <p className="text-xs font-medium">Landlord bank details for future monthly rent</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input type="text" inputMode="numeric" value={landlordBankSortCode} onChange={event => setLandlordBankSortCode(event.target.value)} placeholder="Sort code *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                        <input type="text" inputMode="numeric" value={landlordBankAccountNumber} onChange={event => setLandlordBankAccountNumber(event.target.value)} placeholder="8-digit account number *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                        <input type="text" value={landlordBankAccountName} onChange={event => setLandlordBankAccountName(event.target.value)} placeholder="Account name *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                        <input type="text" value={landlordBankName} onChange={event => setLandlordBankName(event.target.value)} placeholder="Bank name *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendEmail} onChange={e => setAgreementSendEmail(e.target.checked)} /> {agreementCompliance?.agreementType === 'client' ? 'Email landlord, then tenant' : 'Email tenant signing link'}</label>
+                    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendSms} onChange={e => setAgreementSendSms(e.target.checked)} /> {agreementCompliance?.agreementType === 'client' ? 'SMS tenant after landlord signs' : 'SMS tenant signing link'}</label>
+                  </div>
+                  <Button variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || agreementCompliance?.ready !== true || !agreementDetailsComplete}>{saving ? 'Generating...' : agreement ? 'Generate Replacement Agreement' : 'Generate & Issue Agreement'}</Button>
                 </>}
                 {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
               </div>

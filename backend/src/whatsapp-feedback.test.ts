@@ -37,7 +37,14 @@ describe('31 August CRM feedback regressions', () => {
   it('blocks agreements until property compliance is current and attaches the certificates', () => {
     expect(apiSource).toContain("app.get('/api/tenant-enquiries/:id/tenancy-agreement-compliance'");
     expect(apiSource).toContain('Complete the property compliance checks before issuing the agreement');
-    expect(apiSource).toContain('attachments: complianceAttachments');
+    expect(apiSource).toContain('compliance.attachments.map');
+  });
+
+  it('generates the AST automatically and enforces landlord-first client signing', () => {
+    expect(apiSource).toContain('generateTenancyAgreementPdf');
+    expect(apiSource).toContain('resolvePaymentRoute');
+    expect(apiSource).toContain('The landlord must sign before the tenant');
+    expect(apiSource).toContain('sendTenantAgreementDelivery');
   });
 
   it('requires an explicit gas-connection answer for every new property', () => {

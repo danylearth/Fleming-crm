@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS tenancy_agreements (
   landlord_signature_ip TEXT,
   landlord_signature_user_agent TEXT,
   created_by INTEGER REFERENCES users(id),
+  tenant_delivery_email INTEGER DEFAULT 0,
+  tenant_delivery_sms INTEGER DEFAULT 0,
+  tenant_delivery_sent_at TIMESTAMP,
   issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   completed_at TIMESTAMP
 );
@@ -42,6 +45,10 @@ ALTER TABLE tenancy_agreements ADD CONSTRAINT tenancy_agreements_status_check
 
 CREATE INDEX IF NOT EXISTS idx_tenancy_agreements_enquiry ON tenancy_agreements(enquiry_id);
 CREATE INDEX IF NOT EXISTS idx_tenancy_agreements_token ON tenancy_agreements(tenant_token);
+
+ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS tenant_delivery_email INTEGER DEFAULT 0;
+ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS tenant_delivery_sms INTEGER DEFAULT 0;
+ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS tenant_delivery_sent_at TIMESTAMP;
 
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_task_type_check;
 ALTER TABLE tasks ADD CONSTRAINT tasks_task_type_check CHECK (
