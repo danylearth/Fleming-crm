@@ -1038,7 +1038,12 @@ app.get('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) =
   try {
     const { limit, offset } = pageParams(req);
     const enquiries = await query(`
-      SELECT te.*, p.address as property_address FROM tenant_enquiries te
+      SELECT te.*, p.address as property_address,
+        EXISTS (
+          SELECT 1 FROM tenancy_agreements ta
+          WHERE ta.enquiry_id = te.id AND ta.status = 'completed'
+        ) AS tenancy_agreement_completed
+      FROM tenant_enquiries te
       LEFT JOIN properties p ON p.id = te.linked_property_id
       ORDER BY te.created_at DESC
       LIMIT $1 OFFSET $2
@@ -1771,6 +1776,12 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
         enquiry.notes || null
       ]);
       tenantId = tenantResult.rows[0].id;
+      const nextOfKin = enquiry.app_form_data || {};
+      await client.query('UPDATE tenants SET nok_email = $1, nok_address = $2 WHERE id = $3', [
+        nextOfKin.next_of_kin_email || null,
+        [nextOfKin.next_of_kin_address || enquiry.app_next_of_kin_address, nextOfKin.next_of_kin_postcode].filter(Boolean).join(', ') || null,
+        tenantId,
+      ]);
 
       await client.query('UPDATE tenancy_agreements SET tenant_id = $1 WHERE id = $2', [tenantId, completedAgreement.id]);
       if (completedAgreement.signed_filename) {
@@ -1818,6 +1829,12 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
             partner.notes || null
           ]);
           partnerTenantId = partnerTenantResult.rows[0].id;
+          const partnerNextOfKin = partner.app_form_data || {};
+          await client.query('UPDATE tenants SET nok_email = $1, nok_address = $2 WHERE id = $3', [
+            partnerNextOfKin.next_of_kin_email || null,
+            [partnerNextOfKin.next_of_kin_address || partner.app_next_of_kin_address, partnerNextOfKin.next_of_kin_postcode].filter(Boolean).join(', ') || null,
+            partnerTenantId,
+          ]);
 
           await client.query("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [enquiry.joint_partner_id]);
         }
@@ -2518,6 +2535,17 @@ app.post('/api/public/application-form/:token/draft', publicSubmitLimiter, async
     if (!formData || typeof formData !== 'object' || Array.isArray(formData)) {
       return res.status(400).json({ error: 'Application details are required' });
     }
+    for (const key of ['current_address_postcode', 'previous_address_postcode', 'next_of_kin_postcode']) {
+      if (typeof formData[key] === 'string') formData[key] = formData[key].trim().toUpperCase();
+    }
+    if (typeof formData.ni_number === 'string') {
+      const compactNi = formData.ni_number.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 9);
+      formData.ni_number = [compactNi.slice(0, 2), compactNi.slice(2, 4), compactNi.slice(4, 6), compactNi.slice(6, 8), compactNi.slice(8)]
+        .filter(Boolean).join(' ');
+    }
+    for (const key of ['gross_annual_income', 'current_monthly_rent', 'self_employed_annual_income', 'contractor_annual_income', 'guarantor_annual_income']) {
+      if (typeof formData[key] === 'string') formData[key] = formData[key].replace(/,/g, '');
+    }
     const enquiry = await queryOne(
       'SELECT id, status FROM tenant_enquiries WHERE application_form_token = $1',
       [req.params.token]
@@ -2557,6 +2585,17 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
     const formData = req.body?.app_form_data;
     if (!formData || typeof formData !== 'object' || Array.isArray(formData)) {
       return res.status(400).json({ error: 'Application details are required' });
+    }
+    for (const key of ['current_address_postcode', 'previous_address_postcode', 'next_of_kin_postcode']) {
+      if (typeof formData[key] === 'string') formData[key] = formData[key].trim().toUpperCase();
+    }
+    if (typeof formData.ni_number === 'string') {
+      const compactNi = formData.ni_number.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 9);
+      formData.ni_number = [compactNi.slice(0, 2), compactNi.slice(2, 4), compactNi.slice(4, 6), compactNi.slice(6, 8), compactNi.slice(8)]
+        .filter(Boolean).join(' ');
+    }
+    for (const key of ['gross_annual_income', 'current_monthly_rent', 'self_employed_annual_income', 'contractor_annual_income', 'guarantor_annual_income']) {
+      if (typeof formData[key] === 'string') formData[key] = formData[key].replace(/,/g, '');
     }
     const missing = applicationFormIssues(formData);
     if (missing.length) return res.status(400).json({ error: 'Please complete all mandatory fields', missing_fields: missing });
@@ -2708,7 +2747,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       ]);
       (async () => {
         const { sendEmail, applicationConfirmationEmail, OUTBOUND_EMAIL_ADDRESS } = require('./email');
-        const content = applicationConfirmationEmail(`${formData.first_name} ${formData.last_name}`.trim());
+        const content = applicationConfirmationEmail(String(formData.first_name || '').trim());
         const result = await sendEmail({ to: formData.email, subject: content.subject, html: content.html });
         await insert(`
           INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
@@ -4722,6 +4761,76 @@ app.post('/api/tenant-enquiries/:id/application-review', authMiddleware, require
   } catch (err) {
     console.error('Application review failed:', err);
     res.status(500).json({ error: 'Failed to update application review' });
+  }
+});
+
+app.post('/api/tenant-enquiries/:id/confirm-holding-deposit', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const enquiryId = Number(req.params.id);
+    const amount = Number(req.body.amount);
+    const receivedDate = String(req.body.received_date || '');
+    const sendEmailRequested = req.body.send_email === true;
+    const sendSmsRequested = req.body.send_sms === true;
+    if (!Number.isFinite(amount) || amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(receivedDate)) {
+      return res.status(400).json({ error: 'A valid amount and received date are required' });
+    }
+    const enquiry = await queryOne('SELECT id, first_name_1, email_1, phone_1, notes FROM tenant_enquiries WHERE id = $1', [enquiryId]);
+    if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
+
+    let notes: Array<Record<string, string>> = [];
+    try {
+      const parsed = JSON.parse(enquiry.notes || '[]');
+      if (Array.isArray(parsed)) notes = parsed;
+    } catch {
+      if (enquiry.notes) notes.push({ id: `legacy-${Date.now()}`, text: String(enquiry.notes), author: 'System', created_at: new Date().toISOString() });
+    }
+    const displayDate = receivedDate.split('-').reverse().join('/');
+    notes.push({
+      id: `holding-deposit-${Date.now()}`,
+      text: `Holding deposit received of £${amount.toLocaleString('en-GB')} on ${displayDate}.`,
+      author: 'System',
+      created_at: new Date().toISOString(),
+    });
+    await run(`UPDATE tenant_enquiries SET holding_deposit_received=1,
+      holding_deposit_received_date=$1, holding_deposit_received_amount=$2, notes=$3,
+      updated_at=CURRENT_TIMESTAMP WHERE id=$4`, [receivedDate, amount, JSON.stringify(notes), enquiryId]);
+
+    const delivery: Record<string, any> = {};
+    const firstName = enquiry.first_name_1 || 'there';
+    if (sendEmailRequested) {
+      if (!enquiry.email_1) {
+        delivery.email = { success: false, error: 'No applicant email address is recorded' };
+      } else {
+        const { sendEmail, holdingDepositReceiptEmail, OUTBOUND_EMAIL_ADDRESS } = require('./email');
+        const content = holdingDepositReceiptEmail(firstName, amount, receivedDate);
+        const result = await sendEmail({ to: enquiry.email_1, subject: content.subject, html: content.html });
+        await insert(`INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
+          VALUES ($1,'tenant_enquiry',$2,$3,$4,$5,'holding_deposit_receipt',$6,$7,$8,$9,$10)`, [
+          result.id || null, enquiryId, enquiry.email_1, OUTBOUND_EMAIL_ADDRESS, content.subject, content.html,
+          result.simulated ? 'simulated' : result.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null, result.error || null,
+        ]);
+        delivery.email = { success: result.success, error: result.error };
+      }
+    }
+    if (sendSmsRequested) {
+      if (!enquiry.phone_1) {
+        delivery.sms = { success: false, error: 'No applicant phone number is recorded' };
+      } else {
+        const { sendSms, normalizeUkPhone } = require('./sms');
+        const body = `Hi ${firstName}, Fleming Lettings confirms receipt of your holding deposit of £${amount.toLocaleString('en-GB', { minimumFractionDigits: 2 })} on ${displayDate}.`;
+        const phone = normalizeUkPhone(enquiry.phone_1);
+        const result = await sendSms({ to: phone, body });
+        await insert(`INSERT INTO sms_messages (enquiry_id, entity_type, entity_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
+          VALUES ($1,'tenant_enquiry',$1,$2,$3,$4,$5,$6,$7,$8,$9)`, [enquiryId, phone, SMS_FROM || null, body,
+          result.simulated ? 'simulated' : result.success ? 'sent' : 'failed', result.sid || null, result.error || null, req.user?.id || null, req.user?.email || null]);
+        delivery.sms = { success: result.success, error: result.error };
+      }
+    }
+    await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, { action: 'holding_deposit_received', amount, date: receivedDate });
+    res.json({ success: true, delivery });
+  } catch (err) {
+    console.error('Holding deposit confirmation failed:', err);
+    res.status(500).json({ error: 'Holding deposit could not be confirmed' });
   }
 });
 

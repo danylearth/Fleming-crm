@@ -848,16 +848,16 @@
                         <div class="input-group input-group-editable"><label>Email *</label><input type="email" id="f_email" class="pre-filled" readonly required /><button type="button" class="edit-toggle-btn" onclick="toggleEdit(this)" aria-label="Edit email">&#9998;</button></div>
                         <div class="input-group input-group-editable"><label>Phone *</label><input type="tel" id="f_phone" class="pre-filled" readonly required /><button type="button" class="edit-toggle-btn" onclick="toggleEdit(this)" aria-label="Edit phone">&#9998;</button></div>
                         <div class="input-group"><label>Date of birth *</label><div class="date-picker-wrapper"><input type="text" id="f_dob" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_dob')"><span class="calendar-icon">&#x1F4C5;</span></div></div>
-                        <div class="input-group"><label>National Insurance number *</label><input type="text" id="f_ni" placeholder="e.g. QQ 12 34 56 C" required /></div>
+                        <div class="input-group"><label>National Insurance number *</label><input type="text" id="f_ni" placeholder="e.g. QQ 12 34 56 C" maxlength="13" pattern="[A-Z]{2} [0-9]{2} [0-9]{2} [0-9]{2} [A-D]" oninput="formatNationalInsurance(this)" required /></div>
                         <div class="input-group"><label>Marital status *</label><select id="f_marital_status" required><option value="">Select...</option><option>Single</option><option>Married / Civil Partnership</option><option>Living with Partner</option><option>Separated</option><option>Divorced</option><option>Widowed</option><option>Prefer not to say</option></select></div>
-                        <div class="input-group"><label>Gross annual income (&pound;) *</label><input type="number" id="f_gross_income" min="0" step="0.01" required /></div>
+                        <div class="input-group"><label>Gross annual income (&pound;) *</label><input type="text" inputmode="decimal" id="f_gross_income" oninput="formatMoney(this)" required /></div>
                     </div>
 
                     <div class="section-divider"><div class="dot"></div><span>ADDRESS HISTORY</span><div class="line"></div></div>
                     <div class="two-col">
                         <div class="input-group full-width"><label>First line of current address *</label><input type="text" id="f_address_line_1" placeholder="Enter your address" required /></div>
                         <div class="input-group"><label>City *</label><input type="text" id="f_address_city" required /></div>
-                        <div class="input-group"><label>Postcode *</label><input type="text" id="f_address_postcode" required /></div>
+                        <div class="input-group"><label>Postcode *</label><input type="text" id="f_address_postcode" oninput="formatPostcode(this)" required /></div>
                         <div class="input-group"><label>Years at this address *</label><input type="number" id="f_years_current" min="0" max="99" step="1" inputmode="numeric" required /></div>
                         <div class="input-group" style="display:flex;align-items:center;"><button type="button" id="btn_add_prev_address" onclick="togglePrevAddress()" class="upload-button" style="width:100%;">+ Add a previous address</button></div>
                     </div>
@@ -865,7 +865,7 @@
                         <div class="two-col">
                             <div class="input-group full-width"><label>First line of previous address</label><input type="text" id="f_prev_address_line_1" /></div>
                             <div class="input-group"><label>City</label><input type="text" id="f_prev_address_city" /></div>
-                            <div class="input-group"><label>Postcode</label><input type="text" id="f_prev_address_postcode" /></div>
+                            <div class="input-group"><label>Postcode</label><input type="text" id="f_prev_address_postcode" oninput="formatPostcode(this)" /></div>
                             <div class="input-group"><label>Years at previous address</label><input type="number" id="f_years_previous" min="0" max="99" step="1" inputmode="numeric" /></div>
                         </div>
                         <button type="button" onclick="togglePrevAddress()" class="upload-button">Remove previous address</button>
@@ -879,7 +879,7 @@
                             <div class="input-group"><label>Name *</label><input type="text" id="f_current_landlord_name" /></div>
                             <div class="input-group"><label>Contact number *</label><input type="tel" id="f_current_landlord_phone" /></div>
                             <div class="input-group"><label>Email *</label><input type="email" id="f_current_landlord_email" /></div>
-                            <div class="input-group"><label>Monthly rent (&pound;) *</label><input type="number" id="f_current_rent" min="0" step="0.01" /></div>
+                            <div class="input-group"><label>Monthly rent (&pound;) *</label><input type="text" inputmode="decimal" id="f_current_rent" oninput="formatMoney(this)" /></div>
                         </div>
                         <div class="input-group"><label>Do you authorise us to contact your current landlord / agent? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_landlord_contact_authority" data-value="yes" onclick="setYesNo('f_landlord_contact_authority','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_landlord_contact_authority" data-value="no" onclick="setYesNo('f_landlord_contact_authority','no')">No</button></div><input type="hidden" id="f_landlord_contact_authority" data-required-choice="true" /></div>
                     </div>
@@ -918,11 +918,11 @@
                         <div id="self-employed-business-fields" class="two-col" style="display:none;">
                             <div class="input-group"><label>Business name *</label><input type="text" id="f_business_name" /></div>
                             <div class="input-group" id="company-number-field" style="display:none;"><label>Company number *</label><input type="text" id="f_company_number" /></div>
-                            <div class="input-group"><label>Annual income (&pound;) *</label><input type="number" min="0" id="f_self_employed_income" /></div>
+                            <div class="input-group"><label>Annual income (&pound;) *</label><input type="text" inputmode="decimal" id="f_self_employed_income" oninput="formatMoney(this)" /></div>
                             <div class="input-group"><label>Years trading *</label><input type="number" min="0" step="0.1" id="f_years_trading" /></div>
                         </div>
                         <div id="contractor-fields" class="two-col" style="display:none;">
-                            <div class="input-group"><label>Annual income (&pound;) *</label><input type="number" min="0" id="f_contractor_income" /></div>
+                            <div class="input-group"><label>Annual income (&pound;) *</label><input type="text" inputmode="decimal" id="f_contractor_income" oninput="formatMoney(this)" /></div>
                             <div class="input-group"><label>Length of employment *</label><input type="text" id="f_contractor_length" placeholder="e.g. 2 years" /></div>
                         </div>
                         <div class="input-group"><label>Have you completed previous self-assessments? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_self_assessments" data-value="yes" onclick="setYesNo('f_has_self_assessments','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_self_assessments" data-value="no" onclick="setYesNo('f_has_self_assessments','no')">No</button></div><input type="hidden" id="f_has_self_assessments" data-required-choice="true" /></div>
@@ -972,8 +972,8 @@
 
                     <div class="section-divider"><div class="dot"></div><span>GUARANTOR &amp; NEXT OF KIN</span><div class="line"></div></div>
                     <div class="input-group"><label>Will you have a guarantor for this application? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_guarantor" data-value="yes" onclick="setYesNo('f_has_guarantor','yes'); toggleGuarantorSection()">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_guarantor" data-value="no" onclick="setYesNo('f_has_guarantor','no'); toggleGuarantorSection()">No</button></div><input type="hidden" id="f_has_guarantor" data-required-choice="true" /></div>
-                    <div id="guarantor-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Full name *</label><input type="text" id="f_guarantor_name" /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_guarantor_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_guarantor_email" /></div><div class="input-group"><label>Address *</label><input type="text" id="f_guarantor_address" /></div><div class="input-group"><label>Annual income (&pound;) *</label><input type="number" id="f_guarantor_income" min="0" /></div><div class="input-group"><label>Employment type *</label><select id="f_guarantor_employment"><option value="">Select...</option><option>Employed</option><option>Part-time Employed</option><option>Self-Employed</option><option>Retired</option><option>Other</option></select></div></div><div class="input-group"><label>May we contact this guarantor? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="yes" onclick="setYesNo('f_guarantor_consent','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="no" onclick="setYesNo('f_guarantor_consent','no')">No</button></div><input type="hidden" id="f_guarantor_consent" data-required-choice="true" /></div></div>
-                    <div class="two-col"><div class="input-group"><label>Next of kin full name *</label><input type="text" id="f_nok_name" required /></div><div class="input-group"><label>Relationship *</label><input type="text" id="f_nok_rel" required /></div><div class="input-group"><label>Address *</label><input type="text" id="f_nok_address" required /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_nok_phone" required /></div></div>
+                    <div id="guarantor-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Full name *</label><input type="text" id="f_guarantor_name" /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_guarantor_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_guarantor_email" /></div><div class="input-group"><label>Address *</label><input type="text" id="f_guarantor_address" /></div><div class="input-group"><label>Annual income (&pound;) *</label><input type="text" inputmode="decimal" id="f_guarantor_income" oninput="formatMoney(this)" /></div><div class="input-group"><label>Employment type *</label><select id="f_guarantor_employment"><option value="">Select...</option><option>Employed</option><option>Part-time Employed</option><option>Self-Employed</option><option>Retired</option><option>Other</option></select></div></div><div class="input-group"><label>May we contact this guarantor? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="yes" onclick="setYesNo('f_guarantor_consent','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="no" onclick="setYesNo('f_guarantor_consent','no')">No</button></div><input type="hidden" id="f_guarantor_consent" data-required-choice="true" /></div></div>
+                    <div class="two-col"><div class="input-group"><label>Next of kin full name *</label><input type="text" id="f_nok_name" required /></div><div class="input-group"><label>Relationship *</label><input type="text" id="f_nok_rel" required /></div><div class="input-group full-width"><label>Address *</label><input type="text" id="f_nok_address" required /></div><div class="input-group"><label>Postcode *</label><input type="text" id="f_nok_postcode" oninput="formatPostcode(this)" required /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_nok_phone" required /></div><div class="input-group full-width"><label>Email *</label><input type="email" id="f_nok_email" required /></div></div>
 
                     <p id="step-3-error" class="error-text" style="display:none;"></p>
                     <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(2)">Back</button><button type="button" class="btn btn-primary" onclick="goToStep(4)">Continue to documents</button></div>
@@ -1298,6 +1298,28 @@
             input.value = input.value.replace(/\D/g, '').slice(0, 8);
         }
 
+        function formatNationalInsurance(input) {
+            const compact = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 9);
+            input.value = [compact.slice(0, 2), compact.slice(2, 4), compact.slice(4, 6), compact.slice(6, 8), compact.slice(8, 9)]
+                .filter(Boolean).join(' ');
+        }
+
+        function formatPostcode(input) {
+            input.value = input.value.toUpperCase();
+        }
+
+        function formatMoney(input) {
+            const clean = input.value.replace(/[^\d.]/g, '');
+            const parts = clean.split('.');
+            const whole = parts.shift() || '';
+            input.value = whole.replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+                + (parts.length ? `.${parts.join('').slice(0, 2)}` : '');
+        }
+
+        function unformatMoney(value) {
+            return String(value || '').replace(/,/g, '');
+        }
+
         document.addEventListener('click', function(e) {
             const picker = document.getElementById('datePicker');
             if (!picker.classList.contains('open')) return;
@@ -1337,7 +1359,7 @@
             deposit_contributor_details: 'f_deposit_contributor_details', forwarding_address: 'f_forwarding_address', has_guarantor: 'f_has_guarantor',
             guarantor_name: 'f_guarantor_name', guarantor_phone: 'f_guarantor_phone', guarantor_email: 'f_guarantor_email', guarantor_address: 'f_guarantor_address',
             guarantor_annual_income: 'f_guarantor_income', guarantor_employment_status: 'f_guarantor_employment', guarantor_contact_consent: 'f_guarantor_consent',
-            next_of_kin_name: 'f_nok_name', next_of_kin_relationship: 'f_nok_rel', next_of_kin_address: 'f_nok_address', next_of_kin_phone: 'f_nok_phone',
+            next_of_kin_name: 'f_nok_name', next_of_kin_relationship: 'f_nok_rel', next_of_kin_address: 'f_nok_address', next_of_kin_postcode: 'f_nok_postcode', next_of_kin_phone: 'f_nok_phone', next_of_kin_email: 'f_nok_email',
             supporting_information: 'f_further_info', generate_digital_signature: 'f_generate_signature'
         };
         const BOOLEAN_SELECT_KEYS = new Set(['landlord_contact_authority', 'has_joint_applicants', 'has_employment_further_info', 'has_previous_self_assessments', 'provide_accountant_details', 'has_additional_income', 'has_loans', 'has_credit_cards', 'has_employer_reference', 'employer_reference_consent', 'has_landlord_reference', 'landlord_reference_consent', 'has_personal_reference', 'has_other_occupants', 'has_pets', 'deposit_contributor', 'has_guarantor', 'guarantor_contact_consent', 'generate_digital_signature']);
@@ -1511,6 +1533,9 @@
                 else if (['date_of_birth', 'employment_start_date', 'preferred_start_date'].includes(key)) el.value = isoToDDMMYYYY(String(stored[key]));
                 else el.value = stored[key];
             });
+            ['f_gross_income', 'f_current_rent', 'f_self_employed_income', 'f_contractor_income', 'f_guarantor_income'].forEach(id => formatMoney(document.getElementById(id)));
+            ['f_address_postcode', 'f_prev_address_postcode', 'f_nok_postcode'].forEach(id => formatPostcode(document.getElementById(id)));
+            formatNationalInsurance(document.getElementById('f_ni'));
             document.getElementById('f_first_name').value = stored.first_name || formData.first_name_1 || '';
             document.getElementById('f_last_name').value = stored.last_name || formData.last_name_1 || '';
             document.getElementById('f_email').value = stored.email || formData.email_1 || '';
@@ -1718,10 +1743,12 @@
 
         function collectApplicationData() {
             const data = {};
+            const moneyIds = new Set(['f_gross_income', 'f_current_rent', 'f_self_employed_income', 'f_contractor_income', 'f_guarantor_income']);
             Object.entries(FIELD_MAP).forEach(([key, id]) => {
                 const el = document.getElementById(id);
                 if (BOOLEAN_SELECT_KEYS.has(key)) data[key] = el.value === 'yes';
                 else if (key === 'legal_proceedings') data[key] = el.value === 'yes' ? 'Yes' : el.value === 'no' ? 'No' : '';
+                else if (moneyIds.has(id)) data[key] = unformatMoney(el.value);
                 else data[key] = el.value;
             });
             data.declaration_holding_deposit = document.getElementById('f_decl_holding_deposit').checked;

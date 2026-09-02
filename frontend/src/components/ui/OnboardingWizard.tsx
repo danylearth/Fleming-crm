@@ -95,6 +95,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   // Step 2: Holding Deposit Received
   const [hdReceivedDate, setHdReceivedDate] = useState('');
   const [hdReceivedAmount, setHdReceivedAmount] = useState('');
+  const [hdReceiptSendEmail, setHdReceiptSendEmail] = useState(true);
+  const [hdReceiptSendSms, setHdReceiptSendSms] = useState(false);
 
   // Step 5: Credit check
   const [creditScore, setCreditScore] = useState('');
@@ -133,6 +135,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [sendReviewSms, setSendReviewSms] = useState(false);
   const [sendReviewEmail, setSendReviewEmail] = useState(false);
   const [reviewError, setReviewError] = useState('');
+  const [reviewStatusOverride, setReviewStatusOverride] = useState<string | null>(null);
   const [documentPreview, setDocumentPreview] = useState<{ url: string; name: string; mimeType: string } | null>(null);
 
   // Application email modal
@@ -257,6 +260,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       if (failedDeliveries.length) {
         setReviewError(`Review saved, but communication failed: ${failedDeliveries.map(item => item.error).join('; ')}`);
       }
+      setReviewStatusOverride(status);
       await Promise.all([fetchEmailHistory(), fetchDocs(), onUpdate()]);
       setActiveStep(status === 'changes_requested' ? 3 : 4);
     } catch (err) {
@@ -279,6 +283,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     setHandoverTime(enquiry.handover_time ? String(enquiry.handover_time).slice(0, 5) : '10:00');
     setHandoverAssignedTo(enquiry.handover_assigned_to || '');
     setReviewNotes('');
+    setReviewStatusOverride(null);
     setChangesRequired(enquiry.application_review_status === 'changes_requested' ? enquiry.application_review_notes || '' : '');
     // Set active step based on progress
     if (!enquiry.holding_deposit_requested) setActiveStep(0);
@@ -294,6 +299,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
   const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
   const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
+  const applicationReviewStatus = reviewStatusOverride || enquiry.application_review_status;
   // Step definitions
   const steps = [
     {
@@ -319,13 +325,13 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     {
       label: 'Application Review',
       icon: Shield,
-      getStatus: () => enquiry.application_review_status === 'approved'
+      getStatus: () => applicationReviewStatus === 'approved'
         ? 'green'
         : enquiry.application_form_completed ? 'amber' : 'red',
-      desc: enquiry.application_review_status === 'approved'
+      desc: applicationReviewStatus === 'approved'
         ? 'Application and evidence approved'
-        : enquiry.application_review_status === 'changes_requested'
-          ? 'Changes requested from applicant'
+        : applicationReviewStatus === 'changes_requested'
+          ? 'Waiting on tenant review'
           : 'Review the submitted form and evidence',
     },
     {
@@ -390,40 +396,22 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
   const confirmDepositReceived = async () => {
     setSaving(true);
+    setReviewError('');
     try {
       const receivedDate = hdReceivedDate || new Date().toISOString().split('T')[0];
       const receivedAmount = Number(hdReceivedAmount) || enquiry.holding_deposit_amount;
-      const existingNotes: { id: string; text: string; author: string; created_at: string }[] = [];
-      if (enquiry.notes) {
-        try {
-          const parsed = JSON.parse(enquiry.notes);
-          if (Array.isArray(parsed)) existingNotes.push(...parsed);
-          else existingNotes.push({ id: `legacy-${Date.now()}`, text: String(enquiry.notes), author: 'System', created_at: new Date().toISOString() });
-        } catch {
-          existingNotes.push({ id: `legacy-${Date.now()}`, text: String(enquiry.notes), author: 'System', created_at: new Date().toISOString() });
-        }
-      }
-      const displayDate = receivedDate.split('-').reverse().join('/');
-      existingNotes.push({
-        id: `holding-deposit-${Date.now()}`,
-        text: `Holding deposit received of £${Number(receivedAmount).toLocaleString('en-GB')} on ${displayDate}.`,
-        author: 'System',
-        created_at: new Date().toISOString(),
+      const result = await api.post(`/api/tenant-enquiries/${enquiryId}/confirm-holding-deposit`, {
+        amount: receivedAmount,
+        received_date: receivedDate,
+        send_email: hdReceiptSendEmail,
+        send_sms: hdReceiptSendSms,
       });
-      await api.put(`/api/tenant-enquiries/${enquiryId}`, {
-        first_name_1: enquiry.first_name_1, last_name_1: enquiry.last_name_1,
-        email_1: enquiry.email_1, status: enquiry.status,
-        holding_deposit_received: 1,
-        holding_deposit_received_date: receivedDate,
-        holding_deposit_received_amount: receivedAmount,
-        notes: JSON.stringify(existingNotes),
-      });
-      api.post('/api/activity', {
-        action: 'update', entity_type: 'tenant_enquiry', entity_id: enquiryId,
-        changes: { action: 'holding_deposit_received', amount: receivedAmount, date: receivedDate },
-      }).catch(() => {});
-      await onUpdate();
-    } catch (err) { console.error(err); }
+      const failed = Object.values((result?.delivery || {}) as Record<string, { success: boolean; error?: string }>).filter(item => !item.success);
+      if (failed.length) setReviewError(`Deposit saved, but communication failed: ${failed.map(item => item.error).join('; ')}`);
+      await Promise.all([fetchEmailHistory(), onUpdate()]);
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Holding deposit could not be confirmed');
+    }
     setSaving(false);
   };
 
@@ -689,7 +677,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const answerValue = (value: unknown) => typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value || '—');
   const applicationUrl = `https://apply.fleminglettings.co.uk/onboarding/${enquiry.application_form_token || ''}`;
   const reviewSmsPreview = `Hi there ${enquiry.first_name_1 || 'there'}, thank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you. Please click on this link to jump back in: ${applicationUrl}. If you need any help, then please contact our office on 01902 212 415.`;
-  const reviewEmailPreview = `Subject: Changes required for your Fleming Lettings application\n\nHi ${enquiry.first_name_1 || 'there'},\n\nThank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you.\n\nWhat we need to complete your application:\n${changesRequired || '[Enter the changes or information required above]'}\n\nUpdate your application: ${applicationUrl}\n\nIf you need any help, please contact our office on 01902 212 415.`;
+  const reviewEmailPreview = `Subject: More information required for your tenancy application\n\nHi ${enquiry.first_name_1 || 'there'},\n\nThank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you.\n\nWhat we need to complete your application:\n${changesRequired || '[Enter the changes or information required above]'}\n\nUpdate your application: ${applicationUrl}\n\nIf you need any help, please contact our office on 01902 212 415.`;
   const landlordBankComplete = agreementCompliance?.paymentRoute !== 'landlord' || Boolean(
     landlordBankSortCode.trim() && landlordBankAccountNumber.trim() && landlordBankAccountName.trim() && landlordBankName.trim()
   );
@@ -925,9 +913,18 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     </div>
                     <DatePicker label="Date Deposit Received" value={hdReceivedDate} onChange={setHdReceivedDate} />
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 rounded-lg bg-[var(--bg-subtle)] px-3 py-2 text-xs cursor-pointer">
+                      <input type="checkbox" checked={hdReceiptSendEmail} onChange={event => setHdReceiptSendEmail(event.target.checked)} className="accent-orange-500" /> Email confirmation
+                    </label>
+                    <label className="flex items-center gap-2 rounded-lg bg-[var(--bg-subtle)] px-3 py-2 text-xs cursor-pointer">
+                      <input type="checkbox" checked={hdReceiptSendSms} onChange={event => setHdReceiptSendSms(event.target.checked)} className="accent-orange-500" /> SMS confirmation
+                    </label>
+                  </div>
                   <Button variant="gradient" onClick={confirmDepositReceived} disabled={saving}>
                     {saving ? 'Saving...' : 'Confirm Deposit Received'}
                   </Button>
+                  {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
                 </div>
               </div>
             )}
@@ -1000,75 +997,14 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   {/* Contextual content below the tracker */}
                   {completed ? (
                     <div className="space-y-2">
-                      {enquiry.app_signature && (
-                        <div>
-                          <p className="text-[10px] text-[var(--text-muted)] mb-1">Signature</p>
-                          <div className="bg-white rounded-lg p-2 inline-block">
-                            <img src={enquiry.app_signature} alt="Signature" className="h-12" />
-                          </div>
-                        </div>
-                      )}
-                      <div className="bg-[var(--bg-subtle)] rounded-lg p-3 space-y-2">
-                        <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Application Details</p>
-                        <div className="grid grid-cols-2 gap-2">
-                          {enquiry.app_ni_number && (
-                            <div>
-                              <p className="text-[10px] text-[var(--text-muted)]">NI Number</p>
-                              <p className="text-xs text-[var(--text-primary)]">{enquiry.app_ni_number}</p>
-                            </div>
-                          )}
-                          {enquiry.employer_1 && (
-                            <div>
-                              <p className="text-[10px] text-[var(--text-muted)]">Employer</p>
-                              <p className="text-xs text-[var(--text-primary)]">{enquiry.employer_1}</p>
-                            </div>
-                          )}
-                          {enquiry.income_1 && (
-                            <div>
-                              <p className="text-[10px] text-[var(--text-muted)]">Income</p>
-                              <p className="text-xs text-[var(--text-primary)]">£{Number(enquiry.income_1).toLocaleString()}</p>
-                            </div>
-                          )}
-                          {enquiry.app_bank_name && (
-                            <div>
-                              <p className="text-[10px] text-[var(--text-muted)]">Bank</p>
-                              <p className="text-xs text-[var(--text-primary)]">{enquiry.app_bank_name}</p>
-                            </div>
-                          )}
-                        </div>
-                        {(enquiry.app_has_landlord_ref || enquiry.app_has_employer_ref) && (
-                          <>
-                            <div className="h-px bg-[var(--border-subtle)]" />
-                            <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">References</p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {enquiry.app_landlord_ref_name && (
-                                <div>
-                                  <p className="text-[10px] text-[var(--text-muted)]">Landlord Ref</p>
-                                  <p className="text-xs text-[var(--text-primary)]">{enquiry.app_landlord_ref_name}</p>
-                                  {enquiry.app_landlord_ref_phone && <p className="text-[10px] text-[var(--text-muted)]">{enquiry.app_landlord_ref_phone}</p>}
-                                </div>
-                              )}
-                              {enquiry.app_employer_ref_name && (
-                                <div>
-                                  <p className="text-[10px] text-[var(--text-muted)]">Employer Ref</p>
-                                  <p className="text-xs text-[var(--text-primary)]">{enquiry.app_employer_ref_name}</p>
-                                  {enquiry.app_employer_ref_phone && <p className="text-[10px] text-[var(--text-muted)]">{enquiry.app_employer_ref_phone}</p>}
-                                </div>
-                              )}
-                            </div>
-                          </>
-                        )}
-                        {enquiry.app_next_of_kin_name && (
-                          <>
-                            <div className="h-px bg-[var(--border-subtle)]" />
-                            <div>
-                              <p className="text-[10px] text-[var(--text-muted)]">Next of Kin</p>
-                              <p className="text-xs text-[var(--text-primary)]">{enquiry.app_next_of_kin_name} ({enquiry.app_next_of_kin_relationship || 'N/A'})</p>
-                              {enquiry.app_next_of_kin_phone && <p className="text-[10px] text-[var(--text-muted)]">{enquiry.app_next_of_kin_phone}</p>}
-                            </div>
-                          </>
-                        )}
-                      </div>
+                      {(() => {
+                        const completedApplication = enquiryDocs.find(doc => doc.doc_type === 'Completed Tenancy Application');
+                        return completedApplication ? (
+                          <Button variant="outline" onClick={() => downloadDocument(completedApplication.id, completedApplication.original_name)} className="flex items-center gap-2">
+                            <Download size={14} /> Download Completed Application Form
+                          </Button>
+                        ) : <p className="text-xs text-amber-400">The completed application PDF is being prepared.</p>;
+                      })()}
                     </div>
                   ) : sent ? (
                     <div className="space-y-3">
@@ -1101,6 +1037,13 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               {!enquiry.application_form_completed ? (
                 <div className="text-xs text-[var(--text-muted)] flex items-center gap-2">
                   <AlertTriangle size={14} className="text-amber-400" /> Waiting for the applicant to submit the form and documents.
+                </div>
+              ) : applicationReviewStatus === 'changes_requested' ? (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+                  <p className="text-sm font-medium text-amber-400">Waiting on tenant review</p>
+                  <p className="mt-1 text-xs text-[var(--text-secondary)]">The applicant has been asked to update and resubmit their application.</p>
+                  {changesRequired && <p className="mt-3 text-xs text-[var(--text-primary)] whitespace-pre-wrap">{changesRequired}</p>}
+                  {reviewError && <p className="mt-2 text-xs text-red-400">{reviewError}</p>}
                 </div>
               ) : (
                 <>
@@ -1199,7 +1142,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           {/* Step 5: Run Credit Check */}
           <StepCard idx={4} step={steps[4]} {...stepCardProps}>
             <div className="space-y-3">
-              {enquiry.application_review_status !== 'approved' && (
+              {applicationReviewStatus !== 'approved' && (
                 <div className="text-xs text-[var(--text-muted)] flex items-center gap-2">
                   <AlertTriangle size={14} className="text-amber-400" /> Approve the application before recording a credit check.
                 </div>
@@ -1218,7 +1161,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 </div>
               </div>
               <Button variant={enquiry.credit_check_completed ? 'outline' : 'gradient'} size="sm" onClick={saveCreditCheck}
-                disabled={saving || !creditScore.trim() || !creditReport || enquiry.application_review_status !== 'approved'}>
+                disabled={saving || !creditScore.trim() || !creditReport || applicationReviewStatus !== 'approved'}>
                 {saving ? 'Saving...' : enquiry.credit_check_completed ? 'Replace Credit Check' : 'Save Score & Report'}
               </Button>
               {!enquiry.credit_check_completed && <p className="text-[10px] text-amber-400">A score and uploaded report are both required before onboarding can continue.</p>}

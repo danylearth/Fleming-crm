@@ -40,6 +40,8 @@ interface Enquiry {
   id: number; status: string; first_name_1?: string; last_name_1?: string;
   property_address?: string; property_id?: number; created_at?: string;
   email_1?: string; phone_1?: string;
+  application_form_completed?: number | boolean; application_review_status?: string;
+  tenancy_agreement_completed?: boolean;
 }
 
 export default function Dashboard() {
@@ -62,7 +64,7 @@ export default function Dashboard() {
       setDashboard(dash);
       setProperties(Array.isArray(props) ? props : []);
       setTasks(Array.isArray(tks) ? tks : []);
-      setEnquiries(Array.isArray(enqs) ? enqs : []);
+      setEnquiries(Array.isArray(enqs) ? enqs.filter((enquiry: Enquiry) => enquiry.status !== 'converted') : []);
     }).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -204,6 +206,7 @@ export default function Dashboard() {
                     closed: { label: 'Closed', color: 'text-gray-400', bg: 'bg-gray-500/20' },
                   };
                   const cfg = statusConfig[enq.status] || { label: enq.status, color: 'text-gray-400', bg: 'bg-gray-500/20' };
+                  const readyForReview = (!!enq.application_form_completed && enq.application_review_status === 'pending') || !!enq.tenancy_agreement_completed;
                   const daysAgo = enq.created_at ? Math.floor((now - new Date(enq.created_at).getTime()) / (1000 * 60 * 60 * 24)) : null;
 
                   return (
@@ -224,6 +227,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div className="text-right shrink-0 ml-3">
+                        {readyForReview && <span className="mb-1 inline-block rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">New</span>}
                         <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
                         {daysAgo !== null && (
                           <p className="text-xs text-[var(--text-muted)]">

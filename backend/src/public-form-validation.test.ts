@@ -10,7 +10,7 @@ function validApplication(overrides: Record<string, unknown> = {}) {
     bank_account_name: 'Alex Smith', bank_sort_code: '11-12-14', bank_account_number: '01234567',
     property_address: '2 High Street', preferred_start_date: '01/09/2026', rental_period: 'Monthly',
     tenancy_duration: '12 months', rental_amount: '900', deposit_amount: '1038', next_of_kin_name: 'Sam Smith',
-    next_of_kin_address: '3 High Street', next_of_kin_phone: '07700900124', next_of_kin_relationship: 'Sibling',
+    next_of_kin_address: '3 High Street', next_of_kin_postcode: 'WV1 1AA', next_of_kin_phone: '07700900124', next_of_kin_email: 'kin@example.com', next_of_kin_relationship: 'Sibling',
     legal_proceedings: 'No', has_joint_applicants: false, has_employer_reference: false,
     has_landlord_reference: false, has_personal_reference: false, has_additional_income: false,
     has_loans: false, has_credit_cards: false, has_other_occupants: false, has_pets: false,

@@ -42,6 +42,46 @@ const valueFor = (value: unknown): string => {
   return String(value);
 };
 
+export interface ApplicationPdfSection {
+  title: string;
+  answers: Array<{ key: string; label: string; value: string }>;
+}
+
+const SECTION_ORDER = [
+  'Personal details', 'Address history', 'Employment and income', 'Financial information',
+  'References and next of kin', 'Tenancy information', 'Additional information',
+];
+
+const sectionFor = (key: string): string => {
+  if (/^(first_name|last_name|email|phone|date_of_birth|ni_number|marital_status|residency_status|has_joint_applicants|joint_applicants)$/.test(key)) return 'Personal details';
+  if (/address|years_at_|current_landlord|current_monthly_rent|landlord_contact_authority/.test(key) && !/reference|guarantor|next_of_kin|property_address/.test(key)) return 'Address history';
+  if (/employment|employer|self_employed|contractor|student|business|company_number|income|accountant|job_title|years_trading/.test(key)) return 'Employment and income';
+  if (/bank_|loan|credit_card|legal_proceedings|additional_income/.test(key)) return 'Financial information';
+  if (/reference|next_of_kin/.test(key)) return 'References and next of kin';
+  if (/property_|preferred_|rental_|tenancy_|deposit|occupant|pet|guarantor|forwarding_address/.test(key)) return 'Tenancy information';
+  return 'Additional information';
+};
+
+const hasAnswer = (value: unknown): boolean => {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim() !== '';
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'object') return Object.keys(value as Record<string, unknown>).length > 0;
+  return true;
+};
+
+export function buildCompletedApplicationSections(formData: Record<string, unknown>): ApplicationPdfSection[] {
+  const grouped = new Map<string, ApplicationPdfSection['answers']>();
+  for (const [key, value] of Object.entries(formData)) {
+    if (key in DECLARATION_LABELS || !hasAnswer(value)) continue;
+    const title = sectionFor(key);
+    const answers = grouped.get(title) || [];
+    answers.push({ key, label: labelFor(key), value: valueFor(value) });
+    grouped.set(title, answers);
+  }
+  return SECTION_ORDER.flatMap(title => grouped.has(title) ? [{ title, answers: grouped.get(title)! }] : []);
+}
+
 export function generateCompletedApplicationPdf(input: CompletedApplicationPdfInput): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -83,13 +123,14 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
     doc.text(`Submitted: ${input.submittedAt.toLocaleString('en-GB', { timeZone: 'Europe/London' })}`);
     doc.text(`CRM enquiry: ${input.enquiryId}`);
 
-    section('Application answers');
-    const answers = Object.entries(input.formData).filter(([key]) => !(key in DECLARATION_LABELS));
-    for (const [key, value] of answers) {
-      ensureSpace(40);
-      doc.font('Helvetica-Bold').fontSize(9).fillColor('#555555').text(labelFor(key));
-      doc.font('Helvetica').fontSize(10).fillColor('#20201f').text(valueFor(value), { width: contentWidth });
-      doc.moveDown(0.45);
+    for (const applicationSection of buildCompletedApplicationSections(input.formData)) {
+      section(applicationSection.title);
+      for (const answer of applicationSection.answers) {
+        ensureSpace(40);
+        doc.font('Helvetica-Bold').fontSize(9).fillColor('#555555').text(answer.label);
+        doc.font('Helvetica').fontSize(10).fillColor('#20201f').text(answer.value, { width: contentWidth });
+        doc.moveDown(0.45);
+      }
     }
 
     section('Holding Deposit Terms');

@@ -27,8 +27,8 @@ export function applicationFormIssues(data: Record<string, any>): string[] {
     'residency_status', 'marital_status', 'gross_annual_income', 'employment_status',
     'bank_account_name', 'bank_sort_code', 'bank_account_number',
     'property_address', 'preferred_start_date', 'rental_period', 'tenancy_duration', 'rental_amount',
-    'deposit_amount', 'next_of_kin_name', 'next_of_kin_address',
-    'next_of_kin_phone', 'next_of_kin_relationship', 'legal_proceedings',
+    'deposit_amount', 'next_of_kin_name', 'next_of_kin_address', 'next_of_kin_postcode',
+    'next_of_kin_phone', 'next_of_kin_email', 'next_of_kin_relationship', 'legal_proceedings',
   ];
   const issues = required.filter((key) => isBlank(data[key]));
   const requiredChoices = [
@@ -49,6 +49,8 @@ export function applicationFormIssues(data: Record<string, any>): string[] {
     }
   }
   if (!isValidEmail(data.email)) issues.push('email');
+  if (!isValidEmail(data.next_of_kin_email)) issues.push('next_of_kin_email');
+  if (!/^[A-Z]{2} \d{2} \d{2} \d{2} [A-D]$/.test(String(data.ni_number || '').toUpperCase())) issues.push('ni_number');
 
   if (['Employed', 'Part-time Employed'].includes(data.employment_status)) {
     for (const key of ['employer_name', 'job_title', 'employment_start_date', 'employer_department', 'employer_address']) {

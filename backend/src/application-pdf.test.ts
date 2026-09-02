@@ -1,8 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
-import { generateCompletedApplicationPdf } from './application-pdf';
+import { buildCompletedApplicationSections, generateCompletedApplicationPdf } from './application-pdf';
 
 describe('completed tenancy application PDF', () => {
+  it('groups answered fields and omits blank answers', () => {
+    const sections = buildCompletedApplicationSections({
+      first_name: 'Test', gross_annual_income: '32000', next_of_kin_name: 'Taylor',
+      next_of_kin_email: '', supporting_information: '', has_pets: false,
+      declaration_privacy: true,
+    });
+    expect(sections.map(section => section.title)).toEqual([
+      'Personal details', 'Employment and income', 'References and next of kin', 'Tenancy information',
+    ]);
+    const keys = sections.flatMap(section => section.answers.map(answer => answer.key));
+    expect(keys).not.toContain('next_of_kin_email');
+    expect(keys).not.toContain('supporting_information');
+    expect(keys).not.toContain('declaration_privacy');
+    expect(keys).toContain('has_pets');
+  });
+
   it('creates a valid multi-section PDF with the signed application', async () => {
     const signature = await sharp({
       create: { width: 120, height: 40, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } },

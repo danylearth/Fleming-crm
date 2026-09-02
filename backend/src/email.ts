@@ -5,6 +5,10 @@ export const OUTBOUND_EMAIL_ADDRESS = 'contact@tenancies.fleminglettings.co.uk';
 export const EMAIL_FROM = `Fleming Lettings <${OUTBOUND_EMAIL_ADDRESS}>`;
 const ALLOW_SIMULATED_MESSAGES = process.env.ALLOW_SIMULATED_MESSAGES === 'true' && process.env.NODE_ENV !== 'production';
 
+const escapeHtml = (value: unknown): string => String(value ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 export interface SendEmailParams {
   to: string | string[];
   subject: string;
@@ -66,7 +70,7 @@ export function applicationChangesRequestedEmail(name: string, changes: string, 
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/\r?\n/g, '<br/>');
   return {
-    subject: 'Changes required for your Fleming Lettings application',
+    subject: 'More information required for your tenancy application',
     html: brandedEmailHtml('Application Review', `
       <p>Hi ${name || 'there'},</p>
       <p>Thank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you.</p>
@@ -343,37 +347,53 @@ export function tenancyApplicationEmail(
 }
 
 export function enquiryConfirmationEmail(name: string, reference: string, propertyAddress?: string | null): { subject: string; html: string } {
+  const safeName = escapeHtml(name || 'there');
+  const safeReference = escapeHtml(reference);
+  const safeProperty = propertyAddress ? escapeHtml(propertyAddress) : '';
   return {
     subject: 'Welcome to Fleming Lettings!',
-    html: brandedEmailHtml('Enquiry Received', `
-          <p style="font-size: 15px; color: #333;">Hi there ${name}!</p>
-          <p style="font-size: 14px; color: #555; line-height: 1.6;">
-            Thank you for registering with Fleming Lettings. We have received your application${propertyAddress ? ` regarding <strong>${propertyAddress}</strong>` : ''} and our lettings team will review it in due course.
-          </p>
-          <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 16px 0;">
-            <span style="font-size: 13px; color: #666;">Your reference:</span>
-            <strong style="font-size: 15px; color: #333;"> ${reference}</strong>
-          </div>
-          <p style="font-size: 14px; color: #555; line-height: 1.6;">
-            We retain your information in line with our <a href="https://fleminglettings.co.uk/privacy-policy" style="color: #DC006D;">Privacy Policy</a> to support your property application and help find other suitable properties. You can ask us to remove your information at any time, subject to our legal obligations.
-          </p>
-          <p style="font-size: 14px; color: #555; line-height: 1.6;">
-            If you have any questions, reply to this email or call us on <strong>01902 212 415</strong> quoting your reference.
-          </p>
-      `),
+    html: `<!doctype html><html><body style="margin:0;background:#f4f1f6;font-family:Arial,sans-serif;color:#332b37">
+      <div style="display:none;max-height:0;overflow:hidden">We have received your Fleming Lettings enquiry. Reference ${safeReference}.</div>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f1f6"><tr><td align="center" style="padding:24px 12px">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;background:#fff;border-radius:16px;overflow:hidden">
+          <tr><td style="background:#27083D;padding:30px;text-align:center;color:#fff"><div style="font-size:26px;font-weight:800;letter-spacing:.5px">FLEMING LETTINGS</div><div style="margin-top:7px;color:#e6cfe9;font-size:13px">Welcome to Fleming Lettings!</div></td></tr>
+          <tr><td style="padding:36px 34px 28px">
+            <p style="font-size:18px;font-weight:700;margin:0 0 18px;color:#27083D">Hi there ${safeName}!</p>
+            <p style="font-size:15px;line-height:1.7;margin:0 0 18px">Thank you for registering with Fleming Lettings. We have received your application${safeProperty ? ` regarding <strong>${safeProperty}</strong>` : ''} and our lettings team will review it in due course.</p>
+            <div style="background:#f7f2f8;border-left:4px solid #DC006D;padding:16px 18px;margin:22px 0;border-radius:6px"><span style="font-size:13px;color:#6f6474">Your reference</span><br><strong style="font-size:20px;color:#27083D">${safeReference}</strong></div>
+            <p style="font-size:14px;line-height:1.7">We retain your information in line with our <a href="https://fleminglettings.co.uk/privacy-policy" style="color:#DC006D">Privacy Policy</a> to support your property application and help find other suitable properties. You can ask us to remove your information at any time, subject to our legal obligations.</p>
+            <p style="font-size:14px;line-height:1.7;margin-bottom:0">If you have any questions, reply to this email or call us on <strong>01902 212 415</strong> quoting your reference.</p>
+          </td></tr>
+          <tr><td style="background:linear-gradient(135deg,#27083D,#DC006D);padding:24px;text-align:center;color:#fff"><strong style="font-size:18px">All of your property needs</strong><br><span style="font-size:14px">Without any of the hassle</span></td></tr>
+          <tr><td style="background:#f7f5f7;padding:18px 28px;text-align:center;font-size:10px;line-height:1.5;color:#827987">Fleming Lettings and Developments UK Limited · Company 13943597<br>Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG</td></tr>
+        </table>
+      </td></tr></table></body></html>`,
   };
 }
 
 export function applicationConfirmationEmail(name: string): { subject: string; html: string } {
+  const firstName = String(name || '').trim().split(/\s+/)[0] || 'there';
   return {
     subject: 'Thank you for completing your application form',
     html: brandedEmailHtml('Application Received', `
-          <p style="font-size: 15px; color: #333;">Dear ${name},</p>
+          <p style="font-size: 15px; color: #333;">Dear ${escapeHtml(firstName)},</p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">Thank you for completing your application form.</p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">Our office team will review your application and be in touch with you within the next 48 hours.</p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">Please note that we may still require additional information or documentation from you to complete our checks. If so, a member of our team will contact you.</p>
           <p style="font-size: 14px; color: #555; line-height: 1.6;">If you have any questions, reply to this email or call us on <strong>01902 212 415</strong>.</p>
       `),
+  };
+}
+
+export function holdingDepositReceiptEmail(name: string, amount: number, receivedDate: string): { subject: string; html: string } {
+  const displayDate = new Date(`${receivedDate}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return {
+    subject: 'Confirmation of receipt of your holding deposit',
+    html: brandedEmailHtml('Holding Deposit Received', `
+      <p>Hi ${escapeHtml(name || 'there')},</p>
+      <p>We confirm that Fleming Lettings received your holding deposit of <strong>£${Number(amount).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> on <strong>${displayDate}</strong>.</p>
+      <p>We will continue progressing your tenancy application and contact you if anything else is required.</p>
+    `),
   };
 }
 

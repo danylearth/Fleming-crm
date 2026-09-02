@@ -55,6 +55,7 @@ describe('email provider safety', () => {
   it('builds the requested changes email with requirements and a secure link', async () => {
     const { applicationChangesRequestedEmail } = await import('./email');
     const email = applicationChangesRequestedEmail('Sam', 'Please upload a clearer passport scan.', 'https://apply.example.test/token');
+    expect(email.subject).toBe('More information required for your tenancy application');
     expect(email.html).toContain('What we need to complete your application:');
     expect(email.html).toContain('Please upload a clearer passport scan.');
     expect(email.html).toContain('https://apply.example.test/token');
@@ -74,6 +75,8 @@ describe('email provider safety', () => {
     expect(email.subject).toBe('Thank you for completing your application form');
     expect(email.html).toContain('within the next 48 hours');
     expect(email.html).toContain('additional information or documentation');
+    expect(email.html).toContain('Dear Alex,');
+    expect(email.html).not.toContain('Dear Alex Smith,');
   });
 
   it('sends the requested welcome message after an initial enquiry', async () => {
@@ -83,5 +86,15 @@ describe('email provider safety', () => {
     expect(email.html).toContain('Hi there Alex and Sam!');
     expect(email.html).toContain('Privacy Policy');
     expect(email.html).toContain('reply to this email');
+    expect(email.html).toContain('ENQ-42');
+    expect(email.html).toContain('Without any of the hassle');
+  });
+
+  it('builds a holding-deposit receipt with the exact subject, amount and date', async () => {
+    const { holdingDepositReceiptEmail } = await import('./email');
+    const email = holdingDepositReceiptEmail('Alex', 207.69, '2026-09-01');
+    expect(email.subject).toBe('Confirmation of receipt of your holding deposit');
+    expect(email.html).toContain('£207.69');
+    expect(email.html).toContain('1 September 2026');
   });
 });
