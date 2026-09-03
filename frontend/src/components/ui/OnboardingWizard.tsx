@@ -130,11 +130,17 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [agreementEmailMessage, setAgreementEmailMessage] = useState('Your tenancy agreement for {{property_address}} is ready to review and sign.');
   const [agreementSmsMessage, setAgreementSmsMessage] = useState('Hi {{first_name}}, your Fleming Lettings tenancy agreement is ready to review and sign: {{signing_link}}');
   const [balanceSendEmail, setBalanceSendEmail] = useState(false);
+  const [balanceSendSms, setBalanceSendSms] = useState(false);
+  const [balanceEmailMessage, setBalanceEmailMessage] = useState('Your tenancy agreement has been completed. The remaining balance for {{property_address}} is set out below.');
+  const [balanceSmsMessage, setBalanceSmsMessage] = useState('Hi {{first_name}}, thank you for signing your tenancy agreement and completing our application and screening process. We have emailed your final payment details so we can arrange a handover date and location.');
   const [handoverDate, setHandoverDate] = useState('');
   const [handoverTime, setHandoverTime] = useState('10:00');
   const [handoverAssignedTo, setHandoverAssignedTo] = useState('');
+  const [handoverWithLandlord, setHandoverWithLandlord] = useState(false);
   const [handoverSendEmail, setHandoverSendEmail] = useState(false);
   const [handoverSendSms, setHandoverSendSms] = useState(false);
+  const [handoverEmailMessage, setHandoverEmailMessage] = useState('Finally, we’re nearly there! Your move in and handover appointment is confirmed. We will meet you at the property to conduct the inventory, hand over the keys and answer any final questions that you may have.');
+  const [handoverSmsMessage, setHandoverSmsMessage] = useState('Hi {{first_name}}, your Fleming Lettings move in and handover appointment is confirmed for {{handover_date}} at {{handover_time}} at {{property_address}} with {{appointment_with}}.');
   const [reviewNotes, setReviewNotes] = useState('');
   const [changesRequired, setChangesRequired] = useState('');
   const [sendReviewSms, setSendReviewSms] = useState(false);
@@ -290,6 +296,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     setHandoverDate(enquiry.handover_date ? String(enquiry.handover_date).slice(0, 10) : '');
     setHandoverTime(enquiry.handover_time ? String(enquiry.handover_time).slice(0, 5) : '10:00');
     setHandoverAssignedTo(enquiry.handover_assigned_to || '');
+    setHandoverWithLandlord(Boolean(enquiry.handover_with_landlord));
     setReviewNotes('');
     setReviewStatusOverride(null);
     setCreditCheckCompleteOverride(false);
@@ -491,7 +498,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const requestBalance = async () => {
     setSaving(true); setReviewError('');
     try {
-      const result = await api.post(`/api/tenant-enquiries/${enquiryId}/request-balance`, { send_email: balanceSendEmail });
+      const result = await api.post(`/api/tenant-enquiries/${enquiryId}/request-balance`, {
+        send_email: balanceSendEmail, send_sms: balanceSendSms,
+        email_message: balanceEmailMessage, sms_message: balanceSmsMessage,
+      });
       const failures = Object.values(result?.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
       if (failures.length) setReviewError('Balance request saved, but the email failed. Check the email history.');
       await Promise.all([fetchEmailHistory(), onUpdate()]);
@@ -514,6 +524,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       const result = await api.post(`/api/tenant-enquiries/${enquiryId}/schedule-handover`, {
         handover_date: handoverDate, handover_time: handoverTime, assigned_to: handoverAssignedTo,
         send_email: handoverSendEmail, send_sms: handoverSendSms,
+        with_landlord: handoverWithLandlord,
+        email_message: handoverEmailMessage, sms_message: handoverSmsMessage,
       });
       const failures = Object.values(result?.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
       if (failures.length) setReviewError(`Handover saved, but ${failures.length} communication${failures.length === 1 ? '' : 's'} failed.`);
@@ -694,7 +706,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     landlordBankSortCode.trim() && landlordBankAccountNumber.trim() && landlordBankAccountName.trim() && landlordBankName.trim()
   );
   const agreementServiceComplete = agreementCompliance?.agreementType !== 'client' || ['let_only', 'rent_collection', 'full_management'].includes(String(agreementCompliance?.serviceType || ''));
-  const agreementDetailsComplete = Boolean(agreementStartDate && agreementRent && agreementDeposit !== '' && landlordBankComplete && agreementServiceComplete);
+  const agreementDetailsComplete = Boolean(agreementStartDate && agreementRent && agreementDeposit !== ''
+    && agreementOccupiers.trim() && agreementFacilities.trim() && agreementParking.trim()
+    && landlordBankComplete && agreementServiceComplete);
 
   return (
     <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -1253,9 +1267,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label className="text-[10px] text-[var(--text-muted)]">Permitted occupiers (or none)<input type="text" value={agreementOccupiers} onChange={event => setAgreementOccupiers(event.target.value)} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
-                    <label className="text-[10px] text-[var(--text-muted)]">Shared facilities (or none)<input type="text" value={agreementFacilities} onChange={event => setAgreementFacilities(event.target.value)} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
-                    <label className="text-[10px] text-[var(--text-muted)] sm:col-span-2">Parking (or none)<input type="text" value={agreementParking} onChange={event => setAgreementParking(event.target.value)} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
+                    <label className="text-[10px] text-[var(--text-muted)]">Who are the permitted occupiers? *<input type="text" value={agreementOccupiers} onChange={event => setAgreementOccupiers(event.target.value)} placeholder="Enter names, or None" className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
+                    <label className="text-[10px] text-[var(--text-muted)]">Are there shared facilities? *<input type="text" value={agreementFacilities} onChange={event => setAgreementFacilities(event.target.value)} placeholder="Describe them, or None" className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
+                    <label className="text-[10px] text-[var(--text-muted)] sm:col-span-2">Is there permitted parking, and if so where? *<input type="text" value={agreementParking} onChange={event => setAgreementParking(event.target.value)} placeholder="Describe it, or None" className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
                   </div>
                   {agreementCompliance?.paymentRoute === 'landlord' && (
                     <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 space-y-2">
@@ -1295,8 +1309,19 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           {/* Step 7: Final Balance */}
           <StepCard idx={6} step={steps[6]} {...stepCardProps}>
             {allPreviousComplete(6) ? <div className="space-y-3">
-              <div className="p-3 rounded-lg bg-[var(--bg-subtle)] text-xs">Security deposit + first month’s rent − holding deposit = <strong>£{Number(enquiry.balance_due_amount || (Number(enquiry.security_deposit_amount || 0) + Number(enquiry.monthly_rent_agreed || 0) - Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0))).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
-              {!enquiry.balance_payment_requested && <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={balanceSendEmail} onChange={e => setBalanceSendEmail(e.target.checked)} /> Email payment request</label>}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg bg-[var(--bg-subtle)] p-3"><span className="block text-[10px] text-[var(--text-muted)]">Security deposit</span><strong>£{Number(enquiry.security_deposit_amount || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
+                <div className="rounded-lg bg-[var(--bg-subtle)] p-3"><span className="block text-[10px] text-[var(--text-muted)]">First month’s rent</span><strong>£{Number(enquiry.monthly_rent_agreed || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
+                <div className="rounded-lg bg-[var(--bg-subtle)] p-3"><span className="block text-[10px] text-[var(--text-muted)]">Holding deposit received</span><strong>−£{Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
+                <div className="rounded-lg bg-[#563F6E] p-3 text-white"><span className="block text-[10px] text-white/70">Remaining balance</span><strong>£{Number(enquiry.balance_due_amount || (Number(enquiry.security_deposit_amount || 0) + Number(enquiry.monthly_rent_agreed || 0) - Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0))).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
+              </div>
+              {!enquiry.balance_payment_requested && <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={balanceSendEmail} onChange={e => setBalanceSendEmail(e.target.checked)} /> Email payment request</label>
+                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={balanceSendSms} onChange={e => setBalanceSendSms(e.target.checked)} /> SMS payment request</label>
+              </div>}
+              {!enquiry.balance_payment_requested && balanceSendEmail && <label className="block text-[10px] text-[var(--text-muted)]">Editable email preview<textarea value={balanceEmailMessage} onChange={e => setBalanceEmailMessage(e.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
+              {!enquiry.balance_payment_requested && balanceSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<textarea value={balanceSmsMessage} onChange={e => setBalanceSmsMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
+              {!enquiry.balance_payment_requested && (balanceSendEmail || balanceSendSms) && <p className="text-[10px] text-[var(--text-muted)]">Available placeholders: {'{{first_name}}'}, {'{{property_address}}'}, {'{{balance_due}}'}.</p>}
               {!enquiry.balance_payment_requested ? <Button variant="gradient" size="sm" onClick={requestBalance} disabled={saving}>Request Final Balance</Button>
                 : !enquiry.balance_payment_received ? <Button variant="gradient" size="sm" onClick={confirmBalance} disabled={saving}>Confirm Payment Received</Button>
                 : <p className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle size={14} /> Final balance received</p>}
@@ -1308,16 +1333,22 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           <StepCard idx={7} step={steps[7]} {...stepCardProps}>
             {allPreviousComplete(7) ? <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input type="date" value={handoverDate} onChange={e => setHandoverDate(e.target.value)} className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                <DatePicker label="Handover date *" value={handoverDate} onChange={setHandoverDate} />
                 <input type="time" value={handoverTime} onChange={e => setHandoverTime(e.target.value)} className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
               </div>
-              <select value={handoverAssignedTo} onChange={e => setHandoverAssignedTo(e.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs">
-                <option value="">Assign team member…</option>{users.map(user => <option key={user.id} value={user.name}>{user.name}</option>)}
+              <select value={handoverWithLandlord ? '__landlord__' : handoverAssignedTo} onChange={e => { const landlord = e.target.value === '__landlord__'; setHandoverWithLandlord(landlord); setHandoverAssignedTo(landlord ? (agreementCompliance?.landlordName || 'With Landlord') : e.target.value); }} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs">
+                <option value="">Assign team member…</option>
+                <option value="__landlord__">With Landlord</option>
+                {users.map(user => <option key={user.id} value={user.name}>{user.name}</option>)}
               </select>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={handoverSendEmail} onChange={e => setHandoverSendEmail(e.target.checked)} /> Email tenant</label>
                 <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={handoverSendSms} onChange={e => setHandoverSendSms(e.target.checked)} /> SMS tenant</label>
               </div>
+              {handoverWithLandlord && <p className="text-[10px] text-[var(--text-muted)]">The landlord is included in the selected email/SMS channels.</p>}
+              {handoverSendEmail && <label className="block text-[10px] text-[var(--text-muted)]">Editable email preview<textarea value={handoverEmailMessage} onChange={e => setHandoverEmailMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
+              {handoverSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<textarea value={handoverSmsMessage} onChange={e => setHandoverSmsMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
+              {(handoverSendEmail || handoverSendSms) && <p className="text-[10px] text-[var(--text-muted)]">Available placeholders: {'{{first_name}}'}, {'{{property_address}}'}, {'{{handover_date}}'}, {'{{handover_time}}'}, {'{{appointment_with}}'}.</p>}
               <Button variant="gradient" size="sm" onClick={scheduleHandover} disabled={saving || !handoverDate || !handoverTime || !handoverAssignedTo}>{enquiry.handover_date ? 'Update Handover' : 'Add to Team Calendar'}</Button>
               {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
             </div> : <p className="text-xs text-[var(--text-muted)]">Confirm the final balance first.</p>}

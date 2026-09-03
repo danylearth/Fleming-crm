@@ -83,4 +83,13 @@ describe('31 August CRM feedback regressions', () => {
     expect(apiSource).toContain('finalBalanceHandoverEmail({');
     expect(apiSource).toContain('agreement_details');
   });
+
+  it('wires the September handover and tenant maintenance feedback', () => {
+    expect(apiSource).toContain('handoverAppointmentEmail({');
+    expect(apiSource).toContain("app.post('/api/public/maintenance-report'");
+    expect(apiSource).toContain("'maintenance',$4,CURRENT_DATE,'maintenance'");
+    expect(apiSource).toContain('handover_with_landlord');
+    expect(wizardSource).toContain('With Landlord');
+    expect(wizardSource).toContain('Editable SMS preview');
+  });
 });

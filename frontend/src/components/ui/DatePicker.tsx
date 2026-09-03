@@ -16,7 +16,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 function formatDisplay(iso: string) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
-  return `${d}-${m}-${y}`;
+  return `${d}/${m}/${y}`;
 }
 
 function getMonthDays(year: number, month: number) {
@@ -47,7 +47,7 @@ function getMonthDays(year: number, month: number) {
   return cells;
 }
 
-export function DatePicker({ label, value, onChange, placeholder = 'DD-MM-YYYY', className = '' }: DatePickerProps) {
+export function DatePicker({ label, value, onChange, placeholder = 'DD/MM/YYYY', className = '' }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const [yearPicker, setYearPicker] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);

@@ -21,8 +21,8 @@ interface OverdueTask {
 interface DashboardData {
   stats: { properties: number; active_tenancies: number; open_maintenance: number; active_enquiries: number };
   complianceAlerts: { id: number; property_address: string; type: string; expiry_date: string }[];
-  upcomingMaintenance: MaintenanceItem[];
-  overdueTasks: OverdueTask[];
+  recentMaintenance: MaintenanceItem[];
+  recentTasks: OverdueTask[];
 }
 
 interface Property {
@@ -157,13 +157,13 @@ export default function Dashboard() {
 
         {/* Two Column: Compliance + Pipeline */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Compliance Alerts */}
+          {/* Compliance and maintenance alerts */}
           <Card className="p-6">
-            <SectionHeader title="Compliance Alerts" action={() => navigate('/properties')} actionLabel="View All" />
-            {dashboard?.complianceAlerts?.length ? (
+            <SectionHeader title="Compliance Alerts & Maintenance Requests" action={() => navigate('/maintenance')} actionLabel="View All" />
+            {dashboard?.complianceAlerts?.length || dashboard?.recentMaintenance?.length ? (
               <div className="space-y-3">
-                {dashboard.complianceAlerts.slice(0, 5).map((alert, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors">
+                {dashboard.complianceAlerts.slice(0, 3).map((alert, i) => (
+                  <button key={`compliance-${i}`} onClick={() => navigate(`/properties/${alert.id}`)} className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                     <div className="flex items-center gap-3">
                       <AlertTriangle size={16} className={urgencyColor(alert.expiry_date)} />
                       <div>
@@ -179,11 +179,17 @@ export default function Dashboard() {
                       </p>
                       <p className="text-xs text-[var(--text-muted)]">{new Date(alert.expiry_date).toLocaleDateString()}</p>
                     </div>
-                  </div>
+                  </button>
+                ))}
+                {dashboard.recentMaintenance.slice(0, 3).map(item => (
+                  <button key={`maintenance-${item.id}`} onClick={() => navigate('/maintenance')} className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                    <div className="flex items-center gap-3 min-w-0"><Wrench size={16} className="text-amber-400 shrink-0" /><div className="min-w-0"><p className="text-sm font-medium truncate">{item.property_address}</p><p className="text-xs text-[var(--text-muted)] truncate">{item.description}</p></div></div>
+                    <span className="text-[10px] font-semibold uppercase text-amber-400">{item.status.replace('_', ' ')}</span>
+                  </button>
                 ))}
               </div>
             ) : (
-              <EmptyState message="No compliance alerts" />
+              <EmptyState message="No compliance alerts or open maintenance requests" />
             )}
           </Card>
 

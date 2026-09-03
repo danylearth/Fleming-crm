@@ -191,6 +191,7 @@ export async function initDb() {
         onboarded_date DATE,
         notes TEXT,
         amenities TEXT,
+        key_colour_code TEXT,
         tenant_id INTEGER,
         image_url TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -329,7 +330,7 @@ export async function initDb() {
         entity_id INTEGER,
         due_date DATE,
         follow_up_date DATE,
-        task_type TEXT CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', 'viewing', NULL)),
+        task_type TEXT CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', 'viewing', 'handover', 'maintenance', NULL)),
         notes TEXT,
         completed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -646,6 +647,7 @@ export async function initDb() {
 
     // Tenant agreement, final balance and handover workflow.
     await client.query(`
+      ALTER TABLE properties ADD COLUMN IF NOT EXISTS key_colour_code TEXT;
       ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS balance_due_amount NUMERIC(10,2);
       ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS balance_payment_requested INTEGER DEFAULT 0;
       ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS balance_payment_received INTEGER DEFAULT 0;
@@ -653,6 +655,7 @@ export async function initDb() {
       ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS handover_date DATE;
       ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS handover_time TIME;
       ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS handover_assigned_to TEXT;
+      ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS handover_with_landlord INTEGER DEFAULT 0;
       CREATE TABLE IF NOT EXISTS tenancy_agreements (
         id SERIAL PRIMARY KEY,
         enquiry_id INTEGER NOT NULL REFERENCES tenant_enquiries(id) ON DELETE CASCADE,
@@ -940,7 +943,7 @@ export async function initDb() {
     `);
     await client.query(`
       DO $$ BEGIN
-        ALTER TABLE tasks ADD CONSTRAINT tasks_task_type_check CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', 'viewing', 'handover', NULL));
+        ALTER TABLE tasks ADD CONSTRAINT tasks_task_type_check CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', 'viewing', 'handover', 'maintenance', NULL));
       EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);

@@ -17,7 +17,7 @@ import {
 
 interface PropertyDetail {
   id: number; address: string; postcode: string; rent_amount: number;
-  status: string; landlord_name: string; landlord_id?: number;
+  status: string; landlord_name: string; landlord_id?: number; landlord_type?: 'internal' | 'external';
   landlord_phone?: string; landlord_email?: string;
   current_tenant: string | null; current_tenant_id?: number; tenant_id?: number;
   current_tenant_email?: string | null; current_tenant_phone?: string | null;
@@ -38,6 +38,7 @@ interface PropertyDetail {
   gas_safety_expiry_date: string | null; has_gas: number;
   notes: string | null;
   amenities: string | null;
+  key_colour_code: string | null;
   image_url?: string | null;
 }
 
@@ -207,6 +208,7 @@ export default function PropertyDetail() {
     eicr_expiry_date: p.eicr_expiry_date || '', epc_expiry_date: p.epc_expiry_date || '',
     has_gas: !!p.has_gas, gas_safety_expiry_date: p.gas_safety_expiry_date || '',
     amenities: p.amenities || '',
+    key_colour_code: p.key_colour_code || '',
   });
 
   const parseNotes = (raw: string | null) => {
@@ -656,6 +658,7 @@ export default function PropertyDetail() {
                     <Input label="Bedrooms" value={form.bedrooms} onChange={(v: string) => setForm({ ...form, bedrooms: v })} />
                     <Select label="Status" value={form.status} onChange={(v: string) => setForm({ ...form, status: v })}
                       options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }]} />
+                    {property.landlord_type === 'internal' && <Input label="Key Colour Code" value={form.key_colour_code} onChange={(v: string) => setForm({ ...form, key_colour_code: v })} placeholder="e.g. Pink / Blue" />}
                   </div>
                   <div className="mt-4">
                     <label className="block text-xs font-medium text-[var(--text-secondary)] mb-2">
@@ -711,6 +714,7 @@ export default function PropertyDetail() {
                     <ReadField label="Status" value={
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusColor}`}>{statusLbl}</span>
                     } />
+                    {property.landlord_type === 'internal' && <ReadField label="Key Colour Code" value={property.key_colour_code} />}
                   </div>
                   {property.amenities && (
                     <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">

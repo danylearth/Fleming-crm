@@ -32,6 +32,7 @@ export interface TenancyAgreementPdfInput {
   permittedOccupiers?: string | null;
   sharedFacilities?: string | null;
   parking?: string | null;
+  depositContributorDetails?: string | null;
   paymentReference: string;
   bankDetails: AgreementBankDetails;
   paymentRoute: PaymentRoute;
@@ -405,9 +406,15 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
         }
         paragraph('5.3 The deposit will be returned when the tenancy ends if all conditions are met, less properly due rent, reasonable breach costs, unpaid utilities or Council Tax, and damage or missing items subject to fair wear and tear.');
         paragraph('5.4 If the deposit is insufficient, you must pay the properly due shortfall.');
+        paragraph(input.depositContributorDetails
+          ? `5.7 A person who is not a tenant has contributed towards the deposit. Contributor details: ${input.depositContributorDetails}.`
+          : '5.7 The named tenant(s) confirm that no person who is not a tenant has contributed towards the deposit.');
       }
       heading(title, 2);
       for (const clause of clauses) paragraph(`• ${clause}`, { indent: 10, size: 8.25 });
+      if (title === '7. Serving notices') {
+        paragraph(`• 7.3 Notices to the landlord may be sent by first-class post or delivered to ${input.agreementType === 'internal' ? FLEMING_NAME : input.landlord.name}, at ${input.agreementType === 'internal' ? FLEMING_ADDRESS : (input.landlord.address || 'the address stated in Section A')}. Alternatively, notices may be emailed to ${input.agreementType === 'internal' ? 'enquiries@fleminglettings.co.uk' : (input.landlord.email || 'the email address stated in Section A')}.`, { indent: 10, size: 8.25 });
+      }
     }
 
     heading('Signed as an agreement');

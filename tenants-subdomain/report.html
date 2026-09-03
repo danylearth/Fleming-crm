@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Report a maintenance issue | Fleming Lettings</title>
+  <style>
+    @font-face{font-family:Lufga;src:url('fonts/Lufga-Regular.otf')}@font-face{font-family:Lufga;src:url('fonts/Lufga-SemiBold.otf');font-weight:600}@font-face{font-family:Lufga;src:url('fonts/Lufga-Bold.otf');font-weight:700}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#25073b,#8b155d 65%,#dc006d);color:#29232d;font-family:Lufga,Helvetica,Arial,sans-serif;min-height:100vh;padding:28px 14px}.shell{max-width:720px;margin:auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 22px 70px #16032255}.header{display:flex;justify-content:space-between;align-items:center;gap:16px;background:#27083d;padding:26px 34px;border-bottom:6px solid #dc006d}.header img{height:48px}.header span{color:#dc006d;font-weight:700}.content{padding:34px}.eyebrow{color:#dc006d;text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:700}h1{color:#27083d;font-size:34px;line-height:1.15;margin:8px 0 10px}p{line-height:1.65;color:#625a65}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.field{margin-top:18px}.field.full{grid-column:1/-1}label{display:block;font-size:12px;font-weight:600;color:#493f4c;margin-bottom:7px}input,select,textarea{width:100%;border:1px solid #d9d2db;border-radius:10px;padding:13px 14px;font:15px Lufga,Helvetica,Arial,sans-serif;color:#29232d;background:#fff}textarea{min-height:140px;resize:vertical}input:focus,select:focus,textarea:focus{outline:2px solid #dc006d44;border-color:#dc006d}.button{width:100%;margin-top:24px;border:0;border-radius:10px;background:linear-gradient(90deg,#f26a21,#dc006d);color:#fff;padding:15px;font:700 15px Lufga,Helvetica,Arial,sans-serif;cursor:pointer}.button:disabled{opacity:.6;cursor:wait}.message{margin-top:18px;padding:14px;border-radius:10px;background:#f5f1f6}.success{background:#ecfdf3;color:#166534}.error{background:#fef2f2;color:#991b1b}.footer{background:#27083d;color:#eee;padding:22px 34px;font-size:12px;line-height:1.6}@media(max-width:620px){body{padding:0}.shell{border-radius:0;min-height:100vh}.header,.content,.footer{padding-left:22px;padding-right:22px}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}h1{font-size:29px}.header span{display:none}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="header"><img src="logo-white.png" alt="Fleming Lettings"><span>Maintenance support</span></header>
+    <section class="content">
+      <div class="eyebrow">Tenant support</div>
+      <h1>Report a maintenance issue</h1>
+      <p>Tell us what has happened. We will link the report to your property and pass it to the lettings team for action.</p>
+      <form id="report-form">
+        <div class="grid">
+          <div class="field"><label for="name">Your full name *</label><input id="name" name="name" autocomplete="name" required></div>
+          <div class="field"><label for="email">Registered email *</label><input id="email" name="email" type="email" autocomplete="email" required></div>
+          <div class="field"><label for="phone">Phone number</label><input id="phone" name="phone" autocomplete="tel"></div>
+          <div class="field"><label for="postcode">Property postcode *</label><input id="postcode" name="postcode" autocomplete="postal-code" required></div>
+          <div class="field"><label for="category">Type of issue *</label><select id="category" name="category" required><option value="">Select…</option><option value="plumbing">Plumbing / flood</option><option value="electrical">Electrical</option><option value="heating">Heating / hot water</option><option value="structural">Damage / structural</option><option value="appliance">Appliance</option><option value="pest">Pest</option><option value="garden">Garden</option><option value="other">Lost key / permission / other</option></select></div>
+          <div class="field"><label for="priority">How urgent is it? *</label><select id="priority" name="priority" required><option value="medium">Routine</option><option value="low">Low</option><option value="high">Urgent</option><option value="urgent">Emergency</option></select></div>
+          <div class="field full"><label for="title">Short issue title *</label><input id="title" name="title" placeholder="e.g. Leak beneath kitchen sink" required></div>
+          <div class="field full"><label for="description">What happened and what help do you need? *</label><textarea id="description" name="description" minlength="10" required></textarea></div>
+        </div>
+        <button class="button" id="submit" type="submit">Send maintenance report</button>
+        <div id="message" class="message" hidden></div>
+      </form>
+    </section>
+    <footer class="footer">If there is an immediate danger to life, call 999. For urgent out-of-hours property support, call Fleming Lettings on 01902 212 415.</footer>
+  </main>
+  <script>
+    const API=location.hostname==='localhost'?'http://localhost:3001':'https://fleming-crm-api.fly.dev';
+    const form=document.getElementById('report-form'),button=document.getElementById('submit'),message=document.getElementById('message');
+    form.addEventListener('submit',async(event)=>{event.preventDefault();button.disabled=true;button.textContent='Sending…';message.hidden=true;const payload=Object.fromEntries(new FormData(form));try{const response=await fetch(`${API}/api/public/maintenance-report`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),data=await response.json();if(!response.ok)throw new Error(data.error||'Report could not be sent');form.reset();message.className='message success';message.textContent=`Thank you. Your report has been sent. Reference: ${data.reference}`;message.hidden=false}catch(error){message.className='message error';message.textContent=error.message||'Report could not be sent';message.hidden=false}finally{button.disabled=false;button.textContent='Send maintenance report'}});
+  </script>
+</body>
+</html>

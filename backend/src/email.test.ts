@@ -140,4 +140,19 @@ describe('email provider safety', () => {
     expect(email.html).toContain('10 WV11AA - EXAMPLE');
     expect(email.html).toContain('Reply with your preferred time');
   });
+
+  it('renders the branded handover appointment with dynamic directions', async () => {
+    const { handoverAppointmentEmail } = await import('./email');
+    const email = handoverAppointmentEmail({
+      firstName: 'Sam', propertyAddress: '29 Wealden Hatch, Wolverhampton, WV10 8TY',
+      appointmentDate: '2026-10-02', appointmentTime: '15:05', appointmentWith: 'Alex Fleming',
+    });
+    expect(email.subject).toBe('Your move in and handover date');
+    expect(email.html).toContain('Friday, 2 October 2026');
+    expect(email.html).toContain('15:05');
+    expect(email.html).toContain('Alex Fleming');
+    expect(email.html).toContain('Google Maps');
+    expect(email.html).toContain('Apple Maps');
+    expect(email.html).not.toContain('assets/');
+  });
 });

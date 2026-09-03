@@ -1,7 +1,9 @@
 {
   "rewrites": [
+    { "source": "/", "has": [{ "type": "host", "value": "report.fleminglettings.co.uk" }], "destination": "/report.html" },
     { "source": "/onboarding/:token", "destination": "/application.html" },
     { "source": "/agreement/:token", "destination": "/agreement.html" },
+    { "source": "/report", "destination": "/report.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

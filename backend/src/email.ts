@@ -126,6 +126,7 @@ export interface FinalBalanceEmailInput {
   balanceDue: number;
   bankDetails: { bankName: string; accountName: string; sortCode: string; accountNumber: string };
   paymentReference: string;
+  customMessage?: string | null;
 }
 
 export function finalBalanceHandoverEmail(input: FinalBalanceEmailInput): { subject: string; html: string } {
@@ -134,7 +135,7 @@ export function finalBalanceHandoverEmail(input: FinalBalanceEmailInput): { subj
     subject: 'Final balance and handover',
     html: brandedEmailHtml('Final balance and handover', `
       <h1 style="font-size:34px;line-height:40px;color:#27083D;margin:0 0 18px">Hi ${escapeHtml(input.firstName || 'there')},</h1>
-      <p>Your tenancy agreement has been completed. The remaining balance for <strong>${escapeHtml(input.propertyAddress)}</strong> is set out below.</p>
+      <p>${escapeHtml(input.customMessage || `Your tenancy agreement has been completed. The remaining balance for ${input.propertyAddress} is set out below.`).replace(/\r?\n/g, '<br>')}</p>
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0 4px;margin:24px 0">
         ${emailSummaryRow('Security deposit', `&pound;${emailMoney(input.securityDeposit)}`)}
         ${emailSummaryRow('First month’s rent', `&pound;${emailMoney(input.monthlyRent)}`)}
@@ -153,6 +154,50 @@ export function finalBalanceHandoverEmail(input: FinalBalanceEmailInput): { subj
       <p>Once the funds have been received, we can arrange a preferred date and time on site for the handover and inventory.</p>
       <p><a href="mailto:${OUTBOUND_EMAIL_ADDRESS}?subject=${replySubject}" style="display:inline-block;background:#DC006D;color:#ffffff;text-decoration:none;padding:15px 32px;font-weight:bold">Reply with your preferred time</a></p>
       <p>If you have any questions, reply to this email or call us on <a href="tel:+441902212415" style="color:#DC006D">01902 212 415</a>.</p>
+    `),
+  };
+}
+
+export interface HandoverAppointmentEmailInput {
+  firstName: string;
+  propertyAddress: string;
+  appointmentDate: string | Date;
+  appointmentTime: string;
+  appointmentWith: string;
+  customMessage?: string | null;
+}
+
+export function handoverAppointmentEmail(input: HandoverAppointmentEmailInput): { subject: string; html: string } {
+  const propertyAddress = escapeHtml(input.propertyAddress);
+  const mapQuery = encodeURIComponent(input.propertyAddress);
+  const date = input.appointmentDate instanceof Date
+    ? input.appointmentDate
+    : new Date(`${String(input.appointmentDate).slice(0, 10)}T12:00:00Z`);
+  const displayDate = Number.isNaN(date.getTime())
+    ? escapeHtml(input.appointmentDate)
+    : date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' });
+  const intro = escapeHtml(input.customMessage || 'Finally, we’re nearly there! Your move in and handover appointment is confirmed. We will meet you at the property to conduct the inventory, hand over the keys and answer any final questions that you may have.').replace(/\r?\n/g, '<br>');
+  return {
+    subject: 'Your move in and handover date',
+    html: brandedEmailHtml('Your move in date', `
+      <h1 style="font-size:34px;line-height:40px;color:#27083D;margin:0 0 18px">Hi ${escapeHtml(input.firstName || 'there')},</h1>
+      <p>${intro}</p>
+      <div style="background:#563F6E;padding:24px;margin:24px 0;color:#ffffff">
+        <span style="font-size:14px;color:#EEEEEE">Your appointment</span><br>
+        <strong style="font-size:28px;line-height:38px">${displayDate}</strong><br>
+        <strong style="font-size:22px;line-height:32px">${escapeHtml(input.appointmentTime)}</strong>
+        <div style="padding-top:14px;color:#EEEEEE">Your appointment is with</div>
+        <strong style="font-size:19px">${escapeHtml(input.appointmentWith)}</strong>
+        <div style="padding-top:14px;color:#EEEEEE">Meeting at</div>
+        <strong style="font-size:19px">${propertyAddress}</strong>
+      </div>
+      <p>Please arrive on time. If you are running late or need us to wait a little longer, call us on <a href="tel:+441902212415" style="color:#DC006D">01902 212 415</a>.</p>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:8px 0;margin:24px -8px 0">
+        <tr>
+          <td style="width:50%;background:#FCE9F2;border-left:4px solid #DC006D;padding:18px"><a href="https://www.google.com/maps/search/?api=1&amp;query=${mapQuery}" style="color:#27083D;text-decoration:none;font-weight:bold">Google Maps<br><span style="font-size:13px;font-weight:normal;color:#563F6E">Get directions</span></a></td>
+          <td style="width:50%;background:#FCE9F2;border-left:4px solid #563F6E;padding:18px"><a href="https://maps.apple.com/?q=${mapQuery}" style="color:#27083D;text-decoration:none;font-weight:bold">Apple Maps<br><span style="font-size:13px;font-weight:normal;color:#563F6E">Get directions</span></a></td>
+        </tr>
+      </table>
     `),
   };
 }
