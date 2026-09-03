@@ -35,6 +35,24 @@ import {
 } from './email';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { propertyCompliance } from './property-compliance';
+import {
+  bankFeedConfig,
+  buildAuthUrl,
+  decryptToken,
+  dueDateForPayment,
+  encryptToken,
+  exchangeCode,
+  fetchAccounts,
+  fetchTransactions,
+  matchDeposit,
+  matchExpense,
+  matchRent,
+  refreshAccess,
+  type BankTransaction,
+  type DepositCandidate,
+  type PropertyCandidate,
+  type RentCandidate,
+} from './bank-feed';
 
 // Validate required environment variables
 if (!process.env.DATABASE_URL) {
@@ -5854,6 +5872,252 @@ app.post('/api/activity', authMiddleware, async (req: AuthRequest, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to log activity' });
+  }
+});
+
+// ============ OPEN BANKING FEED ============
+
+function bankFeedFrontendUrl(result: 'connected' | 'error'): string {
+  const base = (process.env.FRONTEND_URL || 'https://crm.fleminglettings.co.uk').replace(/\/$/, '');
+  return `${base}/financials?bank_feed=${result}`;
+}
+
+async function applyBankFeedMatch(feedId: number, transaction: BankTransaction, rentCandidates: RentCandidate[], depositCandidates: DepositCandidate[], propertyCandidates: PropertyCandidate[]) {
+  const rent = matchRent(transaction, rentCandidates);
+  const deposit = rent ? null : matchDeposit(transaction, depositCandidates);
+  const expense = rent || deposit ? null : matchExpense(transaction, propertyCandidates);
+  if (!rent && !deposit && !expense) return;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (rent) {
+      const dueDate = dueDateForPayment(rent.tenancyStartDate, transaction.timestamp);
+      const existing = await client.query(
+        'SELECT id, amount_due, COALESCE(amount_paid, 0) AS amount_paid FROM rent_payments WHERE tenant_id = $1 AND due_date = $2 LIMIT 1',
+        [rent.tenantId, dueDate],
+      );
+      let rentPaymentId: number;
+      if (existing.rows[0]) {
+        rentPaymentId = existing.rows[0].id;
+        const amountPaid = Number(existing.rows[0].amount_paid) + Number(transaction.amount);
+        const status = amountPaid >= Number(existing.rows[0].amount_due) ? 'paid' : 'partial';
+        await client.query(
+          "UPDATE rent_payments SET amount_paid=$1, payment_date=$2, status=$3, notes=COALESCE(notes || E'\\n', '') || $4 WHERE id=$5",
+          [amountPaid, transaction.timestamp.slice(0, 10), status, 'Imported from Barclays bank feed', rentPaymentId],
+        );
+      } else {
+        const inserted = await client.query(
+          'INSERT INTO rent_payments (property_id, tenant_id, due_date, amount_due, amount_paid, payment_date, status, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+          [rent.propertyId, rent.tenantId, dueDate, rent.rentAmount, transaction.amount, transaction.timestamp.slice(0, 10), transaction.amount >= rent.rentAmount ? 'paid' : 'partial', 'Imported from Barclays bank feed'],
+        );
+        rentPaymentId = inserted.rows[0].id;
+      }
+      if (rent.tenancyId) {
+        await client.query(
+          'INSERT INTO transactions (tenancy_id, type, amount, description, date) VALUES ($1,$2,$3,$4,$5)',
+          [rent.tenancyId, 'payment', transaction.amount, transaction.description || 'Barclays rent payment', transaction.timestamp.slice(0, 10)],
+        );
+      }
+      await client.query(
+        "UPDATE bank_feed_transactions SET property_id=$1, tenant_id=$2, rent_payment_id=$3, match_status='matched_rent' WHERE id=$4",
+        [rent.propertyId, rent.tenantId, rentPaymentId, feedId],
+      );
+    } else if (deposit) {
+      if (deposit.enquiryId) {
+        await client.query(
+          'UPDATE tenant_enquiries SET holding_deposit_received=1, holding_deposit_received_date=$1, holding_deposit_received_amount=$2, updated_at=NOW() WHERE id=$3',
+          [transaction.timestamp.slice(0, 10), transaction.amount, deposit.enquiryId],
+        );
+      } else if (deposit.tenantId) {
+        await client.query(
+          'UPDATE tenants SET holding_deposit_received=1, holding_deposit_date=$1, updated_at=NOW() WHERE id=$2',
+          [transaction.timestamp.slice(0, 10), deposit.tenantId],
+        );
+      }
+      if (deposit.tenancyId) {
+        await client.query(
+          'INSERT INTO transactions (tenancy_id, type, amount, description, date) VALUES ($1,$2,$3,$4,$5)',
+          [deposit.tenancyId, 'deposit', transaction.amount, transaction.description || 'Barclays holding deposit', transaction.timestamp.slice(0, 10)],
+        );
+      }
+      await client.query(
+        "UPDATE bank_feed_transactions SET property_id=$1, tenant_id=$2, enquiry_id=$3, match_status='matched_deposit' WHERE id=$4",
+        [deposit.propertyId || null, deposit.tenantId || null, deposit.enquiryId || null, feedId],
+      );
+    } else if (expense) {
+      const inserted = await client.query(
+        'INSERT INTO property_expenses (property_id, description, amount, category, expense_date) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+        [expense.propertyId, transaction.description || transaction.merchant_name || 'Barclays bank transaction', Math.abs(Number(transaction.amount)), 'bank_feed', transaction.timestamp.slice(0, 10)],
+      );
+      await client.query(
+        "UPDATE bank_feed_transactions SET property_id=$1, expense_id=$2, match_status='matched_expense' WHERE id=$3",
+        [expense.propertyId, inserted.rows[0].id, feedId],
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+app.get('/api/bank-feed/status', authMiddleware, async (_req, res) => {
+  try {
+    const connection = await queryOne(`
+      SELECT id, provider, status, provider_name, last_synced_at, last_error, created_at
+      FROM bank_feed_connections ORDER BY created_at DESC LIMIT 1
+    `);
+    const totals = await queryOne(`
+      SELECT COUNT(*)::INTEGER AS total,
+        COUNT(*) FILTER (WHERE match_status = 'matched_rent')::INTEGER AS rent_matches,
+        COUNT(*) FILTER (WHERE match_status = 'matched_deposit')::INTEGER AS deposit_matches,
+        COUNT(*) FILTER (WHERE match_status = 'matched_expense')::INTEGER AS expense_matches,
+        COUNT(*) FILTER (WHERE match_status = 'unmatched')::INTEGER AS unmatched
+      FROM bank_feed_transactions
+    `);
+    res.json({ configured: Boolean(bankFeedConfig()), connection, totals });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch bank feed status' });
+  }
+});
+
+app.post('/api/bank-feed/connect', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
+  try {
+    const config = bankFeedConfig();
+    if (!config) return res.status(503).json({ error: 'Open Banking credentials are not configured' });
+    const state = crypto.randomBytes(32).toString('base64url');
+    const stateHash = crypto.createHash('sha256').update(state).digest('hex');
+    const id = await insert(
+      "INSERT INTO bank_feed_connections (status, state_hash, created_by) VALUES ('pending', $1, $2)",
+      [stateHash, req.user?.id || null],
+    );
+    await logAudit(req.user?.id, req.user?.email, 'create', 'bank_feed_connection', id);
+    res.json({ url: buildAuthUrl(config, state) });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to start Open Banking connection' });
+  }
+});
+
+app.get('/api/bank-feed/callback', async (req, res) => {
+  const state = String(req.query.state || '');
+  const code = String(req.query.code || '');
+  const stateHash = crypto.createHash('sha256').update(state).digest('hex');
+  const connection = await queryOne(
+    "SELECT id FROM bank_feed_connections WHERE state_hash=$1 AND status='pending' AND created_at > NOW() - INTERVAL '30 minutes'",
+    [stateHash],
+  );
+  if (!connection || !code) return res.redirect(303, bankFeedFrontendUrl('error'));
+  try {
+    const config = bankFeedConfig();
+    if (!config) throw new Error('Open Banking credentials are not configured');
+    const token = await exchangeCode(config, code);
+    if (!token.refresh_token) throw new Error('TrueLayer did not return an offline access token');
+    await run(
+      "UPDATE bank_feed_connections SET status='connected', refresh_token_encrypted=$1, token_expires_at=NOW() + ($2 || ' seconds')::INTERVAL, state_hash=NULL, last_error=NULL, updated_at=NOW() WHERE id=$3",
+      [encryptToken(token.refresh_token), token.expires_in || 3600, connection.id],
+    );
+    res.redirect(303, bankFeedFrontendUrl('connected'));
+  } catch (error) {
+    await run("UPDATE bank_feed_connections SET status='error', last_error=$1, state_hash=NULL, updated_at=NOW() WHERE id=$2", [error instanceof Error ? error.message : 'Connection failed', connection.id]);
+    res.redirect(303, bankFeedFrontendUrl('error'));
+  }
+});
+
+app.post('/api/bank-feed/sync', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
+  try {
+    const config = bankFeedConfig();
+    if (!config) return res.status(503).json({ error: 'Open Banking credentials are not configured' });
+    const connection = await queryOne("SELECT * FROM bank_feed_connections WHERE status='connected' ORDER BY created_at DESC LIMIT 1");
+    if (!connection?.refresh_token_encrypted) return res.status(409).json({ error: 'Connect Barclays before syncing' });
+
+    const refreshed = await refreshAccess(config, decryptToken(connection.refresh_token_encrypted));
+    if (refreshed.refresh_token) {
+      await run('UPDATE bank_feed_connections SET refresh_token_encrypted=$1, token_expires_at=NOW() + ($2 || \' seconds\')::INTERVAL, updated_at=NOW() WHERE id=$3', [encryptToken(refreshed.refresh_token), refreshed.expires_in || 3600, connection.id]);
+    }
+    const accounts = await fetchAccounts(config, refreshed.access_token);
+    const rentCandidates = await query(`
+      SELECT t.id AS "tenantId", p.id AS "propertyId", tn.id AS "tenancyId", t.name AS "tenantName",
+        p.address AS "propertyAddress", p.postcode, COALESCE(t.monthly_rent, tn.rent_amount, p.rent_amount) AS "rentAmount",
+        COALESCE(tn.start_date, t.tenancy_start_date) AS "tenancyStartDate"
+      FROM tenants t JOIN properties p ON p.id=t.property_id
+      LEFT JOIN LATERAL (SELECT * FROM tenancies x WHERE x.tenant_id=t.id AND x.status='active' ORDER BY x.start_date DESC LIMIT 1) tn ON TRUE
+    `) as RentCandidate[];
+    const propertyCandidates = await query('SELECT id AS "propertyId", address, postcode FROM properties') as PropertyCandidate[];
+    const depositCandidates = await query(`
+      SELECT t.id AS "tenantId", NULL::INTEGER AS "enquiryId", t.property_id AS "propertyId", tn.id AS "tenancyId",
+        t.name, COALESCE(t.holding_deposit_amount, 0)::FLOAT AS amount
+      FROM tenants t
+      LEFT JOIN LATERAL (SELECT * FROM tenancies x WHERE x.tenant_id=t.id AND x.status='active' ORDER BY x.start_date DESC LIMIT 1) tn ON TRUE
+      WHERE COALESCE(t.holding_deposit_received, 0)=0 AND COALESCE(t.holding_deposit_amount, 0)>0
+      UNION ALL
+      SELECT NULL::INTEGER AS "tenantId", te.id AS "enquiryId", te.linked_property_id AS "propertyId", NULL::INTEGER AS "tenancyId",
+        TRIM(te.first_name_1 || ' ' || te.last_name_1) AS name, COALESCE(te.holding_deposit_amount, 0)::FLOAT AS amount
+      FROM tenant_enquiries te
+      WHERE COALESCE(te.holding_deposit_received, 0)=0 AND COALESCE(te.holding_deposit_amount, 0)>0
+    `) as DepositCandidate[];
+    const to = new Date().toISOString().slice(0, 10);
+    const fromDate = connection.last_synced_at ? new Date(connection.last_synced_at) : new Date(Date.now() - 90 * 86400000);
+    fromDate.setUTCDate(fromDate.getUTCDate() - 7);
+    const from = fromDate.toISOString().slice(0, 10);
+    let imported = 0;
+    let matched = 0;
+
+    for (const account of accounts.results || []) {
+      const feed = await fetchTransactions(config, refreshed.access_token, account.account_id, from, to);
+      for (const transaction of feed.results || []) {
+        const inserted = await queryOne(`
+          INSERT INTO bank_feed_transactions
+            (connection_id, external_id, account_id, booked_at, description, amount, currency, transaction_type, transaction_category, merchant_name)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          ON CONFLICT (external_id) DO NOTHING RETURNING id
+        `, [connection.id, transaction.transaction_id, account.account_id, transaction.timestamp, transaction.description || null, transaction.amount, transaction.currency || 'GBP', transaction.transaction_type || null, transaction.transaction_category || null, transaction.merchant_name || null]);
+        if (!inserted) continue;
+        imported++;
+      }
+    }
+    const unmatchedRows = await query(`
+      SELECT id, external_id AS transaction_id, booked_at AS timestamp, description, amount::FLOAT,
+        currency, transaction_type, transaction_category, merchant_name
+      FROM bank_feed_transactions WHERE match_status='unmatched'
+    `);
+    for (const transaction of unmatchedRows as Array<BankTransaction & { id: number }>) {
+      await applyBankFeedMatch(transaction.id, transaction, rentCandidates, depositCandidates, propertyCandidates);
+      const matchedRow = await queryOne('SELECT match_status FROM bank_feed_transactions WHERE id=$1', [transaction.id]);
+      if (matchedRow?.match_status !== 'unmatched') matched++;
+    }
+    await run("UPDATE bank_feed_connections SET provider_name=$1, last_synced_at=NOW(), last_error=NULL, updated_at=NOW() WHERE id=$2", [accounts.results?.[0]?.provider?.display_name || 'Barclays', connection.id]);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'bank_feed_connection', connection.id, { imported, matched });
+    const remaining = await queryOne("SELECT COUNT(*)::INTEGER AS count FROM bank_feed_transactions WHERE match_status='unmatched'");
+    res.json({ imported, matched, unmatched: remaining?.count || 0 });
+  } catch (error) {
+    console.error(error);
+    const message = error instanceof Error ? error.message : 'Bank sync failed';
+    await run("UPDATE bank_feed_connections SET last_error=$1, updated_at=NOW() WHERE id=(SELECT id FROM bank_feed_connections ORDER BY created_at DESC LIMIT 1)", [message]).catch(() => {});
+    res.status(502).json({ error: message });
+  }
+});
+
+app.get('/api/bank-feed/transactions', authMiddleware, async (req, res) => {
+  try {
+    const { limit, offset } = pageParams(req);
+    const rows = await query(`
+      SELECT b.id, b.booked_at, b.description, b.amount, b.currency, b.transaction_type,
+        b.transaction_category, b.merchant_name, b.match_status, p.address AS property_address,
+        COALESCE(t.name, TRIM(te.first_name_1 || ' ' || te.last_name_1)) AS tenant_name
+      FROM bank_feed_transactions b
+      LEFT JOIN properties p ON p.id=b.property_id LEFT JOIN tenants t ON t.id=b.tenant_id
+      LEFT JOIN tenant_enquiries te ON te.id=b.enquiry_id
+      ORDER BY b.booked_at DESC, b.id DESC LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch bank transactions' });
   }
 });
 

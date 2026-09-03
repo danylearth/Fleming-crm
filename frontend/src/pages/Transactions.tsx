@@ -1,16 +1,37 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { Card, GlassCard, EmptyState } from '../components/ui';
+import { Button, Card, GlassCard, EmptyState } from '../components/ui';
 import { useApi } from '../hooks/useApi';
-import { PoundSterling, TrendingUp, TrendingDown, Home } from 'lucide-react';
+import { PoundSterling, TrendingUp, TrendingDown, Home, Landmark, RefreshCw, Clock3 } from 'lucide-react';
 
 interface RentPayment {
   id: number;
   tenant_name?: string;
   property_address?: string;
   amount: number;
+  amount_paid?: number;
   date: string;
+  due_date?: string;
+  payment_date?: string;
   status?: string;
+}
+
+interface BankFeedStatus {
+  configured: boolean;
+  connection?: { status: string; provider_name?: string; last_synced_at?: string; last_error?: string } | null;
+  totals?: { total: number; rent_matches: number; deposit_matches: number; expense_matches: number; unmatched: number };
+}
+
+interface BankFeedTransaction {
+  id: number;
+  booked_at: string;
+  description?: string;
+  merchant_name?: string;
+  amount: number;
+  currency: string;
+  match_status: 'unmatched' | 'matched_rent' | 'matched_deposit' | 'matched_expense' | 'ignored';
+  property_address?: string;
+  tenant_name?: string;
 }
 
 interface Property {
@@ -35,37 +56,84 @@ export default function Transactions() {
   const [payments, setPayments] = useState<RentPayment[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [tenancies, setTenancies] = useState<Tenancy[]>([]);
+  const [bankStatus, setBankStatus] = useState<BankFeedStatus | null>(null);
+  const [bankTransactions, setBankTransactions] = useState<BankFeedTransaction[]>([]);
+  const [bankBusy, setBankBusy] = useState(false);
+  const [bankMessage, setBankMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [pay, prop, ten] = await Promise.all([
+        const [pay, prop, ten, feedStatus, feedTransactions] = await Promise.all([
           api.get('/api/rent-payments').catch(() => []),
           api.get('/api/properties').catch(() => []),
           api.get('/api/tenancies').catch(() => []),
+          api.get('/api/bank-feed/status').catch(() => null),
+          api.get('/api/bank-feed/transactions?limit=25').catch(() => []),
         ]);
         setPayments(Array.isArray(pay) ? pay : pay?.payments || []);
         setProperties(Array.isArray(prop) ? prop : prop?.properties || []);
         setTenancies(Array.isArray(ten) ? ten : ten?.tenancies || []);
+        setBankStatus(feedStatus);
+        setBankTransactions(Array.isArray(feedTransactions) ? feedTransactions : []);
       } catch {
         // Errors already handled by individual .catch() calls above
       }
       setLoading(false);
     };
     load();
-  }, []);
+  }, [api]);
+
+  const refreshBankData = async () => {
+    const [status, transactions] = await Promise.all([
+      api.get(`/api/bank-feed/status?at=${Date.now()}`),
+      api.get(`/api/bank-feed/transactions?limit=25&at=${Date.now()}`),
+    ]);
+    setBankStatus(status);
+    setBankTransactions(Array.isArray(transactions) ? transactions : []);
+  };
+
+  const connectBank = async () => {
+    setBankBusy(true);
+    setBankMessage('');
+    try {
+      const result = await api.post('/api/bank-feed/connect', {});
+      window.location.assign(result.url);
+    } catch (error) {
+      setBankMessage(error instanceof Error ? error.message : 'Could not start the bank connection');
+      setBankBusy(false);
+    }
+  };
+
+  const syncBank = async () => {
+    setBankBusy(true);
+    setBankMessage('');
+    try {
+      const result = await api.post('/api/bank-feed/sync', {});
+      setBankMessage(`${result.imported} new transaction${result.imported === 1 ? '' : 's'} imported; ${result.matched} matched.`);
+      await refreshBankData();
+    } catch (error) {
+      setBankMessage(error instanceof Error ? error.message : 'Bank sync failed');
+    } finally {
+      setBankBusy(false);
+    }
+  };
 
   // Calculate summaries
   const totalMonthlyRent = tenancies.reduce((sum, t) => sum + (t.monthly_rent || t.rent_amount || 0), 0) ||
     properties.reduce((sum, p) => sum + (p.monthly_rent || p.rent || 0), 0);
 
-  const collected = payments.filter(p => p.status === 'paid' || !p.status).reduce((sum, p) => sum + (p.amount || 0), 0);
+  const collected = payments.filter(p => p.status === 'paid' || !p.status).reduce((sum, p) => sum + (p.amount_paid || p.amount || 0), 0);
   const outstanding = totalMonthlyRent - collected;
   const occupiedCount = properties.filter(p => p.status === 'occupied' || p.status === 'let').length;
   const totalCount = properties.length || 1;
   const vacancyRate = ((totalCount - occupiedCount) / totalCount) * 100;
   const vacancyLoss = totalMonthlyRent > 0 ? (totalMonthlyRent / totalCount) * (totalCount - occupiedCount) : 0;
+  const paymentDelays = payments
+    .filter(payment => payment.due_date && payment.payment_date)
+    .map(payment => Math.max(0, Math.round((new Date(payment.payment_date!).getTime() - new Date(payment.due_date!).getTime()) / 86400000)));
+  const averageDaysLate = paymentDelays.length ? paymentDelays.reduce((sum, days) => sum + days, 0) / paymentDelays.length : 0;
 
   const fmt = (n: number) => `£${n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
@@ -85,13 +153,49 @@ export default function Transactions() {
           <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
         ) : (
           <>
+            <Card className="p-5 mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0"><Landmark size={20} /></div>
+                  <div>
+                    <h3 className="font-semibold">Barclays bank feed</h3>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">
+                      {!bankStatus?.configured
+                        ? 'Waiting for Open Banking provider credentials.'
+                        : bankStatus.connection?.status === 'connected'
+                          ? `Connected${bankStatus.connection.provider_name ? ` via ${bankStatus.connection.provider_name}` : ''}${bankStatus.connection.last_synced_at ? ` · last synced ${new Date(bankStatus.connection.last_synced_at).toLocaleString('en-GB')}` : ''}`
+                          : 'Ready to connect and approve access in Barclays.'}
+                    </p>
+                    {bankMessage && <p className="text-xs text-orange-400 mt-2">{bankMessage}</p>}
+                    {bankStatus?.connection?.last_error && <p className="text-xs text-red-400 mt-2">{bankStatus.connection.last_error}</p>}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {bankStatus?.connection?.status === 'connected' ? (
+                    <Button variant="outline" size="sm" onClick={syncBank} disabled={bankBusy} className="gap-2"><RefreshCw size={14} className={bankBusy ? 'animate-spin' : ''} /> Sync now</Button>
+                  ) : (
+                    <Button variant="gradient" size="sm" onClick={connectBank} disabled={bankBusy || !bankStatus?.configured}>Connect Barclays</Button>
+                  )}
+                </div>
+              </div>
+              {bankStatus?.totals && bankStatus.totals.total > 0 && (
+                <div className="grid grid-cols-4 gap-3 mt-4 pt-4 border-t border-[var(--border-subtle)] text-center">
+                  <div><p className="font-semibold">{bankStatus.totals.rent_matches}</p><p className="text-[11px] text-[var(--text-muted)]">Rent matched</p></div>
+                  <div><p className="font-semibold">{bankStatus.totals.deposit_matches}</p><p className="text-[11px] text-[var(--text-muted)]">Deposits matched</p></div>
+                  <div><p className="font-semibold">{bankStatus.totals.expense_matches}</p><p className="text-[11px] text-[var(--text-muted)]">Expenses matched</p></div>
+                  <div><p className="font-semibold">{bankStatus.totals.unmatched}</p><p className="text-[11px] text-[var(--text-muted)]">Needs review</p></div>
+                </div>
+              )}
+            </Card>
+
             {/* Summary Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4 mb-8">
               {[
                 { label: 'Total Monthly Rent', value: fmt(totalMonthlyRent), icon: <PoundSterling size={20} />, color: 'from-blue-500 to-blue-600' },
                 { label: 'Collected', value: fmt(collected), icon: <TrendingUp size={20} />, color: 'from-emerald-500 to-emerald-600' },
                 { label: 'Outstanding', value: fmt(outstanding > 0 ? outstanding : 0), icon: <TrendingDown size={20} />, color: 'from-amber-500 to-orange-500' },
                 { label: 'Vacancy Loss', value: fmt(vacancyLoss), icon: <Home size={20} />, color: 'from-red-500 to-pink-500' },
+                { label: 'Average Lateness', value: `${averageDaysLate.toFixed(1)} days`, icon: <Clock3 size={20} />, color: 'from-violet-500 to-purple-600' },
               ].map(card => (
                 <GlassCard key={card.label} className="p-5">
                   <div className="flex items-center justify-between mb-3">
@@ -155,6 +259,27 @@ export default function Transactions() {
                 )}
               </Card>
             </div>
+
+            {bankTransactions.length > 0 && (
+              <Card className="p-5 mt-6">
+                <h3 className="text-lg font-semibold mb-4">Latest bank transactions</h3>
+                <div className="overflow-x-auto">
+                  <div className="min-w-[620px]">
+                    <div className="grid grid-cols-[100px_1fr_120px_150px] gap-3 text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider pb-2 border-b border-[var(--border-subtle)]">
+                      <span>Date</span><span>Description</span><span className="text-right">Amount</span><span>CRM match</span>
+                    </div>
+                    {bankTransactions.map(transaction => (
+                      <div key={transaction.id} className="grid grid-cols-[100px_1fr_120px_150px] gap-3 py-2.5 border-b border-[var(--border-subtle)] text-sm items-center">
+                        <span className="text-[var(--text-muted)]">{new Date(transaction.booked_at).toLocaleDateString('en-GB')}</span>
+                        <span className="truncate">{transaction.description || transaction.merchant_name || 'Bank transaction'}</span>
+                        <span className={`text-right font-medium ${Number(transaction.amount) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{Number(transaction.amount) >= 0 ? '+' : '-'}{fmt(Math.abs(Number(transaction.amount)))}</span>
+                        <span className="text-xs text-[var(--text-secondary)]">{transaction.match_status === 'matched_rent' ? `Rent · ${transaction.tenant_name || 'tenant'}` : transaction.match_status === 'matched_deposit' ? `Deposit · ${transaction.tenant_name || 'applicant'}` : transaction.match_status === 'matched_expense' ? `Expense · ${transaction.property_address || 'property'}` : 'Needs review'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            )}
 
             {/* Vacancy info */}
             <GlassCard className="mt-6 p-5">

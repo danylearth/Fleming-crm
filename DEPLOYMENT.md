@@ -40,6 +40,14 @@ Secrets (set once, via `flyctl secrets set -a fleming-crm-api KEY=value`):
 Set `TWILIO_SENDER_ID=FlemingLets` only after Twilio approves that alphanumeric
 sender; until then, SMS sends continue to use `TWILIO_PHONE_NUMBER`.
 
+The Barclays bank feed uses TrueLayer's hosted Open Banking consent flow. Set
+`TRUELAYER_CLIENT_ID`, `TRUELAYER_CLIENT_SECRET`, `TRUELAYER_REDIRECT_URI`, and
+`BANK_FEED_ENCRYPTION_KEY` (32 random bytes, base64 or hex). Set
+`TRUELAYER_ENV=live` for production; it defaults to sandbox. Register the exact
+redirect URI in TrueLayer Console. The production callback is
+`https://fleming-crm-api.fly.dev/api/bank-feed/callback`. Refresh tokens are
+AES-256-GCM encrypted before being stored in Postgres.
+
 ### Frontend + forms (Vercel)
 
 ```bash
