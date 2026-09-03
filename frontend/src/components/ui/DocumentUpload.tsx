@@ -19,6 +19,7 @@ interface Props {
   entityId: number;
   applicantNumber?: number;
   title?: string;
+  onChange?: () => void | Promise<void>;
 }
 
 function formatBytes(bytes: number) {
@@ -27,7 +28,7 @@ function formatBytes(bytes: number) {
   return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
-export default function DocumentUpload({ entityType, entityId, applicantNumber, title }: Props) {
+export default function DocumentUpload({ entityType, entityId, applicantNumber, title, onChange }: Props) {
   const { token } = useAuth();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [docTypes, setDocTypes] = useState<string[]>([]);
@@ -90,6 +91,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
         setShowUpload(false);
         setSelectedType('');
         setCustomTypeName('');
+        await onChange?.();
       }
     } catch (e) {
       console.error('Upload error:', e);
@@ -102,6 +104,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
     try {
       await fetch(`${API_URL}/api/documents/${id}`, { method: 'DELETE', headers });
       setDocs(prev => prev.filter(d => d.id !== id));
+      await onChange?.();
     } catch (e) { console.error(e); }
   };
 

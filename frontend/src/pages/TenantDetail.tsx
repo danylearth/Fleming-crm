@@ -29,6 +29,7 @@ interface Tenant {
   guarantor_phone?: string; guarantor_email?: string;
   guarantor_kyc_completed?: number; guarantor_deed_received?: number;
   holding_deposit_received?: number; holding_deposit_amount?: number; holding_deposit_date?: string;
+  security_deposit_amount?: number;
   application_forms_completed?: number;
   authority_to_contact?: number; proof_of_income?: string; deposit_scheme?: string;
   income_amount?: string; income_employer?: string; income_contract_type?: string;
@@ -42,6 +43,14 @@ interface Tenant {
 
 interface TenantNote {
   id: string; text: string; author: string; created_at: string;
+}
+
+function parseNotes(raw?: string | null): TenantNote[] {
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    if (Array.isArray(parsed)) return parsed;
+  } catch { /* legacy plain-text note */ }
+  return raw?.trim() ? [{ id: 'legacy', text: raw, author: 'System', created_at: new Date().toISOString() }] : [];
 }
 
 // ==================== HELPERS ====================
@@ -144,6 +153,8 @@ export default function TenantDetail() {
 
   // Notes
   const [notes, setNotes] = useState<TenantNote[]>([]);
+  const [propertyNotes, setPropertyNotes] = useState<TenantNote[]>([]);
+  const [notesFilter, setNotesFilter] = useState<'tenant' | 'property'>('tenant');
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
 
@@ -172,6 +183,7 @@ export default function TenantDetail() {
       guarantor_kyc_completed: !!t.guarantor_kyc_completed, guarantor_deed_received: !!t.guarantor_deed_received,
       holding_deposit_received: !!t.holding_deposit_received,
       holding_deposit_amount: t.holding_deposit_amount || '', holding_deposit_date: t.holding_deposit_date || '',
+      security_deposit_amount: t.security_deposit_amount || '',
       application_forms_completed: !!t.application_forms_completed,
       authority_to_contact: !!t.authority_to_contact,
       kyc_primary_id: !!t.kyc_primary_id, kyc_secondary_id: !!t.kyc_secondary_id,
@@ -181,7 +193,7 @@ export default function TenantDetail() {
       income_frequency: t.income_frequency || 'monthly',
       deposit_scheme: t.deposit_scheme || '',
       property_id: t.property_id, tenancy_start_date: t.tenancy_start_date || t.move_in_date || '',
-      tenancy_type: t.tenancy_type || '', has_end_date: !!t.has_end_date, tenancy_end_date: t.tenancy_end_date || '',
+      tenancy_type: t.tenancy_type || 'Assured Periodic Tenancy', has_end_date: !!t.has_end_date, tenancy_end_date: t.tenancy_end_date || '',
       monthly_rent: t.monthly_rent || '', status: t.status || 'active',
     };
   };
@@ -191,6 +203,12 @@ export default function TenantDetail() {
       const t = await api.get(`/api/tenants/${id}`);
       setTenant(t);
       setForm(tenantToForm(t));
+      if (t.property_id) {
+        const linkedProperty = await api.get(`/api/properties/${t.property_id}`).catch(() => null);
+        setPropertyNotes(parseNotes(linkedProperty?.notes));
+      } else {
+        setPropertyNotes([]);
+      }
     } catch (e) {
       console.error(e);
       alert(e instanceof Error ? e.message : 'Failed to load tenant');
@@ -215,13 +233,7 @@ export default function TenantDetail() {
 
   // Load notes
   useEffect(() => {
-    if (tenant?.notes) {
-      try {
-        const parsed = JSON.parse(tenant.notes);
-        if (Array.isArray(parsed)) { setNotes(parsed); return; }
-      } catch { /* Silently ignore */ }
-      if (tenant.notes.trim()) setNotes([{ id: '1', text: tenant.notes, author: 'System', created_at: new Date().toISOString() }]);
-    }
+    setNotes(parseNotes(tenant?.notes));
   }, [tenant?.notes]);
 
   // Restructured checklist: Authority → KYC → Application Forms → Proof of Income
@@ -310,8 +322,14 @@ export default function TenantDetail() {
     const updated = [...notes, note];
     setNewNote('');
     try {
-      await api.patch(`/api/tenants/${id}/notes`, { notes: JSON.stringify(updated) });
-      api.post('/api/activity', { action: 'note_added', entity_type: 'tenant', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
+      if (notesFilter === 'property' && tenant?.property_id) {
+        const updatedPropertyNotes = [...propertyNotes, note];
+        await api.put(`/api/properties/${tenant.property_id}`, { notes: JSON.stringify(updatedPropertyNotes) });
+        api.post('/api/activity', { action: 'note_added', entity_type: 'property', entity_id: tenant.property_id, changes: { text: noteText } }).catch(() => {});
+      } else {
+        await api.patch(`/api/tenants/${id}/notes`, { notes: JSON.stringify(updated) });
+        api.post('/api/activity', { action: 'note_added', entity_type: 'tenant', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
+      }
       // Reload the data to show the new note
       await loadDetail();
     } catch (e) { console.error(e); }
@@ -323,6 +341,7 @@ export default function TenantDetail() {
 
   const displayName = form.first_name_1 && form.last_name_1 ? `${form.first_name_1} ${form.last_name_1}` : tenant.name;
   const isEditing = (section: string) => editingSection === section;
+  const displayedNotes = notesFilter === 'tenant' ? notes : propertyNotes;
 
   return (
     <Layout breadcrumb={[{ label: 'Tenants', to: '/tenants' }, { label: displayName }]}>
@@ -548,8 +567,6 @@ export default function TenantDetail() {
                     <Select label="Tenancy Type" value={form.tenancy_type} onChange={v => setForm({
                       ...form,
                       tenancy_type: v,
-                      has_end_date: v === 'Fixed Term',
-                      tenancy_end_date: v === 'Assured Periodic Tenancy' ? '' : form.tenancy_end_date,
                     })}
                       options={[
                         { value: '', label: 'Select...' },
@@ -558,16 +575,21 @@ export default function TenantDetail() {
                         { value: 'Assured Periodic Tenancy', label: 'Assured Periodic Tenancy' },
                       ]} />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <Input label="Monthly Rent (£)" value={form.monthly_rent} onChange={v => setForm({ ...form, monthly_rent: v })} placeholder="0.00" />
+                    <Input label="Deposit Held (£)" value={form.security_deposit_amount} onChange={v => setForm({ ...form, security_deposit_amount: v })} placeholder="0.00" />
                     <Select label="Deposit Scheme" value={form.deposit_scheme} onChange={v => setForm({ ...form, deposit_scheme: v })}
                       options={[{ value: '', label: 'Select...' }, { value: 'tds', label: 'Tenancy Deposit Scheme' }, { value: 'gov_back', label: 'Gov Back Scheme' }, { value: 'paid_to_landlord', label: 'Paid to Landlord' }, { value: 'other', label: 'Other/TBF' }]} />
                   </div>
-                  {form.tenancy_type === 'Fixed Term' && (
+                  <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                    <input type="checkbox" checked={!!form.has_end_date} onChange={event => setForm({ ...form, has_end_date: event.target.checked, tenancy_end_date: event.target.checked ? form.tenancy_end_date : '' })} />
+                    Schedule this tenancy to end
+                  </label>
+                  {form.has_end_date && (
                     <DatePicker label="End Date" value={form.tenancy_end_date} onChange={v => setForm({ ...form, tenancy_end_date: v })} />
                   )}
                   <Select label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })}
-                    options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+                    options={[{ value: 'active', label: 'Active' }, { value: 'scheduled', label: 'Scheduled' }, { value: 'inactive', label: 'Archived' }]} />
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -586,8 +608,9 @@ export default function TenantDetail() {
                     <ReadField label="Tenancy Start" value={form.tenancy_start_date ? formatDateDMY(form.tenancy_start_date) : null} />
                     <ReadField label="Tenancy Type" value={form.tenancy_type} />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <ReadField label="Monthly Rent" value={form.monthly_rent ? `£${Number(form.monthly_rent).toLocaleString()}` : null} />
+                    <ReadField label="Deposit Held" value={form.security_deposit_amount ? `£${Number(form.security_deposit_amount).toLocaleString()}` : null} />
                     <ReadField label="Deposit Scheme" value={
                       form.deposit_scheme === 'tds' ? 'Tenancy Deposit Scheme' :
                         form.deposit_scheme === 'gov_back' ? 'Gov Back Scheme' :
@@ -597,7 +620,7 @@ export default function TenantDetail() {
                   </div>
                   {form.has_end_date && (
                     <div>
-                      <p className="text-xs text-[var(--text-muted)]">End Date</p>
+                      <p className="text-xs text-[var(--text-muted)]">Scheduled End Date</p>
                       <p className={`text-sm mt-0.5 ${endDateWarning !== null ? 'text-red-400 font-medium' : ''}`}>
                         {form.tenancy_end_date ? formatDateDMY(form.tenancy_end_date) : '—'}
                         {endDateWarning !== null && endDateWarning > 0 && ` (${endDateWarning} days left)`}
@@ -610,7 +633,7 @@ export default function TenantDetail() {
             </GlassCard>
 
             {/* Onboarding Checklist */}
-            <GlassCard className="p-6">
+            {form.status === 'onboarding' && !isOnboarded && <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader title="Onboarding Checklist" icon={<CheckCircle size={16} />} />
                 <div className="flex items-center gap-2">
@@ -762,14 +785,22 @@ export default function TenantDetail() {
                   )}
                 </div>
               </div>
-            </GlassCard>
+            </GlassCard>}
 
             {/* Notes */}
             <GlassCard className="p-6">
               <SectionHeader title="Notes" icon={<MessageSquare size={16} />} />
+              <div className="flex flex-wrap gap-2 mb-4">
+                <button onClick={() => setNotesFilter('tenant')} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${notesFilter === 'tenant' ? 'bg-[var(--text-primary)] text-[var(--bg-page)]' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'}`}>
+                  Tenant ({notes.length})
+                </button>
+                {tenant.property_id && <button onClick={() => setNotesFilter('property')} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${notesFilter === 'property' ? 'bg-[var(--text-primary)] text-[var(--bg-page)]' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'}`}>
+                  Property ({propertyNotes.length})
+                </button>}
+              </div>
               <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                {notes.length === 0 && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
-                {notes.map(note => (
+                {displayedNotes.length === 0 && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
+                {displayedNotes.map(note => (
                   <div key={note.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
                     <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p>
                     <div className="flex items-center justify-between mt-1.5">
@@ -782,7 +813,7 @@ export default function TenantDetail() {
               <div className="flex gap-2 mt-3">
                 <input value={newNote} onChange={e => setNewNote(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addNote()}
-                  placeholder="Add a note..."
+                  placeholder={`Add a note to ${notesFilter}...`}
                   className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
                 <Button variant="gradient" onClick={addNote} disabled={addingNote || !newNote.trim()}>
                   <Plus size={14} />

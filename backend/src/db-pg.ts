@@ -251,6 +251,7 @@ export async function initDb() {
         guarantor_deed_received INTEGER DEFAULT 0,
         holding_deposit_received INTEGER DEFAULT 0,
         holding_deposit_amount REAL,
+        security_deposit_amount REAL,
         holding_deposit_date DATE,
         application_forms_completed INTEGER DEFAULT 0,
         property_id INTEGER REFERENCES properties(id),
@@ -500,6 +501,7 @@ export async function initDb() {
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS deposit_scheme TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS security_deposit_amount REAL;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS authority_to_contact INTEGER DEFAULT 0;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS proof_of_income INTEGER DEFAULT 0;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_address TEXT;
@@ -548,6 +550,15 @@ export async function initDb() {
       ALTER TABLE properties DROP CONSTRAINT IF EXISTS properties_tenancy_type_check;
       ALTER TABLE properties ADD CONSTRAINT properties_tenancy_type_check
         CHECK (tenancy_type IN ('Fixed Term', 'Assured Periodic Tenancy', 'AST', 'HMO', 'Rolling', 'Other', NULL));
+    `);
+
+    // New tenancy records use the current agreement terminology. Keep the old
+    // values valid for imports, but normalise records already held by the CRM.
+    await client.query(`
+      UPDATE tenants SET tenancy_type = 'Assured Periodic Tenancy'
+      WHERE tenancy_type IS NULL OR tenancy_type = 'AST';
+      UPDATE properties SET tenancy_type = 'Assured Periodic Tenancy'
+      WHERE has_live_tenancy = 1 AND (tenancy_type IS NULL OR tenancy_type = 'AST');
     `);
 
     // Sprint 5: Onboarding & application form fields
@@ -747,6 +758,16 @@ export async function initDb() {
       ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS tenant_delivery_sms_message TEXT;
       ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS agreement_details JSONB NOT NULL DEFAULT '{}'::jsonb;
       CREATE INDEX IF NOT EXISTS idx_tenancy_agreements_joint_token ON tenancy_agreements(joint_tenant_token);
+    `);
+
+    await client.query(`
+      UPDATE tenants t SET security_deposit_amount = COALESCE(
+        t.security_deposit_amount,
+        NULLIF(ta.agreement_details->>'security_deposit', '')::NUMERIC,
+        NULLIF(ta.agreement_details->>'deposit', '')::NUMERIC
+      )
+      FROM tenancy_agreements ta
+      WHERE ta.tenant_id = t.id AND ta.status = 'completed' AND t.security_deposit_amount IS NULL;
     `);
 
     // Users table: backfill missing columns for older deployments

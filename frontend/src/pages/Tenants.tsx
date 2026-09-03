@@ -12,7 +12,7 @@ import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 
 interface Tenant {
   id: number; name: string; email: string; phone: string; property_id: number;
-  property_address: string; property_landlord_name?: string; tenancy_end_date: string; monthly_rent: number;
+  property_address: string; property_landlord_name?: string; tenancy_start_date?: string; tenancy_end_date: string; monthly_rent: number;
   status: string; nok_name: string; landlord_type?: string; created_at?: string;
 }
 
@@ -394,6 +394,7 @@ export default function Tenants() {
             { key: 'all', label: `All (${tenants.length})` },
             { key: 'new', label: `New (${tenants.filter(t => { const days = (now - new Date(t.created_at || 0).getTime()) / 86400000; return days <= 30 && (t.status || 'active') === 'active'; }).length})` },
             { key: 'active', label: `Active (${statusCounts['active'] || 0})` },
+            { key: 'scheduled', label: `Scheduled (${statusCounts['scheduled'] || 0})` },
             { key: 'onboarding', label: `Onboarding (${statusCounts['onboarding'] || 0})` },
             { key: 'inactive', label: `Archived (${statusCounts['inactive'] || 0})` },
           ].map(f => (
@@ -496,9 +497,9 @@ export default function Tenants() {
                 render: (t) => {
                   const s = t.status || 'active';
                   return (
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${s === 'active' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-[var(--bg-hover)] text-[var(--text-muted)] border-[var(--border-subtle)]'
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${s === 'active' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : s === 'scheduled' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-[var(--bg-hover)] text-[var(--text-muted)] border-[var(--border-subtle)]'
                       }`}>
-                      {s === 'active' ? 'Active' : 'Inactive'}
+                      {s === 'active' ? 'Active' : s === 'scheduled' ? `Scheduled${t.tenancy_start_date ? ` for ${formatDate(t.tenancy_start_date)}` : ''}` : 'Archived'}
                     </span>
                   );
                 },

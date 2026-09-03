@@ -11,7 +11,12 @@ export function getPropertyImage(
   address?: string,
   imageUrl?: string | null,
 ): string {
-  if (imageUrl) return imageUrl;
+  if (imageUrl) {
+    if (imageUrl.startsWith('/') && import.meta.env.VITE_API_URL) {
+      return `${String(import.meta.env.VITE_API_URL).replace(/\/$/, '')}${imageUrl}`;
+    }
+    return imageUrl;
+  }
 
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_GOOGLE_PLACES_API_KEY;
   if (apiKey && address) {

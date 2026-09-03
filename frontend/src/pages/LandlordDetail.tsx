@@ -781,7 +781,7 @@ export default function LandlordDetail() {
                 ))}
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                 {filteredNotes.length === 0 && <p className="text-sm text-[var(--text-muted)]">No notes yet</p>}
                 {filteredNotes.map((n: { id: string; text: string; author: string; created_at: string; source?: string; propertyId?: number }) => (
                   <div key={n.id + '-' + n.source} className="flex gap-3">

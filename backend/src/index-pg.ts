@@ -35,6 +35,7 @@ import {
 } from './email';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { propertyCompliance } from './property-compliance';
+import { dateOnly, tenantPlacementStatus } from './tenant-lifecycle';
 import {
   bankFeedConfig,
   buildAuthUrl,
@@ -128,6 +129,30 @@ function appendSystemNote(rawNotes: unknown, text: string, prefix: string): stri
   }
   notes.push({ id: `${prefix}-${Date.now()}`, text, author: 'System', created_at: new Date().toISOString() });
   return JSON.stringify(notes);
+}
+
+async function syncTenantLifecycle(): Promise<void> {
+  await run(`UPDATE tenants SET status='inactive', updated_at=NOW()
+    WHERE COALESCE(status, 'active')='active' AND has_end_date=1
+      AND tenancy_end_date IS NOT NULL AND tenancy_end_date < CURRENT_DATE`);
+  await run(`UPDATE tenants scheduled SET status='active', updated_at=NOW()
+    WHERE scheduled.status='scheduled' AND scheduled.tenancy_start_date <= CURRENT_DATE
+      AND NOT EXISTS (
+        SELECT 1 FROM tenants current
+        WHERE current.property_id=scheduled.property_id
+          AND COALESCE(current.status, 'active')='active'
+      )`);
+  await run(`UPDATE properties property SET
+      tenant_id=(SELECT MIN(tenant.id) FROM tenants tenant WHERE tenant.property_id=property.id AND COALESCE(tenant.status, 'active')='active'),
+      has_live_tenancy=CASE WHEN EXISTS (
+        SELECT 1 FROM tenants tenant WHERE tenant.property_id=property.id AND COALESCE(tenant.status, 'active')='active'
+      ) THEN 1 ELSE 0 END,
+      updated_at=NOW()
+    WHERE property.tenant_id IS DISTINCT FROM (
+      SELECT MIN(tenant.id) FROM tenants tenant WHERE tenant.property_id=property.id AND COALESCE(tenant.status, 'active')='active'
+    ) OR property.has_live_tenancy IS DISTINCT FROM CASE WHEN EXISTS (
+      SELECT 1 FROM tenants tenant WHERE tenant.property_id=property.id AND COALESCE(tenant.status, 'active')='active'
+    ) THEN 1 ELSE 0 END`);
 }
 
 function parseAgreementDetails(value: unknown): Record<string, any> {
@@ -445,12 +470,13 @@ app.post('/api/auth/setup', async (req, res) => {
 
 app.get('/api/dashboard', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    await syncTenantLifecycle();
     const cnt = (row: any) => Number(row.c);
 
     const properties = cnt(await queryOne('SELECT COUNT(*)::integer as c FROM properties'));
     const propertiesLet = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM properties WHERE status = 'let'"));
     const landlords = cnt(await queryOne('SELECT COUNT(*)::integer as c FROM landlords'));
-    const tenants = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tenants WHERE COALESCE(status, 'active') <> 'inactive'"));
+    const tenants = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tenants WHERE COALESCE(status, 'active') = 'active'"));
     const activeTenancies = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tenancies tn JOIN tenants t ON t.id=tn.tenant_id WHERE tn.status = 'active' AND COALESCE(t.status, 'active') <> 'inactive'"));
     const openMaintenance = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM maintenance WHERE status IN ('open', 'in_progress')"));
     const bdmProspects = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM landlords_bdm WHERE status NOT IN ('onboarded', 'not_interested')"));
@@ -1847,9 +1873,23 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
     if (!enquiry.balance_payment_received) return res.status(409).json({ error: 'Confirm the final balance before conversion' });
     if (!enquiry.handover_date || !enquiry.handover_assigned_to) return res.status(409).json({ error: 'Schedule the tenancy handover before conversion' });
 
-    const { property_id, tenancy_start_date, tenancy_type, monthly_rent } = req.body;
+    const property_id = Number(req.body.property_id || enquiry.linked_property_id);
+    const tenancy_start_date = dateOnly(req.body.tenancy_start_date || new Date().toISOString());
+    const tenancy_type = String(req.body.tenancy_type || 'Assured Periodic Tenancy');
+    const monthly_rent = req.body.monthly_rent;
+    if (!Number.isInteger(property_id) || !/^\d{4}-\d{2}-\d{2}$/.test(tenancy_start_date)) {
+      return res.status(400).json({ error: 'Choose the property and tenancy start date' });
+    }
     const name = `${enquiry.first_name_1} ${enquiry.last_name_1}`;
     const isJoint = !!enquiry.joint_partner_id;
+    const activeTenants = await query(`
+      SELECT is_joint_tenancy, tenancy_start_date, tenancy_end_date
+      FROM tenants WHERE property_id=$1 AND COALESCE(status, 'active')='active'
+    `, [property_id]);
+    const tenantStatus = tenantPlacementStatus(activeTenants, tenancy_start_date, false);
+    if (!tenantStatus) {
+      return res.status(409).json({ error: 'This property already has a live tenancy. Schedule its end date before converting the next tenant.' });
+    }
 
     // Use transaction to prevent orphaned tenant records if status update fails
     const client = await pool.connect();
@@ -1864,22 +1904,22 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
         INSERT INTO tenants (
           title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
           is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent,
-          holding_deposit_received, holding_deposit_amount, holding_deposit_date,
+          holding_deposit_received, holding_deposit_amount, security_deposit_amount, holding_deposit_date,
           nok_name, nok_relationship, nok_phone, nok_address,
           nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
           guarantor_required, guarantor_name, guarantor_phone, guarantor_email, guarantor_address,
-          notes
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+          notes, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
         RETURNING id
       `, [
         enquiry.title_1, enquiry.first_name_1, enquiry.last_name_1, name, enquiry.email_1, enquiry.phone_1,
         enquiry.date_of_birth_1, isJoint ? 1 : 0, enquiry.kyc_completed_1,
         property_id, tenancy_start_date, tenancy_type, monthly_rent || enquiry.monthly_rent_agreed,
-        enquiry.holding_deposit_received || 0, enquiry.holding_deposit_amount || null, enquiry.holding_deposit_received_date || null,
+        enquiry.holding_deposit_received || 0, enquiry.holding_deposit_amount || null, enquiry.security_deposit_amount || null, enquiry.holding_deposit_received_date || null,
         enquiry.app_next_of_kin_name || null, enquiry.app_next_of_kin_relationship || null, enquiry.app_next_of_kin_phone || null, enquiry.app_next_of_kin_address || null,
         enquiry.app_next_of_kin_2_name || null, enquiry.app_next_of_kin_2_relationship || null, enquiry.app_next_of_kin_2_phone || null, enquiry.app_next_of_kin_2_address || null,
         hasGuarantor ? 1 : 0, enquiry.app_guarantor_name || null, enquiry.app_guarantor_phone || null, enquiry.app_guarantor_email || null, enquiry.app_guarantor_address || null,
-        enquiry.notes || null
+        enquiry.notes || null, tenantStatus
       ]);
       tenantId = tenantResult.rows[0].id;
       const nextOfKin = enquiry.app_form_data || {};
@@ -1900,8 +1940,10 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
       }
 
       // Sync property.tenant_id so the property shows its new tenant (mirrors PUT /api/tenants sync)
-      if (property_id) {
-        await client.query('UPDATE properties SET tenant_id = $1 WHERE id = $2', [tenantId, property_id]);
+      if (tenantStatus === 'active') {
+        await client.query(`UPDATE properties SET tenant_id=$1, has_live_tenancy=1,
+          tenancy_start_date=$2, tenancy_type=$3, updated_at=NOW() WHERE id=$4`,
+        [tenantId, tenancy_start_date, tenancy_type, property_id]);
       }
 
       await client.query("UPDATE tenant_enquiries SET status = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id]);
@@ -1917,22 +1959,22 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
             INSERT INTO tenants (
               title_1, first_name_1, last_name_1, name, email, phone, date_of_birth_1,
               is_joint_tenancy, kyc_completed_1, property_id, tenancy_start_date, tenancy_type, monthly_rent,
-              holding_deposit_received, holding_deposit_amount, holding_deposit_date,
+              holding_deposit_received, holding_deposit_amount, security_deposit_amount, holding_deposit_date,
               nok_name, nok_relationship, nok_phone, nok_address,
               nok_2_name, nok_2_relationship, nok_2_phone, nok_2_address,
               guarantor_required, guarantor_name, guarantor_phone, guarantor_email, guarantor_address,
-              notes
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+              notes, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
             RETURNING id
           `, [
             partner.title_1, partner.first_name_1, partner.last_name_1, partnerName, partner.email_1, partner.phone_1,
             partner.date_of_birth_1, 1, partner.kyc_completed_1,
             property_id, tenancy_start_date, tenancy_type, monthly_rent || partner.monthly_rent_agreed,
-            partner.holding_deposit_received || 0, partner.holding_deposit_amount || null, partner.holding_deposit_received_date || null,
+            partner.holding_deposit_received || 0, partner.holding_deposit_amount || null, partner.security_deposit_amount || enquiry.security_deposit_amount || null, partner.holding_deposit_received_date || null,
             partner.app_next_of_kin_name || null, partner.app_next_of_kin_relationship || null, partner.app_next_of_kin_phone || null, partner.app_next_of_kin_address || null,
             partner.app_next_of_kin_2_name || null, partner.app_next_of_kin_2_relationship || null, partner.app_next_of_kin_2_phone || null, partner.app_next_of_kin_2_address || null,
             partnerHasGuarantor ? 1 : 0, partner.app_guarantor_name || null, partner.app_guarantor_phone || null, partner.app_guarantor_email || null, partner.app_guarantor_address || null,
-            partner.notes || null
+            partner.notes || null, tenantStatus
           ]);
           partnerTenantId = partnerTenantResult.rows[0].id;
           const partnerNextOfKin = partner.app_form_data || {};
@@ -2209,6 +2251,7 @@ app.post('/api/tenant-enquiries/bulk-update', authMiddleware, async (req: AuthRe
 
 app.get('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    await syncTenantLifecycle();
     const { limit, offset } = pageParams(req);
     const tenants = await query(`
       SELECT t.*, p.address as property_address, p.landlord_id as property_landlord_id, l.name as property_landlord_name
@@ -2228,6 +2271,16 @@ app.post('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
     const name = d.name || `${d.first_name_1 || ''} ${d.last_name_1 || ''}`.trim();
+    const tenancyStartDate = dateOnly(d.tenancy_start_date || new Date().toISOString());
+    const tenancyType = String(d.tenancy_type || 'Assured Periodic Tenancy');
+    let tenantStatus = d.status === 'inactive' ? 'inactive' : 'active';
+    if (d.property_id && tenantStatus !== 'inactive') {
+      const activeTenants = await query(`SELECT is_joint_tenancy, tenancy_start_date, tenancy_end_date
+        FROM tenants WHERE property_id=$1 AND COALESCE(status, 'active')='active'`, [d.property_id]);
+      const placement = tenantPlacementStatus(activeTenants, tenancyStartDate, Boolean(d.is_joint_tenancy));
+      if (!placement) return res.status(409).json({ error: 'This property already has a live tenancy. Schedule its end date before adding the next tenant.' });
+      tenantStatus = placement;
+    }
     const id = await insert(`
       INSERT INTO tenants (
         name, title_1, first_name_1, last_name_1, email, phone, date_of_birth_1,
@@ -2238,7 +2291,7 @@ app.post('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
         kyc_primary_id, kyc_secondary_id, kyc_address_verification, kyc_personal_verification,
         guarantor_required, guarantor_name, guarantor_address, guarantor_phone, guarantor_email,
         guarantor_kyc_completed, guarantor_deed_received,
-        holding_deposit_received, holding_deposit_amount, holding_deposit_date,
+        holding_deposit_received, holding_deposit_amount, security_deposit_amount, holding_deposit_date,
         application_forms_completed, authority_to_contact, proof_of_income, deposit_scheme,
         income_amount, income_employer, income_contract_type,
         property_id, tenancy_start_date, tenancy_type, has_end_date, tenancy_end_date,
@@ -2246,7 +2299,7 @@ app.post('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
-        $41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56
+        $41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56,$57
       )
     `, [
       name,
@@ -2262,16 +2315,18 @@ app.post('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
       d.guarantor_required ? 1 : 0, d.guarantor_name || null, d.guarantor_address || null,
       d.guarantor_phone || null, d.guarantor_email || null,
       d.guarantor_kyc_completed ? 1 : 0, d.guarantor_deed_received ? 1 : 0,
-      d.holding_deposit_received ? 1 : 0, d.holding_deposit_amount || null, d.holding_deposit_date || null,
+      d.holding_deposit_received ? 1 : 0, d.holding_deposit_amount || null, d.security_deposit_amount || null, d.holding_deposit_date || null,
       d.application_forms_completed ? 1 : 0, d.authority_to_contact ? 1 : 0, d.proof_of_income ? 1 : 0, d.deposit_scheme || null,
       d.income_amount || null, d.income_employer || null, d.income_contract_type || null,
-      d.property_id || null, d.tenancy_start_date || null, d.tenancy_type || null,
+      d.property_id || null, tenancyStartDate, tenancyType,
       d.has_end_date ? 1 : 0, d.tenancy_end_date || null,
-      d.monthly_rent || null, d.notes || null, d.emergency_contact || null, d.status || 'active'
+      d.monthly_rent || null, d.notes || null, d.emergency_contact || null, tenantStatus
     ]);
     // Sync property.tenant_id when tenant is created with a property
-    if (d.property_id) {
-      await run('UPDATE properties SET tenant_id = $1 WHERE id = $2', [id, d.property_id]);
+    if (d.property_id && tenantStatus === 'active') {
+      await run(`UPDATE properties SET tenant_id=$1, has_live_tenancy=1,
+        tenancy_start_date=$2, tenancy_type=$3, updated_at=NOW() WHERE id=$4`,
+      [id, tenancyStartDate, tenancyType, d.property_id]);
     }
     await logAudit(req.user?.id, req.user?.email, 'create', 'tenant', id);
     res.json({ id });
@@ -2283,6 +2338,7 @@ app.post('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
 
 app.get('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    await syncTenantLifecycle();
     const tenant = await queryOne(`
       SELECT t.*, p.address as property_address, p.landlord_id as property_landlord_id, l.name as property_landlord_name
       FROM tenants t
@@ -2301,8 +2357,22 @@ app.get('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
 app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
+    const current = await queryOne('SELECT * FROM tenants WHERE id=$1', [req.params.id]);
+    if (!current) return res.status(404).json({ error: 'Tenant not found' });
     if (d.first_name_1 && d.last_name_1 && !d.name) {
       d.name = `${d.first_name_1} ${d.last_name_1}`;
+    }
+    if (d.tenancy_end_date) d.has_end_date = 1;
+    const nextPropertyId = 'property_id' in d ? d.property_id : current.property_id;
+    const nextStartDate = dateOnly(('tenancy_start_date' in d ? d.tenancy_start_date : current.tenancy_start_date) || new Date().toISOString());
+    const nextJoint = 'is_joint_tenancy' in d ? Boolean(d.is_joint_tenancy) : Boolean(current.is_joint_tenancy);
+    const nextInactive = ('status' in d ? d.status : current.status) === 'inactive';
+    if (nextPropertyId && !nextInactive) {
+      const activeTenants = await query(`SELECT is_joint_tenancy, tenancy_start_date, tenancy_end_date
+        FROM tenants WHERE property_id=$1 AND id<>$2 AND COALESCE(status, 'active')='active'`, [nextPropertyId, req.params.id]);
+      const placement = tenantPlacementStatus(activeTenants, nextStartDate, nextJoint);
+      if (!placement) return res.status(409).json({ error: 'This property already has a live tenancy. Schedule its end date before assigning this tenant.' });
+      d.status = placement;
     }
     const fields: string[] = [];
     const values: any[] = [];
@@ -2316,7 +2386,7 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
       'kyc_primary_id','kyc_secondary_id','kyc_address_verification','kyc_personal_verification',
       'guarantor_required','guarantor_name','guarantor_address','guarantor_phone','guarantor_email',
       'guarantor_kyc_completed','guarantor_deed_received',
-      'holding_deposit_received','holding_deposit_amount','holding_deposit_date',
+      'holding_deposit_received','holding_deposit_amount','security_deposit_amount','holding_deposit_date',
       'application_forms_completed','authority_to_contact','proof_of_income','deposit_scheme',
       'income_amount','income_employer','income_contract_type','income_frequency',
       'property_id','tenancy_start_date','tenancy_type','has_end_date','tenancy_end_date',
@@ -2333,7 +2403,7 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
       'date_of_birth_1','date_of_birth_2','holding_deposit_date',
       'tenancy_start_date','tenancy_end_date'
     ];
-    const nullableNumberFields = ['holding_deposit_amount','income_amount','property_id','monthly_rent'];
+    const nullableNumberFields = ['holding_deposit_amount','security_deposit_amount','income_amount','property_id','monthly_rent'];
     for (const key of allowed) {
       if (key in d) {
         fields.push(`${key}=$${idx++}`);
@@ -2356,8 +2426,8 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
       // Sync property.tenant_id when tenant changes property
       if ('property_id' in d) {
         await client.query('UPDATE properties SET tenant_id = NULL WHERE tenant_id = $1', [req.params.id]);
-        if (d.property_id) {
-          await client.query('UPDATE properties SET tenant_id = $1 WHERE id = $2', [req.params.id, d.property_id]);
+        if (d.property_id && d.status === 'active') {
+          await client.query('UPDATE properties SET tenant_id = $1, has_live_tenancy=1 WHERE id = $2', [req.params.id, d.property_id]);
         }
       }
       await client.query('COMMIT');
@@ -3078,10 +3148,13 @@ app.post('/api/public/tenancy-agreements/:token/sign', publicSubmitLimiter, asyn
 
 app.get('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    await syncTenantLifecycle();
     const { limit, offset } = pageParams(req);
     const properties = await query(`
       SELECT p.*, l.name as landlord_name, l.landlord_type,
-        (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant
+        (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') = 'active' LIMIT 1) as current_tenant,
+        (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND t.status = 'scheduled' ORDER BY t.tenancy_start_date LIMIT 1) as scheduled_tenant,
+        (SELECT t.tenancy_start_date FROM tenants t WHERE t.property_id = p.id AND t.status = 'scheduled' ORDER BY t.tenancy_start_date LIMIT 1) as scheduled_tenancy_start
       FROM properties p LEFT JOIN landlords l ON l.id = p.landlord_id ORDER BY p.address
       LIMIT $1 OFFSET $2
     `, [limit, offset]);
@@ -3153,12 +3226,15 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
 
 app.get('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    await syncTenantLifecycle();
     const property = await queryOne(`
       SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email, l.landlord_type,
-        (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant,
-        (SELECT t.id FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant_id,
-        (SELECT t.email FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant_email,
-        (SELECT t.phone FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant_phone
+        (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') = 'active' LIMIT 1) as current_tenant,
+        (SELECT t.id FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') = 'active' LIMIT 1) as current_tenant_id,
+        (SELECT t.email FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') = 'active' LIMIT 1) as current_tenant_email,
+        (SELECT t.phone FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') = 'active' LIMIT 1) as current_tenant_phone,
+        (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND t.status = 'scheduled' ORDER BY t.tenancy_start_date LIMIT 1) as scheduled_tenant,
+        (SELECT t.tenancy_start_date FROM tenants t WHERE t.property_id = p.id AND t.status = 'scheduled' ORDER BY t.tenancy_start_date LIMIT 1) as scheduled_tenancy_start
       FROM properties p LEFT JOIN landlords l ON l.id = p.landlord_id WHERE p.id = $1
     `, [req.params.id as string]);
     if (!property) return res.status(404).json({ error: 'Property not found' });
@@ -3211,8 +3287,8 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
     await logAudit(req.user?.id, req.user?.email, 'update', 'property', parseInt(req.params.id as string), req.body);
     const updated = await queryOne(`
       SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email, l.landlord_type,
-        (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant,
-        (SELECT t.id FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant_id
+        (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') = 'active' LIMIT 1) as current_tenant,
+        (SELECT t.id FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') = 'active' LIMIT 1) as current_tenant_id
       FROM properties p LEFT JOIN landlords l ON l.id = p.landlord_id WHERE p.id = $1
     `, [req.params.id]);
     res.json(updated);
@@ -3621,7 +3697,7 @@ const DOC_TYPES: Record<string, string[]> = {
   landlord_bdm: ['Primary Identification', 'Address Identification', 'Proof of Funds', 'Other'],
   tenant: ['Primary Identification', 'Address Identification', 'Application Form(s)', 'Bank Statements', 'Other'],
   tenant_enquiry: ['Primary Identification', 'Secondary Identification', 'Proof of Income or Employment', 'Bank Statements', 'Other Financial Document', 'Other'],
-  property: ['Gas Safety Certificate', 'EPC', 'EICR', 'How to Rent Guide', 'Renters Rights Information', 'Proof of Ownership', 'Insurance', 'Other'],
+  property: ['Property Photo', 'Gas Safety Certificate', 'EPC', 'EICR', 'How to Rent Guide', 'Renters Rights Information', 'Proof of Ownership', 'Insurance', 'Other'],
   maintenance: ['Quote', 'Invoice', 'Photo', 'Report', 'Other'],
   task: ['Supporting Document', 'Other'],
 };
@@ -3629,6 +3705,22 @@ const DOC_TYPES: Record<string, string[]> = {
 app.get('/api/documents/types/:entityType', authMiddleware, (req: AuthRequest, res) => {
   const types = DOC_TYPES[req.params.entityType as string] || ['Other'];
   res.json(types);
+});
+
+app.get('/api/public/properties/:id/thumbnail', publicReadLimiter, async (req, res) => {
+  try {
+    const doc = await queryOne(`SELECT filename, mime_type FROM documents
+      WHERE entity_type='property' AND entity_id=$1 AND doc_type='Property Photo'
+        AND mime_type LIKE 'image/%' ORDER BY uploaded_at DESC LIMIT 1`, [req.params.id]);
+    if (!doc) return res.status(404).json({ error: 'Property photo not found' });
+    const filePath = path.join(uploadsDir, doc.filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Property photo file not found' });
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.type(doc.mime_type || 'image/jpeg');
+    res.sendFile(filePath);
+  } catch {
+    res.status(500).json({ error: 'Property photo could not be loaded' });
+  }
 });
 
 app.get('/api/documents/download/:id', authMiddleware, async (req: AuthRequest, res) => {
@@ -3681,6 +3773,9 @@ app.post('/api/documents/:entityType/:entityId', authMiddleware, requirePermissi
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'approved', NOW(), $8)`,
       [entityType, entityId, doc_type, file.filename, file.originalname, file.mimetype, file.size, req.user?.id, appNum]
     );
+    if (entityType === 'property' && doc_type === 'Property Photo' && file.mimetype.startsWith('image/')) {
+      await run('UPDATE properties SET image_url=$1, updated_at=NOW() WHERE id=$2', [`/api/public/properties/${entityId}/thumbnail`, entityId]);
+    }
     await logAudit(req.user?.id, req.user?.email, 'document_upload', entityType as string, parseInt(entityId as string), { doc_type, original_name: file.originalname, size: file.size, applicant_number: appNum });
     res.json({ id, doc_type, original_name: file.originalname, review_status: 'approved' });
   } catch (err) {
@@ -3733,6 +3828,14 @@ app.delete('/api/documents/:id', authMiddleware, requirePermission('staff'), asy
     try {
       await client.query('BEGIN');
       await client.query('DELETE FROM documents WHERE id = $1', [req.params.id as string]);
+      if (doc.entity_type === 'property' && doc.doc_type === 'Property Photo') {
+        const remaining = await client.query(`SELECT id FROM documents
+          WHERE entity_type='property' AND entity_id=$1 AND doc_type='Property Photo'
+            AND mime_type LIKE 'image/%' LIMIT 1`, [doc.entity_id]);
+        if (remaining.rowCount === 0) {
+          await client.query("UPDATE properties SET image_url=NULL, updated_at=NOW() WHERE id=$1 AND image_url LIKE '/api/public/properties/%/thumbnail'", [doc.entity_id]);
+        }
+      }
       await client.query('COMMIT');
       // Unlink file only after DB commit succeeds
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);

@@ -4,6 +4,9 @@ import { describe, expect, it } from 'vitest';
 
 const apiSource = fs.readFileSync(path.resolve(__dirname, 'index-pg.ts'), 'utf8');
 const wizardSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/components/ui/OnboardingWizard.tsx'), 'utf8');
+const tenantDetailSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/TenantDetail.tsx'), 'utf8');
+const propertyDetailSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/PropertyDetail.tsx'), 'utf8');
+const dashboardSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/Dashboard.tsx'), 'utf8');
 
 describe('31 August CRM feedback regressions', () => {
   it('casts reviewer IDs as integers in document and application reviews', () => {
@@ -41,7 +44,7 @@ describe('31 August CRM feedback regressions', () => {
     expect(apiSource).toContain('compliance.attachments.map');
   });
 
-  it('generates the AST automatically and enforces landlord-first client signing', () => {
+  it('generates the tenancy agreement automatically and enforces landlord-first client signing', () => {
     expect(apiSource).toContain('generateTenancyAgreementPdf');
     expect(apiSource).toContain('resolvePaymentRoute');
     expect(apiSource).toContain('The landlord must sign before the tenant');
@@ -67,8 +70,9 @@ describe('31 August CRM feedback regressions', () => {
     expect(apiSource).toContain('Both joint applicants must complete application review and credit checks');
   });
 
-  it('provides the requested AST controls and missing-document route', () => {
-    expect(wizardSource).toContain('AST Agreement for FL Tenancies');
+  it('provides the requested tenancy agreement controls and missing-document route', () => {
+    expect(wizardSource).toContain('Tenancy Agreement for Fleming Lettings Properties');
+    expect(wizardSource).not.toMatch(/\bAST\b/);
     expect(wizardSource).toContain('Click to add document');
     expect(wizardSource).toContain('Upload Credit Report *');
     expect(wizardSource).toContain('Editable tenant email preview');
@@ -91,5 +95,24 @@ describe('31 August CRM feedback regressions', () => {
     expect(apiSource).toContain('handover_with_landlord');
     expect(wizardSource).toContain('With Landlord');
     expect(wizardSource).toContain('Editable SMS preview');
+  });
+
+  it('shows completed payment and credit report evidence without another upload prompt', () => {
+    expect(wizardSource).toContain('balance_payment_received_at');
+    expect(wizardSource).toContain('creditReportDocument.original_name');
+    expect(wizardSource).toContain('downloadDocument(creditReportDocument.id');
+  });
+
+  it('provides linked, scrollable notes and hides finished onboarding checklists', () => {
+    expect(tenantDetailSource).toContain("notesFilter === 'property'");
+    expect(tenantDetailSource).toContain("form.status === 'onboarding' && !isOnboarded");
+    expect(propertyDetailSource).toContain("notesFilter.startsWith('tenant-')");
+    expect(propertyDetailSource).toContain('max-h-64 overflow-y-auto');
+  });
+
+  it('allows dashboard reminders to be deleted and uploaded property photos to become thumbnails', () => {
+    expect(dashboardSource).toContain("api.delete(`/api/tasks/${task.id}`)");
+    expect(apiSource).toContain("doc_type='Property Photo'");
+    expect(apiSource).toContain("app.get('/api/public/properties/:id/thumbnail'");
   });
 });

@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { getPropertyImage } from '../utils/propertyImages';
 import {
   Building2, Users, Wrench, MessageSquare, AlertTriangle,
-  Clock, CheckCircle2, ArrowRight, CalendarDays
+  Clock, CheckCircle2, ArrowRight, CalendarDays, Trash2
 } from 'lucide-react';
 
 interface MaintenanceItem {
@@ -114,6 +114,16 @@ export default function Dashboard() {
     return 'text-emerald-400';
   };
 
+  const deleteTask = async (task: Task) => {
+    if (!confirm(`Delete reminder “${task.title}”?`)) return;
+    try {
+      await api.delete(`/api/tasks/${task.id}`);
+      setTasks(current => current.filter(item => item.id !== task.id));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Reminder could not be deleted');
+    }
+  };
+
   if (loading) {
     return (
       <Layout hideTopBar>
@@ -212,7 +222,7 @@ export default function Dashboard() {
                     closed: { label: 'Closed', color: 'text-gray-400', bg: 'bg-gray-500/20' },
                   };
                   const cfg = statusConfig[enq.status] || { label: enq.status, color: 'text-gray-400', bg: 'bg-gray-500/20' };
-                  const readyForReview = (!!enq.application_form_completed && enq.application_review_status === 'pending') || !!enq.tenancy_agreement_completed;
+                  const readyForReview = !!enq.application_form_completed && enq.application_review_status === 'pending';
                   const daysAgo = enq.created_at ? Math.floor((now - new Date(enq.created_at).getTime()) / (1000 * 60 * 60 * 24)) : null;
 
                   return (
@@ -316,6 +326,15 @@ export default function Dashboard() {
                       </p>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => deleteTask(task)}
+                    className="p-2 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    aria-label={`Delete ${task.title}`}
+                    title="Delete reminder"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 </div>
               ))}
             </div>

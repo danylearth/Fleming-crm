@@ -101,6 +101,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   // Step 5: Credit check
   const [creditScore, setCreditScore] = useState('');
   const [creditReport, setCreditReport] = useState<File | null>(null);
+  const [replacingCreditReport, setReplacingCreditReport] = useState(false);
   const [creditCheckCompleteOverride, setCreditCheckCompleteOverride] = useState(false);
   const [agreement, setAgreement] = useState<{ id: number; agreement_type: string; original_name: string; status: string; requires_landlord_signature: number; requires_joint_tenant_signature: number; tenant_signed_at?: string; joint_tenant_signed_at?: string; landlord_signed_at?: string } | null>(null);
   const [agreementCompliance, setAgreementCompliance] = useState<{
@@ -300,6 +301,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     setReviewNotes('');
     setReviewStatusOverride(null);
     setCreditCheckCompleteOverride(false);
+    setReplacingCreditReport(false);
     setChangesRequired(enquiry.application_review_status === 'changes_requested' ? enquiry.application_review_notes || '' : '');
     // Set active step based on progress
     if (!enquiry.holding_deposit_requested) setActiveStep(0);
@@ -315,6 +317,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
   const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
   const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
+  const creditReportDocument = enquiryDocs.find(document => document.doc_type === 'Credit Check Report');
   const applicationReviewStatus = reviewStatusOverride || enquiry.application_review_status;
   // Step definitions
   const steps = [
@@ -357,7 +360,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       desc: enquiry.credit_check_completed || creditCheckCompleteOverride ? `Credit check completed${creditScore ? ` — ${creditScore}` : ''}` : 'Run after the application is approved',
     },
     {
-      label: 'AST Agreement for FL Tenancies',
+      label: 'Tenancy Agreement for Fleming Lettings Properties',
       icon: FileSignature,
       getStatus: () => agreement?.status === 'completed' ? 'green' : agreement ? 'amber' : 'red',
       desc: agreement?.status === 'completed' ? 'Agreement signed and stored' : agreement ? 'Waiting for required signatures' : 'Generate and issue the agreement for e-signature',
@@ -366,7 +369,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       label: 'Final Balance',
       icon: PoundSterling,
       getStatus: () => enquiry.balance_payment_received ? 'green' : enquiry.balance_payment_requested ? 'amber' : 'red',
-      desc: enquiry.balance_payment_received ? 'Payment received' : enquiry.balance_payment_requested ? `Waiting for £${Number(enquiry.balance_due_amount || 0).toLocaleString()}` : 'Request deposit and first rent balance',
+      desc: enquiry.balance_payment_received
+        ? `Payment received${enquiry.balance_payment_received_at ? ` on ${new Date(enquiry.balance_payment_received_at).toLocaleDateString('en-GB')}` : ''}`
+        : enquiry.balance_payment_requested ? `Waiting for £${Number(enquiry.balance_due_amount || 0).toLocaleString()}` : 'Request deposit and first rent balance',
     },
     {
       label: 'Schedule Handover',
@@ -436,7 +441,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     try {
       await api.post(`/api/tenant-enquiries/${enquiryId}/convert`, {
         property_id: enquiry.linked_property_id,
-        tenancy_start_date: new Date().toISOString().split('T')[0],
+        tenancy_start_date: agreementStartDate || new Date().toISOString().split('T')[0],
+        tenancy_type: 'Assured Periodic Tenancy',
       });
       await onUpdate();
       onClose();
@@ -458,6 +464,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Credit check could not be saved');
       setCreditReport(null);
+      setReplacingCreditReport(false);
       setCreditCheckCompleteOverride(true);
       await Promise.all([fetchDocs(), onUpdate()]);
       setActiveStep(5);
@@ -1174,22 +1181,36 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 </div>
               )}
               <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Credit Check Result</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] text-[var(--text-muted)] mb-1">Credit Score</label>
-                  <input type="text" value={creditScore} onChange={e => setCreditScore(e.target.value)} placeholder="e.g. 720"
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+              {creditReportDocument && !replacingCreditReport && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3">
+                  <FileText size={15} className="text-emerald-400" />
+                  <span className="min-w-0 flex-1 truncate text-xs">{creditReportDocument.original_name}</span>
+                  <Button variant="ghost" size="sm" onClick={() => viewDocument(creditReportDocument.id, creditReportDocument.original_name)}><Eye size={13} className="mr-1" />View</Button>
+                  <Button variant="ghost" size="sm" onClick={() => downloadDocument(creditReportDocument.id, creditReportDocument.original_name)}><Download size={13} className="mr-1" />Download</Button>
+                  <Button variant="outline" size="sm" onClick={() => setReplacingCreditReport(true)}>Replace</Button>
                 </div>
-                <div>
-                  <label className="block text-xs text-[var(--text-muted)] mb-1">Upload Credit Report *</label>
-                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={event => setCreditReport(event.target.files?.[0] || null)}
-                    className="block w-full text-xs text-[var(--text-secondary)] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--bg-hover)] file:px-3 file:py-2 file:text-xs file:text-[var(--text-primary)]" />
+              )}
+              {(!creditReportDocument || replacingCreditReport) && <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-[var(--text-muted)] mb-1">Credit Score</label>
+                    <input type="text" value={creditScore} onChange={e => setCreditScore(e.target.value)} placeholder="e.g. 720"
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] mb-1">Upload Credit Report *</label>
+                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={event => setCreditReport(event.target.files?.[0] || null)}
+                      className="block w-full text-xs text-[var(--text-secondary)] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--bg-hover)] file:px-3 file:py-2 file:text-xs file:text-[var(--text-primary)]" />
+                  </div>
                 </div>
-              </div>
-              <Button variant={enquiry.credit_check_completed ? 'outline' : 'gradient'} size="sm" onClick={saveCreditCheck}
-                disabled={saving || !creditScore.trim() || !creditReport || applicationReviewStatus !== 'approved'}>
-                {saving ? 'Saving...' : enquiry.credit_check_completed ? 'Replace Credit Check' : 'Save Score & Report'}
-              </Button>
+                <div className="flex gap-2">
+                  <Button variant={enquiry.credit_check_completed ? 'outline' : 'gradient'} size="sm" onClick={saveCreditCheck}
+                    disabled={saving || !creditScore.trim() || !creditReport || applicationReviewStatus !== 'approved'}>
+                    {saving ? 'Saving...' : enquiry.credit_check_completed ? 'Save Replacement' : 'Save Score & Report'}
+                  </Button>
+                  {replacingCreditReport && <Button variant="ghost" size="sm" onClick={() => { setReplacingCreditReport(false); setCreditReport(null); }}>Cancel</Button>}
+                </div>
+              </>}
               {!enquiry.credit_check_completed && <p className="text-[10px] text-amber-400">A score and uploaded report are both required before onboarding can continue.</p>}
               {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
               {enquiry.credit_score && (
@@ -1238,12 +1259,12 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       <p className="mt-1 text-[10px] text-[var(--text-muted)]">
                         Application {agreementCompliance.jointApplicant.applicationComplete ? 'complete' : 'incomplete'} · review {agreementCompliance.jointApplicant.applicationApproved ? 'approved' : 'pending'} · credit check {agreementCompliance.jointApplicant.creditCheckComplete ? 'complete' : 'pending'}
                       </p>
-                      {!agreementCompliance.jointApplicantsReady && <p className="mt-1 text-[10px] text-amber-400">Both applicants must reach this stage before one shared AST can be issued.</p>}
+                      {!agreementCompliance.jointApplicantsReady && <p className="mt-1 text-[10px] text-amber-400">Both applicants must reach this stage before one shared tenancy agreement can be issued.</p>}
                     </div>
                   )}
                   <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3 text-xs space-y-1">
                     <p className="font-medium text-[var(--text-primary)]">
-                      {agreementCompliance?.agreementType === 'client' ? `Client agreement · ${agreementCompliance.landlordName || 'landlord'}` : 'AST Agreement for FL Tenancies'}
+                      {agreementCompliance?.agreementType === 'client' ? `Client agreement · ${agreementCompliance.landlordName || 'landlord'}` : 'Tenancy Agreement for Fleming Lettings Properties'}
                     </p>
                     <p className="text-[var(--text-muted)]">
                       {agreementCompliance?.paymentRoute === 'landlord'
@@ -1324,7 +1345,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               {!enquiry.balance_payment_requested && (balanceSendEmail || balanceSendSms) && <p className="text-[10px] text-[var(--text-muted)]">Available placeholders: {'{{first_name}}'}, {'{{property_address}}'}, {'{{balance_due}}'}.</p>}
               {!enquiry.balance_payment_requested ? <Button variant="gradient" size="sm" onClick={requestBalance} disabled={saving}>Request Final Balance</Button>
                 : !enquiry.balance_payment_received ? <Button variant="gradient" size="sm" onClick={confirmBalance} disabled={saving}>Confirm Payment Received</Button>
-                : <p className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle size={14} /> Final balance received</p>}
+                : <p className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle size={14} /> Final balance received{enquiry.balance_payment_received_at ? ` on ${new Date(enquiry.balance_payment_received_at).toLocaleDateString('en-GB')}` : ''}</p>}
               {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
             </div> : <p className="text-xs text-[var(--text-muted)]">Complete the signed agreement first.</p>}
           </StepCard>

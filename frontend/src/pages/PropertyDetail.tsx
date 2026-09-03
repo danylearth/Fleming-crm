@@ -177,11 +177,12 @@ export default function PropertyDetail() {
   // Notes state
   const [notes, setNotes] = useState<{ id: string; text: string; author: string; created_at: string }[]>([]);
   const [landlordNotes, setLandlordNotes] = useState<{ id: string; text: string; author: string; created_at: string }[]>([]);
-  const [notesFilter, setNotesFilter] = useState<'property' | 'landlord'>('property');
+  const [notesFilter, setNotesFilter] = useState<'property' | 'landlord' | string>('property');
+  const [tenantNotes, setTenantNotes] = useState<Record<number, { id: string; text: string; author: string; created_at: string }[]>>({});
   const [notesInput, setNotesInput] = useState('');
 
   // Tenant state
-  const [allTenants, setAllTenants] = useState<{ id: number; name: string; email?: string; phone?: string; first_name_1?: string; last_name_1?: string; email_1?: string; phone_1?: string }[]>([]);
+  const [allTenants, setAllTenants] = useState<{ id: number; name: string; property_id?: number; status?: string; notes?: string; email?: string; phone?: string; first_name_1?: string; last_name_1?: string; email_1?: string; phone_1?: string }[]>([]);
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [tenantModalMode, setTenantModalMode] = useState<'select' | 'create'>('select');
   const [tenantSearch, setTenantSearch] = useState('');
@@ -232,6 +233,11 @@ export default function PropertyDetail() {
       setPropertyLandlords(propLandlords);
       setAllLandlords(landlords);
       setAllTenants(Array.isArray(tenants) ? tenants : []);
+      const linkedTenantNotes: Record<number, { id: string; text: string; author: string; created_at: string }[]> = {};
+      (Array.isArray(tenants) ? tenants : []).filter(tenant => tenant.property_id === Number(id)).forEach(tenant => {
+        linkedTenantNotes[tenant.id] = parseNotes(tenant.notes || '');
+      });
+      setTenantNotes(linkedTenantNotes);
 
       // Fetch directors for company landlords
       const companyLandlords = (Array.isArray(propLandlords) ? propLandlords : []).filter(
@@ -425,11 +431,16 @@ export default function PropertyDetail() {
         const updated = [...notes, newNote];
         await api.put(`/api/properties/${id}`, { notes: JSON.stringify(updated) });
         api.post('/api/activity', { action: 'note_added', entity_type: 'property', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
-      } else if (property.landlord_id) {
+      } else if (notesFilter === 'landlord' && property.landlord_id) {
         // Add note to landlord
         const updated = [...landlordNotes, newNote];
         await api.put(`/api/landlords/${property.landlord_id}`, { notes: JSON.stringify(updated) });
         api.post('/api/activity', { action: 'note_added', entity_type: 'landlord', entity_id: property.landlord_id, changes: { text: noteText } }).catch(() => {});
+      } else if (notesFilter.startsWith('tenant-')) {
+        const tenantId = Number(notesFilter.replace('tenant-', ''));
+        const updated = [...(tenantNotes[tenantId] || []), newNote];
+        await api.patch(`/api/tenants/${tenantId}/notes`, { notes: JSON.stringify(updated) });
+        api.post('/api/activity', { action: 'note_added', entity_type: 'tenant', entity_id: tenantId, changes: { text: noteText } }).catch(() => {});
       }
       await loadDetail();
     } catch (e) { console.error(e); }
@@ -557,6 +568,12 @@ export default function PropertyDetail() {
   const isToLet = property.status === 'to_let';
   const statusColor = STATUS_COLORS[property.status] || 'bg-[var(--bg-hover)] text-[var(--text-muted)]';
   const statusLbl = STATUS_LABELS[property.status] || property.status;
+  const linkedTenants = allTenants.filter(tenant => tenant.property_id === property.id);
+  const displayedNotes = notesFilter === 'property'
+    ? notes
+    : notesFilter === 'landlord'
+      ? landlordNotes
+      : tenantNotes[Number(notesFilter.replace('tenant-', ''))] || [];
 
   // Compliance reminders (expiring within 30 days)
   const reminders: { label: string; days: number }[] = [];
@@ -1197,7 +1214,7 @@ export default function PropertyDetail() {
             {property.postcode && <PricePaidData postcode={property.postcode} />}
 
             {/* Documents */}
-            <DocumentUpload entityType="property" entityId={property.id} />
+            <DocumentUpload entityType="property" entityId={property.id} onChange={loadDetail} />
 
             {/* Activity */}
             {/* Notes */}
@@ -1205,7 +1222,7 @@ export default function PropertyDetail() {
               <SectionHeader title="Notes" />
 
               {/* Filter Tabs */}
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex flex-wrap items-center gap-2 mb-4">
                 <button
                   onClick={() => setNotesFilter('property')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -1228,13 +1245,26 @@ export default function PropertyDetail() {
                     Landlord ({landlordNotes.length})
                   </button>
                 )}
+                {linkedTenants.map(tenant => (
+                  <button
+                    key={tenant.id}
+                    onClick={() => setNotesFilter(`tenant-${tenant.id}`)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      notesFilter === `tenant-${tenant.id}`
+                        ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                        : 'bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    {tenant.name} ({tenantNotes[tenant.id]?.length || 0})
+                  </button>
+                ))}
               </div>
 
-              <div className="space-y-3">
-                {(notesFilter === 'property' ? notes : landlordNotes).length === 0 && (
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                {displayedNotes.length === 0 && (
                   <p className="text-sm text-[var(--text-muted)]">No notes yet</p>
                 )}
-                {(notesFilter === 'property' ? notes : landlordNotes).map(n => (
+                {displayedNotes.map(n => (
                   <div key={n.id} className="flex gap-3">
                     <div className="w-8 h-8 rounded-full bg-[var(--bg-hover)] flex items-center justify-center shrink-0 mt-0.5">
                       <StickyNote size={14} className="text-[var(--text-muted)]" />
