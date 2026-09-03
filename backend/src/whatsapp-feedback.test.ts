@@ -74,4 +74,13 @@ describe('31 August CRM feedback regressions', () => {
     expect(wizardSource).toContain('Editable tenant email preview');
     expect(wizardSource).toContain('<DatePicker label="Tenancy start *"');
   });
+
+  it('wires the tenancy email templates to signing, completion and final balance', () => {
+    expect(apiSource).toContain('tenancyAgreementEmail({');
+    expect(apiSource).toContain('completedTenancyAgreementEmail(');
+    expect(apiSource).toContain("template, body_html, status, error_message)");
+    expect(apiSource).toContain("'completed_tenancy_agreement'");
+    expect(apiSource).toContain('finalBalanceHandoverEmail({');
+    expect(apiSource).toContain('agreement_details');
+  });
 });

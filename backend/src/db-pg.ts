@@ -701,6 +701,7 @@ export async function initDb() {
       ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS joint_tenant_signature_user_agent TEXT;
       ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS tenant_delivery_email_message TEXT;
       ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS tenant_delivery_sms_message TEXT;
+      ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS agreement_details JSONB NOT NULL DEFAULT '{}'::jsonb;
       CREATE INDEX IF NOT EXISTS idx_tenancy_agreements_joint_token ON tenancy_agreements(joint_tenant_token);
     `);
 

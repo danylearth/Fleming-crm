@@ -24,7 +24,14 @@ import {
   resolveAgreementType,
   resolvePaymentRoute,
 } from './tenancy-agreement-pdf';
-import { normalizePropertyAddress } from './email';
+import {
+  completedTenancyAgreementEmail,
+  finalBalanceHandoverEmail,
+  normalizePropertyAddress,
+  OUTBOUND_EMAIL_ADDRESS,
+  sendEmail,
+  tenancyAgreementEmail,
+} from './email';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { propertyCompliance } from './property-compliance';
 
@@ -92,6 +99,52 @@ function renderAgreementMessage(template: unknown, values: Record<string, string
   return String(template || '').replace(/\{\{(first_name|property_address|signing_link)\}\}/g, (_match, key) => values[key] || '');
 }
 
+function parseAgreementDetails(value: unknown): Record<string, any> {
+  if (!value) return {};
+  if (typeof value === 'object') return value as Record<string, any>;
+  try { return JSON.parse(String(value)); } catch { return {}; }
+}
+
+async function sendCompletedAgreementEmails(agreement: any, signedPdf: Buffer): Promise<void> {
+  const contact = await queryOne(`
+    SELECT te.first_name_1, te.email_1,
+      COALESCE(jp.first_name_1, te.first_name_2) AS joint_first_name,
+      COALESCE(jp.email_1, te.email_2) AS joint_email,
+      l.name AS landlord_name, l.email AS landlord_email,
+      p.address, p.postcode
+    FROM tenant_enquiries te
+    LEFT JOIN tenant_enquiries jp ON jp.id = te.joint_partner_id
+    LEFT JOIN properties p ON p.id = $2
+    LEFT JOIN landlords l ON l.id = p.landlord_id
+    WHERE te.id = $1
+  `, [agreement.enquiry_id, agreement.property_id]);
+  if (!contact) return;
+  const recipients = [
+    { name: contact.first_name_1, email: contact.email_1 },
+    ...(agreement.requires_joint_tenant_signature ? [{ name: contact.joint_first_name, email: contact.joint_email }] : []),
+    ...(agreement.requires_landlord_signature ? [{ name: contact.landlord_name, email: contact.landlord_email }] : []),
+  ];
+  const sentTo = new Set<string>();
+  const propertyAddress = normalizePropertyAddress(contact.address, contact.postcode);
+  for (const recipient of recipients) {
+    const email = String(recipient.email || '').trim();
+    if (!email || sentTo.has(email.toLowerCase())) continue;
+    sentTo.add(email.toLowerCase());
+    const content = completedTenancyAgreementEmail(recipient.name || 'there', propertyAddress);
+    const result = await sendEmail({
+      to: email,
+      subject: content.subject,
+      html: content.html,
+      attachments: [{ filename: `Signed ${agreement.original_name}`, content: signedPdf, contentType: 'application/pdf' }],
+    });
+    await insert(`INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, error_message)
+      VALUES ($1,'tenant_enquiry',$2,$3,$4,$5,'completed_tenancy_agreement',$6,$7,$8)`, [
+      result.id || null, agreement.enquiry_id, email, OUTBOUND_EMAIL_ADDRESS, content.subject, content.html,
+      result.simulated ? 'simulated' : result.success ? 'sent' : 'failed', result.error || null,
+    ]);
+  }
+}
+
 async function finaliseTenancyAgreement(agreementId: number): Promise<void> {
   const agreement = await queryOne('SELECT * FROM tenancy_agreements WHERE id = $1', [agreementId]);
   if (!agreement?.tenant_signature
@@ -144,6 +197,11 @@ async function finaliseTenancyAgreement(agreementId: number): Promise<void> {
     throw error;
   } finally {
     client.release();
+  }
+  try {
+    await sendCompletedAgreementEmails(agreement, Buffer.from(bytes));
+  } catch (error) {
+    console.error('Completed tenancy agreement email failed:', error);
   }
 }
 
@@ -4439,28 +4497,34 @@ async function sendTenantAgreementDelivery(
   }));
 
   const propertyAddress = normalizePropertyAddress(agreement.address, agreement.postcode);
+  const details = parseAgreementDetails(agreement.agreement_details);
   if (agreement.tenant_delivery_email) {
     for (const recipient of recipients) {
       if (!recipient.email) {
         delivery[`${recipient.key}_email`] = { success: false, error: 'No tenant email is recorded' };
         continue;
       }
-      const { sendEmail, brandedEmailHtml, OUTBOUND_EMAIL_ADDRESS } = require('./email');
-      const subject = 'Your tenancy agreement is ready to sign';
       const signingUrl = `https://apply.fleminglettings.co.uk/agreement/${recipient.token}`;
       const defaultMessage = `Your tenancy agreement for {{property_address}} is ready to review and sign.`;
       const message = renderAgreementMessage(agreement.tenant_delivery_email_message || defaultMessage, {
         first_name: recipient.firstName || 'there', property_address: propertyAddress, signing_link: signingUrl,
       });
-      const html = brandedEmailHtml('Tenancy Agreement', `
-        <p>Hi ${escapeHtmlText(recipient.firstName || 'there')},</p>
-        <p>${escapeHtmlText(message).replace(/\r?\n/g, '<br/>')}</p>
-        <p>The current property compliance documents are attached for your records.</p>
-        <p><a href="${signingUrl}" style="display:inline-block;background:#DC006D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">Review and sign agreement</a></p>
-      `);
-      const result = await sendEmail({ to: recipient.email, subject, html, attachments });
+      const content = tenancyAgreementEmail({
+        firstName: recipient.firstName || 'there',
+        propertyAddress,
+        tenancyStartDate: details.tenancyStartDate || agreement.issued_at,
+        landlordName: details.landlordName || 'Fleming Lettings & Developments UK Limited',
+        landlordAddress: details.landlordAddress || null,
+        monthlyRent: Number(details.rent || 0),
+        securityDeposit: Number(details.deposit || 0),
+        fundsOnAccount: Number(details.holdingDeposit || 0),
+        balanceDue: Number(details.balanceDue || 0),
+        signingUrl,
+        customMessage: message,
+      });
+      const result = await sendEmail({ to: recipient.email, subject: content.subject, html: content.html, attachments });
       await insert(`INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
-        VALUES ($1,'tenant_enquiry',$2,$3,$4,$5,'tenancy_agreement',$6,$7,$8,$9,$10)`, [result.id || null, agreement.enquiry_id, recipient.email, OUTBOUND_EMAIL_ADDRESS, subject, html, result.simulated ? 'simulated' : result.success ? 'sent' : 'failed', actor?.id || null, actor?.email || null, result.error || null]);
+        VALUES ($1,'tenant_enquiry',$2,$3,$4,$5,'tenancy_agreement',$6,$7,$8,$9,$10)`, [result.id || null, agreement.enquiry_id, recipient.email, OUTBOUND_EMAIL_ADDRESS, content.subject, content.html, result.simulated ? 'simulated' : result.success ? 'sent' : 'failed', actor?.id || null, actor?.email || null, result.error || null]);
       delivery[`${recipient.key}_email`] = result;
     }
   }
@@ -4650,6 +4714,21 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
       });
     }
     const paymentReference = `${String(enquiry.address || '').match(/^\s*\d+[A-Za-z]?/)?.[0]?.trim() || 'PROPERTY'} ${String(enquiry.postcode || '').replace(/\s/g, '').toUpperCase()} - ${String(enquiry.last_name_1 || 'TENANT').toUpperCase()}`;
+    const holdingDeposit = Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
+    const balanceDue = Number(Math.max(0, deposit + rent - holdingDeposit).toFixed(2));
+    const agreementDetails = {
+      tenancyStartDate: startDateText,
+      rent,
+      deposit,
+      holdingDeposit,
+      balanceDue,
+      landlordName: agreementType === 'internal' ? 'Fleming Lettings & Developments UK Limited' : enquiry.landlord_name,
+      landlordAddress: agreementType === 'internal'
+        ? 'Creative Industries Centre, Glaisher Drive, Wolverhampton Science Park, Wolverhampton, West Midlands, WV10 9TG'
+        : enquiry.landlord_address,
+      paymentReference,
+      bankDetails,
+    };
     const pdf = await generateTenancyAgreementPdf({
       enquiryId,
       agreementType,
@@ -4694,12 +4773,13 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
         tenant_token, joint_tenant_token, landlord_token,
         requires_landlord_signature, requires_joint_tenant_signature, created_by,
         tenant_delivery_email, tenant_delivery_sms,
-        tenant_delivery_email_message, tenant_delivery_sms_message
-      ) VALUES ($1,$2,$3,$4,$5,'application/pdf',$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        tenant_delivery_email_message, tenant_delivery_sms_message, agreement_details
+      ) VALUES ($1,$2,$3,$4,$5,'application/pdf',$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)
     `, [enquiryId, enquiry.linked_property_id, agreementType, filename, originalName, pdf.length,
       tenantToken, jointTenantToken, landlordToken, requiresLandlord ? 1 : 0, requiresJointTenant ? 1 : 0,
       req.user?.id || null, sendEmailRequested ? 1 : 0, sendSmsRequested ? 1 : 0,
-      String(req.body.email_message || '').trim() || null, String(req.body.sms_message || '').trim() || null]);
+      String(req.body.email_message || '').trim() || null, String(req.body.sms_message || '').trim() || null,
+      JSON.stringify(agreementDetails)]);
     generatedPath = null;
 
     const tenantUrl = `https://apply.fleminglettings.co.uk/agreement/${tenantToken}`;
@@ -4743,24 +4823,62 @@ app.post('/api/tenant-enquiries/:id/request-balance', authMiddleware, requirePer
   try {
     const enquiryId = Number(req.params.id);
     const enquiry = await queryOne(`
-      SELECT te.*, p.address, p.postcode FROM tenant_enquiries te
-      LEFT JOIN properties p ON p.id = te.linked_property_id WHERE te.id = $1
+      SELECT te.*, p.address, p.postcode, p.service_type,
+        l.landlord_type,
+        COALESCE(jp.first_name_1, te.first_name_2) AS joint_first_name,
+        COALESCE(jp.email_1, te.email_2) AS joint_email
+      FROM tenant_enquiries te
+      LEFT JOIN tenant_enquiries jp ON jp.id = te.joint_partner_id
+      LEFT JOIN properties p ON p.id = te.linked_property_id
+      LEFT JOIN landlords l ON l.id = p.landlord_id
+      WHERE te.id = $1
     `, [enquiryId]);
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
-    const agreement = await queryOne(`SELECT id FROM tenancy_agreements WHERE enquiry_id = $1 AND status = 'completed' ORDER BY completed_at DESC LIMIT 1`, [enquiryId]);
+    const agreement = await queryOne(`SELECT id, agreement_details FROM tenancy_agreements WHERE enquiry_id = $1 AND status = 'completed' ORDER BY completed_at DESC LIMIT 1`, [enquiryId]);
     if (!agreement) return res.status(409).json({ error: 'Complete the tenancy agreement before requesting the balance' });
-    const balance = Number((Number(enquiry.security_deposit_amount || 0) + Number(enquiry.monthly_rent_agreed || 0) - Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0)).toFixed(2));
+    const securityDeposit = Number(enquiry.security_deposit_amount || 0);
+    const monthlyRent = Number(enquiry.monthly_rent_agreed || 0);
+    const holdingDeposit = Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
+    const balance = Number((securityDeposit + monthlyRent - holdingDeposit).toFixed(2));
     if (balance <= 0) return res.status(409).json({ error: 'The calculated balance must be greater than zero' });
+    const details = parseAgreementDetails(agreement.agreement_details);
+    let bankDetails = details.bankDetails;
+    if (!bankDetails) {
+      const paymentRoute = resolvePaymentRoute(resolveAgreementType(enquiry.landlord_type), enquiry.service_type);
+      if (paymentRoute === 'landlord') {
+        return res.status(409).json({ error: 'Regenerate the agreement to save the landlord payment details before requesting the balance' });
+      }
+      bankDetails = bankDetailsForRoute(paymentRoute);
+    }
+    const paymentReference = details.paymentReference
+      || `${String(enquiry.address || '').match(/^\s*\d+[A-Za-z]?/)?.[0]?.trim() || 'PROPERTY'} ${String(enquiry.postcode || '').replace(/\s/g, '').toUpperCase()} - ${String(enquiry.last_name_1 || 'TENANT').toUpperCase()}`;
     await run(`UPDATE tenant_enquiries SET balance_due_amount = $1, balance_payment_requested = 1, updated_at = NOW() WHERE id = $2`, [balance, enquiryId]);
     const delivery: Record<string, unknown> = {};
-    if (req.body.send_email === true && enquiry.email_1) {
-      const { sendEmail, brandedEmailHtml, OUTBOUND_EMAIL_ADDRESS } = require('./email');
-      const subject = `Final tenancy balance - ${normalizePropertyAddress(enquiry.address, enquiry.postcode)}`;
-      const html = brandedEmailHtml('Final Balance', `<p>Hi ${escapeHtmlText(enquiry.first_name_1 || 'there')},</p><p>Your tenancy agreement has been completed. The remaining balance is <strong>&pound;${balance.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong>.</p><p>This is your security deposit and first month’s rent, less the holding deposit already received.</p>`);
-      const result = await sendEmail({ to: enquiry.email_1, subject, html });
-      await insert(`INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
-        VALUES ($1,'tenant_enquiry',$2,$3,$4,$5,'final_balance',$6,$7,$8,$9,$10)`, [result.id || null, enquiryId, enquiry.email_1, OUTBOUND_EMAIL_ADDRESS, subject, html, result.simulated ? 'simulated' : result.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null, result.error || null]);
-      delivery.email = result;
+    if (req.body.send_email === true) {
+      const recipients = [
+        { key: 'tenant', firstName: enquiry.first_name_1, email: enquiry.email_1 },
+        ...(enquiry.joint_email ? [{ key: 'joint_tenant', firstName: enquiry.joint_first_name, email: enquiry.joint_email }] : []),
+      ];
+      for (const recipient of recipients) {
+        if (!recipient.email) {
+          delivery[`${recipient.key}_email`] = { success: false, error: 'No tenant email is recorded' };
+          continue;
+        }
+        const content = finalBalanceHandoverEmail({
+          firstName: recipient.firstName || 'there',
+          propertyAddress: normalizePropertyAddress(enquiry.address, enquiry.postcode),
+          securityDeposit,
+          monthlyRent,
+          holdingDeposit,
+          balanceDue: balance,
+          bankDetails,
+          paymentReference,
+        });
+        const result = await sendEmail({ to: recipient.email, subject: content.subject, html: content.html });
+        await insert(`INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
+          VALUES ($1,'tenant_enquiry',$2,$3,$4,$5,'final_balance',$6,$7,$8,$9,$10)`, [result.id || null, enquiryId, recipient.email, OUTBOUND_EMAIL_ADDRESS, content.subject, content.html, result.simulated ? 'simulated' : result.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null, result.error || null]);
+        delivery[`${recipient.key}_email`] = result;
+      }
     }
     await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', enquiryId, { action: 'final_balance_requested', amount: balance });
     res.json({ success: true, balance, delivery });

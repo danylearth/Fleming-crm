@@ -100,4 +100,44 @@ describe('email provider safety', () => {
     expect(email.html).toContain('£207.69');
     expect(email.html).toContain('1 September 2026');
   });
+
+  it('renders the tenancy agreement invitation with dynamic agreement details', async () => {
+    const { tenancyAgreementEmail } = await import('./email');
+    const email = tenancyAgreementEmail({
+      firstName: 'Alex', propertyAddress: '10 High Street, WV1 1AA', tenancyStartDate: '2026-10-01',
+      landlordName: 'Example Landlord', landlordAddress: '1 Landlord Road', monthlyRent: 900,
+      securityDeposit: 1038, fundsOnAccount: 207.69, balanceDue: 1730.31,
+      signingUrl: 'https://apply.example.test/agreement/secure-token',
+    });
+    expect(email.subject).toBe('Your tenancy agreement is ready to sign');
+    expect(email.html).toContain('1 October 2026');
+    expect(email.html).toContain('&pound;1,730.31');
+    expect(email.html).toContain('https://apply.example.test/agreement/secure-token');
+    expect(email.html).not.toContain('29 Wealden Hatch');
+    expect(email.html).not.toContain('assets/');
+  });
+
+  it('renders and escapes the completed agreement email', async () => {
+    const { completedTenancyAgreementEmail } = await import('./email');
+    const email = completedTenancyAgreementEmail('<Alex>', '10 High Street & Annexe');
+    expect(email.subject).toBe('Copy of your completed tenancy agreement');
+    expect(email.html).toContain('&lt;Alex&gt;');
+    expect(email.html).toContain('10 High Street &amp; Annexe');
+    expect(email.html).toContain('completed copy');
+  });
+
+  it('renders the final balance and handover email with payment details', async () => {
+    const { finalBalanceHandoverEmail } = await import('./email');
+    const email = finalBalanceHandoverEmail({
+      firstName: 'Alex', propertyAddress: '10 High Street, WV1 1AA', securityDeposit: 1038,
+      monthlyRent: 900, holdingDeposit: 207.69, balanceDue: 1730.31,
+      bankDetails: { bankName: 'Example Bank', accountName: 'Example Client Account', sortCode: '20-08-64', accountNumber: '12345678' },
+      paymentReference: '10 WV11AA - EXAMPLE',
+    });
+    expect(email.subject).toBe('Final balance and handover');
+    expect(email.html).toContain('&minus;&pound;207.69');
+    expect(email.html).toContain('Example Client Account');
+    expect(email.html).toContain('10 WV11AA - EXAMPLE');
+    expect(email.html).toContain('Reply with your preferred time');
+  });
 });

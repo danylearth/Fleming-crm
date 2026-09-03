@@ -45,6 +45,118 @@ export function brandedEmailHtml(title: string, content: string): string {
     </td></tr></table></body></html>`;
 }
 
+function emailMoney(value: number): string {
+  return Number(value || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function emailDate(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(`${String(value).slice(0, 10)}T12:00:00Z`);
+  if (Number.isNaN(date.getTime())) return escapeHtml(value);
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' });
+}
+
+function emailSummaryRow(label: string, value: string, highlighted = false): string {
+  const background = highlighted ? '#563F6E' : '#EEEEEE';
+  const colour = highlighted ? '#ffffff' : '#27083D';
+  const fontSize = highlighted ? '20px' : '15px';
+  return `<tr><td style="padding:14px 18px;background:${background};color:${highlighted ? '#ffffff' : '#1E1E1E'};font-size:15px;font-weight:${highlighted ? 'bold' : 'normal'}">${escapeHtml(label)}</td><td align="right" style="padding:14px 18px;background:${background};color:${colour};font-size:${fontSize};font-weight:bold">${value}</td></tr>`;
+}
+
+export interface TenancyAgreementEmailInput {
+  firstName: string;
+  propertyAddress: string;
+  tenancyStartDate: string | Date;
+  landlordName: string;
+  landlordAddress?: string | null;
+  monthlyRent: number;
+  securityDeposit: number;
+  fundsOnAccount: number;
+  balanceDue: number;
+  signingUrl: string;
+  customMessage?: string | null;
+}
+
+export function tenancyAgreementEmail(input: TenancyAgreementEmailInput): { subject: string; html: string } {
+  const propertyAddress = escapeHtml(input.propertyAddress);
+  const landlord = `${escapeHtml(input.landlordName)}${input.landlordAddress ? `<br><span style="font-weight:normal;color:#1E1E1E">${escapeHtml(input.landlordAddress)}</span>` : ''}`;
+  const message = escapeHtml(input.customMessage || `Your tenancy agreement for ${input.propertyAddress} is ready to review and sign.`).replace(/\r?\n/g, '<br>');
+  return {
+    subject: 'Your tenancy agreement is ready to sign',
+    html: brandedEmailHtml('Tenancy agreement', `
+      <h1 style="font-size:34px;line-height:40px;color:#27083D;margin:0 0 18px">Hi ${escapeHtml(input.firstName || 'there')},</h1>
+      <p>${message}</p>
+      <div style="background:#563F6E;padding:22px 24px;margin:24px 0;color:#ffffff"><span style="font-size:14px;color:#EEEEEE">Property</span><br><strong style="font-size:22px">${propertyAddress}</strong></div>
+      <h2 style="font-size:20px;color:#27083D;margin:28px 0 14px">Agreement summary</h2>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0 4px">
+        ${emailSummaryRow('Tenancy type', 'Assured Shorthold Tenancy')}
+        ${emailSummaryRow('Start date', emailDate(input.tenancyStartDate))}
+        ${emailSummaryRow('Landlord', landlord)}
+        ${emailSummaryRow('Monthly rent', `&pound;${emailMoney(input.monthlyRent)}`)}
+        ${emailSummaryRow('Security deposit', `&pound;${emailMoney(input.securityDeposit)}`)}
+        ${emailSummaryRow('Funds already on account', `&pound;${emailMoney(input.fundsOnAccount)}`)}
+        ${emailSummaryRow('Balance due before move in', `&pound;${emailMoney(input.balanceDue)}`, true)}
+      </table>
+      <p>All of the property’s compliance documentation is attached for your records.</p>
+      <p>Once you have completed and signed your tenancy agreement, you will be emailed the completed documents on a new thread.</p>
+      <p><a href="${escapeHtml(input.signingUrl)}" style="display:inline-block;background:#DC006D;color:#ffffff;text-decoration:none;padding:15px 32px;font-weight:bold">Review and sign agreement</a></p>
+    `),
+  };
+}
+
+export function completedTenancyAgreementEmail(firstName: string, propertyAddress: string): { subject: string; html: string } {
+  const replySubject = encodeURIComponent(`Completed tenancy agreement - ${propertyAddress}`);
+  return {
+    subject: 'Copy of your completed tenancy agreement',
+    html: brandedEmailHtml('Completed agreement', `
+      <h1 style="font-size:34px;line-height:40px;color:#27083D;margin:0 0 18px">Hi ${escapeHtml(firstName || 'there')},</h1>
+      <p>Please see attached your completed copy of your Assured Shorthold Tenancy agreement.</p>
+      <div style="background:#563F6E;padding:22px 24px;margin:24px 0;color:#ffffff"><span style="font-size:14px;color:#EEEEEE">Property</span><br><strong style="font-size:22px">${escapeHtml(propertyAddress)}</strong></div>
+      <p>If you have any questions, reply to this email or call us on <a href="tel:+441902212415" style="color:#DC006D">01902 212 415</a>.</p>
+      <p><a href="mailto:${OUTBOUND_EMAIL_ADDRESS}?subject=${replySubject}" style="display:inline-block;background:#DC006D;color:#ffffff;text-decoration:none;padding:15px 32px;font-weight:bold">Reply to this email</a></p>
+    `),
+  };
+}
+
+export interface FinalBalanceEmailInput {
+  firstName: string;
+  propertyAddress: string;
+  securityDeposit: number;
+  monthlyRent: number;
+  holdingDeposit: number;
+  balanceDue: number;
+  bankDetails: { bankName: string; accountName: string; sortCode: string; accountNumber: string };
+  paymentReference: string;
+}
+
+export function finalBalanceHandoverEmail(input: FinalBalanceEmailInput): { subject: string; html: string } {
+  const replySubject = encodeURIComponent(`Final balance and handover - ${input.propertyAddress}`);
+  return {
+    subject: 'Final balance and handover',
+    html: brandedEmailHtml('Final balance and handover', `
+      <h1 style="font-size:34px;line-height:40px;color:#27083D;margin:0 0 18px">Hi ${escapeHtml(input.firstName || 'there')},</h1>
+      <p>Your tenancy agreement has been completed. The remaining balance for <strong>${escapeHtml(input.propertyAddress)}</strong> is set out below.</p>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0 4px;margin:24px 0">
+        ${emailSummaryRow('Security deposit', `&pound;${emailMoney(input.securityDeposit)}`)}
+        ${emailSummaryRow('First month’s rent', `&pound;${emailMoney(input.monthlyRent)}`)}
+        ${emailSummaryRow('Holding deposit already received', `&minus;&pound;${emailMoney(input.holdingDeposit)}`)}
+        ${emailSummaryRow('Remaining balance', `&pound;${emailMoney(input.balanceDue)}`, true)}
+      </table>
+      <h2 style="font-size:20px;color:#27083D;margin:28px 0 14px">Bank details for payment</h2>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0 4px">
+        ${emailSummaryRow('Bank', escapeHtml(input.bankDetails.bankName))}
+        ${emailSummaryRow('Account name', escapeHtml(input.bankDetails.accountName))}
+        ${emailSummaryRow('Sort code', escapeHtml(input.bankDetails.sortCode))}
+        ${emailSummaryRow('Account number', escapeHtml(input.bankDetails.accountNumber))}
+        ${emailSummaryRow('Payment reference', escapeHtml(input.paymentReference), true)}
+      </table>
+      <p>Please contact your lettings manager or our office once payment has been made so we can confirm receipt.</p>
+      <p>Once the funds have been received, we can arrange a preferred date and time on site for the handover and inventory.</p>
+      <p><a href="mailto:${OUTBOUND_EMAIL_ADDRESS}?subject=${replySubject}" style="display:inline-block;background:#DC006D;color:#ffffff;text-decoration:none;padding:15px 32px;font-weight:bold">Reply with your preferred time</a></p>
+      <p>If you have any questions, reply to this email or call us on <a href="tel:+441902212415" style="color:#DC006D">01902 212 415</a>.</p>
+    `),
+  };
+}
+
 export function normalizePropertyAddress(address: string, postcode?: string | null): string {
   const cleanAddress = String(address || '').trim().replace(/,\s*$/, '');
   const cleanPostcode = String(postcode || '').trim();
