@@ -110,6 +110,8 @@ describe('email provider safety', () => {
       signingUrl: 'https://apply.example.test/agreement/secure-token',
     });
     expect(email.subject).toBe('Your tenancy agreement is ready to sign');
+    expect(email.html).toContain('Assured Periodic Tenancy');
+    expect(email.html).not.toContain('Assured Shorthold Tenancy');
     expect(email.html).toContain('1 October 2026');
     expect(email.html).toContain('&pound;1,730.31');
     expect(email.html).toContain('https://apply.example.test/agreement/secure-token');
@@ -124,6 +126,8 @@ describe('email provider safety', () => {
     expect(email.html).toContain('&lt;Alex&gt;');
     expect(email.html).toContain('10 High Street &amp; Annexe');
     expect(email.html).toContain('completed copy');
+    expect(email.html).toContain('Assured Periodic Tenancy');
+    expect(email.html).not.toContain('Assured Shorthold Tenancy');
   });
 
   it('renders the final balance and handover email with payment details', async () => {

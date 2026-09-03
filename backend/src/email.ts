@@ -88,7 +88,7 @@ export function tenancyAgreementEmail(input: TenancyAgreementEmailInput): { subj
       <div style="background:#563F6E;padding:22px 24px;margin:24px 0;color:#ffffff"><span style="font-size:14px;color:#EEEEEE">Property</span><br><strong style="font-size:22px">${propertyAddress}</strong></div>
       <h2 style="font-size:20px;color:#27083D;margin:28px 0 14px">Agreement summary</h2>
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0 4px">
-        ${emailSummaryRow('Tenancy type', 'Assured Shorthold Tenancy')}
+        ${emailSummaryRow('Tenancy type', 'Assured Periodic Tenancy')}
         ${emailSummaryRow('Start date', emailDate(input.tenancyStartDate))}
         ${emailSummaryRow('Landlord', landlord)}
         ${emailSummaryRow('Monthly rent', `&pound;${emailMoney(input.monthlyRent)}`)}
@@ -109,7 +109,7 @@ export function completedTenancyAgreementEmail(firstName: string, propertyAddres
     subject: 'Copy of your completed tenancy agreement',
     html: brandedEmailHtml('Completed agreement', `
       <h1 style="font-size:34px;line-height:40px;color:#27083D;margin:0 0 18px">Hi ${escapeHtml(firstName || 'there')},</h1>
-      <p>Please see attached your completed copy of your Assured Shorthold Tenancy agreement.</p>
+      <p>Please see attached your completed copy of your Assured Periodic Tenancy agreement.</p>
       <div style="background:#563F6E;padding:22px 24px;margin:24px 0;color:#ffffff"><span style="font-size:14px;color:#EEEEEE">Property</span><br><strong style="font-size:22px">${escapeHtml(propertyAddress)}</strong></div>
       <p>If you have any questions, reply to this email or call us on <a href="tel:+441902212415" style="color:#DC006D">01902 212 415</a>.</p>
       <p><a href="mailto:${OUTBOUND_EMAIL_ADDRESS}?subject=${replySubject}" style="display:inline-block;background:#DC006D;color:#ffffff;text-decoration:none;padding:15px 32px;font-weight:bold">Reply to this email</a></p>
