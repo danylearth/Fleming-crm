@@ -4,7 +4,7 @@ import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable } from '../components/ui';
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Mail, Phone, Building2, Calendar, Search, ChevronDown, LayoutGrid, List, User, MapPin } from 'lucide-react';
+import { Plus, X, Mail, Phone, Building2, Calendar, Search, ChevronDown, LayoutGrid, List, User, MapPin, Archive } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -74,7 +74,7 @@ export default function Tenants() {
   const [now] = useState(() => Date.now());
   // Bulk actions state
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
   const load = async () => {
@@ -192,25 +192,21 @@ export default function Tenants() {
     return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
-  const handleBulkDelete = async () => {
+  const handleBulkArchive = async () => {
     if (selectedIds.length === 0) return;
-
     const confirmed = window.confirm(
-      `Are you sure you want to delete ${selectedIds.length} tenant${selectedIds.length !== 1 ? 's' : ''}? This action cannot be undone.`
+      `Archive ${selectedIds.length} tenant${selectedIds.length !== 1 ? 's' : ''}? Their records and documents will be preserved.`
     );
-
     if (!confirmed) return;
-
-    setIsDeleting(true);
+    setIsArchiving(true);
     try {
-      await api.post('/api/tenants/bulk-delete', { ids: selectedIds });
+      await api.post('/api/tenants/bulk-archive', { ids: selectedIds });
       setSelectedIds([]);
       await load();
     } catch (e) {
-      console.error('Bulk delete error:', e);
-      console.error('Failed to delete tenants:', e);
+      console.error('Failed to archive tenants:', e);
     }
-    setIsDeleting(false);
+    setIsArchiving(false);
   };
 
   const toggleSelectTenant = (id: number) => {
@@ -412,10 +408,14 @@ export default function Tenants() {
           <BulkActions
             selectedIds={selectedIds}
             onClearSelection={() => setSelectedIds([])}
-            onBulkDelete={handleBulkDelete}
+            onBulkDelete={() => {}}
             entityName="tenant"
-            isDeleting={isDeleting}
-          />
+            showDelete={false}
+          >
+            <button onClick={handleBulkArchive} disabled={isArchiving} className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-500 text-white rounded-lg transition-colors">
+              <Archive className="w-4 h-4" /> {isArchiving ? 'Archiving...' : 'Archive Selected'}
+            </button>
+          </BulkActions>
         )}
 
         {/* Content */}

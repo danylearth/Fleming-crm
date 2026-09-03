@@ -121,7 +121,7 @@ export default function Transactions() {
   };
 
   // Calculate summaries
-  const totalMonthlyRent = tenancies.reduce((sum, t) => sum + (t.monthly_rent || t.rent_amount || 0), 0) ||
+  const totalMonthlyRent = tenancies.filter(t => !t.status || t.status === 'active').reduce((sum, t) => sum + (t.monthly_rent || t.rent_amount || 0), 0) ||
     properties.reduce((sum, p) => sum + (p.monthly_rent || p.rent || 0), 0);
 
   const collected = payments.filter(p => p.status === 'paid' || !p.status).reduce((sum, p) => sum + (p.amount_paid || p.amount || 0), 0);

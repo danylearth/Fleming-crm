@@ -450,8 +450,8 @@ app.get('/api/dashboard', authMiddleware, async (req: AuthRequest, res) => {
     const properties = cnt(await queryOne('SELECT COUNT(*)::integer as c FROM properties'));
     const propertiesLet = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM properties WHERE status = 'let'"));
     const landlords = cnt(await queryOne('SELECT COUNT(*)::integer as c FROM landlords'));
-    const tenants = cnt(await queryOne('SELECT COUNT(*)::integer as c FROM tenants'));
-    const activeTenancies = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tenancies WHERE status = 'active'"));
+    const tenants = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tenants WHERE COALESCE(status, 'active') <> 'inactive'"));
+    const activeTenancies = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tenancies tn JOIN tenants t ON t.id=tn.tenant_id WHERE tn.status = 'active' AND COALESCE(t.status, 'active') <> 'inactive'"));
     const openMaintenance = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM maintenance WHERE status IN ('open', 'in_progress')"));
     const bdmProspects = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM landlords_bdm WHERE status NOT IN ('onboarded', 'not_interested')"));
     const activeEnquiries = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tenant_enquiries WHERE status NOT IN ('rejected', 'converted')"));
@@ -2383,6 +2383,39 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+app.post('/api/tenants/bulk-archive', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
+  try {
+    const ids = [...new Set<number>((Array.isArray(req.body?.ids) ? req.body.ids : []).map(Number).filter(Number.isInteger))];
+    if (ids.length === 0) return res.status(400).json({ error: 'Invalid or empty ids array' });
+    const placeholders = ids.map((_, index) => `$${index + 1}`).join(',');
+    const client = await pool.connect();
+    let archived = 0;
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `UPDATE tenants SET status='inactive', updated_at=NOW() WHERE id IN (${placeholders}) AND COALESCE(status, 'active') <> 'inactive'`,
+        ids,
+      );
+      archived = result.rowCount || 0;
+      await client.query(
+        `UPDATE properties SET has_live_tenancy=0, tenant_id=NULL, updated_at=NOW() WHERE tenant_id IN (${placeholders})`,
+        ids,
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    for (const id of ids) await logAudit(req.user?.id, req.user?.email, 'update', 'tenant', id, { status: 'inactive', action: 'archive' });
+    res.json({ success: true, archived });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to archive tenants' });
+  }
+});
+
 app.post('/api/tenants/bulk-delete', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const { ids } = req.body;
@@ -3048,7 +3081,7 @@ app.get('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
     const { limit, offset } = pageParams(req);
     const properties = await query(`
       SELECT p.*, l.name as landlord_name, l.landlord_type,
-        (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant
+        (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant
       FROM properties p LEFT JOIN landlords l ON l.id = p.landlord_id ORDER BY p.address
       LIMIT $1 OFFSET $2
     `, [limit, offset]);
@@ -3122,10 +3155,10 @@ app.get('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
   try {
     const property = await queryOne(`
       SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email, l.landlord_type,
-        (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant,
-        (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id,
-        (SELECT t.email FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_email,
-        (SELECT t.phone FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_phone
+        (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant,
+        (SELECT t.id FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant_id,
+        (SELECT t.email FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant_email,
+        (SELECT t.phone FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant_phone
       FROM properties p LEFT JOIN landlords l ON l.id = p.landlord_id WHERE p.id = $1
     `, [req.params.id as string]);
     if (!property) return res.status(404).json({ error: 'Property not found' });
@@ -3178,8 +3211,8 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
     await logAudit(req.user?.id, req.user?.email, 'update', 'property', parseInt(req.params.id as string), req.body);
     const updated = await queryOne(`
       SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email, l.landlord_type,
-        (SELECT t.name FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant,
-        (SELECT t.id FROM tenants t WHERE t.property_id = p.id LIMIT 1) as current_tenant_id
+        (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant,
+        (SELECT t.id FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') <> 'inactive' LIMIT 1) as current_tenant_id
       FROM properties p LEFT JOIN landlords l ON l.id = p.landlord_id WHERE p.id = $1
     `, [req.params.id]);
     res.json(updated);
@@ -3406,6 +3439,7 @@ app.post('/api/public/maintenance-report', publicSubmitLimiter, async (req, res)
       FROM tenants t
       JOIN properties p ON p.id = t.property_id
       WHERE (LOWER(COALESCE(t.email, '')) = $1 OR LOWER(COALESCE(t.email_2, '')) = $1)
+        AND COALESCE(t.status, 'active') <> 'inactive'
         AND UPPER(REPLACE(p.postcode, ' ', '')) = $2
       LIMIT 1
     `, [reporterEmail, postcode]);
@@ -3722,6 +3756,7 @@ app.get('/api/tenancies', authMiddleware, async (req: AuthRequest, res) => {
     const tenancies = await query(`
       SELECT tn.*, p.address, t.name as tenant_name FROM tenancies tn
       JOIN properties p ON p.id = tn.property_id LEFT JOIN tenants t ON t.id = tn.tenant_id
+      WHERE COALESCE(t.status, 'active') <> 'inactive'
       ORDER BY tn.start_date DESC
     `);
     res.json(tenancies);
@@ -6046,6 +6081,7 @@ app.post('/api/bank-feed/sync', authMiddleware, requirePermission('manager'), as
         COALESCE(tn.start_date, t.tenancy_start_date) AS "tenancyStartDate"
       FROM tenants t JOIN properties p ON p.id=t.property_id
       LEFT JOIN LATERAL (SELECT * FROM tenancies x WHERE x.tenant_id=t.id AND x.status='active' ORDER BY x.start_date DESC LIMIT 1) tn ON TRUE
+      WHERE COALESCE(t.status, 'active') <> 'inactive'
     `) as RentCandidate[];
     const propertyCandidates = await query('SELECT id AS "propertyId", address, postcode FROM properties') as PropertyCandidate[];
     const depositCandidates = await query(`
@@ -6053,7 +6089,7 @@ app.post('/api/bank-feed/sync', authMiddleware, requirePermission('manager'), as
         t.name, COALESCE(t.holding_deposit_amount, 0)::FLOAT AS amount
       FROM tenants t
       LEFT JOIN LATERAL (SELECT * FROM tenancies x WHERE x.tenant_id=t.id AND x.status='active' ORDER BY x.start_date DESC LIMIT 1) tn ON TRUE
-      WHERE COALESCE(t.holding_deposit_received, 0)=0 AND COALESCE(t.holding_deposit_amount, 0)>0
+      WHERE COALESCE(t.status, 'active') <> 'inactive' AND COALESCE(t.holding_deposit_received, 0)=0 AND COALESCE(t.holding_deposit_amount, 0)>0
       UNION ALL
       SELECT NULL::INTEGER AS "tenantId", te.id AS "enquiryId", te.linked_property_id AS "propertyId", NULL::INTEGER AS "tenancyId",
         TRIM(te.first_name_1 || ' ' || te.last_name_1) AS name, COALESCE(te.holding_deposit_amount, 0)::FLOAT AS amount
