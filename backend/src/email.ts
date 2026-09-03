@@ -41,6 +41,14 @@ function emailMoneyCompact(value: number): string {
   return Number(value || 0).toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+function emailTime(value: string): string {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
+  if (!match) return escapeHtml(value);
+  const hour = Number(match[1]);
+  if (hour > 23) return escapeHtml(value);
+  return `${hour % 12 || 12}:${match[2]}${hour < 12 ? 'am' : 'pm'}`;
+}
+
 export interface SendEmailParams {
   to: string | string[];
   subject: string;
@@ -192,8 +200,8 @@ export function handoverAppointmentEmail(input: HandoverAppointmentEmailInput): 
     : new Date(`${String(input.appointmentDate).slice(0, 10)}T12:00:00Z`);
   const displayDate = Number.isNaN(date.getTime())
     ? escapeHtml(input.appointmentDate)
-    : date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' });
-  const intro = escapeHtml(input.customMessage || 'Finally, we’re nearly there! Your move in and handover appointment is confirmed. We will meet you at the property to conduct the inventory, hand over the keys and answer any final questions that you may have.').replace(/\r?\n/g, '<br>');
+    : date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }).replace(',', '');
+  const intro = escapeHtml(input.customMessage || "Finally, we're nearly there! Your move in and handover appointment is confirmed. We will meet you at the property to conduct the inventory, handover the keys and be on hand to answer any final questions that you may have.").replace(/\r?\n/g, '<br>');
   return {
     subject: 'Your move in and handover date',
     html: renderFinalEmailTemplate('09-move-in-date.html', {
@@ -201,7 +209,7 @@ export function handoverAppointmentEmail(input: HandoverAppointmentEmailInput): 
       PROPERTY_ADDRESS: escapeHtml(address.full),
       PROPERTY_SHORT_ADDRESS: escapeHtml(address.short),
       APPOINTMENT_DATE: displayDate,
-      APPOINTMENT_TIME: escapeHtml(input.appointmentTime),
+      APPOINTMENT_TIME: emailTime(input.appointmentTime),
       APPOINTMENT_WITH: escapeHtml(input.appointmentWith),
       INTRO_MESSAGE: intro,
       GOOGLE_MAP_URL: escapeHtml(`https://www.google.com/maps/search/?api=1&query=${mapQuery}`),

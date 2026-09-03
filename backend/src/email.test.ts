@@ -152,8 +152,8 @@ describe('email provider safety', () => {
       appointmentDate: '2026-10-02', appointmentTime: '15:05', appointmentWith: 'Alex Fleming',
     });
     expect(email.subject).toBe('Your move in and handover date');
-    expect(email.html).toContain('Friday, 2 October 2026');
-    expect(email.html).toContain('15:05');
+    expect(email.html).toContain('Friday 2 October 2026');
+    expect(email.html).toContain('3:05pm');
     expect(email.html).toContain('Alex Fleming');
     expect(email.html).toContain('Google Maps');
     expect(email.html).toContain('Apple Maps');
