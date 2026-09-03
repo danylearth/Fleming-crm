@@ -44,6 +44,9 @@ describe('email provider safety', () => {
     expect(email.html).toContain('Lettings Support Team | fleminglettings.co.uk');
     expect(email.html).toContain('contact@tenancies.fleminglettings.co.uk');
     expect(email.html).toContain('company number 13943597');
+    expect(email.html).toContain('Google Maps');
+    expect(email.html).toContain('Apple Maps');
+    expect(email.html).toContain('10%20High%20Street%2C%20WV1%201AA');
   });
 
   it('does not repeat a postcode already present in a property address', async () => {

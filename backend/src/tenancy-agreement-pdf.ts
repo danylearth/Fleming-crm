@@ -413,7 +413,9 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     heading('Signed as an agreement');
     paragraph('Between us, the Landlord:', { bold: true });
     paragraph(input.agreementType === 'internal' ? `Mr. Robert Fleming (Managing Director), for and on behalf of ${FLEMING_NAME}` : input.landlord.name);
-    paragraph('Signature: ____________________________________    Date: ____________________');
+    paragraph(input.agreementType === 'internal'
+      ? `Electronically signed: Robert Fleming    Date: ${longDate(input.tenancyStartDate)}`
+      : 'Signature: ____________________________________    Date: ____________________');
     paragraph('And you, the Tenant(s):', { bold: true });
     paragraph(tenantNames);
     paragraph('Signature: ____________________________________    Date: ____________________');
@@ -431,7 +433,9 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     for (const item of input.complianceDocuments) paragraph(`• ${item}`);
     paragraph('This addendum is binding on all parties.');
     paragraph(`Landlord: ${input.agreementType === 'internal' ? `Mr. Robert Fleming, for ${FLEMING_NAME}` : input.landlord.name}`);
-    paragraph('Signed: ____________________________________    Date: ____________________');
+    paragraph(input.agreementType === 'internal'
+      ? `Electronically signed: Robert Fleming    Date: ${longDate(input.tenancyStartDate)}`
+      : 'Signed: ____________________________________    Date: ____________________');
     paragraph(`Tenant(s): ${tenantNames}`);
     paragraph('Signed: ____________________________________    Date: ____________________');
 

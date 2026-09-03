@@ -101,7 +101,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   // Step 5: Credit check
   const [creditScore, setCreditScore] = useState('');
   const [creditReport, setCreditReport] = useState<File | null>(null);
-  const [agreement, setAgreement] = useState<{ id: number; agreement_type: string; original_name: string; status: string; requires_landlord_signature: number; tenant_signed_at?: string; landlord_signed_at?: string } | null>(null);
+  const [creditCheckCompleteOverride, setCreditCheckCompleteOverride] = useState(false);
+  const [agreement, setAgreement] = useState<{ id: number; agreement_type: string; original_name: string; status: string; requires_landlord_signature: number; requires_joint_tenant_signature: number; tenant_signed_at?: string; joint_tenant_signed_at?: string; landlord_signed_at?: string } | null>(null);
   const [agreementCompliance, setAgreementCompliance] = useState<{
     ready: boolean;
     propertyLinked: boolean;
@@ -110,6 +111,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     serviceType?: string | null;
     paymentRoute?: 'fleming_operating' | 'fleming_client_money' | 'landlord';
     landlordName?: string | null;
+    jointApplicantsReady?: boolean;
+    jointApplicant?: { name: string; applicationComplete: boolean; applicationApproved: boolean; creditCheckComplete: boolean } | null;
     defaults?: { tenancyStartDate?: string; rent?: string | number; deposit?: string | number; permittedOccupiers?: string; sharedFacilities?: string; parking?: string };
   } | null>(null);
   const [agreementStartDate, setAgreementStartDate] = useState('');
@@ -124,6 +127,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [landlordBankName, setLandlordBankName] = useState('');
   const [agreementSendEmail, setAgreementSendEmail] = useState(true);
   const [agreementSendSms, setAgreementSendSms] = useState(false);
+  const [agreementEmailMessage, setAgreementEmailMessage] = useState('Your tenancy agreement for {{property_address}} is ready to review and sign.');
+  const [agreementSmsMessage, setAgreementSmsMessage] = useState('Hi {{first_name}}, your Fleming Lettings tenancy agreement is ready to review and sign: {{signing_link}}');
   const [balanceSendEmail, setBalanceSendEmail] = useState(false);
   const [handoverDate, setHandoverDate] = useState('');
   const [handoverTime, setHandoverTime] = useState('10:00');
@@ -199,7 +204,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     setSaving(true);
     setReviewError('');
     try {
-      await api.put(`/api/documents/${docId}/review`, { status, notes: reviewNotes || null });
+      await api.put(`/api/documents/${docId}/review`, {
+        status,
+        notes: status === 'rejected' ? changesRequired.trim() : (reviewNotes.trim() || null),
+      });
       await Promise.all([fetchDocs(), onUpdate()]);
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : 'Document review could not be saved');
@@ -284,6 +292,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     setHandoverAssignedTo(enquiry.handover_assigned_to || '');
     setReviewNotes('');
     setReviewStatusOverride(null);
+    setCreditCheckCompleteOverride(false);
     setChangesRequired(enquiry.application_review_status === 'changes_requested' ? enquiry.application_review_notes || '' : '');
     // Set active step based on progress
     if (!enquiry.holding_deposit_requested) setActiveStep(0);
@@ -337,11 +346,11 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     {
       label: 'Run Credit Check',
       icon: CreditCard,
-      getStatus: () => enquiry.credit_check_completed ? 'green' : 'red',
-      desc: enquiry.credit_check_completed ? `Credit check completed${enquiry.credit_score ? ` — ${enquiry.credit_score}` : ''}` : 'Run after the application is approved',
+      getStatus: () => enquiry.credit_check_completed || creditCheckCompleteOverride ? 'green' : 'red',
+      desc: enquiry.credit_check_completed || creditCheckCompleteOverride ? `Credit check completed${creditScore ? ` — ${creditScore}` : ''}` : 'Run after the application is approved',
     },
     {
-      label: 'Issue Tenancy Agreement',
+      label: 'AST Agreement for FL Tenancies',
       icon: FileSignature,
       getStatus: () => agreement?.status === 'completed' ? 'green' : agreement ? 'amber' : 'red',
       desc: agreement?.status === 'completed' ? 'Agreement signed and stored' : agreement ? 'Waiting for required signatures' : 'Generate and issue the agreement for e-signature',
@@ -442,6 +451,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Credit check could not be saved');
       setCreditReport(null);
+      setCreditCheckCompleteOverride(true);
       await Promise.all([fetchDocs(), onUpdate()]);
       setActiveStep(5);
     } catch (err) {
@@ -468,6 +478,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         landlord_bank_name: landlordBankName,
         send_email: agreementSendEmail,
         send_sms: agreementSendSms,
+        email_message: agreementEmailMessage,
+        sms_message: agreementSmsMessage,
       });
       const failures = Object.values(result.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
       if (failures.length) setReviewError(`Agreement issued, but ${failures.length} communication${failures.length === 1 ? '' : 's'} failed. Check the email/SMS history.`);
@@ -1084,7 +1096,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                               <button onClick={() => viewDocument(doc.id, doc.original_name)} className="px-2 py-1 rounded text-[10px] bg-sky-500/15 text-sky-400 flex items-center gap-1"><Eye size={10} />View</button>
                               <button onClick={() => downloadDocument(doc.id, doc.original_name)} className="px-2 py-1 rounded text-[10px] bg-[var(--bg-hover)] text-[var(--text-secondary)] flex items-center gap-1"><Download size={10} />Download</button>
                               <button onClick={() => reviewDocument(doc.id, 'approved')} disabled={saving} className="px-2 py-1 rounded text-[10px] bg-emerald-500/15 text-emerald-400">Approve</button>
-                              <button onClick={() => reviewDocument(doc.id, 'rejected')} disabled={saving} className="px-2 py-1 rounded text-[10px] bg-red-500/15 text-red-400">Reject</button>
+                              <button onClick={() => reviewDocument(doc.id, 'rejected')} disabled={saving || !changesRequired.trim()} title={!changesRequired.trim() ? 'Enter the changes or information required first' : undefined} className="px-2 py-1 rounded text-[10px] bg-red-500/15 text-red-400 disabled:opacity-40">Reject</button>
                             </div>
                           ))}
                         </div>
@@ -1098,7 +1110,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none" />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-[var(--text-muted)] mb-1">Changes / information required</label>
+                    <label className="block text-[10px] text-[var(--text-muted)] mb-1">Changes / information required *</label>
                     <textarea value={changesRequired} onChange={event => setChangesRequired(event.target.value)} rows={3}
                       className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none" />
                   </div>
@@ -1155,7 +1167,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-[var(--text-muted)] mb-1">NRLA / credit report *</label>
+                  <label className="block text-xs text-[var(--text-muted)] mb-1">Upload Credit Report *</label>
                   <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={event => setCreditReport(event.target.files?.[0] || null)}
                     className="block w-full text-xs text-[var(--text-secondary)] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--bg-hover)] file:px-3 file:py-2 file:text-xs file:text-[var(--text-primary)]" />
                 </div>
@@ -1181,7 +1193,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               <div className="space-y-3">
                 {agreement && <div className={`p-3 rounded-lg border ${agreement.status === 'completed' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
                   <p className="text-sm font-medium">{agreement.original_name}</p>
-                  <p className="text-xs mt-1">{agreement.status === 'completed' ? 'All required signatures completed; signed PDF stored in Documents.' : `Status: ${agreement.status.replace('_', ' ')}${agreement.requires_landlord_signature ? ' · tenant and landlord signatures required' : ''}`}</p>
+                  <p className="text-xs mt-1">{agreement.status === 'completed' ? 'All required signatures completed; signed PDF stored in Documents.' : `Status: ${agreement.status.replace('_', ' ')}${agreement.requires_joint_tenant_signature ? ' · both tenants must sign' : ''}${agreement.requires_landlord_signature ? ' · landlord must sign' : ''}`}</p>
                 </div>}
                 {agreement && agreement.status !== 'completed' && <Button variant="ghost" size="sm" onClick={fetchAgreement}>Refresh Signatures</Button>}
                 {agreement?.status !== 'completed' && <>
@@ -1192,18 +1204,32 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     ) : (
                       <div className="mt-2 space-y-1">
                         {agreementCompliance.items.map(item => (
-                          <p key={item.docType} className={`flex items-center gap-1.5 text-[10px] ${item.ready ? 'text-emerald-400' : 'text-amber-400'}`}>
-                            {item.ready ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
-                            {item.ready ? `${item.label} valid to ${new Date(`${item.expiryDate}T00:00:00`).toLocaleDateString('en-GB')}` : item.reason}
-                          </p>
+                          <div key={item.docType} className={`flex items-center justify-between gap-2 text-[10px] ${item.ready ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            <span className="flex items-center gap-1.5">
+                              {item.ready ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+                              {item.ready ? `${item.label} valid to ${new Date(`${item.expiryDate}T00:00:00`).toLocaleDateString('en-GB')}` : item.reason}
+                            </span>
+                            {!item.ready && enquiry.linked_property_id && (
+                              <a href={`/properties/${enquiry.linked_property_id}`} className="shrink-0 underline font-medium text-amber-300">Click to add document</a>
+                            )}
+                          </div>
                         ))}
                         {agreementCompliance.ready && <p className="pt-1 text-[10px] text-emerald-400">These documents will be attached when the signing link is emailed.</p>}
                       </div>
                     )}
                   </div>
+                  {agreementCompliance?.jointApplicant && (
+                    <div className={`rounded-lg border p-3 text-xs ${agreementCompliance.jointApplicantsReady ? 'border-emerald-500/20 bg-emerald-500/10' : 'border-amber-500/20 bg-amber-500/10'}`}>
+                      <p className="font-medium">Joint applicant: {agreementCompliance.jointApplicant.name}</p>
+                      <p className="mt-1 text-[10px] text-[var(--text-muted)]">
+                        Application {agreementCompliance.jointApplicant.applicationComplete ? 'complete' : 'incomplete'} · review {agreementCompliance.jointApplicant.applicationApproved ? 'approved' : 'pending'} · credit check {agreementCompliance.jointApplicant.creditCheckComplete ? 'complete' : 'pending'}
+                      </p>
+                      {!agreementCompliance.jointApplicantsReady && <p className="mt-1 text-[10px] text-amber-400">Both applicants must reach this stage before one shared AST can be issued.</p>}
+                    </div>
+                  )}
                   <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3 text-xs space-y-1">
                     <p className="font-medium text-[var(--text-primary)]">
-                      {agreementCompliance?.agreementType === 'client' ? `Client agreement · ${agreementCompliance.landlordName || 'landlord'}` : 'Fleming-owned agreement'}
+                      {agreementCompliance?.agreementType === 'client' ? `Client agreement · ${agreementCompliance.landlordName || 'landlord'}` : 'AST Agreement for FL Tenancies'}
                     </p>
                     <p className="text-[var(--text-muted)]">
                       {agreementCompliance?.paymentRoute === 'landlord'
@@ -1215,11 +1241,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     {agreementCompliance?.agreementType === 'client' && <p className="text-[var(--text-muted)]">Signing order: landlord first, then tenant automatically.</p>}
                     {!agreementServiceComplete && <p className="text-amber-400">Set the service type on the property before generating the agreement.</p>}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-[10px] text-[var(--text-muted)] mb-1">Tenancy start *</label>
-                      <input type="date" value={agreementStartDate} onChange={event => setAgreementStartDate(event.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
+                    <DatePicker label="Tenancy start *" value={agreementStartDate} onChange={setAgreementStartDate} />
                     <div>
                       <label className="block text-[10px] text-[var(--text-muted)] mb-1">Monthly rent *</label>
                       <input type="number" min="0.01" step="0.01" value={agreementRent} onChange={event => setAgreementRent(event.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
@@ -1229,10 +1252,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       <input type="number" min="0" step="0.01" value={agreementDeposit} onChange={event => setAgreementDeposit(event.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <input type="text" value={agreementOccupiers} onChange={event => setAgreementOccupiers(event.target.value)} placeholder="Permitted occupiers (or none)" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
-                    <input type="text" value={agreementFacilities} onChange={event => setAgreementFacilities(event.target.value)} placeholder="Shared facilities (or none)" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
-                    <input type="text" value={agreementParking} onChange={event => setAgreementParking(event.target.value)} placeholder="Parking (or none)" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="text-[10px] text-[var(--text-muted)]">Permitted occupiers (or none)<input type="text" value={agreementOccupiers} onChange={event => setAgreementOccupiers(event.target.value)} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
+                    <label className="text-[10px] text-[var(--text-muted)]">Shared facilities (or none)<input type="text" value={agreementFacilities} onChange={event => setAgreementFacilities(event.target.value)} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
+                    <label className="text-[10px] text-[var(--text-muted)] sm:col-span-2">Parking (or none)<input type="text" value={agreementParking} onChange={event => setAgreementParking(event.target.value)} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
                   </div>
                   {agreementCompliance?.paymentRoute === 'landlord' && (
                     <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 space-y-2">
@@ -1249,6 +1272,17 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendEmail} onChange={e => setAgreementSendEmail(e.target.checked)} /> {agreementCompliance?.agreementType === 'client' ? 'Email landlord, then tenant' : 'Email tenant signing link'}</label>
                     <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendSms} onChange={e => setAgreementSendSms(e.target.checked)} /> {agreementCompliance?.agreementType === 'client' ? 'SMS tenant after landlord signs' : 'SMS tenant signing link'}</label>
                   </div>
+                  {agreementSendEmail && (
+                    <label className="block text-[10px] text-[var(--text-muted)]">Editable tenant email preview
+                      <textarea value={agreementEmailMessage} onChange={event => setAgreementEmailMessage(event.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
+                    </label>
+                  )}
+                  {agreementSendSms && (
+                    <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview
+                      <textarea value={agreementSmsMessage} onChange={event => setAgreementSmsMessage(event.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
+                    </label>
+                  )}
+                  {(agreementSendEmail || agreementSendSms) && <p className="text-[10px] text-[var(--text-muted)]">Available placeholders: {'{{first_name}}'}, {'{{property_address}}'}, {'{{signing_link}}'}.</p>}
                   <Button variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || agreementCompliance?.ready !== true || !agreementDetailsComplete}>{saving ? 'Generating...' : agreement ? 'Generate Replacement Agreement' : 'Generate & Issue Agreement'}</Button>
                 </>}
                 {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}

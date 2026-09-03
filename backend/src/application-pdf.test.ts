@@ -42,6 +42,10 @@ describe('completed tenancy application PDF', () => {
       },
       signatureName: 'Test Applicant',
       signatureDataUrl: `data:image/png;base64,${signature.toString('base64')}`,
+      auditEntries: [
+        { timestamp: new Date('2026-08-31T11:55:00Z'), action: 'Opened application form', detail: 'Secure application link opened' },
+        { timestamp: new Date('2026-08-31T12:00:00Z'), action: 'Submitted application', detail: 'Initial application submitted' },
+      ],
     });
 
     expect(result.subarray(0, 5).toString()).toBe('%PDF-');

@@ -1331,6 +1331,20 @@
         const pathParts = window.location.pathname.split('/');
         const token = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
 
+        document.addEventListener('click', event => {
+            if (!token || token === 'onboarding') return;
+            if (!(event.target instanceof Element)) return;
+            const target = event.target.closest('button, a, input, select, textarea, label');
+            if (!target) return;
+            const element = target.id || target.getAttribute('aria-label') || target.getAttribute('name') || target.tagName.toLowerCase();
+            void fetch(`${API_BASE_URL}/api/public/application-form/${token}/events`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ element, step: currentStep }),
+                keepalive: true
+            }).catch(() => {});
+        }, { capture: true });
+
         const FIELD_MAP = {
             first_name: 'f_first_name', last_name: 'f_last_name', email: 'f_email', phone: 'f_phone',
             date_of_birth: 'f_dob', ni_number: 'f_ni', marital_status: 'f_marital_status', gross_annual_income: 'f_gross_income',
@@ -1528,7 +1542,9 @@
             Object.entries(FIELD_MAP).forEach(([key, id]) => {
                 const el = document.getElementById(id);
                 if (!el || stored[key] === undefined || stored[key] === null) return;
-                if (BOOLEAN_SELECT_KEYS.has(key)) setYesNo(id, stored[key] ? 'yes' : 'no');
+                if (BOOLEAN_SELECT_KEYS.has(key)) {
+                    if (stored[key] !== '') setYesNo(id, stored[key] ? 'yes' : 'no');
+                }
                 else if (key === 'legal_proceedings') setYesNo(id, String(stored[key]).toLowerCase() === 'yes' ? 'yes' : 'no');
                 else if (['date_of_birth', 'employment_start_date', 'preferred_start_date'].includes(key)) el.value = isoToDDMMYYYY(String(stored[key]));
                 else el.value = stored[key];
@@ -1547,11 +1563,13 @@
                 const requested = document.getElementById('changes-request-banner');
                 requested.textContent = `Changes requested by Fleming Lettings: ${formData.application_review_notes || 'Please update the highlighted items below.'}`;
                 requested.style.display = 'block';
-                document.getElementById('signature-controls').style.display = 'none';
-                document.getElementById('signature-retained').style.display = 'block';
-                document.getElementById('f_typed_name').removeAttribute('required');
-                document.getElementById('f_generate_signature').removeAttribute('data-required-choice');
-                hasSigned = true;
+                hasSigned = formData.signature_retained === true;
+                if (hasSigned) {
+                    document.getElementById('signature-controls').style.display = 'none';
+                    document.getElementById('signature-retained').style.display = 'block';
+                    document.getElementById('f_typed_name').removeAttribute('required');
+                    document.getElementById('f_generate_signature').removeAttribute('data-required-choice');
+                }
             }
 
             const address = formatPropertyAddress(formData.property_address, formData.property_postcode);
@@ -1746,7 +1764,7 @@
             const moneyIds = new Set(['f_gross_income', 'f_current_rent', 'f_self_employed_income', 'f_contractor_income', 'f_guarantor_income']);
             Object.entries(FIELD_MAP).forEach(([key, id]) => {
                 const el = document.getElementById(id);
-                if (BOOLEAN_SELECT_KEYS.has(key)) data[key] = el.value === 'yes';
+                if (BOOLEAN_SELECT_KEYS.has(key)) data[key] = el.value === '' ? '' : el.value === 'yes';
                 else if (key === 'legal_proceedings') data[key] = el.value === 'yes' ? 'Yes' : el.value === 'no' ? 'No' : '';
                 else if (moneyIds.has(id)) data[key] = unformatMoney(el.value);
                 else data[key] = el.value;

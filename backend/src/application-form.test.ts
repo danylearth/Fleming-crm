@@ -47,4 +47,10 @@ describe('tenant application form feedback', () => {
     expect(formHtml).toContain('oninput="formatSortCode(this)"');
     expect(formHtml).toContain('maxlength="8" pattern="\\d{8}"');
   });
+
+  it('keeps a retained signature during requested changes and audits form clicks', () => {
+    expect(formHtml).toContain('formData.signature_retained === true');
+    expect(formHtml).toContain('/events`');
+    expect(formHtml).toContain("el.value === '' ? '' : el.value === 'yes'");
+  });
 });

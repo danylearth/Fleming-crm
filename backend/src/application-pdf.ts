@@ -8,6 +8,7 @@ export interface CompletedApplicationPdfInput {
   formData: Record<string, unknown>;
   signatureName: string;
   signatureDataUrl: string;
+  auditEntries?: Array<{ timestamp: Date; action: string; detail: string }>;
 }
 
 const HOLDING_DEPOSIT_TERMS = [
@@ -148,6 +149,17 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
         .text(accepted ? 'ACCEPTED' : 'NOT ACCEPTED', { continued: true });
       doc.font('Helvetica').fillColor('#20201f').text(`  ${declaration}`, { width: contentWidth });
       doc.moveDown(0.4);
+    }
+
+    if (input.auditEntries?.length) {
+      section('Application audit trail');
+      for (const entry of input.auditEntries) {
+        ensureSpace(34);
+        const timestamp = entry.timestamp.toLocaleString('en-GB', { timeZone: 'Europe/London' });
+        doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#555555').text(`${timestamp} - ${entry.action}`);
+        doc.font('Helvetica').fontSize(8.5).fillColor('#20201f').text(entry.detail, { width: contentWidth });
+        doc.moveDown(0.35);
+      }
     }
 
     ensureSpace(180);

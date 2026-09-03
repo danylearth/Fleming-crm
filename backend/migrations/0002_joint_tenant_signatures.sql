@@ -1,0 +1,10 @@
+ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS requires_joint_tenant_signature INTEGER DEFAULT 0;
+ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS joint_tenant_token TEXT UNIQUE;
+ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS joint_tenant_signature TEXT;
+ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS joint_tenant_signature_name TEXT;
+ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS joint_tenant_signed_at TIMESTAMP;
+ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS joint_tenant_signature_ip TEXT;
+ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS joint_tenant_signature_user_agent TEXT;
+ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS tenant_delivery_email_message TEXT;
+ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS tenant_delivery_sms_message TEXT;
+CREATE INDEX IF NOT EXISTS idx_tenancy_agreements_joint_token ON tenancy_agreements(joint_tenant_token);

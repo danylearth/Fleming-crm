@@ -20,40 +20,29 @@ export interface SendEmailParams {
   }>;
 }
 
-function emailSignature(): string {
-  return `
-    <div style="margin-top:28px;padding-top:20px;border-top:1px solid #eee;color:#555;font-size:13px;line-height:1.6">
-      <strong style="color:#25073B">Lettings Support Team | fleminglettings.co.uk</strong><br/>
-      <a href="mailto:${OUTBOUND_EMAIL_ADDRESS}" style="color:#DC006D;text-decoration:none">${OUTBOUND_EMAIL_ADDRESS}</a> | 01902 212 415
-    </div>
-    <div style="margin-top:18px;background:linear-gradient(135deg,#25073B,#DC006D);padding:20px;text-align:center;color:#fff;border-radius:8px">
-      <strong style="font-size:17px">All of your property needs</strong><br/>
-      <span style="font-size:14px">Without any of the hassle</span>
-    </div>`;
-}
-
 function emailDisclaimer(): string {
   return `
-    <div style="background:#f5f5f5;padding:16px;border-radius:0 0 12px 12px;border:1px solid #eee;border-top:none">
-      <p style="font-size:10px;color:#888;line-height:1.5;margin:0">
+    <div style="padding:20px 40px">
+      <p style="font-size:10px;color:#9A93A0;line-height:1.5;margin:0">
         This email and any attachments are confidential and intended only for the named recipient. If you received it in error, please delete it and notify us. Fleming Lettings and Developments UK Limited, company number 13943597. Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG.
       </p>
     </div>`;
 }
 
 export function brandedEmailHtml(title: string, content: string): string {
-  return `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333">
-      <div style="background:linear-gradient(135deg,#25073B,#DC006D);padding:30px;border-radius:12px 12px 0 0;text-align:center">
-        <div style="color:#fff;font-size:24px;font-weight:700">Fleming Lettings</div>
-        <div style="color:rgba(255,255,255,.85);font-size:13px;margin-top:5px">${title}</div>
-      </div>
-      <div style="background:#fff;padding:32px;border:1px solid #eee;border-top:none;font-size:14px;line-height:1.65">
-        ${content}
-        ${emailSignature()}
-      </div>
-      ${emailDisclaimer()}
-    </div>`;
+  return `<!doctype html><html><body style="margin:0;background:#EEEEEE;font-family:Helvetica,Arial,sans-serif;color:#1E1E1E">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#EEEEEE"><tr><td align="center" style="padding:24px 12px">
+      <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;background:#ffffff">
+        <tr><td style="padding:30px 40px;background:#27083D">
+          <table role="presentation" width="100%"><tr><td style="font-size:21px;font-weight:bold;color:#ffffff">FLEMING LETTINGS</td><td align="right" style="font-size:19px;font-weight:bold;color:#DC006D">${escapeHtml(title)}</td></tr></table>
+        </td></tr>
+        <tr><td style="height:6px;background:#DC006D;font-size:0;line-height:0">&nbsp;</td></tr>
+        <tr><td style="padding:34px 40px;font-size:16px;line-height:1.65">${content}</td></tr>
+        <tr><td style="background:#DC006D;padding:24px 40px;color:#ffffff"><strong style="font-size:24px">All of your property needs</strong><br><strong style="font-size:24px;color:#27083D">Without any of the hassle</strong></td></tr>
+        <tr><td style="background:#27083D;padding:24px 40px;color:#ffffff;font-size:13px;line-height:1.65"><strong>Lettings Support Team | fleminglettings.co.uk</strong><br><a href="mailto:${OUTBOUND_EMAIL_ADDRESS}" style="color:#ffffff">${OUTBOUND_EMAIL_ADDRESS}</a><br>01902 212 415</td></tr>
+        <tr><td style="background:#1E1E1E">${emailDisclaimer()}</td></tr>
+      </table>
+    </td></tr></table></body></html>`;
 }
 
 export function normalizePropertyAddress(address: string, postcode?: string | null): string {
@@ -72,7 +61,7 @@ export function applicationChangesRequestedEmail(name: string, changes: string, 
   return {
     subject: 'More information required for your tenancy application',
     html: brandedEmailHtml('Application Review', `
-      <p>Hi ${name || 'there'},</p>
+      <p>Hi ${escapeHtml(name || 'there')},</p>
       <p>Thank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you.</p>
       <h3 style="font-size:15px;color:#25073B;margin:24px 0 10px">What we need to complete your application:</h3>
       <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px">${escapedChanges}</div>
@@ -120,16 +109,24 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
 
 export function viewingConfirmationEmail(name: string, address: string, date: string): { subject: string; html: string } {
   const cleanAddress = normalizePropertyAddress(address);
+  const mapQuery = encodeURIComponent(cleanAddress);
   return {
     subject: `Your viewing with Fleming Lettings at ${cleanAddress}`,
     html: brandedEmailHtml('Viewing Confirmation', `
-        <p>Hi ${name},</p>
+        <p>Hi ${escapeHtml(name || 'there')},</p>
         <p>This is to confirm your viewing at:</p>
-        <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 16px 0;">
-          <strong>${cleanAddress}</strong><br/>
-          <span style="color: #666;">Date: ${date}</span>
+        <div style="background:#563F6E;padding:18px;border-radius:4px;margin:16px 0;color:#ffffff">
+          <strong>${escapeHtml(cleanAddress)}</strong><br/>
+          <span style="color:#EEC9DF">Date: ${escapeHtml(date)}</span>
         </div>
-        <p>Please arrive on time. If you need to reschedule, reply to this email or call us.</p>
+        <p>Please arrive on time, or if you're running late or need us to hang on for a little longer, please call us on <a href="tel:01902212415" style="color:#DC006D">01902 212 415</a>.</p>
+        <p><strong>Get directions</strong></p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
+          <td width="49%" style="background:#F5E8F0;border-left:4px solid #DC006D;padding:16px"><a href="https://www.google.com/maps/search/?api=1&amp;query=${mapQuery}" style="color:#25073B;text-decoration:none;font-weight:bold">Google Maps<br><span style="font-weight:normal;font-size:12px">Click to get directions</span></a></td>
+          <td width="2%"></td>
+          <td width="49%" style="background:#F5E8F0;border-left:4px solid #563F6E;padding:16px"><a href="https://maps.apple.com/?q=${mapQuery}" style="color:#25073B;text-decoration:none;font-weight:bold">Apple Maps<br><span style="font-weight:normal;font-size:12px">Click to get directions</span></a></td>
+        </tr></table>
+        <p>We look forward to seeing you soon and showing you around!</p>
       `),
   };
 }
@@ -186,65 +183,28 @@ export function holdingDepositRequestEmail(
   name: string, address: string, monthlyRent: number, securityDeposit: number,
   holdingDeposit: number, applicationFormUrl: string
 ): { subject: string; html: string } {
+  const safeName = escapeHtml(name || 'there');
+  const safeAddress = escapeHtml(address);
+  const safeApplicationUrl = escapeHtml(applicationFormUrl);
   return {
     subject: `Holding Deposit Request - ${address}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
-          <h1 style="color: #fff; margin: 0; font-size: 22px;">Fleming Lettings</h1>
-          <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px;">Holding Deposit Request</p>
-        </div>
-        <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
-          <p style="font-size: 15px; color: #333;">Dear ${name},</p>
-          <p style="font-size: 14px; color: #555; line-height: 1.6;">
-            Thank you for your interest in <strong>${address}</strong>. We are pleased to confirm that we would like to proceed with your application.
-          </p>
-          <p style="font-size: 14px; color: #555; line-height: 1.6;">
-            To secure this property, we require an initial holding deposit. Please see the financial summary below:
-          </p>
-          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-            <tr style="background: #f8f8f8;">
-              <td style="padding: 12px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Monthly Rent</td>
-              <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">&pound;${monthlyRent.toLocaleString()}</td>
-            </tr>
-            <tr>
-              <td style="padding: 12px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Security Deposit</td>
-              <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">&pound;${securityDeposit.toLocaleString()}</td>
-            </tr>
-            <tr style="background: #f0f8ff;">
-              <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #DC006D; border-bottom: 2px solid #DC006D;">Holding Deposit (due now)</td>
-              <td style="padding: 12px 16px; font-size: 16px; font-weight: 700; color: #DC006D; text-align: right; border-bottom: 2px solid #DC006D;">&pound;${holdingDeposit.toLocaleString()}</td>
-            </tr>
-          </table>
-          <p style="font-size: 14px; color: #555; line-height: 1.6;">
-            Please complete your application and review the holding deposit terms by clicking the button below:
-          </p>
-          <div style="text-align: center; margin: 24px 0;">
-            <a href="${applicationFormUrl}" style="display: inline-block; background: linear-gradient(135deg, #DC006D, #a5004f); color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;">
-              Complete Application &amp; Review Terms
-            </a>
-          </div>
-          <p style="font-size: 13px; color: #888; line-height: 1.6;">
-            Please review the holding deposit information and financial summary above carefully before making any payment.
-          </p>
-          <p style="font-size: 13px; color: #555; line-height: 1.6;">
-            Struggling to do it all at once? You can save your application and pick up where you left off at any time by opening this link again.
-          </p>
-          <p style="font-size: 14px; color: #555; line-height: 1.6;">
-            If you have any questions, please don't hesitate to contact us.
-          </p>
-          <p style="font-size: 14px; color: #555;">
-            Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
-            <span style="font-size: 12px; color: #888;">01902 212 415 | contact@tenancies.fleminglettings.co.uk</span>
-          </p>
-        </div>
-        <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
-          <p style="font-size: 11px; color: #999; margin: 0;">
-            Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG
-          </p>
-        </div>
-      </div>
-    `,
+    html: brandedEmailHtml('Holding deposit request', `
+      <h1 style="font-size:34px;line-height:40px;color:#27083D;margin:0 0 18px">Dear ${safeName},</h1>
+      <p>Thank you for your interest in <strong>${safeAddress}</strong>. We are pleased to confirm that we would like to proceed with your application.</p>
+      <p>To secure this property, we require an initial holding deposit. Please see the financial summary below:</p>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0">
+        <tr><td style="padding:14px 18px;background:#EEEEEE">Monthly Rent</td><td align="right" style="padding:14px 18px;background:#EEEEEE;font-weight:bold;color:#27083D">&pound;${monthlyRent.toLocaleString()}</td></tr>
+        <tr><td style="height:4px;font-size:0">&nbsp;</td></tr>
+        <tr><td style="padding:14px 18px;background:#EEEEEE">Security Deposit</td><td align="right" style="padding:14px 18px;background:#EEEEEE;font-weight:bold;color:#27083D">&pound;${securityDeposit.toLocaleString()}</td></tr>
+        <tr><td style="height:4px;font-size:0">&nbsp;</td></tr>
+        <tr><td style="padding:18px;background:#563F6E;color:#ffffff;font-weight:bold">Holding Deposit (due now)</td><td align="right" style="padding:18px;background:#563F6E;color:#ffffff;font-size:22px;font-weight:bold">&pound;${holdingDeposit.toLocaleString()}</td></tr>
+      </table>
+      <p>Please complete your application and review the holding deposit terms by clicking the button below:</p>
+      <p><a href="${safeApplicationUrl}" style="display:inline-block;background:#DC006D;color:#ffffff;text-decoration:none;padding:15px 32px;font-weight:bold">Complete Application &amp; Review Terms</a></p>
+      <p>Please review the holding deposit information and financial summary above carefully before making any payment.</p>
+      <p>Struggling to do it all at once? You can save your application and pick up where you left off at any time by opening this link again.</p>
+      <p>If you have any questions, please don't hesitate to contact us.</p>
+    `),
   };
 }
 
