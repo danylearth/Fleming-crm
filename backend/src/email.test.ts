@@ -41,8 +41,8 @@ describe('email provider safety', () => {
     const { viewingConfirmationEmail } = await import('./email');
     const email = viewingConfirmationEmail('Alex', '10 High Street, WV1 1AA', '25/08/2026 at 14:00');
     expect(email.subject).toBe('Your viewing with Fleming Lettings at 10 High Street, WV1 1AA');
-    expect(email.html).toContain('Lettings Support Team | fleminglettings.co.uk');
-    expect(email.html).toContain('contact@tenancies.fleminglettings.co.uk');
+    expect(email.html).toContain('Lettings Support Team');
+    expect(email.html).toContain('enquiries@fleminglettings.co.uk');
     expect(email.html).toContain('company number 13943597');
     expect(email.html).toContain('Google Maps');
     expect(email.html).toContain('Apple Maps');
@@ -59,7 +59,7 @@ describe('email provider safety', () => {
     const { applicationChangesRequestedEmail } = await import('./email');
     const email = applicationChangesRequestedEmail('Sam', 'Please upload a clearer passport scan.', 'https://apply.example.test/token');
     expect(email.subject).toBe('More information required for your tenancy application');
-    expect(email.html).toContain('What we need to complete your application:');
+    expect(email.html).toContain('What we need to complete your application');
     expect(email.html).toContain('Please upload a clearer passport scan.');
     expect(email.html).toContain('https://apply.example.test/token');
   });

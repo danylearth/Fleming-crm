@@ -1,4 +1,6 @@
 import { Resend } from 'resend';
+import fs from 'fs';
+import path from 'path';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 export const OUTBOUND_EMAIL_ADDRESS = 'contact@tenancies.fleminglettings.co.uk';
@@ -8,6 +10,36 @@ const ALLOW_SIMULATED_MESSAGES = process.env.ALLOW_SIMULATED_MESSAGES === 'true'
 const escapeHtml = (value: unknown): string => String(value ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+const emailTemplateDirectory = path.join(__dirname, 'email-templates');
+
+function renderFinalEmailTemplate(filename: string, values: Record<string, string>): string {
+  let html = fs.readFileSync(path.join(emailTemplateDirectory, filename), 'utf8');
+  for (const [key, value] of Object.entries(values)) {
+    html = html.split(`{{${key}}}`).join(value);
+  }
+  const unresolved = html.match(/\{\{[A-Z_]+\}\}/g);
+  if (unresolved) throw new Error(`Missing values for ${filename}: ${[...new Set(unresolved)].join(', ')}`);
+  // The supplied final HTML references a local assets folder that was not part
+  // of the hand-off. Avoid sending broken image URLs; retain a text logo so the
+  // Fleming brand remains visible when images are unavailable.
+  html = html.replace(/<img\s+src="assets\/[^"]+"[^>]*alt="([^"]*)"[^>]*\/>/g, (_tag, alt: string) =>
+    alt === 'Fleming Lettings'
+      ? '<span style="font-family:Helvetica,Arial,sans-serif;font-size:20px;font-weight:bold;color:#ffffff;letter-spacing:.5px">FLEMING LETTINGS</span>'
+      : ''
+  );
+  return html;
+}
+
+function addressParts(address: string): { full: string; short: string; remainder: string } {
+  const full = normalizePropertyAddress(address);
+  const [short, ...remainder] = full.split(',').map(part => part.trim()).filter(Boolean);
+  return { full, short: short || full, remainder: remainder.join(', ') };
+}
+
+function emailMoneyCompact(value: number): string {
+  return Number(value || 0).toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
 
 export interface SendEmailParams {
   to: string | string[];
@@ -77,43 +109,35 @@ export interface TenancyAgreementEmailInput {
 }
 
 export function tenancyAgreementEmail(input: TenancyAgreementEmailInput): { subject: string; html: string } {
-  const propertyAddress = escapeHtml(input.propertyAddress);
-  const landlord = `${escapeHtml(input.landlordName)}${input.landlordAddress ? `<br><span style="font-weight:normal;color:#1E1E1E">${escapeHtml(input.landlordAddress)}</span>` : ''}`;
-  const message = escapeHtml(input.customMessage || `Your tenancy agreement for ${input.propertyAddress} is ready to review and sign.`).replace(/\r?\n/g, '<br>');
+  const address = addressParts(input.propertyAddress);
   return {
     subject: 'Your tenancy agreement is ready to sign',
-    html: brandedEmailHtml('Tenancy agreement', `
-      <h1 style="font-size:34px;line-height:40px;color:#27083D;margin:0 0 18px">Hi ${escapeHtml(input.firstName || 'there')},</h1>
-      <p>${message}</p>
-      <div style="background:#563F6E;padding:22px 24px;margin:24px 0;color:#ffffff"><span style="font-size:14px;color:#EEEEEE">Property</span><br><strong style="font-size:22px">${propertyAddress}</strong></div>
-      <h2 style="font-size:20px;color:#27083D;margin:28px 0 14px">Agreement summary</h2>
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0 4px">
-        ${emailSummaryRow('Tenancy type', 'Assured Periodic Tenancy')}
-        ${emailSummaryRow('Start date', emailDate(input.tenancyStartDate))}
-        ${emailSummaryRow('Landlord', landlord)}
-        ${emailSummaryRow('Monthly rent', `&pound;${emailMoney(input.monthlyRent)}`)}
-        ${emailSummaryRow('Security deposit', `&pound;${emailMoney(input.securityDeposit)}`)}
-        ${emailSummaryRow('Funds already on account', `&pound;${emailMoney(input.fundsOnAccount)}`)}
-        ${emailSummaryRow('Balance due before move in', `&pound;${emailMoney(input.balanceDue)}`, true)}
-      </table>
-      <p>All of the property’s compliance documentation is attached for your records.</p>
-      <p>Once you have completed and signed your tenancy agreement, you will be emailed the completed documents on a new thread.</p>
-      <p><a href="${escapeHtml(input.signingUrl)}" style="display:inline-block;background:#DC006D;color:#ffffff;text-decoration:none;padding:15px 32px;font-weight:bold">Review and sign agreement</a></p>
-    `),
+    html: renderFinalEmailTemplate('06-tenancy-agreement.html', {
+      FIRST_NAME: escapeHtml(input.firstName || 'there'),
+      PROPERTY_ADDRESS: escapeHtml(address.full),
+      PROPERTY_SHORT_ADDRESS: escapeHtml(address.short),
+      PROPERTY_ADDRESS_REMAINDER: escapeHtml(address.remainder),
+      INTRO_MESSAGE: escapeHtml(input.customMessage || `Your tenancy agreement for ${address.full} is ready to review and sign.`).replace(/\r?\n/g, '<br>'),
+      TENANCY_START_DATE: emailDate(input.tenancyStartDate),
+      LANDLORD_NAME: escapeHtml(input.landlordName),
+      LANDLORD_ADDRESS: escapeHtml(input.landlordAddress || ''),
+      MONTHLY_RENT: emailMoneyCompact(input.monthlyRent),
+      SECURITY_DEPOSIT: emailMoneyCompact(input.securityDeposit),
+      FUNDS_ON_ACCOUNT: emailMoneyCompact(input.fundsOnAccount),
+      BALANCE_DUE: emailMoneyCompact(input.balanceDue),
+      SIGNING_URL: escapeHtml(input.signingUrl),
+    }),
   };
 }
 
 export function completedTenancyAgreementEmail(firstName: string, propertyAddress: string): { subject: string; html: string } {
-  const replySubject = encodeURIComponent(`Completed tenancy agreement - ${propertyAddress}`);
+  const address = addressParts(propertyAddress);
   return {
     subject: 'Copy of your completed tenancy agreement',
-    html: brandedEmailHtml('Completed agreement', `
-      <h1 style="font-size:34px;line-height:40px;color:#27083D;margin:0 0 18px">Hi ${escapeHtml(firstName || 'there')},</h1>
-      <p>Please see attached your completed copy of your Assured Periodic Tenancy agreement.</p>
-      <div style="background:#563F6E;padding:22px 24px;margin:24px 0;color:#ffffff"><span style="font-size:14px;color:#EEEEEE">Property</span><br><strong style="font-size:22px">${escapeHtml(propertyAddress)}</strong></div>
-      <p>If you have any questions, reply to this email or call us on <a href="tel:+441902212415" style="color:#DC006D">01902 212 415</a>.</p>
-      <p><a href="mailto:${OUTBOUND_EMAIL_ADDRESS}?subject=${replySubject}" style="display:inline-block;background:#DC006D;color:#ffffff;text-decoration:none;padding:15px 32px;font-weight:bold">Reply to this email</a></p>
-    `),
+    html: renderFinalEmailTemplate('07-completed-tenancy-agreement.html', {
+      FIRST_NAME: escapeHtml(firstName || 'there'),
+      PROPERTY_SHORT_ADDRESS: escapeHtml(address.short),
+    }),
   };
 }
 
@@ -130,31 +154,24 @@ export interface FinalBalanceEmailInput {
 }
 
 export function finalBalanceHandoverEmail(input: FinalBalanceEmailInput): { subject: string; html: string } {
-  const replySubject = encodeURIComponent(`Final balance and handover - ${input.propertyAddress}`);
+  const address = addressParts(input.propertyAddress);
   return {
     subject: 'Final balance and handover',
-    html: brandedEmailHtml('Final balance and handover', `
-      <h1 style="font-size:34px;line-height:40px;color:#27083D;margin:0 0 18px">Hi ${escapeHtml(input.firstName || 'there')},</h1>
-      <p>${escapeHtml(input.customMessage || `Your tenancy agreement has been completed. The remaining balance for ${input.propertyAddress} is set out below.`).replace(/\r?\n/g, '<br>')}</p>
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0 4px;margin:24px 0">
-        ${emailSummaryRow('Security deposit', `&pound;${emailMoney(input.securityDeposit)}`)}
-        ${emailSummaryRow('First month’s rent', `&pound;${emailMoney(input.monthlyRent)}`)}
-        ${emailSummaryRow('Holding deposit already received', `&minus;&pound;${emailMoney(input.holdingDeposit)}`)}
-        ${emailSummaryRow('Remaining balance', `&pound;${emailMoney(input.balanceDue)}`, true)}
-      </table>
-      <h2 style="font-size:20px;color:#27083D;margin:28px 0 14px">Bank details for payment</h2>
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0 4px">
-        ${emailSummaryRow('Bank', escapeHtml(input.bankDetails.bankName))}
-        ${emailSummaryRow('Account name', escapeHtml(input.bankDetails.accountName))}
-        ${emailSummaryRow('Sort code', escapeHtml(input.bankDetails.sortCode))}
-        ${emailSummaryRow('Account number', escapeHtml(input.bankDetails.accountNumber))}
-        ${emailSummaryRow('Payment reference', escapeHtml(input.paymentReference), true)}
-      </table>
-      <p>Please contact your lettings manager or our office once payment has been made so we can confirm receipt.</p>
-      <p>Once the funds have been received, we can arrange a preferred date and time on site for the handover and inventory.</p>
-      <p><a href="mailto:${OUTBOUND_EMAIL_ADDRESS}?subject=${replySubject}" style="display:inline-block;background:#DC006D;color:#ffffff;text-decoration:none;padding:15px 32px;font-weight:bold">Reply with your preferred time</a></p>
-      <p>If you have any questions, reply to this email or call us on <a href="tel:+441902212415" style="color:#DC006D">01902 212 415</a>.</p>
-    `),
+    html: renderFinalEmailTemplate('08-final-balance-handover.html', {
+      FIRST_NAME: escapeHtml(input.firstName || 'there'),
+      PROPERTY_ADDRESS: escapeHtml(address.full),
+      PROPERTY_SHORT_ADDRESS: escapeHtml(address.short),
+      INTRO_MESSAGE: escapeHtml(input.customMessage || `Your tenancy agreement has been completed. The remaining balance for ${address.full} is set out below.`).replace(/\r?\n/g, '<br>'),
+      SECURITY_DEPOSIT: emailMoney(input.securityDeposit),
+      MONTHLY_RENT: emailMoney(input.monthlyRent),
+      HOLDING_DEPOSIT: emailMoney(input.holdingDeposit),
+      BALANCE_DUE: emailMoney(input.balanceDue),
+      BANK_NAME: escapeHtml(input.bankDetails.bankName),
+      ACCOUNT_NAME: escapeHtml(input.bankDetails.accountName),
+      SORT_CODE: escapeHtml(input.bankDetails.sortCode),
+      ACCOUNT_NUMBER: escapeHtml(input.bankDetails.accountNumber),
+      PAYMENT_REFERENCE: escapeHtml(input.paymentReference),
+    }),
   };
 }
 
@@ -168,8 +185,8 @@ export interface HandoverAppointmentEmailInput {
 }
 
 export function handoverAppointmentEmail(input: HandoverAppointmentEmailInput): { subject: string; html: string } {
-  const propertyAddress = escapeHtml(input.propertyAddress);
-  const mapQuery = encodeURIComponent(input.propertyAddress);
+  const address = addressParts(input.propertyAddress);
+  const mapQuery = encodeURIComponent(address.full);
   const date = input.appointmentDate instanceof Date
     ? input.appointmentDate
     : new Date(`${String(input.appointmentDate).slice(0, 10)}T12:00:00Z`);
@@ -179,26 +196,17 @@ export function handoverAppointmentEmail(input: HandoverAppointmentEmailInput): 
   const intro = escapeHtml(input.customMessage || 'Finally, we’re nearly there! Your move in and handover appointment is confirmed. We will meet you at the property to conduct the inventory, hand over the keys and answer any final questions that you may have.').replace(/\r?\n/g, '<br>');
   return {
     subject: 'Your move in and handover date',
-    html: brandedEmailHtml('Your move in date', `
-      <h1 style="font-size:34px;line-height:40px;color:#27083D;margin:0 0 18px">Hi ${escapeHtml(input.firstName || 'there')},</h1>
-      <p>${intro}</p>
-      <div style="background:#563F6E;padding:24px;margin:24px 0;color:#ffffff">
-        <span style="font-size:14px;color:#EEEEEE">Your appointment</span><br>
-        <strong style="font-size:28px;line-height:38px">${displayDate}</strong><br>
-        <strong style="font-size:22px;line-height:32px">${escapeHtml(input.appointmentTime)}</strong>
-        <div style="padding-top:14px;color:#EEEEEE">Your appointment is with</div>
-        <strong style="font-size:19px">${escapeHtml(input.appointmentWith)}</strong>
-        <div style="padding-top:14px;color:#EEEEEE">Meeting at</div>
-        <strong style="font-size:19px">${propertyAddress}</strong>
-      </div>
-      <p>Please arrive on time. If you are running late or need us to wait a little longer, call us on <a href="tel:+441902212415" style="color:#DC006D">01902 212 415</a>.</p>
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:8px 0;margin:24px -8px 0">
-        <tr>
-          <td style="width:50%;background:#FCE9F2;border-left:4px solid #DC006D;padding:18px"><a href="https://www.google.com/maps/search/?api=1&amp;query=${mapQuery}" style="color:#27083D;text-decoration:none;font-weight:bold">Google Maps<br><span style="font-size:13px;font-weight:normal;color:#563F6E">Get directions</span></a></td>
-          <td style="width:50%;background:#FCE9F2;border-left:4px solid #563F6E;padding:18px"><a href="https://maps.apple.com/?q=${mapQuery}" style="color:#27083D;text-decoration:none;font-weight:bold">Apple Maps<br><span style="font-size:13px;font-weight:normal;color:#563F6E">Get directions</span></a></td>
-        </tr>
-      </table>
-    `),
+    html: renderFinalEmailTemplate('09-move-in-date.html', {
+      FIRST_NAME: escapeHtml(input.firstName || 'there'),
+      PROPERTY_ADDRESS: escapeHtml(address.full),
+      PROPERTY_SHORT_ADDRESS: escapeHtml(address.short),
+      APPOINTMENT_DATE: displayDate,
+      APPOINTMENT_TIME: escapeHtml(input.appointmentTime),
+      APPOINTMENT_WITH: escapeHtml(input.appointmentWith),
+      INTRO_MESSAGE: intro,
+      GOOGLE_MAP_URL: escapeHtml(`https://www.google.com/maps/search/?api=1&query=${mapQuery}`),
+      APPLE_MAP_URL: escapeHtml(`https://maps.apple.com/?q=${mapQuery}`),
+    }),
   };
 }
 
@@ -212,20 +220,13 @@ export function normalizePropertyAddress(address: string, postcode?: string | nu
 }
 
 export function applicationChangesRequestedEmail(name: string, changes: string, applicationUrl: string): { subject: string; html: string } {
-  const escapedChanges = String(changes)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/\r?\n/g, '<br/>');
   return {
     subject: 'More information required for your tenancy application',
-    html: brandedEmailHtml('Application Review', `
-      <p>Hi ${escapeHtml(name || 'there')},</p>
-      <p>Thank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you.</p>
-      <h3 style="font-size:15px;color:#25073B;margin:24px 0 10px">What we need to complete your application:</h3>
-      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px">${escapedChanges}</div>
-      <p>Please use your secure link to update the application:</p>
-      <p><a href="${applicationUrl}" style="display:inline-block;background:#DC006D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">Update your application</a></p>
-      <p>If you need any help, please contact our office on 01902 212 415.</p>
-    `),
+    html: renderFinalEmailTemplate('05-application-review.html', {
+      FIRST_NAME: escapeHtml(name || 'there'),
+      REQUESTED_CHANGES: escapeHtml(changes).replace(/\r?\n/g, '<br>'),
+      APPLICATION_URL: escapeHtml(applicationUrl),
+    }),
   };
 }
 
@@ -265,26 +266,18 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
 // ── Email Templates ──
 
 export function viewingConfirmationEmail(name: string, address: string, date: string): { subject: string; html: string } {
-  const cleanAddress = normalizePropertyAddress(address);
-  const mapQuery = encodeURIComponent(cleanAddress);
+  const cleanAddress = addressParts(address);
+  const mapQuery = encodeURIComponent(cleanAddress.full);
   return {
-    subject: `Your viewing with Fleming Lettings at ${cleanAddress}`,
-    html: brandedEmailHtml('Viewing Confirmation', `
-        <p>Hi ${escapeHtml(name || 'there')},</p>
-        <p>This is to confirm your viewing at:</p>
-        <div style="background:#563F6E;padding:18px;border-radius:4px;margin:16px 0;color:#ffffff">
-          <strong>${escapeHtml(cleanAddress)}</strong><br/>
-          <span style="color:#EEC9DF">Date: ${escapeHtml(date)}</span>
-        </div>
-        <p>Please arrive on time, or if you're running late or need us to hang on for a little longer, please call us on <a href="tel:01902212415" style="color:#DC006D">01902 212 415</a>.</p>
-        <p><strong>Get directions</strong></p>
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
-          <td width="49%" style="background:#F5E8F0;border-left:4px solid #DC006D;padding:16px"><a href="https://www.google.com/maps/search/?api=1&amp;query=${mapQuery}" style="color:#25073B;text-decoration:none;font-weight:bold">Google Maps<br><span style="font-weight:normal;font-size:12px">Click to get directions</span></a></td>
-          <td width="2%"></td>
-          <td width="49%" style="background:#F5E8F0;border-left:4px solid #563F6E;padding:16px"><a href="https://maps.apple.com/?q=${mapQuery}" style="color:#25073B;text-decoration:none;font-weight:bold">Apple Maps<br><span style="font-weight:normal;font-size:12px">Click to get directions</span></a></td>
-        </tr></table>
-        <p>We look forward to seeing you soon and showing you around!</p>
-      `),
+    subject: `Your viewing with Fleming Lettings at ${cleanAddress.full}`,
+    html: renderFinalEmailTemplate('02-viewing-confirmation.html', {
+      FIRST_NAME: escapeHtml(name || 'there'),
+      PROPERTY_ADDRESS: escapeHtml(cleanAddress.full),
+      PROPERTY_SHORT_ADDRESS: escapeHtml(cleanAddress.short),
+      VIEWING_DATE: escapeHtml(date),
+      GOOGLE_MAP_URL: escapeHtml(`https://www.google.com/maps/search/?api=1&query=${mapQuery}`),
+      APPLE_MAP_URL: escapeHtml(`https://maps.apple.com/?q=${mapQuery}`),
+    }),
   };
 }
 
@@ -340,28 +333,18 @@ export function holdingDepositRequestEmail(
   name: string, address: string, monthlyRent: number, securityDeposit: number,
   holdingDeposit: number, applicationFormUrl: string
 ): { subject: string; html: string } {
-  const safeName = escapeHtml(name || 'there');
-  const safeAddress = escapeHtml(address);
-  const safeApplicationUrl = escapeHtml(applicationFormUrl);
+  const propertyAddress = addressParts(address);
   return {
     subject: `Holding Deposit Request - ${address}`,
-    html: brandedEmailHtml('Holding deposit request', `
-      <h1 style="font-size:34px;line-height:40px;color:#27083D;margin:0 0 18px">Dear ${safeName},</h1>
-      <p>Thank you for your interest in <strong>${safeAddress}</strong>. We are pleased to confirm that we would like to proceed with your application.</p>
-      <p>To secure this property, we require an initial holding deposit. Please see the financial summary below:</p>
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0">
-        <tr><td style="padding:14px 18px;background:#EEEEEE">Monthly Rent</td><td align="right" style="padding:14px 18px;background:#EEEEEE;font-weight:bold;color:#27083D">&pound;${monthlyRent.toLocaleString()}</td></tr>
-        <tr><td style="height:4px;font-size:0">&nbsp;</td></tr>
-        <tr><td style="padding:14px 18px;background:#EEEEEE">Security Deposit</td><td align="right" style="padding:14px 18px;background:#EEEEEE;font-weight:bold;color:#27083D">&pound;${securityDeposit.toLocaleString()}</td></tr>
-        <tr><td style="height:4px;font-size:0">&nbsp;</td></tr>
-        <tr><td style="padding:18px;background:#563F6E;color:#ffffff;font-weight:bold">Holding Deposit (due now)</td><td align="right" style="padding:18px;background:#563F6E;color:#ffffff;font-size:22px;font-weight:bold">&pound;${holdingDeposit.toLocaleString()}</td></tr>
-      </table>
-      <p>Please complete your application and review the holding deposit terms by clicking the button below:</p>
-      <p><a href="${safeApplicationUrl}" style="display:inline-block;background:#DC006D;color:#ffffff;text-decoration:none;padding:15px 32px;font-weight:bold">Complete Application &amp; Review Terms</a></p>
-      <p>Please review the holding deposit information and financial summary above carefully before making any payment.</p>
-      <p>Struggling to do it all at once? You can save your application and pick up where you left off at any time by opening this link again.</p>
-      <p>If you have any questions, please don't hesitate to contact us.</p>
-    `),
+    html: renderFinalEmailTemplate('03-holding-deposit.html', {
+      FIRST_NAME: escapeHtml(name || 'there'),
+      PROPERTY_ADDRESS: escapeHtml(propertyAddress.full),
+      PROPERTY_SHORT_ADDRESS: escapeHtml(propertyAddress.short),
+      MONTHLY_RENT: emailMoneyCompact(monthlyRent),
+      SECURITY_DEPOSIT: emailMoneyCompact(securityDeposit),
+      HOLDING_DEPOSIT: emailMoneyCompact(holdingDeposit),
+      APPLICATION_URL: escapeHtml(applicationFormUrl),
+    }),
   };
 }
 
@@ -464,27 +447,12 @@ export function tenancyApplicationEmail(
 }
 
 export function enquiryConfirmationEmail(name: string, reference: string, propertyAddress?: string | null): { subject: string; html: string } {
-  const safeName = escapeHtml(name || 'there');
-  const safeReference = escapeHtml(reference);
-  const safeProperty = propertyAddress ? escapeHtml(propertyAddress) : '';
   return {
     subject: 'Welcome to Fleming Lettings!',
-    html: `<!doctype html><html><body style="margin:0;background:#f4f1f6;font-family:Arial,sans-serif;color:#332b37">
-      <div style="display:none;max-height:0;overflow:hidden">We have received your Fleming Lettings enquiry. Reference ${safeReference}.</div>
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f1f6"><tr><td align="center" style="padding:24px 12px">
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;background:#fff;border-radius:16px;overflow:hidden">
-          <tr><td style="background:#27083D;padding:30px;text-align:center;color:#fff"><div style="font-size:26px;font-weight:800;letter-spacing:.5px">FLEMING LETTINGS</div><div style="margin-top:7px;color:#e6cfe9;font-size:13px">Welcome to Fleming Lettings!</div></td></tr>
-          <tr><td style="padding:36px 34px 28px">
-            <p style="font-size:18px;font-weight:700;margin:0 0 18px;color:#27083D">Hi there ${safeName}!</p>
-            <p style="font-size:15px;line-height:1.7;margin:0 0 18px">Thank you for registering with Fleming Lettings. We have received your application${safeProperty ? ` regarding <strong>${safeProperty}</strong>` : ''} and our lettings team will review it in due course.</p>
-            <div style="background:#f7f2f8;border-left:4px solid #DC006D;padding:16px 18px;margin:22px 0;border-radius:6px"><span style="font-size:13px;color:#6f6474">Your reference</span><br><strong style="font-size:20px;color:#27083D">${safeReference}</strong></div>
-            <p style="font-size:14px;line-height:1.7">We retain your information in line with our <a href="https://fleminglettings.co.uk/privacy-policy" style="color:#DC006D">Privacy Policy</a> to support your property application and help find other suitable properties. You can ask us to remove your information at any time, subject to our legal obligations.</p>
-            <p style="font-size:14px;line-height:1.7;margin-bottom:0">If you have any questions, reply to this email or call us on <strong>01902 212 415</strong> quoting your reference.</p>
-          </td></tr>
-          <tr><td style="background:linear-gradient(135deg,#27083D,#DC006D);padding:24px;text-align:center;color:#fff"><strong style="font-size:18px">All of your property needs</strong><br><span style="font-size:14px">Without any of the hassle</span></td></tr>
-          <tr><td style="background:#f7f5f7;padding:18px 28px;text-align:center;font-size:10px;line-height:1.5;color:#827987">Fleming Lettings and Developments UK Limited · Company 13943597<br>Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG</td></tr>
-        </table>
-      </td></tr></table></body></html>`,
+    html: renderFinalEmailTemplate('01-welcome.html', {
+      FIRST_NAME: escapeHtml(name || 'there'),
+      REFERENCE: escapeHtml(reference),
+    }),
   };
 }
 
@@ -492,13 +460,9 @@ export function applicationConfirmationEmail(name: string): { subject: string; h
   const firstName = String(name || '').trim().split(/\s+/)[0] || 'there';
   return {
     subject: 'Thank you for completing your application form',
-    html: brandedEmailHtml('Application Received', `
-          <p style="font-size: 15px; color: #333;">Dear ${escapeHtml(firstName)},</p>
-          <p style="font-size: 14px; color: #555; line-height: 1.6;">Thank you for completing your application form.</p>
-          <p style="font-size: 14px; color: #555; line-height: 1.6;">Our office team will review your application and be in touch with you within the next 48 hours.</p>
-          <p style="font-size: 14px; color: #555; line-height: 1.6;">Please note that we may still require additional information or documentation from you to complete our checks. If so, a member of our team will contact you.</p>
-          <p style="font-size: 14px; color: #555; line-height: 1.6;">If you have any questions, reply to this email or call us on <strong>01902 212 415</strong>.</p>
-      `),
+    html: renderFinalEmailTemplate('04-application-received.html', {
+      FIRST_NAME: escapeHtml(firstName),
+    }),
   };
 }
 

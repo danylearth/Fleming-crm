@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light dark" />
+<meta name="supported-color-schemes" content="light dark" />
+<title>Your viewing at {{PROPERTY_ADDRESS}}</title>
+<style>
+body { margin:0; padding:0; background:#EEEEEE; -webkit-text-size-adjust:100%; }
+a { color:#DC006D; }
+a:hover { color:#27083D; }
+@media only screen and (max-width:620px) {
+  .sp { padding-left:24px !important; padding-right:24px !important; }
+  .h1 { font-size:28px !important; line-height:34px !important; }
+}
+</style>
+</head>
+<body style="margin:0; padding:0; background:#EEEEEE;">
+<div style="margin:0; padding:0; background:#EEEEEE;">
+<span style="display:none; font-size:1px; color:#EEEEEE; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden;">Your viewing at {{PROPERTY_SHORT_ADDRESS}} is confirmed for {{VIEWING_DATE}}. Please arrive on time.</span>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#EEEEEE; width:100%;">
+<tr><td align="center" style="padding:24px 12px 40px 12px;">
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px; max-width:600px; background:#ffffff;">
+
+<tr><td bgcolor="#27083D" style="background:#27083D; padding:34px 40px 30px 40px;" class="sp">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+<tr>
+<td align="left" valign="middle" width="180" style="width:180px;"><img src="assets/fleming-logo-white.png" width="160" height="57" alt="Fleming Lettings" style="display:block; border:0; outline:none; text-decoration:none; width:160px; height:57px;" /></td>
+<td align="right" valign="middle" style="font-family:Helvetica,Arial,sans-serif; font-size:20px; line-height:26px; mso-line-height-rule:exactly; font-weight:bold; color:#DC006D;">Viewing confirmation</td>
+</tr>
+</table>
+</td></tr>
+
+<tr><td bgcolor="#DC006D" style="background:#DC006D; font-size:0; line-height:0; height:6px;" height="6">&nbsp;</td></tr>
+
+<tr><td style="padding:40px 40px 8px 40px;" class="sp">
+<div class="h1" style="font-family:Helvetica,Arial,sans-serif; font-size:34px; line-height:40px; mso-line-height-rule:exactly; font-weight:bold; color:#27083D; letter-spacing:-0.6px;">Hi {{FIRST_NAME}},</div>
+</td></tr>
+
+<tr><td style="padding:16px 40px 0 40px; font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; mso-line-height-rule:exactly; color:#1E1E1E;" class="sp">
+This is to confirm your viewing at:
+</td></tr>
+
+<tr><td style="padding:28px 40px 0 40px;" class="sp">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%; background:#563F6E;" bgcolor="#563F6E">
+<tr><td style="padding:22px 26px 24px 26px;">
+<div style="font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height:20px; mso-line-height-rule:exactly; color:#EEC9DF;">Your viewing</div>
+<div style="font-family:Helvetica,Arial,sans-serif; font-size:26px; line-height:34px; mso-line-height-rule:exactly; font-weight:bold; color:#ffffff; padding-top:6px;">{{PROPERTY_ADDRESS}}</div>
+<div style="font-family:Helvetica,Arial,sans-serif; font-size:18px; line-height:26px; mso-line-height-rule:exactly; color:#ffffff; padding-top:10px;">Date: {{VIEWING_DATE}}</div>
+</td></tr>
+</table>
+</td></tr>
+
+<tr><td style="padding:28px 40px 0 40px; font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; mso-line-height-rule:exactly; color:#1E1E1E;" class="sp">
+Please arrive on time, or if you're running late or need us to hang on for a little longer, then please call us on <a href="tel:01902212415" style="color:#DC006D; text-decoration:underline; white-space:nowrap;">01902 212 415</a>.
+</td></tr>
+
+<tr><td style="padding:28px 40px 0 40px;" class="sp">
+<div style="font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; mso-line-height-rule:exactly; font-weight:bold; color:#27083D; padding-bottom:14px;">Get directions</div>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;">
+<tr>
+<td width="49%" bgcolor="#FCE9F2" style="width:49%; background:#FCE9F2; border-left:4px solid #DC006D;">
+<a href="{{GOOGLE_MAP_URL}}" style="display:block; text-decoration:none; padding:20px 18px 18px 18px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td valign="middle" width="42" style="width:42px;"><img src="assets/gmaps-pin.png" width="24" height="34" alt="" style="display:block; border:0; width:24px; height:34px;" /></td>
+<td valign="middle" style="font-family:Helvetica,Arial,sans-serif; font-size:15px; line-height:20px; font-weight:bold; color:#27083D;">Google Maps<br /><span style="font-weight:normal; font-size:13px; color:#563F6E;">Click to get directions</span></td>
+</tr>
+</table>
+</a>
+</td>
+<td width="2%" style="width:2%; font-size:0; line-height:0;">&nbsp;</td>
+<td width="49%" bgcolor="#FCE9F2" style="width:49%; background:#FCE9F2; border-left:4px solid #563F6E;">
+<a href="{{APPLE_MAP_URL}}" style="display:block; text-decoration:none; padding:20px 18px 18px 18px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td valign="middle" width="42" style="width:42px;"><img src="assets/apple-glyph.png" width="27" height="34" alt="" style="display:block; border:0; width:27px; height:34px;" /></td>
+<td valign="middle" style="font-family:Helvetica,Arial,sans-serif; font-size:15px; line-height:20px; font-weight:bold; color:#27083D;">Apple Maps<br /><span style="font-weight:normal; font-size:13px; color:#563F6E;">Click to get directions</span></td>
+</tr>
+</table>
+</a>
+</td>
+</tr>
+</table>
+</td></tr>
+
+<tr><td style="padding:26px 40px 40px 40px; font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; mso-line-height-rule:exactly; color:#1E1E1E;" class="sp">
+We look forward to seeing you soon and showing you around!
+</td></tr>
+
+<tr><td style="padding:0; font-size:0; line-height:0;">
+<img src="assets/viewing.png" width="600" height="210" alt="A property interior" style="display:block; border:0; outline:none; text-decoration:none; width:100%; max-width:600px; height:auto;" />
+</td></tr>
+
+<tr><td bgcolor="#DC006D" style="background:#DC006D; padding:26px 40px 28px 40px;" class="sp">
+<div style="font-family:Helvetica,Arial,sans-serif; font-size:24px; line-height:32px; mso-line-height-rule:exactly; font-weight:bold; color:#ffffff; letter-spacing:-0.3px;">All of your property needs</div>
+<div style="font-family:Helvetica,Arial,sans-serif; font-size:24px; line-height:32px; mso-line-height-rule:exactly; font-weight:bold; color:#27083D; letter-spacing:-0.3px;">Without any of the hassle</div>
+</td></tr>
+
+<tr><td bgcolor="#27083D" style="background:#27083D; padding:30px 40px 30px 40px;" class="sp">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;">
+<tr>
+<td align="left" valign="middle" style="font-family:Helvetica,Arial,sans-serif; font-size:13px; line-height:22px; mso-line-height-rule:exactly; color:#EEEEEE;">
+<span style="color:#ffffff; font-weight:bold;">Lettings Support Team</span><br />
+<a href="mailto:enquiries@fleminglettings.co.uk" style="color:#ffffff; text-decoration:underline;">enquiries@fleminglettings.co.uk</a><br />
+01902 212 415&nbsp; |&nbsp; <a href="https://fleminglettings.co.uk" style="color:#ffffff; text-decoration:none;">fleminglettings.co.uk</a>
+</td>
+<td align="right" valign="middle" width="130" style="width:130px;">
+<img src="assets/fleming-logo-white.png" width="120" height="43" alt="Fleming Lettings" style="display:block; border:0; outline:none; text-decoration:none; width:120px; height:43px;" />
+</td>
+</tr>
+</table>
+</td></tr>
+
+<tr><td bgcolor="#1E1E1E" style="background:#1E1E1E; padding:22px 40px 26px 40px; font-family:Helvetica,Arial,sans-serif; font-size:11px; line-height:18px; mso-line-height-rule:exactly; color:#9A93A0;" class="sp">
+This email and any attachments are confidential and intended only for the named recipient. If you received it in error, please delete it and notify us. Fleming Lettings and Developments UK Limited, company number 13943597. Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG.
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</div>
+</body>
+</html>
