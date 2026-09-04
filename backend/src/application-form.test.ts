@@ -53,4 +53,10 @@ describe('tenant application form feedback', () => {
     expect(formHtml).toContain('/events`');
     expect(formHtml).toContain("el.value === '' ? '' : el.value === 'yes'");
   });
+
+  it('accepts the requested NI shape and capitalises each word in the typed legal name', () => {
+    expect(formHtml).toContain('pattern="[A-Za-z]{2} [0-9]{2} [0-9]{2} [0-9]{2} [A-Za-z]"');
+    expect(formHtml).toContain('oninput="formatLegalName(this); refreshGeneratedSignature()"');
+    expect(formHtml).toContain('function formatLegalName(input)');
+  });
 });

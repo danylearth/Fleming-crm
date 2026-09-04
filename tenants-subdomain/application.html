@@ -848,7 +848,7 @@
                         <div class="input-group input-group-editable"><label>Email *</label><input type="email" id="f_email" class="pre-filled" readonly required /><button type="button" class="edit-toggle-btn" onclick="toggleEdit(this)" aria-label="Edit email">&#9998;</button></div>
                         <div class="input-group input-group-editable"><label>Phone *</label><input type="tel" id="f_phone" class="pre-filled" readonly required /><button type="button" class="edit-toggle-btn" onclick="toggleEdit(this)" aria-label="Edit phone">&#9998;</button></div>
                         <div class="input-group"><label>Date of birth *</label><div class="date-picker-wrapper"><input type="text" id="f_dob" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_dob')"><span class="calendar-icon">&#x1F4C5;</span></div></div>
-                        <div class="input-group"><label>National Insurance number *</label><input type="text" id="f_ni" placeholder="e.g. QQ 12 34 56 C" maxlength="13" pattern="[A-Z]{2} [0-9]{2} [0-9]{2} [0-9]{2} [A-D]" oninput="formatNationalInsurance(this)" required /></div>
+                        <div class="input-group"><label>National Insurance number *</label><input type="text" id="f_ni" placeholder="e.g. QQ 12 34 56 C" maxlength="13" pattern="[A-Za-z]{2} [0-9]{2} [0-9]{2} [0-9]{2} [A-Za-z]" oninput="formatNationalInsurance(this)" required /></div>
                         <div class="input-group"><label>Marital status *</label><select id="f_marital_status" required><option value="">Select...</option><option>Single</option><option>Married / Civil Partnership</option><option>Living with Partner</option><option>Separated</option><option>Divorced</option><option>Widowed</option><option>Prefer not to say</option></select></div>
                         <div class="input-group"><label>Gross annual income (&pound;) *</label><input type="text" inputmode="decimal" id="f_gross_income" oninput="formatMoney(this)" required /></div>
                     </div>
@@ -1012,7 +1012,7 @@
                     <div class="checkbox-group"><input type="checkbox" id="f_decl_marketing" /><span>Optional: I consent to receiving marketing about related Fleming Lettings services.</span></div>
                     <p class="info-banner">Right to Rent checks are required for all adult occupiers in England. <a href="https://www.gov.uk/government/publications/right-to-rent-document-checks-a-user-guide" target="_blank" rel="noopener">Read the government guidance</a>.</p>
                     <div id="signature-controls">
-                      <div class="input-group"><label>Typed full legal name *</label><input type="text" id="f_typed_name" required oninput="refreshGeneratedSignature()" /></div>
+                      <div class="input-group"><label>Typed full legal name *</label><input type="text" id="f_typed_name" required oninput="formatLegalName(this); refreshGeneratedSignature()" /></div>
                       <div class="input-group"><label>Do you want to generate a digital signature below? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_generate_signature" data-value="yes" onclick="setYesNo('f_generate_signature','yes'); generateSignature()">Yes</button><button type="button" class="choice-button" data-choice-for="f_generate_signature" data-value="no" onclick="setYesNo('f_generate_signature','no'); clearSignature()">No</button></div><input type="hidden" id="f_generate_signature" data-required-choice="true" /></div>
                       <div class="input-group"><label>Signature *</label><p>Select Yes above to generate a signature, or select No and sign using a mouse or finger.</p></div>
                       <div class="signature-area" id="sig-pad"><canvas id="sig-canvas"></canvas><span class="signature-hint">Sign here</span><button type="button" class="clear-sig" onclick="clearSignature()" style="display:none;" id="clear-btn">Clear</button></div>
@@ -1302,6 +1302,10 @@
             const compact = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 9);
             input.value = [compact.slice(0, 2), compact.slice(2, 4), compact.slice(4, 6), compact.slice(6, 8), compact.slice(8, 9)]
                 .filter(Boolean).join(' ');
+        }
+
+        function formatLegalName(input) {
+            input.value = input.value.toLowerCase().replace(/(^|[\s'-])([a-z])/g, (_, separator, letter) => separator + letter.toUpperCase());
         }
 
         function formatPostcode(input) {

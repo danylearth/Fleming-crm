@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker, SectionHeader } from '../components/ui';
+import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker, SectionHeader, TimePicker } from '../components/ui';
 import DocumentUpload from '../components/ui/DocumentUpload';
 import ContextualDocSlot from '../components/ui/ContextualDocSlot';
 import ActivityTimeline from '../components/ui/ActivityTimeline';
@@ -1325,8 +1325,7 @@ export default function EnquiryDetail() {
                         }} />
                         <div>
                           <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Viewing Time</label>
-                          <input type="time" value={wfTime} onChange={e => { setWfTime(e.target.value); setSmsBody(genSms(wfPropId, wfDate, e.target.value)); }}
-                            className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-input)] transition-colors [&::-webkit-calendar-picker-indicator]:invert" />
+                          <TimePicker value={wfTime} onChange={value => { setWfTime(value); setSmsBody(genSms(wfPropId, wfDate, value)); }} />
                         </div>
                       </div>
                       <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Key collection instructions" />

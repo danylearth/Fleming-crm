@@ -25,8 +25,9 @@ describe('tenant enquiry form feedback', () => {
   });
 
   it('requires job title and annual income for applicable employment statuses', () => {
-    expect(formHtml).toContain('if (jobTitle) jobTitle.required = employed');
-    expect(formHtml).toContain('if (annualIncome) annualIncome.required = employed');
+    expect(formHtml).toContain('if (jobTitle) jobTitle.required = hasEmploymentRole');
+    expect(formHtml).toContain('if (annualIncome) annualIncome.required = incomeBased');
+    expect(formHtml).toContain("const hasEmploymentRole = ['Full-Time Employed', 'Part-Time Employed', 'Self-Employed'].includes(this.value)");
   });
 
   it('checks duplicates using email only and uses the CRM favicon', () => {

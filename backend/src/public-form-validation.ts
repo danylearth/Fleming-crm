@@ -50,7 +50,8 @@ export function applicationFormIssues(data: Record<string, any>): string[] {
   }
   if (!isValidEmail(data.email)) issues.push('email');
   if (!isValidEmail(data.next_of_kin_email)) issues.push('next_of_kin_email');
-  if (!/^[A-Z]{2} \d{2} \d{2} \d{2} [A-D]$/.test(String(data.ni_number || '').toUpperCase())) issues.push('ni_number');
+  const compactNiNumber = String(data.ni_number || '').toUpperCase().replace(/\s/g, '');
+  if (!/^[A-Z]{2}\d{6}[A-Z]$/.test(compactNiNumber)) issues.push('ni_number');
 
   if (['Employed', 'Part-time Employed'].includes(data.employment_status)) {
     for (const key of ['employer_name', 'job_title', 'employment_start_date', 'employer_department', 'employer_address']) {

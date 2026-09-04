@@ -17,6 +17,7 @@ import {
 interface Tenant {
   id: number; name: string; email: string; phone: string;
   title_1?: string; first_name_1?: string; last_name_1?: string; date_of_birth_1?: string;
+  current_address?: string; previous_address?: string;
   is_joint_tenancy?: number;
   title_2?: string; first_name_2?: string; last_name_2?: string;
   email_2?: string; phone_2?: string; date_of_birth_2?: string;
@@ -43,6 +44,11 @@ interface Tenant {
 
 interface TenantNote {
   id: string; text: string; author: string; created_at: string;
+}
+
+interface MaintenanceRequest {
+  id: number; tenant_id?: number; title: string; description: string;
+  priority: string; status: string; created_at: string;
 }
 
 function parseNotes(raw?: string | null): TenantNote[] {
@@ -163,12 +169,14 @@ export default function TenantDetail() {
 
   // Properties list for selector
   const [allProperties, setAllProperties] = useState<{ id: number; address: string; postcode: string }[]>([]);
+  const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
 
   const tenantToForm = (t: Tenant) => {
     return {
       name: t.name || '', email: t.email || '', phone: t.phone || '',
       title_1: t.title_1 || '', first_name_1: t.first_name_1 || '', last_name_1: t.last_name_1 || '',
       date_of_birth_1: t.date_of_birth_1 || '',
+      current_address: t.current_address || '', previous_address: t.previous_address || '',
       is_joint_tenancy: !!t.is_joint_tenancy,
       title_2: t.title_2 || '', first_name_2: t.first_name_2 || '', last_name_2: t.last_name_2 || '',
       email_2: t.email_2 || '', phone_2: t.phone_2 || '', date_of_birth_2: t.date_of_birth_2 || '',
@@ -209,6 +217,8 @@ export default function TenantDetail() {
       } else {
         setPropertyNotes([]);
       }
+      const maintenance = await api.get('/api/maintenance').catch(() => []);
+      setMaintenanceRequests(Array.isArray(maintenance) ? maintenance.filter((request: MaintenanceRequest) => Number(request.tenant_id) === Number(t.id)) : []);
     } catch (e) {
       console.error(e);
       alert(e instanceof Error ? e.message : 'Failed to load tenant');
@@ -427,6 +437,10 @@ export default function TenantDetail() {
                     <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
                     <DatePicker label="Date of Birth" value={form.date_of_birth_1} onChange={v => setForm({ ...form, date_of_birth_1: v })} />
                   </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Input label="Current Address" value={form.current_address} onChange={v => setForm({ ...form, current_address: v })} />
+                    <Input label="Previous Address" value={form.previous_address} onChange={v => setForm({ ...form, previous_address: v })} />
+                  </div>
                   <div className="flex items-center gap-3 mt-2">
                     <label className="text-xs text-[var(--text-muted)]">Joint Tenancy?</label>
                     <YesNo value={form.is_joint_tenancy} onChange={v => setForm({ ...form, is_joint_tenancy: v })} />
@@ -463,6 +477,11 @@ export default function TenantDetail() {
                         <div><p className="text-xs text-[var(--text-muted)]">{label}</p><p className="text-sm">{value || '—'}</p></div>
                       </div>
                     ))}
+                  </div>
+                  <div className="h-px bg-[var(--border-subtle)] my-2" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <ReadField label="Current Address" value={tenant.current_address} />
+                    <ReadField label="Previous Address" value={tenant.previous_address} />
                   </div>
                   {!!tenant.is_joint_tenancy && (
                     <>
@@ -546,6 +565,24 @@ export default function TenantDetail() {
             {/* Rent Payments */}
             <RentPayments tenantId={tenant.id} compact />
 
+            {/* Maintenance linked to this tenant */}
+            <GlassCard className="p-6">
+              <SectionHeader title={`Maintenance (${maintenanceRequests.length})`} icon={<AlertTriangle size={16} />} />
+              <div className="mt-4 space-y-2">
+                {maintenanceRequests.length === 0 && <p className="text-xs text-[var(--text-muted)]">No maintenance requests linked to this tenant.</p>}
+                {maintenanceRequests.map(request => (
+                  <button key={request.id} onClick={() => navigate(`/maintenance/${request.id}`)} className="w-full text-left rounded-xl bg-[var(--bg-hover)]/50 p-3 hover:bg-[var(--bg-hover)] transition-colors">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium">{request.title}</p>
+                      <span className="text-[10px] uppercase text-[var(--accent-orange)]">{request.status.replace(/_/g, ' ')}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-[var(--text-muted)] line-clamp-2">{request.description}</p>
+                    <p className="mt-1 text-[10px] text-[var(--text-muted)]">{request.priority} priority · {formatDateDMY(request.created_at)}</p>
+                  </button>
+                ))}
+              </div>
+            </GlassCard>
+
             {/* Documents */}
             <DocumentUpload entityType="tenant" entityId={tenant.id} />
           </div>
@@ -556,7 +593,14 @@ export default function TenantDetail() {
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader title="Tenancy Details" icon={<Building2 size={16} />} />
-                <SectionEditButton editing={isEditing('tenancy')} onEdit={() => setEditingSection('tenancy')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
+                {isEditing('tenancy') ? (
+                  <SectionEditButton editing onEdit={() => setEditingSection('tenancy')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
+                ) : (
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setEditingSection('tenancy')}>Update Tenancy</Button>
+                    <Button variant="ghost" size="sm" onClick={() => { setForm({ ...form, has_end_date: true }); setEditingSection('tenancy'); }}>Schedule Tenancy End</Button>
+                  </div>
+                )}
               </div>
               {isEditing('tenancy') ? (
                 <div className="space-y-3">
@@ -592,9 +636,9 @@ export default function TenantDetail() {
                     options={[{ value: 'active', label: 'Active' }, { value: 'scheduled', label: 'Scheduled' }, { value: 'inactive', label: 'Archived' }]} />
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="divide-y divide-[var(--border-subtle)]">
                   {tenant?.property_id ? (
-                    <div>
+                    <div className="pb-3">
                       <p className="text-xs text-[var(--text-muted)]">Property</p>
                       <button onClick={() => navigate(`/properties/${tenant.property_id}`)}
                         className="text-sm mt-0.5 text-[var(--accent-orange)] hover:underline flex items-center gap-1">
@@ -604,11 +648,11 @@ export default function TenantDetail() {
                   ) : (
                     <ReadField label="Property" value="No property linked" />
                   )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3">
                     <ReadField label="Tenancy Start" value={form.tenancy_start_date ? formatDateDMY(form.tenancy_start_date) : null} />
                     <ReadField label="Tenancy Type" value={form.tenancy_type} />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 py-3">
                     <ReadField label="Monthly Rent" value={form.monthly_rent ? `£${Number(form.monthly_rent).toLocaleString()}` : null} />
                     <ReadField label="Deposit Held" value={form.security_deposit_amount ? `£${Number(form.security_deposit_amount).toLocaleString()}` : null} />
                     <ReadField label="Deposit Scheme" value={
@@ -619,7 +663,7 @@ export default function TenantDetail() {
                     } />
                   </div>
                   {form.has_end_date && (
-                    <div>
+                    <div className="pt-3">
                       <p className="text-xs text-[var(--text-muted)]">Scheduled End Date</p>
                       <p className={`text-sm mt-0.5 ${endDateWarning !== null ? 'text-red-400 font-medium' : ''}`}>
                         {form.tenancy_end_date ? formatDateDMY(form.tenancy_end_date) : '—'}

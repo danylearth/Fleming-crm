@@ -678,7 +678,7 @@ export default function PropertyDetail() {
                       options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
                     <Input label="Bedrooms" value={form.bedrooms} onChange={(v: string) => setForm({ ...form, bedrooms: v })} />
                     <Select label="Status" value={form.status} onChange={(v: string) => setForm({ ...form, status: v })}
-                      options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }]} />
+                      options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }]} />
                     {property.landlord_type === 'internal' && <Input label="Key Colour Code" value={form.key_colour_code} onChange={(v: string) => setForm({ ...form, key_colour_code: v })} placeholder="e.g. Pink / Blue" />}
                   </div>
                   <div className="mt-4">
@@ -752,10 +752,11 @@ export default function PropertyDetail() {
               <SectionHeader title="Management" />
               {editing ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                  <Select label="Service Type" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v })}
+                  {property.landlord_type !== 'internal' && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v })}
                     options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
-                  <Input label="Charge (%)" value={form.charge_percentage} onChange={(v: string) => setForm({ ...form, charge_percentage: v })} placeholder="e.g. 10" />
-                  <Input label="Total Charge (£)" value={form.total_charge} onChange={(v: string) => setForm({ ...form, total_charge: v })} />
+                  }
+                  {property.landlord_type !== 'internal' && <Input label="Charge (%)" value={form.charge_percentage} onChange={(v: string) => setForm({ ...form, charge_percentage: v })} placeholder="e.g. 10" />}
+                  {property.landlord_type !== 'internal' && <Input label="Total Charge (£)" value={form.total_charge} onChange={(v: string) => setForm({ ...form, total_charge: v })} />}
                   <Select label="Council Tax Band" value={form.council_tax_band} onChange={(v: string) => setForm({ ...form, council_tax_band: v })}
                     options={[{ value: '', label: 'Select...' }, { value: 'TBC', label: 'TBC' }, ...['A','B','C','D','E','F','G','H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
                   <Select label="EPC Grade" value={form.epc_grade} onChange={(v: string) => setForm({ ...form, epc_grade: v })}
@@ -823,13 +824,13 @@ export default function PropertyDetail() {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-                  <ReadField label="Service Type" value={
+                  {property.landlord_type !== 'internal' && <ReadField label="Service Type" value={
                     property.service_type === 'full_management' ? 'Full Management' :
                     property.service_type === 'rent_collection' ? 'Rent Collection' :
                     property.service_type === 'let_only' ? 'Let Only' : null
-                  } />
-                  <ReadField label="Charge" value={property.charge_percentage ? `${property.charge_percentage}%` : null} />
-                  <ReadField label="Total Charge" value={property.total_charge ? `£${property.total_charge}` : null} />
+                  } />}
+                  {property.landlord_type !== 'internal' && <ReadField label="Charge" value={property.charge_percentage ? `${property.charge_percentage}%` : null} />}
+                  {property.landlord_type !== 'internal' && <ReadField label="Total Charge" value={property.total_charge ? `£${property.total_charge}` : null} />}
                   <ReadField label="Council Tax" value={property.council_tax_band ? `Band ${property.council_tax_band}` : null} />
                   <ReadField label="EPC Grade" value={property.epc_grade ? (
                     <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-bold ${EPC_COLORS[property.epc_grade] || 'bg-[var(--bg-hover)] text-[var(--text-muted)]'}`}>

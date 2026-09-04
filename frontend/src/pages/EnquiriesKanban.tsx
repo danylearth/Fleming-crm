@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Button, Avatar, SearchBar, EmptyState, Input, Select, DatePicker } from '../components/ui';
+import { Button, Avatar, SearchBar, EmptyState, Input, Select, DatePicker, TimePicker } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { getPropertyImage } from '../utils/propertyImages';
 import {
@@ -200,7 +200,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
                   if (value.trim()) setPropertyId('');
                 }} placeholder="e.g. Fleming Lettings office" />
                 <DatePicker label="Viewing Date" value={date} onChange={setDate} />
-                <Input label="Viewing Time" value={time} onChange={setTime} type="time" />
+                <TimePicker label="Viewing Time" value={time} onChange={setTime} />
                 <p className="text-xs text-[var(--text-muted)]">
                   Creates a Property Viewing. Card disappears from queue and reappears on the viewing date.
                 </p>

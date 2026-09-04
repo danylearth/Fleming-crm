@@ -18,7 +18,7 @@ interface Property {
 }
 
 interface LandlordOption {
-  id: number; name: string;
+  id: number; name: string; landlord_type?: 'internal' | 'external';
 }
 
 interface TenantOption {
@@ -80,7 +80,7 @@ export default function Properties() {
     Promise.all([api.get('/api/properties'), api.get('/api/landlords'), api.get('/api/tenants')])
       .then(([data, lls, tns]) => {
         setProperties(Array.isArray(data) ? data : []);
-        setLandlords(Array.isArray(lls) ? lls.map((l: { id: number; name: string }) => ({ id: l.id, name: l.name })) : []);
+        setLandlords(Array.isArray(lls) ? lls.map((l: LandlordOption) => ({ id: l.id, name: l.name, landlord_type: l.landlord_type })) : []);
         setTenants(Array.isArray(tns) ? tns.map((t: { id: number; name: string; property_id: number }) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
       })
       .catch(() => setProperties([]))
@@ -407,7 +407,7 @@ export default function Properties() {
               setShowAdd(false);
               resetForm();
               navigate(`/properties/${res.id}`);
-            } catch (e) { console.error(e); }
+            } catch (e) { alert(e instanceof Error ? e.message : 'Property could not be created'); }
             setSaving(false);
           }}
         />}
@@ -438,7 +438,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
   // Auto-populate Fleming verandas when My Portfolio is selected
   useEffect(() => {
     if (portfolioType === 'internal' && flemingLandlord) {
-      setForm((f: PropertyForm) => ({ ...f, landlord_id: String(flemingLandlord.id) }));
+      setForm((f: PropertyForm) => ({ ...f, landlord_id: String(flemingLandlord.id), service_type: '' }));
     }
   }, [portfolioType, flemingLandlord, setForm]);
 
@@ -554,9 +554,9 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Select label="Status *" value={form.status} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, status: v }))}
-            options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }]} />
-          <Select label="Service Type" value={form.service_type} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, service_type: v }))}
-            options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
+            options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }]} />
+          {!isMyPortfolio && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, service_type: v }))}
+            options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />}
         </div>
 
         <div>
@@ -582,7 +582,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
 
         <div className="flex gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.address || !form.status || form.has_gas === null}>
+          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.landlord_id || !form.address || !form.status || form.has_gas === null || (!isMyPortfolio && !form.service_type)}>
             {saving ? 'Creating...' : 'Create Property'}
           </Button>
         </div>

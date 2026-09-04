@@ -99,6 +99,7 @@ describe('email provider safety', () => {
     expect(email.subject).toBe('Confirmation of receipt of your holding deposit');
     expect(email.html).toContain('£207.69');
     expect(email.html).toContain('1 September 2026');
+    expect(email.html).toContain('https://crm.fleminglettings.co.uk/email-assets/relaxing-at-home.png');
   });
 
   it('renders the tenancy agreement invitation with dynamic agreement details', async () => {
@@ -116,7 +117,8 @@ describe('email provider safety', () => {
     expect(email.html).toContain('&pound;1,730.31');
     expect(email.html).toContain('https://apply.example.test/agreement/secure-token');
     expect(email.html).not.toContain('29 Wealden Hatch');
-    expect(email.html).not.toContain('assets/');
+    expect(email.html).not.toContain('src="assets/');
+    expect(email.html).toContain('https://crm.fleminglettings.co.uk/email-assets/signing.png');
   });
 
   it('renders and escapes the completed agreement email', async () => {
@@ -157,6 +159,6 @@ describe('email provider safety', () => {
     expect(email.html).toContain('Alex Fleming');
     expect(email.html).toContain('Google Maps');
     expect(email.html).toContain('Apple Maps');
-    expect(email.html).not.toContain('assets/');
+    expect(email.html).not.toContain('src="assets/');
   });
 });

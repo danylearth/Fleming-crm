@@ -4,6 +4,7 @@
     { "source": "/onboarding/:token", "destination": "/application.html" },
     { "source": "/agreement/:token", "destination": "/agreement.html" },
     { "source": "/report", "destination": "/report.html" },
+    { "source": "/:applicationSlug", "destination": "/application.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

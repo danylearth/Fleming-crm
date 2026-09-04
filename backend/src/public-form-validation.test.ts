@@ -58,4 +58,10 @@ describe('public form validation', () => {
     }));
     expect(issues).toEqual(expect.arrayContaining(['bank_sort_code', 'bank_account_number', 'years_at_current_address']));
   });
+
+  it('accepts any two letters, six digits, and a final letter for National Insurance numbers', () => {
+    expect(applicationFormIssues(validApplication({ ni_number: 'zz123456z' }))).not.toContain('ni_number');
+    expect(applicationFormIssues(validApplication({ ni_number: 'ZZ 12 34 56 Z' }))).not.toContain('ni_number');
+    expect(applicationFormIssues(validApplication({ ni_number: 'Z123456ZZ' }))).toContain('ni_number');
+  });
 });

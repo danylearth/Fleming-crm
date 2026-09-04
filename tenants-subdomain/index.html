@@ -1258,7 +1258,7 @@
                     </div>
 
                     <div id="employmentDetails" class="employment-fields">
-                        <div class="input-group">
+                        <div class="input-group employment-role-only">
                             <label>Job Title *</label>
                             <input type="text" name="job_title" placeholder="e.g. Software Engineer">
                         </div>
@@ -1268,7 +1268,7 @@
                             <input type="text" name="AnnualSalary" id="annualIncome" placeholder="e.g. 30000" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                         </div>
 
-                        <div class="input-group">
+                        <div class="input-group employment-role-only">
                             <label>Is this a contract role or fixed term position?</label>
                             <select name="contract_type">
                                 <option value="">Please select</option>
@@ -1354,7 +1354,7 @@
 
                     <div id="employmentDetails2" class="employment-fields">
                         <div class="two-col">
-                            <div class="input-group">
+                            <div class="input-group employment-role-only">
                                 <label>Job Title *</label>
                                 <input type="text" name="job_title2">
                             </div>
@@ -1363,7 +1363,7 @@
                                 <input type="text" name="AnnualSalary2" id="annualIncome2" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                             </div>
                         </div>
-                        <div class="input-group">
+                        <div class="input-group employment-role-only">
                             <label>Is this a contract role or fixed term position?</label>
                             <select name="contract_type2">
                                 <option value="">Please select</option>
@@ -1889,13 +1889,17 @@
             if (!select) return;
             select.addEventListener('change', function() {
                 const details = document.getElementById(detailsId);
-                const employed = ['Full-Time Employed', 'Part-Time Employed', 'Self-Employed', 'Retired'].includes(this.value);
+                const incomeBased = ['Full-Time Employed', 'Part-Time Employed', 'Self-Employed', 'Retired'].includes(this.value);
+                const hasEmploymentRole = ['Full-Time Employed', 'Part-Time Employed', 'Self-Employed'].includes(this.value);
                 const isPrimary = selectId === 'employmentStatus';
                 const annualIncome = document.getElementById(isPrimary ? 'annualIncome' : 'annualIncome2');
                 const jobTitle = document.querySelector(`[name="${isPrimary ? 'job_title' : 'job_title2'}"]`);
-                if (annualIncome) annualIncome.required = employed;
-                if (jobTitle) jobTitle.required = employed;
-                if (employed) {
+                if (annualIncome) annualIncome.required = incomeBased;
+                if (jobTitle) jobTitle.required = hasEmploymentRole;
+                details.querySelectorAll('.employment-role-only').forEach(field => {
+                    field.style.display = hasEmploymentRole ? '' : 'none';
+                });
+                if (incomeBased) {
                     details.classList.add('visible');
                     // Re-init custom selects inside the revealed section
                     setTimeout(() => initCustomSelects(), 450);

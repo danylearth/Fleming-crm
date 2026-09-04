@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState, DataTable, DatePicker } from '../components/ui';
+import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState, DataTable, DatePicker, TimePicker } from '../components/ui';
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Calendar, LayoutGrid, List, Building2, ArrowRight, XCircle, Mail, Phone, Upload, Home } from 'lucide-react';
@@ -268,7 +268,7 @@ function EmploymentFields({ form, setField, suffix, editing }: {
 // ─── Main Page ───
 export default function Enquiries() {
   const api = useApi();
-  const { canCreate } = usePermissions();
+  const { canCreate, canDelete } = usePermissions();
   const navigate = useNavigate();
   const [rawEnquiries, setRawEnquiries] = useState<EnquiryRaw[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
@@ -527,7 +527,7 @@ export default function Enquiries() {
       await load();
     } catch (e) {
       console.error('Bulk delete error:', e);
-      alert('Failed to delete enquiries. Please try again.');
+      alert(e instanceof Error ? e.message : 'Failed to delete enquiries. Please try again.');
     }
     setIsDeleting(false);
   };
@@ -553,9 +553,7 @@ export default function Enquiries() {
   };
 
   const toggleSelectAll = () => {
-    const selectable = viewMode === 'kanban'
-      ? filtered.filter(e => !['converted', 'rejected'].includes(e.status))
-      : filtered;
+    const selectable = filtered.filter(e => e.status !== 'converted');
     if (selectedIds.length === selectable.length) {
       setSelectedIds([]);
     } else {
@@ -684,6 +682,7 @@ export default function Enquiries() {
             onBulkDelete={handleBulkDelete}
             entityName="enquiry"
             isDeleting={isDeleting}
+            showDelete={canDelete()}
           >
             <button onClick={() => handleBulkStatus('onboarding')} className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm transition-colors">
               Progress to Onboarding
@@ -702,7 +701,7 @@ export default function Enquiries() {
           <DragDropContext onDragEnd={onDragEnd}>
             {editMode && (
               <label className="flex items-center gap-2 mb-3 text-sm text-[var(--text-secondary)] w-fit cursor-pointer">
-                <input type="checkbox" checked={selectedIds.length === filtered.filter(e => !['converted', 'rejected'].includes(e.status)).length && selectedIds.length > 0} onChange={toggleSelectAll} className="w-4 h-4 rounded accent-orange-500" />
+                <input type="checkbox" checked={selectedIds.length === filtered.filter(e => e.status !== 'converted').length && selectedIds.length > 0} onChange={toggleSelectAll} className="w-4 h-4 rounded accent-orange-500" />
                 {selectedIds.length > 0 ? `${selectedIds.length} selected` : 'Select all visible enquiries'}
               </label>
             )}
@@ -744,7 +743,7 @@ export default function Enquiries() {
                                       else navigate(`/enquiries/${e.id}`);
                                     }}>
                                     <div className="flex items-start gap-3">
-                                      {editMode && (
+                                      {editMode && e.status !== 'converted' && (
                                         <input type="checkbox" checked={selectedIds.includes(e.id)} onChange={() => toggleSelectEnquiry(e.id)} onClick={ev => ev.stopPropagation()} className="w-4 h-4 mt-1 rounded accent-orange-500" />
                                       )}
                                       <Avatar name={e.name} size="sm" />
@@ -798,7 +797,7 @@ export default function Enquiries() {
               <div className="flex items-center gap-2 mb-2">
                 <input
                   type="checkbox"
-                  checked={selectedIds.length === filtered.length && filtered.length > 0}
+                  checked={selectedIds.length === filtered.filter(e => e.status !== 'converted').length && selectedIds.length > 0}
                   onChange={toggleSelectAll}
                   className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
                 />
@@ -811,7 +810,7 @@ export default function Enquiries() {
               columns={[
                 ...(editMode ? [{
                   key: '_select' as const, header: '', width: 'w-12',
-                  render: (e: Enquiry) => (
+                  render: (e: Enquiry) => e.status === 'converted' ? <span className="text-[10px] text-[var(--text-muted)]">Locked</span> : (
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(e.id)}
@@ -1016,8 +1015,7 @@ export default function Enquiries() {
                         }} />
                         <div>
                           <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Viewing Time</label>
-                          <input type="time" value={wfTime} onChange={e => { setWfTime(e.target.value); setSmsBody(generateViewingSms(firstName, wfPropId, wfDate, e.target.value)); }}
-                            className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-input)] transition-colors [&::-webkit-calendar-picker-indicator]:invert" />
+                          <TimePicker value={wfTime} onChange={value => { setWfTime(value); setSmsBody(generateViewingSms(firstName, wfPropId, wfDate, value)); }} />
                         </div>
                       </div>
                       <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Key collection instructions" />

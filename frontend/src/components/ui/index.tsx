@@ -183,6 +183,20 @@ export function Select({ label, value, onChange, options, className = '', search
   );
 }
 
+const TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
+  const hour = Math.floor(index / 4);
+  const minute = (index % 4) * 15;
+  const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  const label = new Date(2000, 0, 1, hour, minute).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return { value, label };
+});
+
+export function TimePicker({ label, value, onChange, className = '' }: {
+  label?: string; value: string; onChange: (v: string) => void; className?: string;
+}) {
+  return <Select label={label} value={value} onChange={onChange} options={TIME_OPTIONS} searchable={false} className={className} />;
+}
+
 // ─── Tag ───
 export function Tag({ children, active, onClick }: {
   children: ReactNode; active?: boolean; onClick?: () => void;

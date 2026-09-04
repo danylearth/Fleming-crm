@@ -20,14 +20,11 @@ function renderFinalEmailTemplate(filename: string, values: Record<string, strin
   }
   const unresolved = html.match(/\{\{[A-Z_]+\}\}/g);
   if (unresolved) throw new Error(`Missing values for ${filename}: ${[...new Set(unresolved)].join(', ')}`);
-  // The supplied final HTML references a local assets folder that was not part
-  // of the hand-off. Avoid sending broken image URLs; retain a text logo so the
-  // Fleming brand remains visible when images are unavailable.
-  html = html.replace(/<img\s+src="assets\/[^"]+"[^>]*alt="([^"]*)"[^>]*\/>/g, (_tag, alt: string) =>
-    alt === 'Fleming Lettings'
-      ? '<span style="font-family:Helvetica,Arial,sans-serif;font-size:20px;font-weight:bold;color:#ffffff;letter-spacing:.5px">FLEMING LETTINGS</span>'
-      : ''
-  );
+  // Email clients need absolute, publicly reachable image URLs. The hand-off
+  // omitted two small decorative icons, so remove only those rather than
+  // stripping the supplied Fleming artwork from every template.
+  html = html.replace(/<img\s+src="assets\/(?:apple-glyph|gmaps-pin)\.png"[^>]*\/>/g, '');
+  html = html.replace(/src="assets\//g, 'src="https://crm.fleminglettings.co.uk/email-assets/');
   return html;
 }
 
@@ -478,11 +475,11 @@ export function holdingDepositReceiptEmail(name: string, amount: number, receive
   const displayDate = new Date(`${receivedDate}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
   return {
     subject: 'Confirmation of receipt of your holding deposit',
-    html: brandedEmailHtml('Holding Deposit Received', `
-      <p>Hi ${escapeHtml(name || 'there')},</p>
-      <p>We confirm that Fleming Lettings received your holding deposit of <strong>£${Number(amount).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> on <strong>${displayDate}</strong>.</p>
-      <p>We will continue progressing your tenancy application and contact you if anything else is required.</p>
-    `),
+    html: renderFinalEmailTemplate('04-holding-deposit-receipt.html', {
+      FIRST_NAME: escapeHtml(String(name || '').trim().split(/\s+/)[0] || 'there'),
+      AMOUNT: emailMoney(amount),
+      RECEIVED_DATE: displayDate,
+    }),
   };
 }
 

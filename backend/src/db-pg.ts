@@ -223,6 +223,8 @@ export async function initDb() {
         email TEXT,
         phone TEXT,
         date_of_birth_1 DATE,
+        current_address TEXT,
+        previous_address TEXT,
         is_joint_tenancy INTEGER DEFAULT 0,
         title_2 TEXT,
         first_name_2 TEXT,
@@ -510,6 +512,8 @@ export async function initDb() {
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_phone TEXT;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_email TEXT;
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS nok_2_address TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS current_address TEXT;
+        ALTER TABLE tenants ADD COLUMN IF NOT EXISTS previous_address TEXT;
       EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
@@ -537,9 +541,12 @@ export async function initDb() {
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS income_frequency TEXT DEFAULT 'monthly';
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
         ALTER TABLE tenants ADD COLUMN IF NOT EXISTS move_in_date DATE;
+        ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS application_form_slug TEXT;
       EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tenant_enquiries_application_form_slug
+      ON tenant_enquiries(application_form_slug) WHERE application_form_slug IS NOT NULL`);
 
     // Current CRM tenancy terminology. Legacy values remain valid so this
     // schema change does not silently rewrite existing contracts.
