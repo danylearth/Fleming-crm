@@ -1,15 +1,29 @@
-function placeholder(width: number, height: number): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#252525"/><path d="M${width * 0.3} ${height * 0.58}L${width * 0.5} ${height * 0.34}L${width * 0.7} ${height * 0.58}V${height * 0.78}H${width * 0.3}Z" fill="#404040"/><rect x="${width * 0.46}" y="${height * 0.61}" width="${width * 0.09}" height="${height * 0.17}" fill="#252525"/></svg>`;
+const PLACEHOLDER_COLORS = ['#166534', '#1d4ed8', '#7e22ce', '#b45309', '#be123c', '#0f766e'];
+
+function landlordInitials(name?: string): string {
+  const words = name?.trim().split(/\s+/).filter(Boolean) || [];
+  if (words.length === 0) return 'FL';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+}
+
+export function getPropertyPlaceholder(id: number, width: number, height: number, landlordName?: string): string {
+  const initials = landlordInitials(landlordName);
+  const colorKey = landlordName || String(id);
+  const colorIndex = Array.from(colorKey).reduce((sum, char) => sum + char.charCodeAt(0), 0) % PLACEHOLDER_COLORS.length;
+  const fontSize = Math.max(24, Math.round(Math.min(width, height) * 0.28));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="${PLACEHOLDER_COLORS[colorIndex]}"/><text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="700">${initials}</text></svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
 /** Uses an uploaded property image first, otherwise the property's real Street View. */
 export function getPropertyImage(
-  _id: number,
+  id: number,
   width = 400,
   height = 240,
   address?: string,
   imageUrl?: string | null,
+  landlordName?: string,
 ): string {
   if (imageUrl) {
     if (imageUrl.startsWith('/') && import.meta.env.VITE_API_URL) {
@@ -24,5 +38,5 @@ export function getPropertyImage(
     return `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${encodeURIComponent(address)}&key=${encodeURIComponent(apiKey)}`;
   }
 
-  return placeholder(width, height);
+  return getPropertyPlaceholder(id, width, height, landlordName);
 }

@@ -769,7 +769,7 @@ export default function EnquiryDetail() {
                 <div className="flex flex-wrap gap-3">
                   <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Bank Statements" label="Bank Statements" applicantNumber={1} onDocChange={loadDocs} />
                   <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Proof of Income or Employment" label="Proof of Employment" applicantNumber={1} onDocChange={loadDocs} />
-                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Credit Report" label="Credit Report" applicantNumber={1} onDocChange={loadDocs} />
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Credit Check Report" label="Credit Report" applicantNumber={1} onDocChange={loadDocs} />
                 </div>
               </div>
             </GlassCard>
@@ -904,7 +904,7 @@ export default function EnquiryDetail() {
             </GlassCard>
 
             {/* Onboarding Checklist */}
-            <GlassCard className="p-6">
+            {form.status !== 'converted' && <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader title="Onboarding Checklist" icon={<CheckCircle size={16} />} />
                 <div className="flex items-center gap-2">
@@ -1049,7 +1049,7 @@ export default function EnquiryDetail() {
                 {[
                   { label: 'Bank Statements', type: 'Bank Statements' },
                   { label: 'Proof of Employment', type: 'Proof of Income or Employment' },
-                  { label: 'Credit Report', type: 'Credit Report' },
+                  { label: 'Credit Report', type: 'Credit Check Report' },
                 ].map(item => (
                   <div key={item.type} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
                     <span className="text-xs flex items-center gap-1.5">
@@ -1076,7 +1076,7 @@ export default function EnquiryDetail() {
                   </button>
                 )}
               </div>
-            </GlassCard>
+            </GlassCard>}
 
             {/* Notes */}
             <GlassCard className="p-6">

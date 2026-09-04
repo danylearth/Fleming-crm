@@ -4,7 +4,7 @@ import Layout from '../components/Layout';
 import { Card, GlassCard, SectionHeader, StatusDot, EmptyState, Tag } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
-import { getPropertyImage } from '../utils/propertyImages';
+import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import {
   Building2, Users, Wrench, MessageSquare, AlertTriangle,
   Clock, CheckCircle2, ArrowRight, CalendarDays, Trash2
@@ -355,10 +355,14 @@ export default function Dashboard() {
                   className="min-w-[280px] max-w-[280px] shrink-0 overflow-hidden"
                 >
                   <img
-                    src={getPropertyImage(prop.id, 400, 240, `${prop.address}, ${prop.postcode}`, prop.image_url)}
+                    src={getPropertyImage(prop.id, 400, 240, `${prop.address}, ${prop.postcode}`, prop.image_url, prop.landlord_name)}
                     alt={prop.address}
                     className="h-36 w-full object-cover"
                     loading="lazy"
+                    onError={event => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src = getPropertyPlaceholder(prop.id, 400, 240, prop.landlord_name);
+                    }}
                   />
                   <div className="p-4">
                     <div className="flex items-center gap-2 mb-1">

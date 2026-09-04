@@ -7,6 +7,8 @@ const wizardSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src
 const tenantDetailSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/TenantDetail.tsx'), 'utf8');
 const propertyDetailSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/PropertyDetail.tsx'), 'utf8');
 const dashboardSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/Dashboard.tsx'), 'utf8');
+const enquiryDetailSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/EnquiryDetail.tsx'), 'utf8');
+const propertyImagesSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/utils/propertyImages.ts'), 'utf8');
 
 describe('31 August CRM feedback regressions', () => {
   it('casts reviewer IDs as integers in document and application reviews', () => {
@@ -106,12 +108,16 @@ describe('31 August CRM feedback regressions', () => {
   it('provides linked, scrollable notes and hides finished onboarding checklists', () => {
     expect(tenantDetailSource).toContain("notesFilter === 'property'");
     expect(tenantDetailSource).toContain("form.status === 'onboarding' && !isOnboarded");
+    expect(enquiryDetailSource).toContain("form.status !== 'converted' && <GlassCard");
+    expect(enquiryDetailSource).toContain('docType="Credit Check Report"');
     expect(propertyDetailSource).toContain("notesFilter.startsWith('tenant-')");
     expect(propertyDetailSource).toContain('max-h-64 overflow-y-auto');
   });
 
   it('allows dashboard reminders to be deleted and uploaded property photos to become thumbnails', () => {
     expect(dashboardSource).toContain("api.delete(`/api/tasks/${task.id}`)");
+    expect(dashboardSource).toContain('getPropertyPlaceholder(prop.id, 400, 240, prop.landlord_name)');
+    expect(propertyImagesSource).toContain('landlordInitials(landlordName)');
     expect(apiSource).toContain("doc_type='Property Photo'");
     expect(apiSource).toContain("app.get('/api/public/properties/:id/thumbnail'");
   });

@@ -8,7 +8,7 @@ import AddressAutocomplete from '../components/ui/AddressAutocomplete';
 import RentPayments from '../components/ui/RentPayments';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
-import { getPropertyImage } from '../utils/propertyImages';
+import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import {
   PoundSterling, User,
   CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
@@ -591,8 +591,12 @@ export default function PropertyDetail() {
       <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         {/* Hero */}
         <div className="relative h-48 sm:h-56 md:h-64 rounded-xl sm:rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
-          <img src={getPropertyImage(property.id, 1200, 400, `${property.address}, ${property.postcode}`, property.image_url)} alt={property.address}
-            className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+          <img src={getPropertyImage(property.id, 1200, 400, `${property.address}, ${property.postcode}`, property.image_url, property.landlord_name)} alt={property.address}
+            className="absolute inset-0 w-full h-full object-cover" loading="lazy"
+            onError={event => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = getPropertyPlaceholder(property.id, 1200, 400, property.landlord_name);
+            }} />
           <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-t from-black/70 to-transparent">
             <div className="flex items-center gap-2 mb-1">
               <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full border font-medium ${statusColor}`}>{statusLbl}</span>
