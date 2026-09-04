@@ -9,6 +9,7 @@ import RentPayments from '../components/ui/RentPayments';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
+import { activePropertyTenants, type PropertyTenant } from '../utils/propertyTenants';
 import {
   PoundSterling, User,
   CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
@@ -182,7 +183,7 @@ export default function PropertyDetail() {
   const [notesInput, setNotesInput] = useState('');
 
   // Tenant state
-  const [allTenants, setAllTenants] = useState<{ id: number; name: string; property_id?: number; status?: string; notes?: string; email?: string; phone?: string; first_name_1?: string; last_name_1?: string; email_1?: string; phone_1?: string }[]>([]);
+  const [allTenants, setAllTenants] = useState<PropertyTenant[]>([]);
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [tenantModalMode, setTenantModalMode] = useState<'select' | 'create'>('select');
   const [tenantSearch, setTenantSearch] = useState('');
@@ -569,6 +570,17 @@ export default function PropertyDetail() {
   const statusColor = STATUS_COLORS[property.status] || 'bg-[var(--bg-hover)] text-[var(--text-muted)]';
   const statusLbl = STATUS_LABELS[property.status] || property.status;
   const linkedTenants = allTenants.filter(tenant => tenant.property_id === property.id);
+  const activeLinkedTenants = activePropertyTenants(allTenants, property.id);
+  const currentTenants = activeLinkedTenants.length > 0
+    ? activeLinkedTenants
+    : property.current_tenant
+      ? [{
+          id: property.current_tenant_id || property.tenant_id || 0,
+          name: property.current_tenant,
+          email: property.current_tenant_email || undefined,
+          phone: property.current_tenant_phone || undefined,
+        }]
+      : [];
   const displayedNotes = notesFilter === 'property'
     ? notes
     : notesFilter === 'landlord'
@@ -624,22 +636,28 @@ export default function PropertyDetail() {
 
         {/* Tenant Banner — always visible */}
         <div className={`rounded-xl sm:rounded-2xl border p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 ${
-          property.current_tenant
+          currentTenants.length > 0
             ? 'bg-gradient-to-r from-[var(--accent-orange)]/10 to-transparent border-[var(--accent-orange)]/30'
             : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)]'
         }`}>
           <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 ${
-            property.current_tenant ? 'bg-[var(--accent-orange)]/20 text-[var(--accent-orange)]' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'
+            currentTenants.length > 0 ? 'bg-[var(--accent-orange)]/20 text-[var(--accent-orange)]' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'
           }`}>
             <User size={20} />
           </div>
-          {property.current_tenant ? (
+          {currentTenants.length > 0 ? (
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-[var(--text-muted)] mb-0.5">Current Tenant</p>
-              <p className="text-base sm:text-lg font-semibold truncate">{property.current_tenant}</p>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 text-xs text-[var(--text-secondary)]">
-                {property.current_tenant_email && <span>{property.current_tenant_email}</span>}
-                {property.current_tenant_phone && <span>{property.current_tenant_phone}</span>}
+              <p className="text-xs text-[var(--text-muted)] mb-1">{currentTenants.length > 1 ? 'Current Tenants' : 'Current Tenant'}</p>
+              <div className="space-y-1.5">
+                {currentTenants.map(tenant => (
+                  <div key={tenant.id || tenant.name} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                    <p className="text-base sm:text-lg font-semibold">{tenant.name}</p>
+                    <div className="flex flex-wrap items-center gap-x-3 text-xs text-[var(--text-secondary)]">
+                      {(tenant.email || tenant.email_1) && <span>{tenant.email || tenant.email_1}</span>}
+                      {(tenant.phone || tenant.phone_1) && <span>{tenant.phone || tenant.phone_1}</span>}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ) : (
@@ -649,10 +667,14 @@ export default function PropertyDetail() {
             </div>
           )}
           <div className="shrink-0 flex gap-2">
-            {property.current_tenant ? (
-              <Button variant="outline" size="sm" onClick={() => (property.current_tenant_id || property.tenant_id) && navigate(`/tenants/${property.current_tenant_id || property.tenant_id}`)}>
-                View Tenant <ChevronRight size={14} className="ml-1" />
-              </Button>
+            {currentTenants.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {currentTenants.map(tenant => tenant.id ? (
+                  <Button key={tenant.id} variant="outline" size="sm" onClick={() => navigate(`/tenants/${tenant.id}`)}>
+                    View {currentTenants.length > 1 ? tenant.first_name_1 || tenant.name.split(' ')[0] : 'Tenant'} <ChevronRight size={14} className="ml-1" />
+                  </Button>
+                ) : null)}
+              </div>
             ) : (
               <Button variant="gradient" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('select'); }}>
                 <Plus size={14} className="mr-1" /> Assign Tenant
@@ -875,32 +897,35 @@ export default function PropertyDetail() {
               <GlassCard className="p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
                   <SectionHeader title="Current Tenancy" />
-                  {!editing && !property.current_tenant && (
+                  {!editing && currentTenants.length === 0 && (
                     <Button variant="outline" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('select'); }}>
                       <Plus size={14} className="mr-1.5" /> <span className="hidden sm:inline">Add Tenant</span><span className="sm:hidden">Add</span>
                     </Button>
                   )}
-                  {!editing && property.current_tenant && (
+                  {!editing && currentTenants.length > 0 && (
                     <Button variant="ghost" size="sm" onClick={handleRemoveTenant} className="text-red-400 hover:text-red-300">
                       <Trash2 size={14} className="mr-1.5" /> <span className="hidden sm:inline">Remove</span>
                     </Button>
                   )}
                 </div>
-                {property.current_tenant && !editing && (
-                  <div className="mb-4 p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={property.current_tenant} size="md" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{property.current_tenant}</p>
-                        <p className="text-xs text-[var(--text-muted)]">Current Tenant</p>
+                {currentTenants.length > 0 && !editing && (
+                  <div className="mb-4 space-y-2">
+                    {currentTenants.map(tenant => (
+                      <div key={tenant.id || tenant.name} className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={tenant.name} size="md" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">{tenant.name}</p>
+                            <p className="text-xs text-[var(--text-muted)]">{currentTenants.length > 1 ? 'Joint Tenant' : 'Current Tenant'}</p>
+                          </div>
+                          {tenant.id ? (
+                            <button onClick={() => navigate(`/tenants/${tenant.id}`)} className="text-xs text-[var(--accent-orange)] hover:underline">
+                              View
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
-                      <button
-                        onClick={() => (property.current_tenant_id || property.tenant_id) && navigate(`/tenants/${property.current_tenant_id || property.tenant_id}`)}
-                        className="text-xs text-[var(--accent-orange)] hover:underline"
-                      >
-                        View
-                      </button>
-                    </div>
+                    ))}
                   </div>
                 )}
                 {editing ? (
