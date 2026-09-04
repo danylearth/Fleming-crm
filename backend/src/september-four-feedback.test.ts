@@ -7,6 +7,7 @@ const wizard = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/compo
 const tenantDetail = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/TenantDetail.tsx'), 'utf8');
 const properties = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/Properties.tsx'), 'utf8');
 const enquiryForm = fs.readFileSync(path.resolve(__dirname, '../../tenants-subdomain/index.html'), 'utf8');
+const migration = fs.readFileSync(path.resolve(__dirname, '../migrations/0007_september_application_feedback.sql'), 'utf8');
 
 describe('4 September CRM feedback', () => {
   it('keeps Retired income without showing employment-role questions', () => {
@@ -45,5 +46,11 @@ describe('4 September CRM feedback', () => {
     expect(backend).toContain('Choose a service type for this client property');
     expect(properties).toContain('Service Type *');
     expect(properties).not.toContain("{ value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }]} />\n          <Select label=\"Service Type\"");
+  });
+
+  it('creates the confirmed internal Bridgemary test property with gas', () => {
+    expect(migration).toContain("'8 Bridgemary Close, Wolverhampton'");
+    expect(migration).toContain("'WV10 8UL'");
+    expect(migration).toContain("  1,\n  'to_let',\n  NULL");
   });
 });

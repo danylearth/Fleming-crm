@@ -29,3 +29,34 @@ UPDATE properties SET has_gas = 0, gas_safety_expiry_date = NULL, updated_at = N
 WHERE LOWER(TRIM(address)) IN (
   '25 wealden hatch', '29 wealden hatch', '4a cavalier circus', '2a cavalier circus'
 );
+
+INSERT INTO properties (
+  landlord_id,
+  address,
+  postcode,
+  property_type,
+  bedrooms,
+  rent_amount,
+  has_gas,
+  status,
+  service_type
+)
+SELECT
+  l.id,
+  '8 Bridgemary Close, Wolverhampton',
+  'WV10 8UL',
+  'house',
+  4,
+  0,
+  1,
+  'to_let',
+  NULL
+FROM landlords l
+WHERE l.landlord_type = 'internal'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM properties p
+    WHERE LOWER(TRIM(p.address)) LIKE '8 bridgemary close%'
+  )
+ORDER BY l.id
+LIMIT 1;
