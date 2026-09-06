@@ -170,6 +170,17 @@ export async function initDb() {
         leasehold_start_date DATE,
         leasehold_end_date DATE,
         leaseholder_info TEXT,
+        leasehold_issued_by TEXT,
+        leasehold_email TEXT,
+        leasehold_phone TEXT,
+        leasehold_reference TEXT,
+        leasehold_notes TEXT,
+        has_management_company INTEGER,
+        management_company_name TEXT,
+        management_company_email TEXT,
+        management_company_phone TEXT,
+        management_company_reference TEXT,
+        management_company_notes TEXT,
         proof_of_ownership_received INTEGER DEFAULT 0,
         council_tax_band TEXT CHECK(council_tax_band IN ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', NULL)),
         service_type TEXT CHECK(service_type IN ('rent_collection', 'let_only', 'full_management', NULL)),
@@ -363,7 +374,11 @@ export async function initDb() {
         amount NUMERIC(10,2) NOT NULL,
         category TEXT NOT NULL DEFAULT 'other',
         expense_date DATE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        is_recurring INTEGER DEFAULT 0,
+        recurrence_frequency TEXT,
+        receipt_document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
       -- TRANSACTIONS
@@ -547,6 +562,25 @@ export async function initDb() {
     `);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tenant_enquiries_application_form_slug
       ON tenant_enquiries(application_form_slug) WHERE application_form_slug IS NOT NULL`);
+
+    // Structured leasehold/management-company records and richer property costs.
+    await client.query(`
+      ALTER TABLE properties ADD COLUMN IF NOT EXISTS leasehold_issued_by TEXT;
+      ALTER TABLE properties ADD COLUMN IF NOT EXISTS leasehold_email TEXT;
+      ALTER TABLE properties ADD COLUMN IF NOT EXISTS leasehold_phone TEXT;
+      ALTER TABLE properties ADD COLUMN IF NOT EXISTS leasehold_reference TEXT;
+      ALTER TABLE properties ADD COLUMN IF NOT EXISTS leasehold_notes TEXT;
+      ALTER TABLE properties ADD COLUMN IF NOT EXISTS has_management_company INTEGER;
+      ALTER TABLE properties ADD COLUMN IF NOT EXISTS management_company_name TEXT;
+      ALTER TABLE properties ADD COLUMN IF NOT EXISTS management_company_email TEXT;
+      ALTER TABLE properties ADD COLUMN IF NOT EXISTS management_company_phone TEXT;
+      ALTER TABLE properties ADD COLUMN IF NOT EXISTS management_company_reference TEXT;
+      ALTER TABLE properties ADD COLUMN IF NOT EXISTS management_company_notes TEXT;
+      ALTER TABLE property_expenses ADD COLUMN IF NOT EXISTS is_recurring INTEGER DEFAULT 0;
+      ALTER TABLE property_expenses ADD COLUMN IF NOT EXISTS recurrence_frequency TEXT;
+      ALTER TABLE property_expenses ADD COLUMN IF NOT EXISTS receipt_document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL;
+      ALTER TABLE property_expenses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
 
     // Current CRM tenancy terminology. Legacy values remain valid so this
     // schema change does not silently rewrite existing contracts.

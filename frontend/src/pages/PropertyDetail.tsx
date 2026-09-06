@@ -6,12 +6,13 @@ import DocumentUpload from '../components/ui/DocumentUpload';
 import ActivityTimeline from '../components/ui/ActivityTimeline';
 import AddressAutocomplete from '../components/ui/AddressAutocomplete';
 import RentPayments from '../components/ui/RentPayments';
+import PropertyExpenses from '../components/PropertyExpenses';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import { activePropertyTenants, type PropertyTenant } from '../utils/propertyTenants';
 import {
-  PoundSterling, User,
+  User,
   CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
   AlertTriangle, Plus, Wrench, Trash2, StickyNote
 } from 'lucide-react';
@@ -31,6 +32,12 @@ interface PropertyDetail {
   // Leasehold
   is_leasehold: number; leasehold_start_date: string | null;
   leasehold_end_date: string | null; leaseholder_info: string | null;
+  leasehold_issued_by: string | null; leasehold_email: string | null;
+  leasehold_phone: string | null; leasehold_reference: string | null;
+  leasehold_notes: string | null;
+  has_management_company: number | null; management_company_name: string | null;
+  management_company_email: string | null; management_company_phone: string | null;
+  management_company_reference: string | null; management_company_notes: string | null;
   // Tenancy
   has_live_tenancy: number; tenancy_start_date: string | null;
   tenancy_type: string | null; has_end_date: number; tenancy_end_date: string | null;
@@ -52,11 +59,6 @@ interface Task {
 interface MaintenanceRecord {
   id: number; title: string; status: string; priority: string; description: string;
   property_id: number; created_at: string; address?: string;
-}
-
-interface Expense {
-  id: number; property_id: number; description: string; amount: number;
-  category: string; expense_date: string;
 }
 
 interface User {
@@ -133,15 +135,12 @@ export default function PropertyDetail() {
   const [property, setProperty] = useState<PropertyDetail | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form, setForm] = useState<Record<string, any>>({});
-  const [showExpenseForm, setShowExpenseForm] = useState(false);
-  const [expenseForm, setExpenseForm] = useState({ description: '', amount: '', category: 'maintenance', expense_date: '' });
   const [showAddTask, setShowAddTask] = useState(false);
   const [taskForm, setTaskForm] = useState({
     title: '',
@@ -187,6 +186,7 @@ export default function PropertyDetail() {
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [tenantModalMode, setTenantModalMode] = useState<'select' | 'create'>('select');
   const [tenantSearch, setTenantSearch] = useState('');
+  const [showPreviousTenancies, setShowPreviousTenancies] = useState(false);
   const [newTenantForm, setNewTenantForm] = useState({
     first_name_1: '',
     last_name_1: '',
@@ -204,6 +204,15 @@ export default function PropertyDetail() {
     onboarded_date: p.onboarded_date || '', proof_of_ownership_received: !!p.proof_of_ownership_received,
     is_leasehold: !!p.is_leasehold, leasehold_start_date: p.leasehold_start_date || '',
     leasehold_end_date: p.leasehold_end_date || '', leaseholder_info: p.leaseholder_info || '',
+    leasehold_issued_by: p.leasehold_issued_by || '', leasehold_email: p.leasehold_email || '',
+    leasehold_phone: p.leasehold_phone || '', leasehold_reference: p.leasehold_reference || '',
+    leasehold_notes: p.leasehold_notes || '',
+    has_management_company: !!p.has_management_company,
+    management_company_name: p.management_company_name || '',
+    management_company_email: p.management_company_email || '',
+    management_company_phone: p.management_company_phone || '',
+    management_company_reference: p.management_company_reference || '',
+    management_company_notes: p.management_company_notes || '',
     has_live_tenancy: !!p.has_live_tenancy, tenancy_start_date: p.tenancy_start_date || '',
     tenancy_type: p.tenancy_type || '', has_end_date: !!p.has_end_date,
     tenancy_end_date: p.tenancy_end_date || '',
@@ -219,11 +228,10 @@ export default function PropertyDetail() {
 
   const loadDetail = async () => {
     try {
-      const [prop, tks, maint, exps, usrs, propLandlords, landlords, tenants] = await Promise.all([
+      const [prop, tks, maint, usrs, propLandlords, landlords, tenants] = await Promise.all([
         api.get(`/api/properties/${id}`),
         api.get('/api/tasks').catch(() => []),
         api.get('/api/maintenance').catch(() => []),
-        api.get(`/api/property-expenses/${id}`).catch(() => []),
         api.get('/api/users').catch(() => []),
         api.get(`/api/properties/${id}/landlords`).catch(() => []),
         api.get('/api/landlords').catch(() => []),
@@ -256,7 +264,6 @@ export default function PropertyDetail() {
       }
       setTasks(Array.isArray(tks) ? tks : []);
       setMaintenance(Array.isArray(maint) ? maint.filter((m: MaintenanceRecord) => m.property_id === Number(id)) : []);
-      setExpenses(Array.isArray(exps) ? exps : []);
       setUsers(Array.isArray(usrs) ? usrs : []);
 
       // Parse property notes
@@ -305,6 +312,16 @@ export default function PropertyDetail() {
         epc_grade: form.epc_grade || null,
         service_type: form.service_type || null,
         leaseholder_info: form.leaseholder_info || null,
+        leasehold_issued_by: form.leasehold_issued_by || null,
+        leasehold_email: form.leasehold_email || null,
+        leasehold_phone: form.leasehold_phone || null,
+        leasehold_reference: form.leasehold_reference || null,
+        leasehold_notes: form.leasehold_notes || null,
+        management_company_name: form.management_company_name || null,
+        management_company_email: form.management_company_email || null,
+        management_company_phone: form.management_company_phone || null,
+        management_company_reference: form.management_company_reference || null,
+        management_company_notes: form.management_company_notes || null,
       });
       const updated = await api.get(`/api/properties/${id}`);
       setProperty(updated);
@@ -535,10 +552,11 @@ export default function PropertyDetail() {
   };
 
   const handleRemoveTenant = async () => {
+    if (!confirm('End the current tenancy? The tenant will remain available under Previous Tenancies.')) return;
     try {
-      await api.put(`/api/properties/${id}`, {
-        tenant_id: null
-      });
+      await Promise.all(currentTenants
+        .filter(tenant => tenant.id)
+        .map(tenant => api.put(`/api/tenants/${tenant.id}`, { status: 'inactive' })));
       await loadDetail();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } }; message?: string };
@@ -571,6 +589,7 @@ export default function PropertyDetail() {
   const statusLbl = STATUS_LABELS[property.status] || property.status;
   const linkedTenants = allTenants.filter(tenant => tenant.property_id === property.id);
   const activeLinkedTenants = activePropertyTenants(allTenants, property.id);
+  const previousTenants = linkedTenants.filter(tenant => tenant.status === 'inactive');
   const currentTenants = activeLinkedTenants.length > 0
     ? activeLinkedTenants
     : property.current_tenant
@@ -876,13 +895,21 @@ export default function PropertyDetail() {
                     <Toggle label="Leasehold Property" checked={form.is_leasehold} onChange={v => setForm({ ...form, is_leasehold: v })} />
                     <DatePicker label="Lease Start" value={form.leasehold_start_date} onChange={(v: string) => setForm({ ...form, leasehold_start_date: v })} />
                     <DatePicker label="Lease End" value={form.leasehold_end_date} onChange={(v: string) => setForm({ ...form, leasehold_end_date: v })} />
-                    <Input label="Leaseholder Info" value={form.leaseholder_info} onChange={(v: string) => setForm({ ...form, leaseholder_info: v })} className="col-span-full" />
+                    <Input label="Leasehold Issued By" value={form.leasehold_issued_by} onChange={(v: string) => setForm({ ...form, leasehold_issued_by: v })} />
+                    <Input label="Email Address" value={form.leasehold_email} onChange={(v: string) => setForm({ ...form, leasehold_email: v })} type="email" />
+                    <Input label="Contact Number" value={form.leasehold_phone} onChange={(v: string) => setForm({ ...form, leasehold_phone: v })} />
+                    <Input label="Reference" value={form.leasehold_reference} onChange={(v: string) => setForm({ ...form, leasehold_reference: v })} />
+                    <Input label="Portal Notes (do not store passwords)" value={form.leasehold_notes || form.leaseholder_info} onChange={(v: string) => setForm({ ...form, leasehold_notes: v, leaseholder_info: v })} className="col-span-full" />
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                     <ReadField label="Lease Start" value={formatDate(property.leasehold_start_date)} />
                     <ReadField label="Lease End" value={formatDate(property.leasehold_end_date)} />
-                    <ReadField label="Leaseholder Info" value={property.leaseholder_info} />
+                    <ReadField label="Leasehold Issued By" value={property.leasehold_issued_by} />
+                    <ReadField label="Email Address" value={property.leasehold_email} />
+                    <ReadField label="Contact Number" value={property.leasehold_phone} />
+                    <ReadField label="Reference" value={property.leasehold_reference} />
+                    <ReadField label="Portal Notes" value={property.leasehold_notes || property.leaseholder_info} />
                   </div>
                 )}
               </GlassCard>
@@ -892,11 +919,42 @@ export default function PropertyDetail() {
               </div>
             ) : null}
 
-            {/* Current Tenancy (hidden if to_let) */}
-            {!isToLet && (
+            {(editing || property.has_management_company) && (
+              <GlassCard className="p-4 sm:p-6">
+                <SectionHeader title="Management Company" />
+                {editing ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                    <div className="col-span-full"><Toggle label="Management company in place" checked={form.has_management_company} onChange={v => setForm({ ...form, has_management_company: v })} /></div>
+                    {form.has_management_company && <>
+                      <Input label="Company Name" value={form.management_company_name} onChange={(v: string) => setForm({ ...form, management_company_name: v })} />
+                      <Input label="Email Address" value={form.management_company_email} onChange={(v: string) => setForm({ ...form, management_company_email: v })} type="email" />
+                      <Input label="Contact Number" value={form.management_company_phone} onChange={(v: string) => setForm({ ...form, management_company_phone: v })} />
+                      <Input label="Reference" value={form.management_company_reference} onChange={(v: string) => setForm({ ...form, management_company_reference: v })} />
+                      <Input label="Portal Notes (do not store passwords)" value={form.management_company_notes} onChange={(v: string) => setForm({ ...form, management_company_notes: v })} className="col-span-full" />
+                    </>}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                    <ReadField label="Company Name" value={property.management_company_name} />
+                    <ReadField label="Email Address" value={property.management_company_email} />
+                    <ReadField label="Contact Number" value={property.management_company_phone} />
+                    <ReadField label="Reference" value={property.management_company_reference} />
+                    <ReadField label="Portal Notes" value={property.management_company_notes} />
+                  </div>
+                )}
+              </GlassCard>
+            )}
+
+            {/* Tenancy information, including retained historic tenants */}
+            {(!isToLet || linkedTenants.length > 0) && (
               <GlassCard className="p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
-                  <SectionHeader title="Current Tenancy" />
+                  <SectionHeader title="Tenancy Information" />
+                  {!editing && previousTenants.length > 0 && (
+                    <Button variant="outline" size="sm" onClick={() => setShowPreviousTenancies(value => !value)}>
+                      Previous Tenancies ({previousTenants.length})
+                    </Button>
+                  )}
                   {!editing && currentTenants.length === 0 && (
                     <Button variant="outline" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('select'); }}>
                       <Plus size={14} className="mr-1.5" /> <span className="hidden sm:inline">Add Tenant</span><span className="sm:hidden">Add</span>
@@ -904,7 +962,7 @@ export default function PropertyDetail() {
                   )}
                   {!editing && currentTenants.length > 0 && (
                     <Button variant="ghost" size="sm" onClick={handleRemoveTenant} className="text-red-400 hover:text-red-300">
-                      <Trash2 size={14} className="mr-1.5" /> <span className="hidden sm:inline">Remove</span>
+                      <Trash2 size={14} className="mr-1.5" /> <span className="hidden sm:inline">End Tenancy</span>
                     </Button>
                   )}
                 </div>
@@ -925,6 +983,16 @@ export default function PropertyDetail() {
                           ) : null}
                         </div>
                       </div>
+                    ))}
+                  </div>
+                )}
+                {showPreviousTenancies && !editing && (
+                  <div className="mb-4 space-y-2 border-t border-[var(--border-subtle)] pt-4">
+                    {previousTenants.map(tenant => (
+                      <button key={tenant.id} onClick={() => navigate(`/tenants/${tenant.id}`)} className="w-full text-left rounded-xl bg-[var(--bg-subtle)] p-3 hover:bg-[var(--bg-hover)]">
+                        <p className="text-sm font-medium">{tenant.name}</p>
+                        <p className="text-xs text-[var(--text-muted)]">Ended {tenant.tenancy_end_date ? formatDate(tenant.tenancy_end_date) : '—'}</p>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -952,9 +1020,9 @@ export default function PropertyDetail() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                     <ReadField label="Tenancy Type" value={property.tenancy_type} />
                     <ReadField label="Start Date" value={formatDate(property.tenancy_start_date)} />
-                    {property.has_end_date ? <ReadField label="End Date" value={formatDate(property.tenancy_end_date)} /> : null}
+                    {property.has_end_date === 1 ? <ReadField label="End Date" value={formatDate(property.tenancy_end_date)} /> : null}
                     <ReadField label="Status" value={property.has_live_tenancy ? 'Active' : 'Inactive'} />
-                    {property.has_end_date && property.tenancy_end_date && (() => {
+                    {property.has_end_date === 1 && property.tenancy_end_date && (() => {
                       const days = daysUntil(property.tenancy_end_date);
                       if (days === null) return null;
                       return (
@@ -1043,68 +1111,7 @@ export default function PropertyDetail() {
               )}
             </Card>
 
-            {/* Expenses */}
-            <Card className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <SectionHeader title="Expenses" />
-                <Button variant="outline" size="sm" onClick={() => setShowExpenseForm(!showExpenseForm)}>
-                  <Plus size={14} className="mr-1.5" /> Add
-                </Button>
-              </div>
-              {showExpenseForm && (
-                <div className="mb-4 p-3 sm:p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] space-y-3">
-                  <Input label="Description" value={expenseForm.description} onChange={(v: string) => setExpenseForm(f => ({ ...f, description: v }))} placeholder="e.g. Boiler repair" />
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <Input label="Amount (£)" value={expenseForm.amount} onChange={(v: string) => setExpenseForm(f => ({ ...f, amount: v }))} type="number" />
-                    <Select label="Category" value={expenseForm.category} onChange={(v: string) => setExpenseForm(f => ({ ...f, category: v }))}
-                      options={[{ value: 'maintenance', label: 'Maintenance' }, { value: 'insurance', label: 'Insurance' }, { value: 'legal', label: 'Legal' }, { value: 'service_charge', label: 'Service Charge' }, { value: 'other', label: 'Other' }]} />
-                    <DatePicker label="Date" value={expenseForm.expense_date} onChange={(v: string) => setExpenseForm(f => ({ ...f, expense_date: v }))} />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => setShowExpenseForm(false)}>Cancel</Button>
-                    <Button variant="gradient" size="sm" disabled={!expenseForm.description || !expenseForm.amount} onClick={async () => {
-                      try {
-                        await api.post('/api/property-expenses', { property_id: property.id, ...expenseForm, amount: parseFloat(expenseForm.amount) || 0 });
-                        const exps = await api.get(`/api/property-expenses/${property.id}`);
-                        setExpenses(Array.isArray(exps) ? exps : []);
-                        setExpenseForm({ description: '', amount: '', category: 'maintenance', expense_date: '' });
-                        setShowExpenseForm(false);
-                      } catch { /* Silently ignore */ }
-                    }}>Save</Button>
-                  </div>
-                </div>
-              )}
-              {expenses.length ? (
-                <div className="space-y-2">
-                  {expenses.map(e => (
-                    <div key={e.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)]">
-                      <div className="w-7 h-7 rounded-lg bg-red-500/20 text-red-400 flex items-center justify-center">
-                        <PoundSterling size={14} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm truncate">{e.description}</p>
-                        <p className="text-[10px] text-[var(--text-muted)]">{e.category}{e.expense_date ? ` · ${new Date(e.expense_date).toLocaleDateString('en-GB')}` : ''}</p>
-                      </div>
-                      <span className="text-sm font-medium text-red-400">-£{e.amount.toLocaleString()}</span>
-                      <button onClick={async () => {
-                        try {
-                          await api.delete(`/api/property-expenses/${e.id}`);
-                          setExpenses(prev => prev.filter(x => x.id !== e.id));
-                        } catch { /* Silently ignore */ }
-                      }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors">
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                  <div className="pt-2 border-t border-[var(--border-subtle)] flex justify-between">
-                    <span className="text-xs text-[var(--text-muted)]">Total</span>
-                    <span className="text-sm font-semibold text-red-400">-£{expenses.reduce((a, e) => a + e.amount, 0).toLocaleString()}</span>
-                  </div>
-                </div>
-              ) : !showExpenseForm ? (
-                <EmptyState message="No expenses recorded" />
-              ) : null}
-            </Card>
+            <PropertyExpenses propertyId={property.id} />
 
             {/* Rent Payments */}
             <RentPayments propertyId={property.id} compact />

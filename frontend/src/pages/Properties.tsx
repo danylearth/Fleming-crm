@@ -29,6 +29,11 @@ interface PropertyForm {
   landlord_id: string; address: string; postcode: string; property_type: string;
   bedrooms: string; rent_amount: string; status: string; service_type: string;
   council_tax_band: string; has_gas: boolean | null;
+  is_leasehold: boolean; leasehold_issued_by: string; leasehold_email: string;
+  leasehold_phone: string; leasehold_reference: string; leasehold_notes: string;
+  has_management_company: boolean | null; management_company_name: string;
+  management_company_email: string; management_company_phone: string;
+  management_company_reference: string; management_company_notes: string;
 }
 
 const STATUSES = [
@@ -61,6 +66,8 @@ export default function Properties() {
   const [form, setForm] = useState<PropertyForm>({
     landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
     rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: null,
+    is_leasehold: false, leasehold_issued_by: '', leasehold_email: '', leasehold_phone: '', leasehold_reference: '', leasehold_notes: '',
+    has_management_company: null, management_company_name: '', management_company_email: '', management_company_phone: '', management_company_reference: '', management_company_notes: '',
   });
   const [llDropOpen, setLlDropOpen] = useState(false);
   const [llSearch, setLlSearch] = useState('');
@@ -394,7 +401,7 @@ export default function Properties() {
           saving={saving}
           onClose={() => { setShowAdd(false); resetForm(); }}
           onSubmit={async () => {
-            if (form.has_gas === null) return;
+            if (form.has_gas === null || form.has_management_company === null) return;
             setSaving(true);
             try {
               const res = await api.post('/api/properties', {
@@ -416,7 +423,12 @@ export default function Properties() {
   );
 
   function resetForm() {
-    setForm({ landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1', rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: null });
+    setForm({
+      landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
+      rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: null,
+      is_leasehold: false, leasehold_issued_by: '', leasehold_email: '', leasehold_phone: '', leasehold_reference: '', leasehold_notes: '',
+      has_management_company: null, management_company_name: '', management_company_email: '', management_company_phone: '', management_company_reference: '', management_company_notes: '',
+    });
     setLlSearch('');
     setLlDropOpen(false);
   }
@@ -580,9 +592,42 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
           {form.has_gas === null && <p className="mt-1.5 text-[10px] text-amber-400">Choose Yes or No before creating the property.</p>}
         </div>
 
+        <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
+          <button type="button" onClick={() => setForm((current: PropertyForm) => ({ ...current, is_leasehold: !current.is_leasehold }))}
+            className={`w-full rounded-xl border px-4 py-2.5 text-sm font-medium ${form.is_leasehold ? 'border-[var(--accent-orange)] bg-[var(--accent-orange)]/10' : 'border-[var(--border-input)] bg-[var(--bg-input)] text-[var(--text-muted)]'}`}>
+            {form.is_leasehold ? '✓ Leasehold property' : 'Freehold property — click if leasehold'}
+          </button>
+          {form.is_leasehold && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input label="Leasehold Issued By" value={form.leasehold_issued_by} onChange={leasehold_issued_by => setForm((current: PropertyForm) => ({ ...current, leasehold_issued_by }))} />
+            <Input label="Email Address" type="email" value={form.leasehold_email} onChange={leasehold_email => setForm((current: PropertyForm) => ({ ...current, leasehold_email }))} />
+            <Input label="Contact Number" value={form.leasehold_phone} onChange={leasehold_phone => setForm((current: PropertyForm) => ({ ...current, leasehold_phone }))} />
+            <Input label="Reference" value={form.leasehold_reference} onChange={leasehold_reference => setForm((current: PropertyForm) => ({ ...current, leasehold_reference }))} />
+            <Input label="Portal Notes (do not store passwords)" value={form.leasehold_notes} onChange={leasehold_notes => setForm((current: PropertyForm) => ({ ...current, leasehold_notes }))} className="sm:col-span-2" />
+          </div>}
+        </div>
+
+        <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
+          <label className="block text-xs font-medium text-[var(--text-secondary)]">Is there a management company in place? *</label>
+          <div className="grid grid-cols-2 gap-2">
+            {([{ value: true, label: 'Yes' }, { value: false, label: 'No' }] as const).map(option => (
+              <button key={option.label} type="button" onClick={() => setForm((current: PropertyForm) => ({ ...current, has_management_company: option.value }))}
+                className={`rounded-xl border px-4 py-2.5 text-sm font-medium ${form.has_management_company === option.value ? 'border-[var(--accent-orange)] bg-[var(--accent-orange)]/10' : 'border-[var(--border-input)] bg-[var(--bg-input)] text-[var(--text-muted)]'}`}>
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {form.has_management_company && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input label="Company Name" value={form.management_company_name} onChange={management_company_name => setForm((current: PropertyForm) => ({ ...current, management_company_name }))} />
+            <Input label="Email Address" type="email" value={form.management_company_email} onChange={management_company_email => setForm((current: PropertyForm) => ({ ...current, management_company_email }))} />
+            <Input label="Contact Number" value={form.management_company_phone} onChange={management_company_phone => setForm((current: PropertyForm) => ({ ...current, management_company_phone }))} />
+            <Input label="Reference" value={form.management_company_reference} onChange={management_company_reference => setForm((current: PropertyForm) => ({ ...current, management_company_reference }))} />
+            <Input label="Portal Notes (do not store passwords)" value={form.management_company_notes} onChange={management_company_notes => setForm((current: PropertyForm) => ({ ...current, management_company_notes }))} className="sm:col-span-2" />
+          </div>}
+        </div>
+
         <div className="flex gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.landlord_id || !form.address || !form.status || form.has_gas === null || (!isMyPortfolio && !form.service_type)}>
+          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.landlord_id || !form.address || !form.status || form.has_gas === null || form.has_management_company === null || (!isMyPortfolio && !form.service_type)}>
             {saving ? 'Creating...' : 'Create Property'}
           </Button>
         </div>

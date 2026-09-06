@@ -170,6 +170,8 @@ export default function TenantDetail() {
   // Properties list for selector
   const [allProperties, setAllProperties] = useState<{ id: number; address: string; postcode: string }[]>([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
+  const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
+  const [maintenanceForm, setMaintenanceForm] = useState({ title: '', description: '', category: 'other', priority: 'medium' });
 
   const tenantToForm = (t: Tenant) => {
     return {
@@ -245,6 +247,21 @@ export default function TenantDetail() {
   useEffect(() => {
     setNotes(parseNotes(tenant?.notes));
   }, [tenant?.notes]);
+
+  const addMaintenance = async () => {
+    if (!tenant?.property_id || !maintenanceForm.title.trim() || !maintenanceForm.description.trim()) return;
+    await api.post('/api/maintenance', {
+      ...maintenanceForm,
+      property_id: tenant.property_id,
+      tenant_id: tenant.id,
+      landlord_id: tenant.property_landlord_id || null,
+      reporter_type: 'agent',
+      reporter_name: user?.name || user?.email,
+    });
+    setMaintenanceForm({ title: '', description: '', category: 'other', priority: 'medium' });
+    setShowMaintenanceForm(false);
+    await loadDetail();
+  };
 
   // Restructured checklist: Authority → KYC → Application Forms → Proof of Income
   function getChecklistItems() {
@@ -567,7 +584,24 @@ export default function TenantDetail() {
 
             {/* Maintenance linked to this tenant */}
             <GlassCard className="p-6">
-              <SectionHeader title={`Maintenance (${maintenanceRequests.length})`} icon={<AlertTriangle size={16} />} />
+              <SectionHeader title={`Maintenance (${maintenanceRequests.length})`} icon={<AlertTriangle size={16} />}
+                action={tenant.property_id ? () => setShowMaintenanceForm(value => !value) : undefined}
+                actionLabel={showMaintenanceForm ? 'Cancel' : 'Add Request'} />
+              {showMaintenanceForm && (
+                <div className="mt-4 space-y-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3">
+                  <Input label="Issue" value={maintenanceForm.title} onChange={title => setMaintenanceForm(current => ({ ...current, title }))} placeholder="e.g. Lost key" />
+                  <textarea value={maintenanceForm.description} onChange={event => setMaintenanceForm(current => ({ ...current, description: event.target.value }))}
+                    placeholder="Describe the maintenance request" rows={3}
+                    className="w-full rounded-xl border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm outline-none focus:border-[var(--accent-orange)]" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Select label="Category" value={maintenanceForm.category} onChange={category => setMaintenanceForm(current => ({ ...current, category }))}
+                      options={[{ value: 'plumbing', label: 'Plumbing' }, { value: 'electrical', label: 'Electrical' }, { value: 'heating', label: 'Heating' }, { value: 'structural', label: 'Structural' }, { value: 'appliance', label: 'Appliance' }, { value: 'pest', label: 'Pest Control' }, { value: 'garden', label: 'Garden' }, { value: 'other', label: 'Other / Request' }]} />
+                    <Select label="Priority" value={maintenanceForm.priority} onChange={priority => setMaintenanceForm(current => ({ ...current, priority }))}
+                      options={[{ value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }, { value: 'urgent', label: 'Urgent' }]} />
+                  </div>
+                  <Button variant="gradient" size="sm" disabled={!maintenanceForm.title.trim() || !maintenanceForm.description.trim()} onClick={() => addMaintenance().catch(error => alert(error.message))}>Create Request</Button>
+                </div>
+              )}
               <div className="mt-4 space-y-2">
                 {maintenanceRequests.length === 0 && <p className="text-xs text-[var(--text-muted)]">No maintenance requests linked to this tenant.</p>}
                 {maintenanceRequests.map(request => (

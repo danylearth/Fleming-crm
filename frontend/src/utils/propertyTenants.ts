@@ -10,6 +10,8 @@ export interface PropertyTenant {
   last_name_1?: string;
   email_1?: string;
   phone_1?: string;
+  tenancy_start_date?: string;
+  tenancy_end_date?: string;
 }
 
 export function activePropertyTenants(tenants: PropertyTenant[], propertyId: number) {

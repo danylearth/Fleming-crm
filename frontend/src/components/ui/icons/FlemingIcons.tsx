@@ -57,7 +57,7 @@ export function TasksIcon(props: IconProps) {
 
 export function FinancialsIcon(props: IconProps) {
   const p = defaults(props);
-  return <svg {...p}><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>;
+  return <svg {...p} aria-label="British pound"><path d="M18 7c0-5.333-8-5.333-8 0v14" /><path d="M6 13h10" /><path d="M6 21h12" /></svg>;
 }
 
 export function SettingsIcon(props: IconProps) {

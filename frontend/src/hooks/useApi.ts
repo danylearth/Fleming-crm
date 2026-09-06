@@ -3,13 +3,9 @@ import { useAuth } from '../context/AuthContext';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
-// Module-level cache — survives page navigation, cleared on mutation
+// Mutation invalidation is retained for multipart callers. Normal GETs are
+// deliberately fresh: CRM users expect a navigation/action to show saved data.
 const cache = new Map<string, { data: unknown; ts: number }>();
-const CACHE_TTL = 30_000; // 30 seconds stale-while-revalidate
-
-function cacheKey(token: string, endpoint: string) {
-  return `${token.slice(-8)}:${endpoint}`;
-}
 
 // Call this after any mutation so next GET re-fetches
 export function invalidateCache(endpointPrefix?: string) {
@@ -48,24 +44,7 @@ export function useApi() {
   };
 
   const get = async (endpoint: string) => {
-    if (!token) return request(endpoint);
-
-    const key = cacheKey(token, endpoint);
-    const cached = cache.get(key);
-    const now = Date.now();
-
-    if (cached) {
-      // Stale-while-revalidate: return cached immediately, refresh in background
-      if (now - cached.ts > CACHE_TTL) {
-        request(endpoint).then(fresh => cache.set(key, { data: fresh, ts: Date.now() })).catch(() => {});
-      }
-      return cached.data;
-    }
-
-    // Cache miss — fetch, store, return
-    const data = await request(endpoint);
-    cache.set(key, { data, ts: now });
-    return data;
+    return request(endpoint);
   };
 
   const mutate = async (endpoint: string, options: RequestInit, invalidate?: string) => {

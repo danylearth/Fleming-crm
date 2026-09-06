@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Menu, LogOut, ChevronLeft, ChevronRight, X, Sun, Moon, Users } from 'lucide-react';
@@ -43,8 +43,16 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { portfolioFilter, setPortfolioFilter } = usePortfolio();
+
+  useEffect(() => {
+    const section = navItems.find(item => item.to === '/'
+      ? location.pathname === '/'
+      : location.pathname.startsWith(item.to))?.label || 'CRM';
+    document.title = `Fleming Lettings – ${title || section}`;
+  }, [location.pathname, title]);
 
   return (
     <div className="flex h-screen bg-[var(--bg-page)] font-[Lufga] text-[var(--text-primary)] overflow-hidden">

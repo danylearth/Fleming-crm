@@ -37,6 +37,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
   const [showUpload, setShowUpload] = useState(false);
   const [selectedType, setSelectedType] = useState('');
   const [customTypeName, setCustomTypeName] = useState('');
+  const [filterType, setFilterType] = useState('all');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
@@ -89,7 +90,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
       if (newDoc.id) {
         setDocs(prev => [{ ...newDoc, uploaded_at: new Date().toISOString() }, ...prev]);
         setShowUpload(false);
-        setSelectedType('');
+        setSelectedType(docTypes[0] || '');
         setCustomTypeName('');
         await onChange?.();
       }
@@ -187,8 +188,20 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
       ) : docs.length === 0 ? (
         <EmptyState message="No documents uploaded" icon={<FileText size={32} />} />
       ) : (
-        <div className="space-y-2">
-          {docs.map(doc => (
+        <div className="space-y-3">
+          <Select
+            label="Filter documents"
+            value={filterType}
+            onChange={setFilterType}
+            options={[
+              { value: 'all', label: `All document types (${docs.length})` },
+              ...Array.from(new Set(docs.map(doc => doc.doc_type))).sort().map(type => ({
+                value: type,
+                label: `${type} (${docs.filter(doc => doc.doc_type === type).length})`,
+              })),
+            ]}
+          />
+          {(filterType === 'all' ? docs : docs.filter(doc => doc.doc_type === filterType)).map(doc => (
             <div key={doc.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] group">
               <span className="text-lg">{mimeIcon(doc.mime_type)}</span>
               <div className="flex-1 min-w-0">

@@ -3229,6 +3229,9 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
     if (typeof d.has_gas !== 'boolean') {
       return res.status(400).json({ error: 'Confirm whether the property has a gas connection' });
     }
+    if (typeof d.has_management_company !== 'boolean') {
+      return res.status(400).json({ error: 'Confirm whether there is a management company in place' });
+    }
     if (!['to_let', 'let_agreed'].includes(String(d.status || 'to_let'))) {
       return res.status(400).json({ error: 'Property status must be To Let or Let Agreed' });
     }
@@ -3247,6 +3250,9 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
         INSERT INTO properties (
           landlord_id, address, postcode, property_type, bedrooms,
           is_leasehold, leasehold_start_date, leasehold_end_date, leaseholder_info,
+          leasehold_issued_by, leasehold_email, leasehold_phone, leasehold_reference, leasehold_notes,
+          has_management_company, management_company_name, management_company_email,
+          management_company_phone, management_company_reference, management_company_notes,
           proof_of_ownership_received, council_tax_band, service_type,
           charge_percentage, total_charge, rent_amount,
           has_live_tenancy, tenancy_start_date, tenancy_type, has_end_date, tenancy_end_date,
@@ -3255,11 +3261,23 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
           tenant_id, image_url
         ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-          $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32
+          $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
+          $41,$42,$43
         ) RETURNING id
       `, [
         d.landlord_id, d.address, d.postcode, d.property_type || 'house', d.bedrooms || 1,
         d.is_leasehold ? 1 : 0, d.leasehold_start_date || null, d.leasehold_end_date || null, d.leaseholder_info || null,
+        d.is_leasehold ? d.leasehold_issued_by || null : null,
+        d.is_leasehold ? d.leasehold_email || null : null,
+        d.is_leasehold ? d.leasehold_phone || null : null,
+        d.is_leasehold ? d.leasehold_reference || null : null,
+        d.is_leasehold ? d.leasehold_notes || null : null,
+        d.has_management_company ? 1 : 0,
+        d.has_management_company ? d.management_company_name || null : null,
+        d.has_management_company ? d.management_company_email || null : null,
+        d.has_management_company ? d.management_company_phone || null : null,
+        d.has_management_company ? d.management_company_reference || null : null,
+        d.has_management_company ? d.management_company_notes || null : null,
         d.proof_of_ownership_received ? 1 : 0, d.council_tax_band || null, serviceType,
         isInternalPortfolio ? null : d.charge_percentage || null, isInternalPortfolio ? null : d.total_charge || null, d.rent_amount || 0,
         d.has_live_tenancy ? 1 : 0, d.tenancy_start_date || null, d.tenancy_type || null,
@@ -3324,6 +3342,23 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
     if (!currentProperty) return res.status(404).json({ error: 'Property not found' });
     const landlord = await queryOne('SELECT landlord_type FROM landlords WHERE id = $1', [d.landlord_id || currentProperty.landlord_id]);
     if (!landlord) return res.status(400).json({ error: 'Choose a valid landlord' });
+    if ('has_management_company' in d && !d.has_management_company) {
+      d.management_company_name = null;
+      d.management_company_email = null;
+      d.management_company_phone = null;
+      d.management_company_reference = null;
+      d.management_company_notes = null;
+    }
+    if ('is_leasehold' in d && !d.is_leasehold) {
+      d.leasehold_start_date = null;
+      d.leasehold_end_date = null;
+      d.leaseholder_info = null;
+      d.leasehold_issued_by = null;
+      d.leasehold_email = null;
+      d.leasehold_phone = null;
+      d.leasehold_reference = null;
+      d.leasehold_notes = null;
+    }
     if (landlord.landlord_type === 'internal') {
       d.service_type = null;
       d.charge_percentage = null;
@@ -3337,10 +3372,13 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
-    const boolFields = ['has_gas','is_leasehold','proof_of_ownership_received','has_live_tenancy','has_end_date'];
+    const boolFields = ['has_gas','is_leasehold','has_management_company','proof_of_ownership_received','has_live_tenancy','has_end_date'];
     const allowed = [
       'landlord_id','address','postcode','property_type','bedrooms',
       'is_leasehold','leasehold_start_date','leasehold_end_date','leaseholder_info',
+      'leasehold_issued_by','leasehold_email','leasehold_phone','leasehold_reference','leasehold_notes',
+      'has_management_company','management_company_name','management_company_email',
+      'management_company_phone','management_company_reference','management_company_notes',
       'proof_of_ownership_received','council_tax_band','service_type',
       'charge_percentage','total_charge','rent_amount',
       'has_live_tenancy','tenancy_start_date','tenancy_type','has_end_date','tenancy_end_date',
@@ -3648,6 +3686,10 @@ app.post('/api/maintenance', authMiddleware, async (req: AuthRequest, res) => {
        d.tenant_id || null, d.landlord_id || null, d.reporter_name || null, d.reporter_email || null, d.reporter_phone || null, d.reporter_type || null,
        d.contractor || null, d.contractor_phone || null, d.cost || null, d.notes || null, d.status || 'open']
     );
+    await insert(`INSERT INTO tasks (title, description, priority, status, entity_type, entity_id, due_date, task_type)
+      VALUES ($1,$2,$3,'pending','maintenance',$4,CURRENT_DATE,'maintenance')`,
+    [`Maintenance: ${d.title}`, d.description || null, d.priority === 'urgent' ? 'high' : d.priority || 'medium', id]);
+    await logAudit(req.user?.id, req.user?.email, 'create', 'maintenance', id, { property_id: d.property_id, tenant_id: d.tenant_id || null });
     res.json({ id });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create maintenance' });
@@ -3783,7 +3825,13 @@ const DOC_TYPES: Record<string, string[]> = {
   landlord_bdm: ['Primary Identification', 'Address Identification', 'Proof of Funds', 'Other'],
   tenant: ['Primary Identification', 'Address Identification', 'Application Form(s)', 'Bank Statements', 'Other'],
   tenant_enquiry: ['Primary Identification', 'Secondary Identification', 'Proof of Income or Employment', 'Bank Statements', 'Other Financial Document', 'Other'],
-  property: ['Property Photo', 'Gas Safety Certificate', 'EPC', 'EICR', 'How to Rent Guide', 'Renters Rights Information', 'Proof of Ownership', 'Insurance', 'Other'],
+  property: [
+    'Property Photo', 'Gas Safety Certificate', 'EPC', 'EICR', 'How to Rent Guide',
+    'Renters Rights Information', 'Proof of Ownership', 'Insurance', 'Land Registry',
+    'Legal Documents', 'Solicitors Correspondence', 'Management Company Correspondence',
+    'Freeholder Correspondence', 'Tenant Communications', 'Damage Reports',
+    'Service Connections', 'Expense Receipt', 'Other',
+  ],
   maintenance: ['Quote', 'Invoice', 'Photo', 'Report', 'Other'],
   task: ['Supporting Document', 'Other'],
 };
@@ -4160,7 +4208,7 @@ app.post('/api/users/setup-fleming-team', authMiddleware, requireRole('admin'), 
   }
 });
 
-app.put('/api/users/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.put('/api/users/:id', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
     const userId = parseInt(req.params.id as string);
     const { name, email, role, department, is_active } = req.body;
@@ -4535,7 +4583,11 @@ app.patch('/api/tenants/:id/notes', authMiddleware, async (req: AuthRequest, res
 
 app.get('/api/property-expenses/:propertyId', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const expenses = await query('SELECT * FROM property_expenses WHERE property_id = $1 ORDER BY expense_date DESC, created_at DESC', [req.params.propertyId]);
+    const expenses = await query(`SELECT expense.*, document.original_name AS receipt_name
+      FROM property_expenses expense
+      LEFT JOIN documents document ON document.id=expense.receipt_document_id
+      WHERE expense.property_id = $1
+      ORDER BY expense.expense_date DESC NULLS LAST, expense.created_at DESC`, [req.params.propertyId]);
     res.json(expenses);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch expenses' });
@@ -4544,20 +4596,90 @@ app.get('/api/property-expenses/:propertyId', authMiddleware, async (req: AuthRe
 
 app.post('/api/property-expenses', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { property_id, description, amount, category, expense_date } = req.body;
+    const { property_id, description, amount, category, expense_date, is_recurring, recurrence_frequency } = req.body;
+    if (!property_id || !String(description || '').trim() || !Number.isFinite(Number(amount)) || Number(amount) < 0) {
+      return res.status(400).json({ error: 'Property, description, and amount are required' });
+    }
     const id = await insert(
-      'INSERT INTO property_expenses (property_id, description, amount, category, expense_date) VALUES ($1, $2, $3, $4, $5)',
-      [property_id, description, amount, category || 'other', expense_date || null]
+      `INSERT INTO property_expenses
+       (property_id, description, amount, category, expense_date, is_recurring, recurrence_frequency)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [property_id, String(description).trim(), Number(amount), category || 'other', expense_date || null,
+       is_recurring ? 1 : 0, is_recurring ? recurrence_frequency || 'monthly' : null]
     );
+    await logAudit(req.user?.id, req.user?.email, 'create', 'property_expense', id, { property_id, category });
     res.json({ id });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create expense' });
   }
 });
 
+app.put('/api/property-expenses/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const d = req.body;
+    if ('description' in d && !String(d.description || '').trim()) {
+      return res.status(400).json({ error: 'Expense description is required' });
+    }
+    if ('amount' in d && (!Number.isFinite(Number(d.amount)) || Number(d.amount) < 0)) {
+      return res.status(400).json({ error: 'Expense amount must be zero or greater' });
+    }
+    const allowed = ['description', 'amount', 'category', 'expense_date', 'is_recurring', 'recurrence_frequency'];
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    for (const key of allowed) {
+      if (!(key in d)) continue;
+      fields.push(`${key}=$${values.length + 1}`);
+      values.push(key === 'is_recurring' ? (d[key] ? 1 : 0) : d[key] === '' ? null : d[key]);
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No expense fields to update' });
+    fields.push('updated_at=CURRENT_TIMESTAMP');
+    values.push(req.params.id);
+    await run(`UPDATE property_expenses SET ${fields.join(', ')} WHERE id=$${values.length}`, values);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'property_expense', Number(req.params.id), d);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update expense' });
+  }
+});
+
+app.post('/api/property-expenses/:id/receipt', authMiddleware, requirePermission('staff'), upload.single('file'), async (req: AuthRequest, res) => {
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: 'Choose a receipt file' });
+  try {
+    const expense = await queryOne('SELECT id, property_id FROM property_expenses WHERE id=$1', [req.params.id]);
+    if (!expense) {
+      fs.unlinkSync(file.path);
+      return res.status(404).json({ error: 'Expense not found' });
+    }
+    const client = await pool.connect();
+    let documentId: number;
+    try {
+      await client.query('BEGIN');
+      const inserted = await client.query(`INSERT INTO documents
+        (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by, review_status, reviewed_at, reviewed_by)
+        VALUES ('property',$1,'Expense Receipt',$2,$3,$4,$5,$6,'approved',NOW(),$6) RETURNING id`,
+      [expense.property_id, file.filename, file.originalname, file.mimetype, file.size, req.user?.id]);
+      documentId = inserted.rows[0].id;
+      await client.query('UPDATE property_expenses SET receipt_document_id=$1, updated_at=NOW() WHERE id=$2', [documentId, expense.id]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      try { fs.unlinkSync(file.path); } catch { /* cleanup only */ }
+      throw error;
+    } finally {
+      client.release();
+    }
+    await logAudit(req.user?.id, req.user?.email, 'document_upload', 'property', expense.property_id, { doc_type: 'Expense Receipt', expense_id: expense.id });
+    res.json({ document_id: documentId!, original_name: file.originalname });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to attach receipt' });
+  }
+});
+
 app.delete('/api/property-expenses/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     await run('DELETE FROM property_expenses WHERE id = $1', [req.params.id]);
+    await logAudit(req.user?.id, req.user?.email, 'delete', 'property_expense', Number(req.params.id));
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete expense' });
@@ -6605,7 +6727,9 @@ app.get('/api/land-registry/price-paid', authMiddleware, async (req: AuthRequest
     const postcode = (req.query.postcode as string || '').trim();
     if (!postcode) return res.status(400).json({ error: 'Postcode required' });
 
-    const cleanPostcode = postcode.replace(/\s/g, '').toUpperCase();
+    // Land Registry stores postcodes with the inward-code space. Removing it
+    // returns a valid but empty response for addresses that do have sales data.
+    const cleanPostcode = postcode.replace(/\s+/g, ' ').trim().toUpperCase();
     const url = `https://landregistry.data.gov.uk/data/ppi/transaction-record.json?_pageSize=20&propertyAddress.postcode=${encodeURIComponent(cleanPostcode)}`;
 
     const response = await fetch(url, {
