@@ -70,7 +70,7 @@ export default function Landlords() {
     setLoading(false);
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [api]);
 
   const landlordProperties = properties.reduce((acc, p) => {
     if (p.landlord_id) {

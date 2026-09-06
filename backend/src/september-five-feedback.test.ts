@@ -12,8 +12,11 @@ const layout = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/compo
 const app = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/App.tsx'), 'utf8');
 const icons = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/components/ui/icons/FlemingIcons.tsx'), 'utf8');
 const tenantDetail = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/TenantDetail.tsx'), 'utf8');
+const maintenance = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/Maintenance.tsx'), 'utf8');
+const dashboard = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/Dashboard.tsx'), 'utf8');
 const apiHook = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/hooks/useApi.ts'), 'utf8');
 const migration = fs.readFileSync(path.resolve(__dirname, '../migrations/0008_september_five_feedback.sql'), 'utf8');
+const credentialsMigration = fs.readFileSync(path.resolve(__dirname, '../migrations/0009_portal_credentials.sql'), 'utf8');
 
 describe('5 September CRM feedback', () => {
   it('keeps postcode spacing for Land Registry Price Paid searches', () => {
@@ -40,6 +43,11 @@ describe('5 September CRM feedback', () => {
     expect(properties).toContain('Is there a management company in place? *');
     expect(propertyDetail).toContain('Management Company');
     expect(propertyDetail).toContain('Leasehold Issued By');
+    expect(propertyDetail).toContain('Portal Website');
+    expect(propertyDetail).toContain('Reveal password');
+    expect(credentialsMigration).toContain('leasehold_portal_password_encrypted TEXT');
+    expect(credentialsMigration).toContain('management_company_portal_password_encrypted TEXT');
+    expect(backend).toContain("requireRole('admin')");
   });
 
   it('supports editable recurring expenses with receipt evidence and financial-year views', () => {
@@ -49,6 +57,8 @@ describe('5 September CRM feedback', () => {
     expect(propertyExpenses).toContain('Running Costs');
     expect(propertyExpenses).toContain('Historic Costs');
     expect(propertyExpenses).toContain('Financial year');
+    expect(propertyExpenses).toContain('Year to date');
+    expect(propertyExpenses).toContain('All-time total');
     expect(propertyExpenses).toContain('Refurbishment');
   });
 
@@ -66,14 +76,28 @@ describe('5 September CRM feedback', () => {
 
   it('guards the team route and user administration with the admin role', () => {
     expect(app).toContain('<AdminRoute><Users /></AdminRoute>');
+    expect(backend).toContain("app.get('/api/users', authMiddleware, requireRole('admin')");
+    expect(backend).toContain("app.get('/api/users/options', authMiddleware");
     expect(backend).toContain("app.put('/api/users/:id', authMiddleware, requireRole('admin')");
   });
 
   it('creates linked maintenance requests from a tenant and refreshes fresh data after actions', () => {
     expect(tenantDetail).toContain('Add Request');
+    expect(tenantDetail).toContain('Email reporting link');
+    expect(tenantDetail).toContain('SMS reporting link');
     expect(tenantDetail).toContain("tenant_id: tenant.id");
     expect(backend).toContain("'pending','maintenance',$4,CURRENT_DATE,'maintenance'");
-    expect(apiHook).toContain('return request(endpoint)');
+    expect(app).toContain('path="/maintenance/:requestId"');
+    expect(maintenance).toContain('setExpanded(requested)');
+    expect(dashboard).toContain('navigate(`/maintenance/${item.id}`)');
+    expect(apiHook).toContain("window.addEventListener('focus', refresh)");
+    expect(apiHook).toContain('DATA_UPDATED_STORAGE_KEY');
+  });
+
+  it('hides client-only service filters from My Portfolio', () => {
+    expect(properties).toContain("portfolioFilter === 'internal'");
+    expect(properties).toContain("!['full_management', 'rent_collection'].includes(status.key)");
+    expect(properties).toContain('...visibleStatuses.map');
   });
 
   it('migrates confirmed portfolio facts without deleting the source notes', () => {

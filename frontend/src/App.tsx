@@ -96,6 +96,7 @@ function AppRoutes() {
       <Route path="/bdm" element={<ProtectedRoute><BDM /></ProtectedRoute>} />
       <Route path="/bdm/:id" element={<ProtectedRoute><BDMDetail /></ProtectedRoute>} />
       <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
+      <Route path="/maintenance/:requestId" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
       <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
       <Route path="/tasks/:id" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
       <Route path="/financials" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />

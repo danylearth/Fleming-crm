@@ -202,7 +202,7 @@ export default function EnquiryDetail() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form, setForm] = useState<Record<string, any>>({});
   const [properties, setProperties] = useState<{ id: number; address: string; postcode?: string; rent_amount?: number }[]>([]);
-  const [users, setUsers] = useState<{ id: number; name: string; email: string }[]>([]);
+  const [users, setUsers] = useState<{ id: number; name: string; role: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -272,7 +272,7 @@ export default function EnquiryDetail() {
       const [d, props, usersList] = await Promise.all([
         api.get(`/api/tenant-enquiries/${id}`),
         api.get('/api/properties').catch(() => []),
-        api.get('/api/users').catch(() => []),
+        api.get('/api/users/options').catch(() => []),
       ]);
       setData(d);
       setForm({ ...d });

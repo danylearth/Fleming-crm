@@ -3,6 +3,7 @@ import { Download, Pencil, Plus, ReceiptText, Trash2, Upload } from 'lucide-reac
 import { useAuth } from '../context/AuthContext';
 import { invalidateCache, useApi } from '../hooks/useApi';
 import { Button, Card, DatePicker, EmptyState, Input, Select, Tag } from './ui';
+import { isUkFinancialYearToDate, ukFinancialYear } from '../utils/propertyExpenses';
 
 interface Expense {
   id: number;
@@ -45,13 +46,6 @@ const CATEGORIES = [
 
 const RUNNING_COSTS = new Set(['ground_rent', 'service_charge', 'communal_charge']);
 
-function financialYear(date: string | null | undefined) {
-  if (!date) return 'undated';
-  const parsed = new Date(`${date.slice(0, 10)}T12:00:00`);
-  const start = parsed.getMonth() >= 3 ? parsed.getFullYear() : parsed.getFullYear() - 1;
-  return `${start}-${start + 1}`;
-}
-
 function financialYearLabel(value: string) {
   if (value === 'all') return 'All time';
   if (value === 'undated') return 'Date not recorded';
@@ -72,7 +66,8 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<ExpenseForm>(EMPTY_FORM);
-  const [year, setYear] = useState('all');
+  const currentFinancialYear = ukFinancialYear(new Date().toISOString());
+  const [year, setYear] = useState(currentFinancialYear);
 
   const load = useCallback(async () => {
     const data = await api.get(`/api/property-expenses/${propertyId}`).catch(() => []);
@@ -84,24 +79,17 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
   useEffect(() => { load(); }, [load]);
 
   const yearOptions = useMemo(() => {
-    const values = new Set(expenses.map(expense => financialYear(expense.expense_date)));
-    values.add(financialYear(new Date().toISOString()));
+    const values = new Set(expenses.map(expense => ukFinancialYear(expense.expense_date)));
+    values.add(currentFinancialYear);
     return ['all', ...[...values].sort().reverse()];
-  }, [expenses]);
+  }, [currentFinancialYear, expenses]);
 
-  const visibleExpenses = year === 'all' ? expenses : expenses.filter(expense => financialYear(expense.expense_date) === year);
+  const visibleExpenses = year === 'all' ? expenses : expenses.filter(expense => ukFinancialYear(expense.expense_date) === year);
   const runningCosts = visibleExpenses.filter(expense => RUNNING_COSTS.has(expense.category));
   const historicCosts = visibleExpenses.filter(expense => !RUNNING_COSTS.has(expense.category));
   const total = (items: Expense[]) => items.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   const allTimeTotal = total(expenses);
-  const yearTotal = total(visibleExpenses);
-  const currentFinancialYear = financialYear(new Date().toISOString());
-  const comparisonTotal = year === 'all'
-    ? total(expenses.filter(expense => financialYear(expense.expense_date) === currentFinancialYear))
-    : allTimeTotal;
-  const comparisonLabel = year === 'all'
-    ? `${financialYearLabel(currentFinancialYear)} total`
-    : 'All-time total';
+  const yearToDateTotal = total(expenses.filter(expense => isUkFinancialYearToDate(expense.expense_date)));
   const monthlyTotals = Array.from({ length: 12 }, (_, index) => {
     const calendarMonth = (index + 3) % 12;
     const value = total(visibleExpenses.filter(expense => {
@@ -224,8 +212,8 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Select label="Financial year" value={year} onChange={setYear} options={yearOptions.map(value => ({ value, label: financialYearLabel(value) }))} />
-        <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><p className="text-xs text-[var(--text-muted)]">{financialYearLabel(year)} total</p><p className="text-lg font-bold">£{yearTotal.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p></div>
-        <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><p className="text-xs text-[var(--text-muted)]">{comparisonLabel}</p><p className="text-lg font-bold">£{comparisonTotal.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p></div>
+        <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><p className="text-xs text-[var(--text-muted)]">Year to date</p><p className="text-lg font-bold">£{yearToDateTotal.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p></div>
+        <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><p className="text-xs text-[var(--text-muted)]">All-time total</p><p className="text-lg font-bold">£{allTimeTotal.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p></div>
       </div>
 
       {showForm && (

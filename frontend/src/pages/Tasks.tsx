@@ -107,7 +107,7 @@ export default function Tasks() {
   const [properties, setProperties] = useState<{ id: number; address: string; landlord_id: number | null }[]>([]);
   const [landlords, setLandlords] = useState<{ id: number; name: string }[]>([]);
   const [tenants, setTenants] = useState<{ id: number; name: string; property_id: number | null }[]>([]);
-  const [users, setUsers] = useState<{ id: number; name: string; email: string; role: string }[]>([]);
+  const [users, setUsers] = useState<{ id: number; name: string; role: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -153,7 +153,7 @@ export default function Tasks() {
     try {
       const [data, props, lands, tens, usrs] = await Promise.all([
         api.get('/api/tasks'), api.get('/api/properties'), api.get('/api/landlords'),
-        api.get('/api/tenants'), api.get('/api/users'),
+        api.get('/api/tenants'), api.get('/api/users/options'),
       ]);
       setTasks(Array.isArray(data) ? data : data.tasks || []);
       setProperties(props); setLandlords(lands); setTenants(tens); setUsers(usrs);
@@ -166,7 +166,7 @@ export default function Tasks() {
       try {
         const [data, props, lands, tens, usrs] = await Promise.all([
           api.get('/api/tasks'), api.get('/api/properties'), api.get('/api/landlords'),
-          api.get('/api/tenants'), api.get('/api/users'),
+          api.get('/api/tenants'), api.get('/api/users/options'),
         ]);
         if (!cancelled) {
           setTasks(Array.isArray(data) ? data : data.tasks || []);

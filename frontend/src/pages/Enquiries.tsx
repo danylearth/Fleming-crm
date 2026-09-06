@@ -303,7 +303,7 @@ export default function Enquiries() {
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
   const [emailRecipient, setEmailRecipient] = useState('');
-  const [allUsers, setAllUsers] = useState<{ id: number; name: string; email: string }[]>([]);
+  const [allUsers, setAllUsers] = useState<{ id: number; name: string; role: string }[]>([]);
   // Onboarding wizard
   const [onboardingEnquiryId, setOnboardingEnquiryId] = useState<number | null>(null);
   const [onboardingData, setOnboardingData] = useState<Record<string, string | number | boolean | null> | null>(null);
@@ -317,7 +317,7 @@ export default function Enquiries() {
       const [data, props, usersList] = await Promise.all([
         api.get('/api/tenant-enquiries'),
         api.get('/api/properties').catch(() => []),
-        api.get('/api/users').catch(() => []),
+        api.get('/api/users/options').catch(() => []),
       ]);
       setAllUsers(Array.isArray(usersList) ? usersList : []);
       const raw = Array.isArray(data) ? data : data.enquiries || [];
@@ -328,7 +328,7 @@ export default function Enquiries() {
     setLoading(false);
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [api]);
 
   const portfolioFiltered = filterByPortfolio(enquiries, portfolioFilter);
   const filtered = portfolioFiltered.filter(e => {

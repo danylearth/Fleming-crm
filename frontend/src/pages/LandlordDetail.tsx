@@ -192,10 +192,9 @@ export default function LandlordDetail() {
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [api, id]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadSmsHistory(); loadEmailHistory(); }, [id]);
+  useEffect(() => { loadSmsHistory(); loadEmailHistory(); }, [id, loadSmsHistory, loadEmailHistory]);
 
   const handleSave = async () => {
     setSaving(true);

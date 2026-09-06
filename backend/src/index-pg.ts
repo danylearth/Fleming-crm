@@ -37,6 +37,12 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { propertyCompliance } from './property-compliance';
 import { dateOnly, tenantPlacementStatus } from './tenant-lifecycle';
 import {
+  decryptPortalPassword,
+  encryptPortalPassword,
+  redactPropertyPortalPasswords,
+  redactedPortalCredentialChanges,
+} from './portal-credentials';
+import {
   bankFeedConfig,
   buildAuthUrl,
   decryptToken,
@@ -63,6 +69,15 @@ if (!process.env.DATABASE_URL) {
 }
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+
+function normalizePortalUrl(value: unknown) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  const parsed = new URL(candidate);
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Portal URL must use http or https');
+  return parsed.toString();
+}
 
 // Error tracking — activates only when a SENTRY_DSN is configured
 if (process.env.SENTRY_DSN) {
@@ -3217,7 +3232,7 @@ app.get('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
       FROM properties p LEFT JOIN landlords l ON l.id = p.landlord_id ORDER BY p.address
       LIMIT $1 OFFSET $2
     `, [limit, offset]);
-    res.json(properties);
+    res.json(properties.map(redactPropertyPortalPasswords));
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch properties' });
   }
@@ -3242,6 +3257,22 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
     if (!isInternalPortfolio && !['let_only', 'rent_collection', 'full_management'].includes(serviceType)) {
       return res.status(400).json({ error: 'Choose a service type for this client property' });
     }
+    const hasPortalPassword = Boolean(d.leasehold_portal_password || d.management_company_portal_password);
+    if (hasPortalPassword && req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Only an administrator can store portal passwords' });
+    }
+    let leaseholdPortalUrl: string | null;
+    let managementPortalUrl: string | null;
+    let leaseholdPortalPassword: string | null = null;
+    let managementPortalPassword: string | null = null;
+    try {
+      leaseholdPortalUrl = d.is_leasehold ? normalizePortalUrl(d.leasehold_portal_url) : null;
+      managementPortalUrl = d.has_management_company ? normalizePortalUrl(d.management_company_portal_url) : null;
+      if (d.leasehold_portal_password) leaseholdPortalPassword = encryptPortalPassword(String(d.leasehold_portal_password));
+      if (d.management_company_portal_password) managementPortalPassword = encryptPortalPassword(String(d.management_company_portal_password));
+    } catch (error) {
+      return res.status(400).json({ error: error instanceof Error ? error.message : 'Portal credentials are invalid' });
+    }
     const client = await pool.connect();
     let id: number;
     try {
@@ -3251,8 +3282,10 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
           landlord_id, address, postcode, property_type, bedrooms,
           is_leasehold, leasehold_start_date, leasehold_end_date, leaseholder_info,
           leasehold_issued_by, leasehold_email, leasehold_phone, leasehold_reference, leasehold_notes,
+          leasehold_portal_url, leasehold_portal_username, leasehold_portal_password_encrypted,
           has_management_company, management_company_name, management_company_email,
           management_company_phone, management_company_reference, management_company_notes,
+          management_company_portal_url, management_company_portal_username, management_company_portal_password_encrypted,
           proof_of_ownership_received, council_tax_band, service_type,
           charge_percentage, total_charge, rent_amount,
           has_live_tenancy, tenancy_start_date, tenancy_type, has_end_date, tenancy_end_date,
@@ -3262,7 +3295,7 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
         ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
           $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
-          $41,$42,$43
+          $41,$42,$43,$44,$45,$46,$47,$48,$49
         ) RETURNING id
       `, [
         d.landlord_id, d.address, d.postcode, d.property_type || 'house', d.bedrooms || 1,
@@ -3272,12 +3305,18 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
         d.is_leasehold ? d.leasehold_phone || null : null,
         d.is_leasehold ? d.leasehold_reference || null : null,
         d.is_leasehold ? d.leasehold_notes || null : null,
+        leaseholdPortalUrl,
+        d.is_leasehold ? d.leasehold_portal_username || null : null,
+        d.is_leasehold ? leaseholdPortalPassword : null,
         d.has_management_company ? 1 : 0,
         d.has_management_company ? d.management_company_name || null : null,
         d.has_management_company ? d.management_company_email || null : null,
         d.has_management_company ? d.management_company_phone || null : null,
         d.has_management_company ? d.management_company_reference || null : null,
         d.has_management_company ? d.management_company_notes || null : null,
+        managementPortalUrl,
+        d.has_management_company ? d.management_company_portal_username || null : null,
+        d.has_management_company ? managementPortalPassword : null,
         d.proof_of_ownership_received ? 1 : 0, d.council_tax_band || null, serviceType,
         isInternalPortfolio ? null : d.charge_percentage || null, isInternalPortfolio ? null : d.total_charge || null, d.rent_amount || 0,
         d.has_live_tenancy ? 1 : 0, d.tenancy_start_date || null, d.tenancy_type || null,
@@ -3326,15 +3365,38 @@ app.get('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
     `, [req.params.id as string]);
     if (!property) return res.status(404).json({ error: 'Property not found' });
     await logAudit(req.user?.id, req.user?.email, 'view', 'property', parseInt(req.params.id as string));
-    res.json(property);
+    res.json(redactPropertyPortalPasswords(property));
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch property' });
+  }
+});
+
+app.get('/api/properties/:id/portal-credentials/:kind', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
+  try {
+    const column = req.params.kind === 'leasehold'
+      ? 'leasehold_portal_password_encrypted'
+      : req.params.kind === 'management-company'
+        ? 'management_company_portal_password_encrypted'
+        : null;
+    if (!column) return res.status(400).json({ error: 'Unknown portal credential type' });
+    const property = await queryOne(`SELECT ${column} AS encrypted_password FROM properties WHERE id = $1`, [req.params.id]);
+    if (!property) return res.status(404).json({ error: 'Property not found' });
+    if (!property.encrypted_password) return res.status(404).json({ error: 'No portal password is stored' });
+    const password = decryptPortalPassword(property.encrypted_password);
+    res.setHeader('Cache-Control', 'no-store');
+    await logAudit(req.user?.id, req.user?.email, 'view_portal_password', 'property', parseInt(req.params.id as string), { kind: req.params.kind });
+    res.json({ password });
+  } catch (error) {
+    console.error('Portal credential reveal failed:', error);
+    res.status(500).json({ error: 'Portal password could not be revealed' });
   }
 });
 
 app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
+    delete d.leasehold_portal_password_encrypted;
+    delete d.management_company_portal_password_encrypted;
     if ('status' in d && !['to_let', 'let_agreed'].includes(String(d.status))) {
       return res.status(400).json({ error: 'Property status must be To Let or Let Agreed' });
     }
@@ -3348,6 +3410,9 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
       d.management_company_phone = null;
       d.management_company_reference = null;
       d.management_company_notes = null;
+      d.management_company_portal_url = null;
+      d.management_company_portal_username = null;
+      d.management_company_portal_password_encrypted = null;
     }
     if ('is_leasehold' in d && !d.is_leasehold) {
       d.leasehold_start_date = null;
@@ -3358,6 +3423,9 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
       d.leasehold_phone = null;
       d.leasehold_reference = null;
       d.leasehold_notes = null;
+      d.leasehold_portal_url = null;
+      d.leasehold_portal_username = null;
+      d.leasehold_portal_password_encrypted = null;
     }
     if (landlord.landlord_type === 'internal') {
       d.service_type = null;
@@ -3369,6 +3437,22 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
         return res.status(400).json({ error: 'Choose a service type for this client property' });
       }
     }
+    try {
+      if ('leasehold_portal_url' in d) d.leasehold_portal_url = normalizePortalUrl(d.leasehold_portal_url);
+      if ('management_company_portal_url' in d) d.management_company_portal_url = normalizePortalUrl(d.management_company_portal_url);
+      for (const [input, encrypted] of [
+        ['leasehold_portal_password', 'leasehold_portal_password_encrypted'],
+        ['management_company_portal_password', 'management_company_portal_password_encrypted'],
+      ] as const) {
+        if (!(input in d) || !d[input]) continue;
+        if (input === 'leasehold_portal_password' && d.is_leasehold === false) continue;
+        if (input === 'management_company_portal_password' && d.has_management_company === false) continue;
+        if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Only an administrator can store portal passwords' });
+        d[encrypted] = encryptPortalPassword(String(d[input]));
+      }
+    } catch (error) {
+      return res.status(400).json({ error: error instanceof Error ? error.message : 'Portal credentials are invalid' });
+    }
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -3377,8 +3461,10 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
       'landlord_id','address','postcode','property_type','bedrooms',
       'is_leasehold','leasehold_start_date','leasehold_end_date','leaseholder_info',
       'leasehold_issued_by','leasehold_email','leasehold_phone','leasehold_reference','leasehold_notes',
+      'leasehold_portal_url','leasehold_portal_username','leasehold_portal_password_encrypted',
       'has_management_company','management_company_name','management_company_email',
       'management_company_phone','management_company_reference','management_company_notes',
+      'management_company_portal_url','management_company_portal_username','management_company_portal_password_encrypted',
       'proof_of_ownership_received','council_tax_band','service_type',
       'charge_percentage','total_charge','rent_amount',
       'has_live_tenancy','tenancy_start_date','tenancy_type','has_end_date','tenancy_end_date',
@@ -3408,14 +3494,14 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
       }
     }
 
-    await logAudit(req.user?.id, req.user?.email, 'update', 'property', parseInt(req.params.id as string), req.body);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'property', parseInt(req.params.id as string), redactedPortalCredentialChanges(req.body));
     const updated = await queryOne(`
       SELECT p.*, l.name as landlord_name, l.phone as landlord_phone, l.email as landlord_email, l.landlord_type,
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') = 'active' LIMIT 1) as current_tenant,
         (SELECT t.id FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') = 'active' LIMIT 1) as current_tenant_id
       FROM properties p LEFT JOIN landlords l ON l.id = p.landlord_id WHERE p.id = $1
     `, [req.params.id]);
-    res.json(updated);
+    res.json(redactPropertyPortalPasswords(updated));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update property' });
@@ -4144,7 +4230,16 @@ app.put('/api/rent-payments/:id/pay', authMiddleware, async (req: AuthRequest, r
 
 // ============ USERS ============
 
-app.get('/api/users', authMiddleware, async (req: AuthRequest, res) => {
+app.get('/api/users/options', authMiddleware, async (_req: AuthRequest, res) => {
+  try {
+    const users = await query("SELECT id, name, role FROM users WHERE is_active = 1 ORDER BY name");
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch team options' });
+  }
+});
+
+app.get('/api/users', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
     const users = await query('SELECT id, email, name, role, department, is_active, created_at, last_login FROM users ORDER BY created_at DESC');
     res.json(users);
@@ -4559,7 +4654,7 @@ app.get('/api/landlords/:landlordId/properties', authMiddleware, async (req: Aut
       WHERE pl.landlord_id = $1
       ORDER BY pl.is_primary DESC, p.address ASC
     `, [req.params.landlordId]);
-    res.json(properties);
+    res.json(properties.map(redactPropertyPortalPasswords));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch properties' });

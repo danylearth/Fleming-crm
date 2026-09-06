@@ -75,7 +75,7 @@ interface OnboardingWizardProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   enquiry: Record<string, any>;
   properties: { id: number; address: string; postcode?: string; rent_amount?: number }[];
-  users: { id: number; name: string; email: string }[];
+  users: { id: number; name: string; role: string }[];
   onClose: () => void;
   onUpdate: () => void | Promise<void>;
 }

@@ -495,7 +495,7 @@ export default function EnquiriesKanban() {
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [api]);
 
   const propMap = useMemo(() => new Map(properties.map(p => [p.id, p])), [properties]);
 

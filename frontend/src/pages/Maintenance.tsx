@@ -5,6 +5,7 @@ import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Wrench, MapPin, ChevronDown, ChevronUp, Search, Building2, User } from 'lucide-react';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
+import { useParams } from 'react-router-dom';
 
 interface MaintenanceItem {
   id: number; property_id: number; address: string; title: string; description: string;
@@ -49,6 +50,7 @@ function formatDate(d: string) {
 
 export default function Maintenance() {
   const api = useApi();
+  const { requestId } = useParams();
   const [items, setItems] = useState<MaintenanceItem[]>([]);
   const [properties, setProperties] = useState<{ id: number; address: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +72,14 @@ export default function Maintenance() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editMode, setEditMode] = useState(false);
+
+  useEffect(() => {
+    const requested = Number(requestId);
+    if (!Number.isInteger(requested) || requested <= 0) return;
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) setExpanded(requested); });
+    return () => { cancelled = true; };
+  }, [requestId]);
 
   const load = useCallback(async () => {
     try {

@@ -31,9 +31,11 @@ interface PropertyForm {
   council_tax_band: string; has_gas: boolean | null;
   is_leasehold: boolean; leasehold_issued_by: string; leasehold_email: string;
   leasehold_phone: string; leasehold_reference: string; leasehold_notes: string;
+  leasehold_portal_url: string; leasehold_portal_username: string;
   has_management_company: boolean | null; management_company_name: string;
   management_company_email: string; management_company_phone: string;
   management_company_reference: string; management_company_notes: string;
+  management_company_portal_url: string; management_company_portal_username: string;
 }
 
 const STATUSES = [
@@ -67,7 +69,9 @@ export default function Properties() {
     landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
     rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: null,
     is_leasehold: false, leasehold_issued_by: '', leasehold_email: '', leasehold_phone: '', leasehold_reference: '', leasehold_notes: '',
+    leasehold_portal_url: '', leasehold_portal_username: '',
     has_management_company: null, management_company_name: '', management_company_email: '', management_company_phone: '', management_company_reference: '', management_company_notes: '',
+    management_company_portal_url: '', management_company_portal_username: '',
   });
   const [llDropOpen, setLlDropOpen] = useState(false);
   const [llSearch, setLlSearch] = useState('');
@@ -97,6 +101,14 @@ export default function Properties() {
   useEffect(() => { load(); }, [load]);
 
   const portfolioFiltered = filterByPortfolio(properties, portfolioFilter);
+  const visibleStatuses = portfolioFilter === 'internal'
+    ? STATUSES.filter(status => !['full_management', 'rent_collection'].includes(status.key))
+    : STATUSES;
+  useEffect(() => {
+    if (portfolioFilter === 'internal' && ['full_management', 'rent_collection'].includes(statusFilter)) {
+      setStatusFilter('all');
+    }
+  }, [portfolioFilter, statusFilter]);
   const filtered = portfolioFiltered.filter(p => {
     const matchSearch = !search || [p.address, p.postcode, p.landlord_name, p.current_tenant]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
@@ -112,7 +124,7 @@ export default function Properties() {
     return matchSearch;
   });
 
-  const statusCounts = properties.reduce((acc, p) => {
+  const statusCounts = portfolioFiltered.reduce((acc, p) => {
     acc[p.status] = (acc[p.status] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -229,7 +241,7 @@ export default function Properties() {
 
           {[
             { key: 'all', label: `All (${properties.length})` },
-            ...STATUSES.map(s => ({ key: s.key, label: `${s.label} (${statusCounts[s.key] || 0})` })),
+            ...visibleStatuses.map(s => ({ key: s.key, label: `${s.label} (${statusCounts[s.key] || 0})` })),
           ].map(f => (
             <Tag key={f.key} active={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>
               {f.label}
@@ -427,7 +439,9 @@ export default function Properties() {
       landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
       rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: null,
       is_leasehold: false, leasehold_issued_by: '', leasehold_email: '', leasehold_phone: '', leasehold_reference: '', leasehold_notes: '',
+      leasehold_portal_url: '', leasehold_portal_username: '',
       has_management_company: null, management_company_name: '', management_company_email: '', management_company_phone: '', management_company_reference: '', management_company_notes: '',
+      management_company_portal_url: '', management_company_portal_username: '',
     });
     setLlSearch('');
     setLlDropOpen(false);
@@ -602,7 +616,9 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
             <Input label="Email Address" type="email" value={form.leasehold_email} onChange={leasehold_email => setForm((current: PropertyForm) => ({ ...current, leasehold_email }))} />
             <Input label="Contact Number" value={form.leasehold_phone} onChange={leasehold_phone => setForm((current: PropertyForm) => ({ ...current, leasehold_phone }))} />
             <Input label="Reference" value={form.leasehold_reference} onChange={leasehold_reference => setForm((current: PropertyForm) => ({ ...current, leasehold_reference }))} />
-            <Input label="Portal Notes (do not store passwords)" value={form.leasehold_notes} onChange={leasehold_notes => setForm((current: PropertyForm) => ({ ...current, leasehold_notes }))} className="sm:col-span-2" />
+            <Input label="Portal Website" value={form.leasehold_portal_url} onChange={leasehold_portal_url => setForm((current: PropertyForm) => ({ ...current, leasehold_portal_url }))} placeholder="https://…" />
+            <Input label="Portal Username" value={form.leasehold_portal_username} onChange={leasehold_portal_username => setForm((current: PropertyForm) => ({ ...current, leasehold_portal_username }))} />
+            <Input label="Portal Notes" value={form.leasehold_notes} onChange={leasehold_notes => setForm((current: PropertyForm) => ({ ...current, leasehold_notes }))} className="sm:col-span-2" />
           </div>}
         </div>
 
@@ -621,7 +637,9 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
             <Input label="Email Address" type="email" value={form.management_company_email} onChange={management_company_email => setForm((current: PropertyForm) => ({ ...current, management_company_email }))} />
             <Input label="Contact Number" value={form.management_company_phone} onChange={management_company_phone => setForm((current: PropertyForm) => ({ ...current, management_company_phone }))} />
             <Input label="Reference" value={form.management_company_reference} onChange={management_company_reference => setForm((current: PropertyForm) => ({ ...current, management_company_reference }))} />
-            <Input label="Portal Notes (do not store passwords)" value={form.management_company_notes} onChange={management_company_notes => setForm((current: PropertyForm) => ({ ...current, management_company_notes }))} className="sm:col-span-2" />
+            <Input label="Portal Website" value={form.management_company_portal_url} onChange={management_company_portal_url => setForm((current: PropertyForm) => ({ ...current, management_company_portal_url }))} placeholder="https://…" />
+            <Input label="Portal Username" value={form.management_company_portal_username} onChange={management_company_portal_username => setForm((current: PropertyForm) => ({ ...current, management_company_portal_username }))} />
+            <Input label="Portal Notes" value={form.management_company_notes} onChange={management_company_notes => setForm((current: PropertyForm) => ({ ...current, management_company_notes }))} className="sm:col-span-2" />
           </div>}
         </div>
 

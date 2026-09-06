@@ -35,9 +35,13 @@ interface PropertyDetail {
   leasehold_issued_by: string | null; leasehold_email: string | null;
   leasehold_phone: string | null; leasehold_reference: string | null;
   leasehold_notes: string | null;
+  leasehold_portal_url: string | null; leasehold_portal_username: string | null;
+  leasehold_portal_password_set: boolean;
   has_management_company: number | null; management_company_name: string | null;
   management_company_email: string | null; management_company_phone: string | null;
   management_company_reference: string | null; management_company_notes: string | null;
+  management_company_portal_url: string | null; management_company_portal_username: string | null;
+  management_company_portal_password_set: boolean;
   // Tenancy
   has_live_tenancy: number; tenancy_start_date: string | null;
   tenancy_type: string | null; has_end_date: number; tenancy_end_date: string | null;
@@ -187,6 +191,8 @@ export default function PropertyDetail() {
   const [tenantModalMode, setTenantModalMode] = useState<'select' | 'create'>('select');
   const [tenantSearch, setTenantSearch] = useState('');
   const [showPreviousTenancies, setShowPreviousTenancies] = useState(false);
+  const [revealedPortalPasswords, setRevealedPortalPasswords] = useState<Record<string, string>>({});
+  const [revealingPortalPassword, setRevealingPortalPassword] = useState<string | null>(null);
   const [newTenantForm, setNewTenantForm] = useState({
     first_name_1: '',
     last_name_1: '',
@@ -207,12 +213,18 @@ export default function PropertyDetail() {
     leasehold_issued_by: p.leasehold_issued_by || '', leasehold_email: p.leasehold_email || '',
     leasehold_phone: p.leasehold_phone || '', leasehold_reference: p.leasehold_reference || '',
     leasehold_notes: p.leasehold_notes || '',
+    leasehold_portal_url: p.leasehold_portal_url || '',
+    leasehold_portal_username: p.leasehold_portal_username || '',
+    leasehold_portal_password: '',
     has_management_company: !!p.has_management_company,
     management_company_name: p.management_company_name || '',
     management_company_email: p.management_company_email || '',
     management_company_phone: p.management_company_phone || '',
     management_company_reference: p.management_company_reference || '',
     management_company_notes: p.management_company_notes || '',
+    management_company_portal_url: p.management_company_portal_url || '',
+    management_company_portal_username: p.management_company_portal_username || '',
+    management_company_portal_password: '',
     has_live_tenancy: !!p.has_live_tenancy, tenancy_start_date: p.tenancy_start_date || '',
     tenancy_type: p.tenancy_type || '', has_end_date: !!p.has_end_date,
     tenancy_end_date: p.tenancy_end_date || '',
@@ -232,7 +244,7 @@ export default function PropertyDetail() {
         api.get(`/api/properties/${id}`),
         api.get('/api/tasks').catch(() => []),
         api.get('/api/maintenance').catch(() => []),
-        api.get('/api/users').catch(() => []),
+        api.get('/api/users/options').catch(() => []),
         api.get(`/api/properties/${id}/landlords`).catch(() => []),
         api.get('/api/landlords').catch(() => []),
         api.get('/api/tenants').catch(() => []),
@@ -284,14 +296,14 @@ export default function PropertyDetail() {
   useEffect(() => {
     loadDetail().finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [api, id]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
       // Clean up form data: convert types, empty strings to null for dates
       const cleanDate = (v: string) => v && v.trim() ? v.trim() : null;
-      await api.put(`/api/properties/${id}`, {
+      const payload: Record<string, unknown> = {
         ...form,
         rent_amount: parseFloat(form.rent_amount) || 0,
         bedrooms: parseInt(form.bedrooms) || 0,
@@ -317,15 +329,23 @@ export default function PropertyDetail() {
         leasehold_phone: form.leasehold_phone || null,
         leasehold_reference: form.leasehold_reference || null,
         leasehold_notes: form.leasehold_notes || null,
+        leasehold_portal_url: form.leasehold_portal_url || null,
+        leasehold_portal_username: form.leasehold_portal_username || null,
         management_company_name: form.management_company_name || null,
         management_company_email: form.management_company_email || null,
         management_company_phone: form.management_company_phone || null,
         management_company_reference: form.management_company_reference || null,
         management_company_notes: form.management_company_notes || null,
-      });
+        management_company_portal_url: form.management_company_portal_url || null,
+        management_company_portal_username: form.management_company_portal_username || null,
+      };
+      if (!form.leasehold_portal_password) delete payload.leasehold_portal_password;
+      if (!form.management_company_portal_password) delete payload.management_company_portal_password;
+      await api.put(`/api/properties/${id}`, payload);
       const updated = await api.get(`/api/properties/${id}`);
       setProperty(updated);
       populateForm(updated);
+      setRevealedPortalPasswords({});
       setEditing(false);
     } catch (e: unknown) {
       console.error('Save error:', e);
@@ -336,6 +356,21 @@ export default function PropertyDetail() {
   };
 
   const cancelEdit = () => { setEditing(false); if (property) populateForm(property); };
+
+  const revealPortalPassword = async (kind: 'leasehold' | 'management-company') => {
+    if (revealedPortalPasswords[kind]) {
+      setRevealedPortalPasswords(current => ({ ...current, [kind]: '' }));
+      return;
+    }
+    setRevealingPortalPassword(kind);
+    try {
+      const result = await api.get(`/api/properties/${id}/portal-credentials/${kind}`);
+      setRevealedPortalPasswords(current => ({ ...current, [kind]: result.password }));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Portal password could not be revealed');
+    }
+    setRevealingPortalPassword(null);
+  };
 
   const daysUntil = (d: string | null) => {
     if (!d) return null;
@@ -899,7 +934,10 @@ export default function PropertyDetail() {
                     <Input label="Email Address" value={form.leasehold_email} onChange={(v: string) => setForm({ ...form, leasehold_email: v })} type="email" />
                     <Input label="Contact Number" value={form.leasehold_phone} onChange={(v: string) => setForm({ ...form, leasehold_phone: v })} />
                     <Input label="Reference" value={form.leasehold_reference} onChange={(v: string) => setForm({ ...form, leasehold_reference: v })} />
-                    <Input label="Portal Notes (do not store passwords)" value={form.leasehold_notes || form.leaseholder_info} onChange={(v: string) => setForm({ ...form, leasehold_notes: v, leaseholder_info: v })} className="col-span-full" />
+                    <Input label="Portal Website" value={form.leasehold_portal_url} onChange={(v: string) => setForm({ ...form, leasehold_portal_url: v })} placeholder="https://…" />
+                    <Input label="Portal Username" value={form.leasehold_portal_username} onChange={(v: string) => setForm({ ...form, leasehold_portal_username: v })} />
+                    {user?.role === 'admin' && <Input label={property.leasehold_portal_password_set ? 'New Portal Password (leave blank to keep)' : 'Portal Password'} type="password" value={form.leasehold_portal_password} onChange={(v: string) => setForm({ ...form, leasehold_portal_password: v })} />}
+                    <Input label="Portal Notes" value={form.leasehold_notes || form.leaseholder_info} onChange={(v: string) => setForm({ ...form, leasehold_notes: v, leaseholder_info: v })} className="col-span-full" />
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -909,6 +947,16 @@ export default function PropertyDetail() {
                     <ReadField label="Email Address" value={property.leasehold_email} />
                     <ReadField label="Contact Number" value={property.leasehold_phone} />
                     <ReadField label="Reference" value={property.leasehold_reference} />
+                    <ReadField label="Portal Website" value={property.leasehold_portal_url ? <a href={property.leasehold_portal_url} target="_blank" rel="noreferrer" className="text-[var(--accent-orange)] hover:underline">Open portal</a> : ''} />
+                    <ReadField label="Portal Username" value={property.leasehold_portal_username} />
+                    <div>
+                      <p className="text-xs text-[var(--text-muted)]">Portal Password</p>
+                      {property.leasehold_portal_password_set ? user?.role === 'admin' ? (
+                        <button type="button" onClick={() => revealPortalPassword('leasehold')} className="mt-0.5 text-sm font-medium text-[var(--accent-orange)] hover:underline">
+                          {revealedPortalPasswords.leasehold || (revealingPortalPassword === 'leasehold' ? 'Revealing…' : 'Reveal password')}
+                        </button>
+                      ) : <p className="mt-0.5 text-sm font-medium">Stored securely · Admin access required</p> : <p className="mt-0.5 text-sm font-medium">—</p>}
+                    </div>
                     <ReadField label="Portal Notes" value={property.leasehold_notes || property.leaseholder_info} />
                   </div>
                 )}
@@ -930,7 +978,10 @@ export default function PropertyDetail() {
                       <Input label="Email Address" value={form.management_company_email} onChange={(v: string) => setForm({ ...form, management_company_email: v })} type="email" />
                       <Input label="Contact Number" value={form.management_company_phone} onChange={(v: string) => setForm({ ...form, management_company_phone: v })} />
                       <Input label="Reference" value={form.management_company_reference} onChange={(v: string) => setForm({ ...form, management_company_reference: v })} />
-                      <Input label="Portal Notes (do not store passwords)" value={form.management_company_notes} onChange={(v: string) => setForm({ ...form, management_company_notes: v })} className="col-span-full" />
+                      <Input label="Portal Website" value={form.management_company_portal_url} onChange={(v: string) => setForm({ ...form, management_company_portal_url: v })} placeholder="https://…" />
+                      <Input label="Portal Username" value={form.management_company_portal_username} onChange={(v: string) => setForm({ ...form, management_company_portal_username: v })} />
+                      {user?.role === 'admin' && <Input label={property.management_company_portal_password_set ? 'New Portal Password (leave blank to keep)' : 'Portal Password'} type="password" value={form.management_company_portal_password} onChange={(v: string) => setForm({ ...form, management_company_portal_password: v })} />}
+                      <Input label="Portal Notes" value={form.management_company_notes} onChange={(v: string) => setForm({ ...form, management_company_notes: v })} className="col-span-full" />
                     </>}
                   </div>
                 ) : (
@@ -939,6 +990,16 @@ export default function PropertyDetail() {
                     <ReadField label="Email Address" value={property.management_company_email} />
                     <ReadField label="Contact Number" value={property.management_company_phone} />
                     <ReadField label="Reference" value={property.management_company_reference} />
+                    <ReadField label="Portal Website" value={property.management_company_portal_url ? <a href={property.management_company_portal_url} target="_blank" rel="noreferrer" className="text-[var(--accent-orange)] hover:underline">Open portal</a> : ''} />
+                    <ReadField label="Portal Username" value={property.management_company_portal_username} />
+                    <div>
+                      <p className="text-xs text-[var(--text-muted)]">Portal Password</p>
+                      {property.management_company_portal_password_set ? user?.role === 'admin' ? (
+                        <button type="button" onClick={() => revealPortalPassword('management-company')} className="mt-0.5 text-sm font-medium text-[var(--accent-orange)] hover:underline">
+                          {revealedPortalPasswords['management-company'] || (revealingPortalPassword === 'management-company' ? 'Revealing…' : 'Reveal password')}
+                        </button>
+                      ) : <p className="mt-0.5 text-sm font-medium">Stored securely · Admin access required</p> : <p className="mt-0.5 text-sm font-medium">—</p>}
+                    </div>
                     <ReadField label="Portal Notes" value={property.management_company_notes} />
                   </div>
                 )}

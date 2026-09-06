@@ -171,6 +171,7 @@ export default function TenantDetail() {
   const [allProperties, setAllProperties] = useState<{ id: number; address: string; postcode: string }[]>([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
   const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
+  const [sendingMaintenanceLink, setSendingMaintenanceLink] = useState<'email' | 'sms' | null>(null);
   const [maintenanceForm, setMaintenanceForm] = useState({ title: '', description: '', category: 'other', priority: 'medium' });
 
   const tenantToForm = (t: Tenant) => {
@@ -231,8 +232,7 @@ export default function TenantDetail() {
     (async () => {
       try { setAllProperties(await api.get('/api/properties')); } catch { /* Silently ignore */ }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [api]);
 
   // Load tenant
   useEffect(() => {
@@ -241,7 +241,7 @@ export default function TenantDetail() {
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [api, id]);
 
   // Load notes
   useEffect(() => {
@@ -261,6 +261,36 @@ export default function TenantDetail() {
     setMaintenanceForm({ title: '', description: '', category: 'other', priority: 'medium' });
     setShowMaintenanceForm(false);
     await loadDetail();
+  };
+
+  const maintenanceReportUrl = 'https://apply.fleminglettings.co.uk/report';
+  const sendMaintenanceLink = async (channel: 'email' | 'sms') => {
+    if (!tenant) return;
+    setSendingMaintenanceLink(channel);
+    try {
+      if (channel === 'email') {
+        if (!tenant.email) throw new Error('This tenant has no email address');
+        await api.post('/api/email/send-generic', {
+          entity_type: 'tenant',
+          entity_id: tenant.id,
+          to_email: tenant.email,
+          subject: 'Report a maintenance issue to Fleming Lettings',
+          body_html: `<div style="font-family:Arial,sans-serif;color:#29232d"><h2 style="color:#27083d">Fleming Lettings</h2><p>Hi ${tenant.name.replace(/[<>&"']/g, '')},</p><p>Use the secure form below to report maintenance, damage, a lost key, flooding or another property issue.</p><p><a href="${maintenanceReportUrl}" style="display:inline-block;background:#dc006d;color:#fff;padding:12px 18px;text-decoration:none;border-radius:8px">Report an issue</a></p><p>If there is an immediate danger to life, call 999.</p></div>`,
+        });
+      } else {
+        if (!tenant.phone) throw new Error('This tenant has no phone number');
+        await api.post('/api/sms/send', {
+          entity_type: 'tenant',
+          entity_id: tenant.id,
+          to_phone: tenant.phone,
+          message_body: `Hi ${tenant.name.split(' ')[0] || 'there'}, report maintenance, damage, a lost key or another property issue to Fleming Lettings here: ${maintenanceReportUrl}`,
+        });
+      }
+      alert(`Maintenance reporting link sent by ${channel}.`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Maintenance reporting link could not be sent');
+    }
+    setSendingMaintenanceLink(null);
   };
 
   // Restructured checklist: Authority → KYC → Application Forms → Proof of Income
@@ -587,6 +617,14 @@ export default function TenantDetail() {
               <SectionHeader title={`Maintenance (${maintenanceRequests.length})`} icon={<AlertTriangle size={16} />}
                 action={tenant.property_id ? () => setShowMaintenanceForm(value => !value) : undefined}
                 actionLabel={showMaintenanceForm ? 'Cancel' : 'Add Request'} />
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" disabled={!tenant.email || sendingMaintenanceLink !== null} onClick={() => sendMaintenanceLink('email')}>
+                  <Mail size={13} className="mr-1.5" /> {sendingMaintenanceLink === 'email' ? 'Sending…' : 'Email reporting link'}
+                </Button>
+                <Button variant="outline" size="sm" disabled={!tenant.phone || sendingMaintenanceLink !== null} onClick={() => sendMaintenanceLink('sms')}>
+                  <MessageSquare size={13} className="mr-1.5" /> {sendingMaintenanceLink === 'sms' ? 'Sending…' : 'SMS reporting link'}
+                </Button>
+              </div>
               {showMaintenanceForm && (
                 <div className="mt-4 space-y-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3">
                   <Input label="Issue" value={maintenanceForm.title} onChange={title => setMaintenanceForm(current => ({ ...current, title }))} placeholder="e.g. Lost key" />

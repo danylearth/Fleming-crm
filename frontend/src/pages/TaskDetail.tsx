@@ -76,7 +76,7 @@ export default function TaskDetail() {
         api.get('/api/properties'),
         api.get('/api/landlords'),
         api.get('/api/tenants'),
-        api.get('/api/users'),
+        api.get('/api/users/options'),
       ]);
       setTask(taskData);
       setForm(taskData);

@@ -66,8 +66,7 @@ export default function Dashboard() {
       setTasks(Array.isArray(tks) ? tks : []);
       setEnquiries(Array.isArray(enqs) ? enqs.filter((enquiry: Enquiry) => enquiry.status !== 'converted') : []);
     }).finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [api]);
 
   const firstName = user?.name?.split(' ')[0] || 'there';
 
@@ -78,7 +77,7 @@ export default function Dashboard() {
     active_enquiries: enquiries.length,
   };
 
-  const now = useMemo(() => Date.now(), []);
+  const [now] = useState(Date.now);
 
   const calendarDays = useMemo(() => {
     const start = new Date(now);
@@ -192,7 +191,7 @@ export default function Dashboard() {
                   </button>
                 ))}
                 {dashboard.recentMaintenance.slice(0, 3).map(item => (
-                  <button key={`maintenance-${item.id}`} onClick={() => navigate('/maintenance')} className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                  <button key={`maintenance-${item.id}`} onClick={() => navigate(`/maintenance/${item.id}`)} className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                     <div className="flex items-center gap-3 min-w-0"><Wrench size={16} className="text-amber-400 shrink-0" /><div className="min-w-0"><p className="text-sm font-medium truncate">{item.property_address}</p><p className="text-xs text-[var(--text-muted)] truncate">{item.description}</p></div></div>
                     <span className="text-[10px] font-semibold uppercase text-amber-400">{item.status.replace('_', ' ')}</span>
                   </button>

@@ -91,7 +91,7 @@ export default function Tenants() {
     setLoading(false);
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [api]);
 
   // Auto-open modal when navigated from property page
   useEffect(() => {
