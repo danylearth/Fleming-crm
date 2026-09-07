@@ -68,7 +68,19 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info',
+  redact: {
+    paths: [
+      'req.headers.authorization',
+      'req.headers.cookie',
+      'req.headers["x-api-key"]',
+      'req.headers["proxy-authorization"]',
+      'res.headers["set-cookie"]',
+    ],
+    censor: '[REDACTED]',
+  },
+});
 
 function normalizePortalUrl(value: unknown) {
   const raw = String(value || '').trim();

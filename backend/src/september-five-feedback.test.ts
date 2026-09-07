@@ -122,4 +122,11 @@ describe('5 September CRM feedback', () => {
     expect(backend).toContain('req.body.email_message');
     expect(backend).toContain('req.body.sms_message');
   });
+
+  it('redacts credentials from structured request logs', () => {
+    expect(backend).toContain("'req.headers.authorization'");
+    expect(backend).toContain("'req.headers.cookie'");
+    expect(backend).toContain("'req.headers[\"x-api-key\"]'");
+    expect(backend).toContain("censor: '[REDACTED]'");
+  });
 });
