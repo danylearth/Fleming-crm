@@ -19,6 +19,15 @@ function dateInputValue(value: unknown): string {
   return uk ? `${uk[3]}-${uk[2]}-${uk[1]}` : '';
 }
 
+const HOLDING_REQUEST_EMAIL_DEFAULT = 'Thank you for your interest in {{property_address}}. We are pleased to confirm that we would like to proceed with your application.\n\nTo secure this property, we require an initial holding deposit. Please see the financial summary below:';
+const HOLDING_REQUEST_SMS_DEFAULT = 'Hi {{first_name}}, your Fleming Lettings holding deposit request for £{{holding_deposit}} has been emailed to you with your secure tenancy application link.';
+const HOLDING_RECEIPT_EMAIL_DEFAULT = 'We confirm that Fleming Lettings received your holding deposit of £{{holding_deposit}} on {{received_date}}.';
+const HOLDING_RECEIPT_SMS_DEFAULT = 'Hi {{first_name}}, we are pleased to confirm receipt of your holding deposit payment of £{{holding_deposit}}. These funds are now held on account and you can now proceed with your tenancy application of which has been issued to you on email.';
+
+function previewMessage(template: string, values: Record<string, string>): string {
+  return template.replace(/\{\{([a-z_]+)\}\}/g, (match, key) => key in values ? values[key] : match);
+}
+
 // Traffic light colours
 const STATUS = {
   red: { bg: 'bg-red-500/15', border: 'border-red-500/30', text: 'text-red-400', dot: 'bg-red-500' },
@@ -92,12 +101,16 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [hdHoldingDeposit, setHdHoldingDeposit] = useState('');
   const [hdFollowUpDate, setHdFollowUpDate] = useState('');
   const [hdRequestSendSms, setHdRequestSendSms] = useState(false);
+  const [hdRequestEmailMessage, setHdRequestEmailMessage] = useState(HOLDING_REQUEST_EMAIL_DEFAULT);
+  const [hdRequestSmsMessage, setHdRequestSmsMessage] = useState(HOLDING_REQUEST_SMS_DEFAULT);
 
   // Step 2: Holding Deposit Received
   const [hdReceivedDate, setHdReceivedDate] = useState('');
   const [hdReceivedAmount, setHdReceivedAmount] = useState('');
   const [hdReceiptSendEmail, setHdReceiptSendEmail] = useState(true);
   const [hdReceiptSendSms, setHdReceiptSendSms] = useState(false);
+  const [hdReceiptEmailMessage, setHdReceiptEmailMessage] = useState(HOLDING_RECEIPT_EMAIL_DEFAULT);
+  const [hdReceiptSmsMessage, setHdReceiptSmsMessage] = useState(HOLDING_RECEIPT_SMS_DEFAULT);
 
   // Step 5: Credit check
   const [creditScore, setCreditScore] = useState('');
@@ -413,6 +426,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         holding_deposit: Number(hdHoldingDeposit),
         follow_up_date: hdFollowUpDate || null,
         send_sms: hdRequestSendSms,
+        email_message: hdRequestEmailMessage,
+        sms_message: hdRequestSmsMessage,
       });
       const failed = Object.values((result?.delivery || {}) as Record<string, { success: boolean; error?: string }>).filter(item => !item.success);
       if (failed.length) setReviewError(`Request saved, but communication failed: ${failed.map(item => item.error).join('; ')}`);
@@ -436,6 +451,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         received_date: receivedDate,
         send_email: hdReceiptSendEmail,
         send_sms: hdReceiptSendSms,
+        email_message: hdReceiptEmailMessage,
+        sms_message: hdReceiptSmsMessage,
       });
       const failed = Object.values((result?.delivery || {}) as Record<string, { success: boolean; error?: string }>).filter(item => !item.success);
       if (failed.length) setReviewError(`Deposit saved, but communication failed: ${failed.map(item => item.error).join('; ')}`);
@@ -590,6 +607,12 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     const deadline = new Date();
     deadline.setDate(deadline.getDate() + 14);
     const deadlineStr = deadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const introMessage = previewMessage(hdRequestEmailMessage, {
+      first_name: firstName,
+      property_address: propertyAddress,
+      holding_deposit: holdDep.toLocaleString('en-GB', { minimumFractionDigits: 2 }),
+      application_link: formUrl,
+    });
 
     return `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
@@ -598,9 +621,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       </div>
       <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
         <p style="font-size: 15px; color: #333;">Dear ${escapeHtml(firstName)},</p>
-        <p style="font-size: 14px; color: #555; line-height: 1.6;">
-          Thank you for your interest in renting <strong>${escapeHtml(propertyAddress)}</strong>. We are pleased to invite you to complete your tenancy application.
-        </p>
+        <p style="font-size: 14px; color: #555; line-height: 1.6;">${escapeHtml(introMessage).replace(/\r?\n/g, '<br>')}</p>
         <p style="font-size: 14px; color: #555; line-height: 1.6;">
           Please review the financial details below and complete your application within <strong>14 days</strong> (by ${deadlineStr}).
         </p>
@@ -901,6 +922,12 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   <p>From: contact@tenancies.fleminglettings.co.uk</p>
                   <p>Includes: Holding Deposit Summary + Application Form Link</p>
                 </div>
+                <label className="block text-[10px] text-[var(--text-muted)]">
+                  Editable email message
+                  <textarea value={hdRequestEmailMessage} onChange={event => setHdRequestEmailMessage(event.target.value)} rows={5}
+                    className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
+                  <span>Available fields: {'{{first_name}}'}, {'{{property_address}}'}, {'{{holding_deposit}}'} and {'{{application_link}}'}.</span>
+                </label>
                 <button onClick={() => setShowHDEmailPreview(true)} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline">
                   <Eye size={13} /> Preview email before sending
                 </button>
@@ -909,8 +936,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 </label>
                 {hdRequestSendSms && (
                   <div>
-                    <label className="block text-[10px] text-[var(--text-muted)] mb-1">SMS preview</label>
-                    <textarea readOnly rows={4} value={`Hi ${firstName}, your Fleming Lettings holding deposit request for £${Number(hdHoldingDeposit || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })} has been emailed to you with your secure tenancy application link.`} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] resize-none" />
+                    <label className="block text-[10px] text-[var(--text-muted)] mb-1">Editable SMS preview</label>
+                    <textarea rows={4} value={hdRequestSmsMessage} onChange={event => setHdRequestSmsMessage(event.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
                   </div>
                 )}
                 <Button variant="gradient" onClick={requestHoldingDeposit} disabled={saving || !hdMonthlyRent || !hdHoldingDeposit}>
@@ -997,15 +1024,16 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     </label>
                   </div>
                   {hdReceiptSendEmail && (
-                    <div className="rounded-lg bg-[var(--bg-subtle)] p-3 text-xs text-[var(--text-secondary)]">
-                      <p className="font-medium text-[var(--text-primary)]">Email preview</p>
-                      <p className="mt-1">Hi {firstName}, we confirm receipt of your holding deposit of £{Number(hdReceivedAmount || enquiry.holding_deposit_amount || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}. Your application form will be issued separately.</p>
-                    </div>
+                    <label className="block text-[10px] text-[var(--text-muted)]">
+                      Editable email preview
+                      <textarea rows={4} value={hdReceiptEmailMessage} onChange={event => setHdReceiptEmailMessage(event.target.value)}
+                        className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
+                    </label>
                   )}
                   {hdReceiptSendSms && (
                     <div>
-                      <label className="block text-[10px] text-[var(--text-muted)] mb-1">SMS preview</label>
-                      <textarea readOnly rows={5} value={`Hi ${firstName}, we are pleased to confirm receipt of your holding deposit payment of £${Number(hdReceivedAmount || enquiry.holding_deposit_amount || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}. These funds are now held on account and you can now proceed with your tenancy application of which has been issued to you on email.`} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] resize-none" />
+                      <label className="block text-[10px] text-[var(--text-muted)] mb-1">Editable SMS preview</label>
+                      <textarea rows={5} value={hdReceiptSmsMessage} onChange={event => setHdReceiptSmsMessage(event.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
                     </div>
                   )}
                   <Button variant="gradient" onClick={confirmDepositReceived} disabled={saving}>

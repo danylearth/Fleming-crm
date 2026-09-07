@@ -12,6 +12,13 @@ primary_region = "lhr"
 [deploy]
   release_command = "node dist/migrate.js"
 
+# Agreement generation and delivery temporarily hold the PDF and compliance
+# attachments in memory. Keep enough headroom for that single-request workflow.
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"
+
 # Single machine by design: uploads live on this volume, and volumes are
 # per-machine — scaling out requires moving uploads to object storage first
 [mounts]

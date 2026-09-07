@@ -15,6 +15,7 @@ const tenantDetail = fs.readFileSync(path.resolve(__dirname, '../../frontend/src
 const maintenance = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/Maintenance.tsx'), 'utf8');
 const dashboard = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/Dashboard.tsx'), 'utf8');
 const apiHook = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/hooks/useApi.ts'), 'utf8');
+const onboardingWizard = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/components/ui/OnboardingWizard.tsx'), 'utf8');
 const migration = fs.readFileSync(path.resolve(__dirname, '../migrations/0008_september_five_feedback.sql'), 'utf8');
 const credentialsMigration = fs.readFileSync(path.resolve(__dirname, '../migrations/0009_portal_credentials.sql'), 'utf8');
 
@@ -29,6 +30,8 @@ describe('5 September CRM feedback', () => {
       'Land Registry', 'Legal Documents', 'Solicitors Correspondence',
       'Management Company Correspondence', 'Freeholder Correspondence',
       'Tenant Communications', 'Damage Reports', 'Service Connections',
+      'Lease', 'Inventory', 'Signed Tenancy Agreement', 'Credit Report',
+      'Employment Reference', 'Proof of Income',
     ]) {
       expect(backend).toContain(`'${type}'`);
     }
@@ -107,5 +110,16 @@ describe('5 September CRM feedback', () => {
     expect(migration).toContain("'Annual service charge'");
     expect(migration).toContain("'Refurbishment'");
     expect(migration).not.toContain('DELETE FROM properties');
+  });
+
+  it('lets staff edit holding-deposit emails and texts before sending', () => {
+    expect(onboardingWizard).toContain('Editable email message');
+    expect(onboardingWizard).toContain('Editable SMS preview');
+    expect(onboardingWizard).toContain('email_message: hdRequestEmailMessage');
+    expect(onboardingWizard).toContain('sms_message: hdRequestSmsMessage');
+    expect(onboardingWizard).toContain('email_message: hdReceiptEmailMessage');
+    expect(onboardingWizard).toContain('sms_message: hdReceiptSmsMessage');
+    expect(backend).toContain('req.body.email_message');
+    expect(backend).toContain('req.body.sms_message');
   });
 });

@@ -10,7 +10,7 @@ describe('viewing communication previews', () => {
 
   it('shows the same booking details in the email preview', () => {
     const preview = viewingEmailPreview('Derek Guest', '10 High Street', '2026-09-01', '10:30');
-    expect(preview).toContain('Subject: Your viewing with Fleming Lettings at 10 High Street');
+    expect(preview).toContain('Subject: Your viewing at 10 High Street');
     expect(preview).toContain('01/09/2026 at 10:30');
   });
 });

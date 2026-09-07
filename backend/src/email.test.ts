@@ -40,7 +40,7 @@ describe('email provider safety', () => {
   it('uses the agreed viewing subject and Fleming Lettings signature', async () => {
     const { viewingConfirmationEmail } = await import('./email');
     const email = viewingConfirmationEmail('Alex', '10 High Street, WV1 1AA', '25/08/2026 at 14:00');
-    expect(email.subject).toBe('Your viewing with Fleming Lettings at 10 High Street, WV1 1AA');
+    expect(email.subject).toBe('Your viewing at 10 High Street, WV1 1AA');
     expect(email.html).toContain('Lettings Support Team');
     expect(email.html).toContain('enquiries@fleminglettings.co.uk');
     expect(email.html).toContain('company number 13943597');
@@ -68,6 +68,16 @@ describe('email provider safety', () => {
     const { holdingDepositRequestEmail } = await import('./email');
     const email = holdingDepositRequestEmail('Alex', '10 High Street', 900, 1038, 208, 'https://apply.example.test/token');
     expect(email.html).toContain('save your application and pick up where you left off');
+  });
+
+  it('renders and escapes an edited holding-deposit request message', async () => {
+    const { holdingDepositRequestEmail } = await import('./email');
+    const email = holdingDepositRequestEmail(
+      'Alex', '10 High Street', 900, 1038, 208, 'https://apply.example.test/token',
+      'Please check <your details>.\nThen continue.',
+    );
+    expect(email.html).toContain('Please check &lt;your details&gt;.<br>Then continue.');
+    expect(email.html).not.toContain('Please check <your details>');
   });
 
   it('uses the verified mailbox for application confirmations', async () => {
@@ -100,6 +110,13 @@ describe('email provider safety', () => {
     expect(email.html).toContain('£207.69');
     expect(email.html).toContain('1 September 2026');
     expect(email.html).toContain('https://crm.fleminglettings.co.uk/email-assets/relaxing-at-home.png');
+  });
+
+  it('renders and escapes an edited holding-deposit receipt message', async () => {
+    const { holdingDepositReceiptEmail } = await import('./email');
+    const email = holdingDepositReceiptEmail('Alex', 207.69, '2026-09-01', 'Funds received & recorded.');
+    expect(email.html).toContain('Funds received &amp; recorded.');
+    expect(email.html).not.toContain('Funds received & recorded.');
   });
 
   it('renders the tenancy agreement invitation with dynamic agreement details', async () => {

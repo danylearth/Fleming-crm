@@ -3909,14 +3909,20 @@ app.post('/api/maintenance/bulk-delete', authMiddleware, async (req: AuthRequest
 const DOC_TYPES: Record<string, string[]> = {
   landlord: ['Primary Identification', 'Address Identification', 'Proof of Funds', 'Proof of Ownership', 'Other'],
   landlord_bdm: ['Primary Identification', 'Address Identification', 'Proof of Funds', 'Other'],
-  tenant: ['Primary Identification', 'Address Identification', 'Application Form(s)', 'Bank Statements', 'Other'],
+  tenant: [
+    'Primary Identification', 'Secondary Identification', 'Address Identification',
+    'Application Form(s)', 'Bank Statements', 'Proof of Income', 'Credit Report',
+    'Employment Reference', 'Holding Deposit', 'Guarantor Documents',
+    'Signed Tenancy Agreement', 'Other',
+  ],
   tenant_enquiry: ['Primary Identification', 'Secondary Identification', 'Proof of Income or Employment', 'Bank Statements', 'Other Financial Document', 'Other'],
   property: [
     'Property Photo', 'Gas Safety Certificate', 'EPC', 'EICR', 'How to Rent Guide',
     'Renters Rights Information', 'Proof of Ownership', 'Insurance', 'Land Registry',
     'Legal Documents', 'Solicitors Correspondence', 'Management Company Correspondence',
     'Freeholder Correspondence', 'Tenant Communications', 'Damage Reports',
-    'Service Connections', 'Expense Receipt', 'Other',
+    'Service Connections', 'Expense Receipt', 'Lease', 'Inventory',
+    'Signed Tenancy Agreement', 'Other',
   ],
   maintenance: ['Quote', 'Invoice', 'Photo', 'Report', 'Other'],
   task: ['Supporting Document', 'Other'],
@@ -5728,7 +5734,12 @@ app.post('/api/tenant-enquiries/:id/confirm-holding-deposit', authMiddleware, as
           delivery[`${recipient.key}_email`] = { success: false, error: 'No applicant email address is recorded' };
           continue;
         }
-        const content = holdingDepositReceiptEmail(recipient.firstName, amount, receivedDate);
+        const emailMessage = renderAgreementMessage(req.body.email_message, {
+          first_name: recipient.firstName,
+          holding_deposit: amount.toLocaleString('en-GB', { minimumFractionDigits: 2 }),
+          received_date: displayDate,
+        });
+        const content = holdingDepositReceiptEmail(recipient.firstName, amount, receivedDate, emailMessage || null);
         const result = await sendEmail({ to: recipient.email, subject: content.subject, html: content.html });
         await insert(`INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
           VALUES ($1,'tenant_enquiry',$2,$3,$4,$5,'holding_deposit_receipt',$6,$7,$8,$9,$10)`, [
@@ -5749,7 +5760,12 @@ app.post('/api/tenant-enquiries/:id/confirm-holding-deposit', authMiddleware, as
           continue;
         }
         const { sendSms, normalizeUkPhone } = require('./sms');
-        const body = `Hi ${recipient.firstName}, we are pleased to confirm receipt of your holding deposit payment of £${amount.toLocaleString('en-GB', { minimumFractionDigits: 2 })}. These funds are now held on account and you can now proceed with your tenancy application of which has been issued to you on email.`;
+        const defaultSms = 'Hi {{first_name}}, we are pleased to confirm receipt of your holding deposit payment of £{{holding_deposit}}. These funds are now held on account and you can now proceed with your tenancy application of which has been issued to you on email.';
+        const body = renderAgreementMessage(String(req.body.sms_message || '').trim() || defaultSms, {
+          first_name: recipient.firstName,
+          holding_deposit: amount.toLocaleString('en-GB', { minimumFractionDigits: 2 }),
+          received_date: displayDate,
+        });
         const phone = normalizeUkPhone(recipient.phone);
         const result = await sendSms({ to: phone, body });
         await insert(`INSERT INTO sms_messages (enquiry_id, entity_type, entity_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
@@ -5835,7 +5851,13 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
       // Send email and log to email_messages
       const { sendEmail } = require('./email');
       const { holdingDepositRequestEmail } = require('./email');
-      const emailContent = holdingDepositRequestEmail(name, address, monthly_rent, security_deposit, holding_deposit, applicationFormUrl);
+      const emailMessage = renderAgreementMessage(req.body.email_message, {
+        first_name: name,
+        property_address: address,
+        holding_deposit: Number(holding_deposit).toLocaleString('en-GB', { minimumFractionDigits: 2 }),
+        application_link: applicationFormUrl,
+      });
+      const emailContent = holdingDepositRequestEmail(name, address, monthly_rent, security_deposit, holding_deposit, applicationFormUrl, emailMessage || null);
       const emailResult = await sendEmail({
         to: enquiry.email_1,
         subject: emailContent.subject,
@@ -5856,7 +5878,13 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
         } else {
           const { sendSms, normalizeUkPhone } = require('./sms');
           const phone = normalizeUkPhone(enquiry.phone_1);
-          const smsBody = `Hi ${name}, your Fleming Lettings holding deposit request for £${Number(holding_deposit).toLocaleString('en-GB', { minimumFractionDigits: 2 })} has been emailed to you with your secure tenancy application link.`;
+          const defaultSms = 'Hi {{first_name}}, your Fleming Lettings holding deposit request for £{{holding_deposit}} has been emailed to you with your secure tenancy application link.';
+          const smsBody = renderAgreementMessage(String(req.body.sms_message || '').trim() || defaultSms, {
+            first_name: name,
+            property_address: address,
+            holding_deposit: Number(holding_deposit).toLocaleString('en-GB', { minimumFractionDigits: 2 }),
+            application_link: applicationFormUrl,
+          });
           const smsResult = await sendSms({ to: phone, body: smsBody });
           await insert(`INSERT INTO sms_messages (enquiry_id, entity_type, entity_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
             VALUES ($1,'tenant_enquiry',$1,$2,$3,$4,$5,$6,$7,$8,$9)`, [enquiryId, phone, SMS_FROM || null, smsBody,
@@ -5880,7 +5908,13 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
           const partnerName = partner.first_name_1 || 'there';
           const partnerAddress = normalizePropertyAddress(partner.property_address, partner.property_postcode);
           const partnerContent = holdingDepositRequestEmail(
-            partnerName, partnerAddress, monthly_rent, security_deposit, holding_deposit, partnerApplicationFormUrl
+            partnerName, partnerAddress, monthly_rent, security_deposit, holding_deposit, partnerApplicationFormUrl,
+            renderAgreementMessage(req.body.email_message, {
+              first_name: partnerName,
+              property_address: partnerAddress,
+              holding_deposit: Number(holding_deposit).toLocaleString('en-GB', { minimumFractionDigits: 2 }),
+              application_link: partnerApplicationFormUrl,
+            }) || null,
           );
           const partnerEmailResult = await sendEmail({
             to: partner.email_1,
@@ -5901,7 +5935,13 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit', authMiddleware, as
             } else {
               const { sendSms, normalizeUkPhone } = require('./sms');
               const phone = normalizeUkPhone(partner.phone_1);
-              const smsBody = `Hi ${partnerName}, your Fleming Lettings holding deposit request for £${Number(holding_deposit).toLocaleString('en-GB', { minimumFractionDigits: 2 })} has been emailed to you with your secure tenancy application link.`;
+              const defaultSms = 'Hi {{first_name}}, your Fleming Lettings holding deposit request for £{{holding_deposit}} has been emailed to you with your secure tenancy application link.';
+              const smsBody = renderAgreementMessage(String(req.body.sms_message || '').trim() || defaultSms, {
+                first_name: partnerName,
+                property_address: partnerAddress,
+                holding_deposit: Number(holding_deposit).toLocaleString('en-GB', { minimumFractionDigits: 2 }),
+                application_link: partnerApplicationFormUrl,
+              });
               const smsResult = await sendSms({ to: phone, body: smsBody });
               await insert(`INSERT INTO sms_messages (enquiry_id, entity_type, entity_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
                 VALUES ($1,'tenant_enquiry',$1,$2,$3,$4,$5,$6,$7,$8,$9)`, [partner.id, phone, SMS_FROM || null, smsBody,

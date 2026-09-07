@@ -274,7 +274,7 @@ export function viewingConfirmationEmail(name: string, address: string, date: st
   const cleanAddress = addressParts(address);
   const mapQuery = encodeURIComponent(cleanAddress.full);
   return {
-    subject: `Your viewing with Fleming Lettings at ${cleanAddress.full}`,
+    subject: `Your viewing at ${cleanAddress.full}`,
     html: renderFinalEmailTemplate('02-viewing-confirmation.html', {
       FIRST_NAME: escapeHtml(name || 'there'),
       PROPERTY_ADDRESS: escapeHtml(cleanAddress.full),
@@ -336,7 +336,7 @@ export function statusUpdateEmail(name: string, address: string, status: string)
 
 export function holdingDepositRequestEmail(
   name: string, address: string, monthlyRent: number, securityDeposit: number,
-  holdingDeposit: number, applicationFormUrl: string
+  holdingDeposit: number, applicationFormUrl: string, customMessage?: string | null
 ): { subject: string; html: string } {
   const propertyAddress = addressParts(address);
   return {
@@ -349,6 +349,7 @@ export function holdingDepositRequestEmail(
       SECURITY_DEPOSIT: emailMoneyCompact(securityDeposit),
       HOLDING_DEPOSIT: emailMoneyCompact(holdingDeposit),
       APPLICATION_URL: escapeHtml(applicationFormUrl),
+      INTRO_MESSAGE: escapeHtml(customMessage || `Thank you for your interest in ${propertyAddress.full}. We are pleased to confirm that we would like to proceed with your application.\n\nTo secure this property, we require an initial holding deposit. Please see the financial summary below:`).replace(/\r?\n/g, '<br>'),
     }),
   };
 }
@@ -471,7 +472,7 @@ export function applicationConfirmationEmail(name: string): { subject: string; h
   };
 }
 
-export function holdingDepositReceiptEmail(name: string, amount: number, receivedDate: string): { subject: string; html: string } {
+export function holdingDepositReceiptEmail(name: string, amount: number, receivedDate: string, customMessage?: string | null): { subject: string; html: string } {
   const displayDate = new Date(`${receivedDate}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
   return {
     subject: 'Confirmation of receipt of your holding deposit',
@@ -479,6 +480,7 @@ export function holdingDepositReceiptEmail(name: string, amount: number, receive
       FIRST_NAME: escapeHtml(String(name || '').trim().split(/\s+/)[0] || 'there'),
       AMOUNT: emailMoney(amount),
       RECEIVED_DATE: displayDate,
+      INTRO_MESSAGE: escapeHtml(customMessage || `We confirm that Fleming Lettings received your holding deposit of £${emailMoney(amount)} on ${displayDate}.`).replace(/\r?\n/g, '<br>'),
     }),
   };
 }

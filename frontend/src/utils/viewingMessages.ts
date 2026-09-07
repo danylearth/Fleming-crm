@@ -11,5 +11,5 @@ export const viewingSmsPreview = (firstName: string, location: string, date: str
 
 export const viewingEmailPreview = (name: string, location: string, date: string, time: string): string => {
   const dateAndTime = `${formatViewingDate(date)}${time ? ` at ${time}` : ''}`;
-  return `Subject: Your viewing with Fleming Lettings at ${location || '[property address]'}\n\nHi ${name || '[name]'},\n\nThis is to confirm your viewing at:\n${location || '[property address]'}\nDate: ${dateAndTime}\n\nPlease arrive on time. If you need to reschedule, reply to this email or call us.`;
+  return `Subject: Your viewing at ${location || '[property address]'}\n\nHi ${name || '[name]'},\n\nThis is to confirm your viewing at:\n${location || '[property address]'}\nDate: ${dateAndTime}\n\nPlease arrive on time. If you need to reschedule, reply to this email or call us.`;
 };
