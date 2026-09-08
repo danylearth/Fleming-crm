@@ -10,14 +10,14 @@ import { useAuth } from '../context/AuthContext';
 import {
   Pencil, Mail, Phone, Building2, Calendar, MessageSquare, Clock,
   AlertTriangle, ChevronRight, Plus, User, CheckCircle,
-  ChevronDown, ShieldCheck
+  ChevronDown, ShieldCheck, UsersRound
 } from 'lucide-react';
 
 // ==================== TYPES ====================
 interface Tenant {
   id: number; name: string; email: string; phone: string;
   title_1?: string; first_name_1?: string; last_name_1?: string; date_of_birth_1?: string;
-  current_address?: string; previous_address?: string;
+  current_address?: string; previous_address?: string; address_before_previous?: string;
   is_joint_tenancy?: number;
   title_2?: string; first_name_2?: string; last_name_2?: string;
   email_2?: string; phone_2?: string; date_of_birth_2?: string;
@@ -40,6 +40,7 @@ interface Tenant {
   tenancy_start_date?: string; tenancy_type?: string;
   has_end_date?: number; tenancy_end_date?: string; monthly_rent?: number;
   move_in_date: string; status: string; notes: string;
+  linked_tenant_id?: number; linked_tenant_name?: string;
 }
 
 interface TenantNote {
@@ -49,6 +50,12 @@ interface TenantNote {
 interface MaintenanceRequest {
   id: number; tenant_id?: number; title: string; description: string;
   priority: string; status: string; created_at: string;
+}
+
+interface TenantCommunication {
+  id: number; channel: 'email' | 'sms'; recipient: string; sender?: string;
+  subject?: string; body: string; status: string; error_message?: string;
+  opened_at?: string; clicked_at?: string; created_at: string;
 }
 
 function parseNotes(raw?: string | null): TenantNote[] {
@@ -170,6 +177,7 @@ export default function TenantDetail() {
   // Properties list for selector
   const [allProperties, setAllProperties] = useState<{ id: number; address: string; postcode: string }[]>([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
+  const [communications, setCommunications] = useState<TenantCommunication[]>([]);
   const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
   const [sendingMaintenanceLink, setSendingMaintenanceLink] = useState<'email' | 'sms' | null>(null);
   const [maintenanceForm, setMaintenanceForm] = useState({ title: '', description: '', category: 'other', priority: 'medium' });
@@ -180,6 +188,7 @@ export default function TenantDetail() {
       title_1: t.title_1 || '', first_name_1: t.first_name_1 || '', last_name_1: t.last_name_1 || '',
       date_of_birth_1: t.date_of_birth_1 || '',
       current_address: t.current_address || '', previous_address: t.previous_address || '',
+      address_before_previous: t.address_before_previous || '',
       is_joint_tenancy: !!t.is_joint_tenancy,
       title_2: t.title_2 || '', first_name_2: t.first_name_2 || '', last_name_2: t.last_name_2 || '',
       email_2: t.email_2 || '', phone_2: t.phone_2 || '', date_of_birth_2: t.date_of_birth_2 || '',
@@ -222,6 +231,8 @@ export default function TenantDetail() {
       }
       const maintenance = await api.get('/api/maintenance').catch(() => []);
       setMaintenanceRequests(Array.isArray(maintenance) ? maintenance.filter((request: MaintenanceRequest) => Number(request.tenant_id) === Number(t.id)) : []);
+      const communicationRows = await api.get(`/api/tenants/${t.id}/communications`).catch(() => []);
+      setCommunications(Array.isArray(communicationRows) ? communicationRows : []);
     } catch (e) {
       console.error(e);
       alert(e instanceof Error ? e.message : 'Failed to load tenant');
@@ -263,30 +274,13 @@ export default function TenantDetail() {
     await loadDetail();
   };
 
-  const maintenanceReportUrl = 'https://apply.fleminglettings.co.uk/report';
   const sendMaintenanceLink = async (channel: 'email' | 'sms') => {
     if (!tenant) return;
     setSendingMaintenanceLink(channel);
     try {
-      if (channel === 'email') {
-        if (!tenant.email) throw new Error('This tenant has no email address');
-        await api.post('/api/email/send-generic', {
-          entity_type: 'tenant',
-          entity_id: tenant.id,
-          to_email: tenant.email,
-          subject: 'Report a maintenance issue to Fleming Lettings',
-          body_html: `<div style="font-family:Arial,sans-serif;color:#29232d"><h2 style="color:#27083d">Fleming Lettings</h2><p>Hi ${tenant.name.replace(/[<>&"']/g, '')},</p><p>Use the secure form below to report maintenance, damage, a lost key, flooding or another property issue.</p><p><a href="${maintenanceReportUrl}" style="display:inline-block;background:#dc006d;color:#fff;padding:12px 18px;text-decoration:none;border-radius:8px">Report an issue</a></p><p>If there is an immediate danger to life, call 999.</p></div>`,
-        });
-      } else {
-        if (!tenant.phone) throw new Error('This tenant has no phone number');
-        await api.post('/api/sms/send', {
-          entity_type: 'tenant',
-          entity_id: tenant.id,
-          to_phone: tenant.phone,
-          message_body: `Hi ${tenant.name.split(' ')[0] || 'there'}, report maintenance, damage, a lost key or another property issue to Fleming Lettings here: ${maintenanceReportUrl}`,
-        });
-      }
+      await api.post(`/api/tenants/${tenant.id}/maintenance-report-link`, { channel });
       alert(`Maintenance reporting link sent by ${channel}.`);
+      await loadDetail();
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Maintenance reporting link could not be sent');
     }
@@ -302,7 +296,7 @@ export default function TenantDetail() {
       { label: 'Address Verification', done: !!form.kyc_address_verification },
       { label: 'In-person Identity Check', done: !!form.kyc_personal_verification },
     ];
-    if (form.is_joint_tenancy) {
+    if (form.is_joint_tenancy && !tenant?.linked_tenant_id && (form.first_name_2 || form.last_name_2 || form.email_2)) {
       items.push({ label: 'KYC — Applicant 2', done: !!form.kyc_completed_2 });
     }
     items.push({ label: 'Application Forms', done: !!form.application_forms_completed });
@@ -315,6 +309,7 @@ export default function TenantDetail() {
   }
 
   const checklistItems = getChecklistItems();
+  const hasInlineJointApplicant = Boolean(form.is_joint_tenancy && !tenant?.linked_tenant_id && (form.first_name_2 || form.last_name_2 || form.email_2));
   const completedCount = checklistItems.filter(i => i.done).length;
   const completionPercent = checklistItems.length ? Math.round((completedCount / checklistItems.length) * 100) : 0;
   const isOnboarded = completionPercent === 100;
@@ -417,6 +412,11 @@ export default function TenantDetail() {
                     <ShieldCheck size={12} /> Onboarded
                   </span>
                 )}
+                {!!tenant.is_joint_tenancy && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-violet-500/10 text-violet-300 border border-violet-500/20 rounded-lg px-2 py-0.5">
+                    <UsersRound size={12} /> Joint tenancy
+                  </span>
+                )}
               </div>
               {tenant.property_id ? (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -436,6 +436,14 @@ export default function TenantDetail() {
                       </div>
                       <span>{tenant.property_landlord_name || `Landlord #${tenant.property_landlord_id}`}</span>
                       <ChevronRight size={14} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  )}
+                  {tenant.linked_tenant_id && (
+                    <button onClick={() => navigate(`/tenants/${tenant.linked_tenant_id}`)}
+                      className="flex items-center gap-2 mt-2 text-sm text-violet-300 hover:text-violet-200 transition-colors group">
+                      <div className="w-7 h-7 rounded-lg bg-violet-500/15 flex items-center justify-center"><UsersRound size={14} /></div>
+                      <span>Joint tenant: {tenant.linked_tenant_name || `Tenant #${tenant.linked_tenant_id}`}</span>
+                      <ChevronRight size={14} />
                     </button>
                   )}
                 </div>
@@ -484,15 +492,16 @@ export default function TenantDetail() {
                     <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
                     <DatePicker label="Date of Birth" value={form.date_of_birth_1} onChange={v => setForm({ ...form, date_of_birth_1: v })} />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <Input label="Current Address" value={form.current_address} onChange={v => setForm({ ...form, current_address: v })} />
                     <Input label="Previous Address" value={form.previous_address} onChange={v => setForm({ ...form, previous_address: v })} />
+                    <Input label="Address Before Previous" value={form.address_before_previous} onChange={v => setForm({ ...form, address_before_previous: v })} />
                   </div>
                   <div className="flex items-center gap-3 mt-2">
                     <label className="text-xs text-[var(--text-muted)]">Joint Tenancy?</label>
                     <YesNo value={form.is_joint_tenancy} onChange={v => setForm({ ...form, is_joint_tenancy: v })} />
                   </div>
-                  {form.is_joint_tenancy && (
+                  {hasInlineJointApplicant && (
                     <>
                       <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4">Applicant 2</p>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -526,11 +535,12 @@ export default function TenantDetail() {
                     ))}
                   </div>
                   <div className="h-px bg-[var(--border-subtle)] my-2" />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <ReadField label="Current Address" value={tenant.current_address} />
                     <ReadField label="Previous Address" value={tenant.previous_address} />
+                    <ReadField label="Address Before Previous" value={tenant.address_before_previous} />
                   </div>
-                  {!!tenant.is_joint_tenancy && (
+                  {hasInlineJointApplicant && (
                     <>
                       <div className="h-px bg-[var(--border-subtle)] my-2" />
                       <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Applicant 2</p>
@@ -788,7 +798,7 @@ export default function TenantDetail() {
                 </div>
 
                 {/* KYC — Applicant 2 */}
-                {form.is_joint_tenancy && (
+                {hasInlineJointApplicant && (
                   <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
                     <span className="text-xs">KYC — {form.first_name_2 || 'Applicant 2'}</span>
                     <YesNo value={!!form.kyc_completed_2} onChange={v => setForm({ ...form, kyc_completed_2: v })} disabled={!isEditing('checklist')} />
@@ -934,6 +944,30 @@ export default function TenantDetail() {
                 <Button variant="gradient" onClick={addNote} disabled={addingNote || !newNote.trim()}>
                   <Plus size={14} />
                 </Button>
+              </div>
+            </GlassCard>
+
+            {/* Email and SMS thread */}
+            <GlassCard className="p-6">
+              <SectionHeader title={`Email & SMS (${communications.length})`} icon={<Mail size={16} />} />
+              <div className="mt-4 max-h-[390px] space-y-3 overflow-y-auto pr-1">
+                {communications.length === 0 && <p className="text-xs text-[var(--text-muted)]">No email or SMS messages recorded yet.</p>}
+                {communications.map(message => (
+                  <div key={`${message.channel}-${message.id}`} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--accent-orange)]">
+                          {message.channel === 'email' ? <Mail size={12} /> : <MessageSquare size={12} />}{message.channel}
+                        </p>
+                        <p className="mt-1 truncate text-sm font-medium text-[var(--text-primary)]">{message.subject || `Message to ${message.recipient}`}</p>
+                        <p className="text-[10px] text-[var(--text-muted)]">To {message.recipient}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${['failed', 'bounced'].includes(message.status) ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'}`}>{message.status}</span>
+                    </div>
+                    <p className="mt-2 line-clamp-3 text-xs text-[var(--text-secondary)]">{message.channel === 'email' ? message.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : message.body}</p>
+                    <p className="mt-2 text-[10px] text-[var(--text-muted)]">{new Date(message.created_at).toLocaleString('en-GB')}{message.opened_at ? ` · opened ${new Date(message.opened_at).toLocaleString('en-GB')}` : ''}</p>
+                  </div>
+                ))}
               </div>
             </GlassCard>
 

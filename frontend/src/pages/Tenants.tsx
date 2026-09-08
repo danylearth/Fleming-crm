@@ -4,16 +4,18 @@ import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, Tag, SearchBar, EmptyState, DataTable } from '../components/ui';
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Mail, Phone, Building2, Calendar, Search, ChevronDown, LayoutGrid, List, User, MapPin, Archive } from 'lucide-react';
+import { Plus, X, Mail, Phone, Building2, Calendar, Search, ChevronDown, LayoutGrid, List, User, MapPin, Archive, UsersRound } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
+import { useNotifications } from '../context/NotificationContext';
 
 interface Tenant {
   id: number; name: string; email: string; phone: string; property_id: number;
   property_address: string; property_landlord_name?: string; tenancy_start_date?: string; tenancy_end_date: string; monthly_rent: number;
   status: string; nok_name: string; landlord_type?: string; created_at?: string;
+  is_joint_tenancy?: number; linked_tenant_name?: string;
 }
 
 interface Property {
@@ -45,6 +47,7 @@ export default function Tenants() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const api = useApi();
+  const { confirmAction } = useNotifications();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -194,7 +197,7 @@ export default function Tenants() {
 
   const handleBulkArchive = async () => {
     if (selectedIds.length === 0) return;
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       `Archive ${selectedIds.length} tenant${selectedIds.length !== 1 ? 's' : ''}? Their records and documents will be preserved.`
     );
     if (!confirmed) return;
@@ -463,6 +466,7 @@ export default function Tenants() {
                     <Avatar name={t.name} size="sm" />
                     <div className="min-w-0">
                       <p className="font-medium truncate">{t.name}</p>
+                      {!!t.is_joint_tenancy && <p className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-violet-300"><UsersRound size={11} /> Joint{t.linked_tenant_name ? ` with ${t.linked_tenant_name}` : ' tenancy'}</p>}
                       <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{t.email || t.phone}</p>
                     </div>
                   </div>
@@ -555,6 +559,7 @@ export default function Tenants() {
                           )}
                         </div>
                         <div className="mt-1 space-y-0.5">
+                          {!!t.is_joint_tenancy && <p className="flex items-center gap-1 text-[10px] font-medium text-violet-300"><UsersRound size={11} />Joint{t.linked_tenant_name ? ` with ${t.linked_tenant_name}` : ' tenancy'}</p>}
                           {t.email && <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1"><Mail size={10} />{t.email}</p>}
                           {t.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} />{t.phone}</p>}
                         </div>

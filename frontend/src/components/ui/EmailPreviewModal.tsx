@@ -19,6 +19,8 @@ interface EmailPreviewModalProps {
   sendLabel?: string;
   /** Optional extra content rendered above the email preview (e.g. financial inputs) */
   children?: React.ReactNode;
+  /** Read-only preview with a single Close action. */
+  previewOnly?: boolean;
 }
 
 export default function EmailPreviewModal({
@@ -32,6 +34,7 @@ export default function EmailPreviewModal({
   initialBodyHtml,
   sendLabel = 'Send Email',
   children,
+  previewOnly = false,
 }: EmailPreviewModalProps) {
   const [subject, setSubject] = useState(initialSubject);
   const [bodyHtml, setBodyHtml] = useState(initialBodyHtml);
@@ -65,7 +68,7 @@ export default function EmailPreviewModal({
             </div>
             <div>
               <h3 className="text-lg font-bold text-[var(--text-primary)]">Email Preview</h3>
-              <p className="text-xs text-[var(--text-muted)]">Review and edit before sending</p>
+              <p className="text-xs text-[var(--text-muted)]">{previewOnly ? 'Branded email as the recipient will see it' : 'Review and edit before sending'}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
@@ -109,13 +112,13 @@ export default function EmailPreviewModal({
               ) : (
                 <div className="flex-1 flex items-center gap-2">
                   <span className="font-semibold text-[var(--text-primary)]">{subject}</span>
-                  <button
+                  {!previewOnly && <button
                     onClick={() => setEditingSubject(true)}
                     className="text-[var(--text-muted)] hover:text-[var(--accent-orange)] transition-colors"
                     title="Edit subject"
                   >
                     <Pencil size={12} />
-                  </button>
+                  </button>}
                 </div>
               )}
             </div>
@@ -127,12 +130,12 @@ export default function EmailPreviewModal({
               <label className="text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider">
                 Email Body
               </label>
-              <button
+              {!previewOnly && <button
                 onClick={() => setEditingBody(!editingBody)}
                 className="flex items-center gap-1 text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--accent-orange)] transition-colors"
               >
                 {editingBody ? <><Eye size={12} /> Preview</> : <><Pencil size={12} /> Edit HTML</>}
-              </button>
+              </button>}
             </div>
 
             {editingBody ? (
@@ -157,14 +160,14 @@ export default function EmailPreviewModal({
 
         {/* Actions stay visible at 100% browser zoom while the preview scrolls. */}
         <div className="flex flex-wrap gap-3 p-6 pt-4 border-t border-[var(--border-subtle)] bg-[var(--bg-card)] shrink-0">
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button
+          <Button variant="ghost" onClick={onClose}>{previewOnly ? 'Close' : 'Cancel'}</Button>
+          {!previewOnly && <Button
             variant="gradient"
             onClick={handleSend}
             disabled={sending || !subject.trim()}
           >
             {sending ? 'Sending...' : sendLabel}
-          </Button>
+          </Button>}
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, EmptyState, DataTable, type Column } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { usePermissions } from '../hooks/usePermissions';
+import { useNotifications } from '../context/NotificationContext';
 import { Plus, X, Users as UsersIcon, Shield, ShieldAlert, Eye, Key, CheckCircle, XCircle, Copy, type LucideIcon } from 'lucide-react';
 
 interface User {
@@ -21,6 +22,7 @@ export default function Users() {
   const navigate = useNavigate();
   const api = useApi();
   const { canManageUsers, isAdmin } = usePermissions();
+  const { confirmAction } = useNotifications();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -107,7 +109,7 @@ export default function Users() {
   };
 
   const handleResetPassword = async (userId: number) => {
-    if (!confirm('Reset this user\'s password? A temporary password will be generated.')) return;
+    if (!await confirmAction('Reset this user\'s password? A temporary password will be generated.')) return;
 
     try {
       const result = await api.put(`/api/users/${userId}/reset-password`, {});
@@ -123,7 +125,7 @@ export default function Users() {
     const newStatus = user.is_active ? 0 : 1;
     const action = newStatus ? 'activate' : 'deactivate';
 
-    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${user.name}?`)) return;
+    if (!await confirmAction(`${action.charAt(0).toUpperCase() + action.slice(1)} ${user.name}?`)) return;
 
     try {
       await api.put(`/api/users/${user.id}`, { is_active: newStatus });
@@ -139,7 +141,7 @@ export default function Users() {
   };
 
   const setupRequestedTeam = async () => {
-    if (!confirm('Add the four requested Fleming team accounts? Existing accounts will be left unchanged.')) return;
+    if (!await confirmAction('Add the four requested Fleming team accounts? Existing accounts will be left unchanged.')) return;
     setSettingUpTeam(true);
     try {
       const result = await api.post('/api/users/setup-fleming-team', {});

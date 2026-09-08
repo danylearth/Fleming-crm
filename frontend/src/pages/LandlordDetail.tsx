@@ -7,6 +7,7 @@ import ActivityTimeline from '../components/ui/ActivityTimeline';
 import AddressAutocomplete from '../components/ui/AddressAutocomplete';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { calculateSmsSegments } from '../utils/sms';
 import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Briefcase, Trash2, RotateCcw, Send, Clock } from 'lucide-react';
 
@@ -73,6 +74,7 @@ export default function LandlordDetail() {
   const navigate = useNavigate();
   const api = useApi();
   const { user } = useAuth();
+  const { confirmAction } = useNotifications();
   const [landlord, setLandlord] = useState<Landlord | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [directors, setDirectors] = useState<Director[]>([]);
@@ -260,7 +262,7 @@ export default function LandlordDetail() {
   };
 
   const deleteDirector = async (directorId: number) => {
-    if (!confirm('Are you sure you want to archive this director? They will be moved to the Archived tab.')) return;
+    if (!await confirmAction('Are you sure you want to archive this director? They will be moved to the Archived tab.')) return;
     try {
       await api.delete(`/api/directors/${directorId}`);
       await loadDetail();
@@ -271,7 +273,7 @@ export default function LandlordDetail() {
   };
 
   const reinstateDirector = async (directorId: number, directorName: string) => {
-    if (!confirm(`Restore ${directorName} as an active director?`)) return;
+    if (!await confirmAction(`Restore ${directorName} as an active director?`)) return;
     try {
       await api.post(`/api/directors/${directorId}/reinstate`, {});
       await loadDetail();
@@ -441,7 +443,7 @@ export default function LandlordDetail() {
                           type="button"
                           title="Unlink property"
                           onClick={async () => {
-                            if (!window.confirm(`Unlink ${p.address} from ${landlord.name}?`)) return;
+                            if (!await confirmAction(`Unlink ${p.address} from ${landlord.name}?`)) return;
                             try {
                               await api.delete(`/api/property-landlords/${p.link_id}`);
                               await loadDetail();
@@ -573,7 +575,7 @@ export default function LandlordDetail() {
                           variant="outline"
                           size="sm"
                           onClick={async () => {
-                            if (!confirm(`Approve KYC for ${d.name}? This will mark their identity as verified.`)) return;
+                            if (!await confirmAction(`Approve KYC for ${d.name}? This will mark their identity as verified.`)) return;
                             try {
                               await api.put(`/api/directors/${d.id}`, { ...d, kyc_completed: 1 });
                               await loadDetail();
@@ -713,7 +715,7 @@ export default function LandlordDetail() {
                     variant="outline"
                     size="sm"
                     onClick={async () => {
-                      if (!confirm('Approve KYC for this landlord? This action will mark their identity as verified.')) return;
+                      if (!await confirmAction('Approve KYC for this landlord? This action will mark their identity as verified.')) return;
                       try {
                         await api.put(`/api/landlords/${id}`, { ...landlord, kyc_completed: true });
                         const updated = await api.get(`/api/landlords/${id}`);

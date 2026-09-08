@@ -8,6 +8,7 @@ import { Plus, X, Building2, Phone, Mail, Search, Check, LayoutGrid, List, User,
 import CsvImport from '../components/ui/CsvImport';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 import { usePermissions } from '../hooks/usePermissions';
+import { useNotifications } from '../context/NotificationContext';
 
 interface Landlord {
   id: number; name: string; email: string; phone: string;
@@ -26,6 +27,7 @@ interface TenantOption {
 export default function Landlords() {
   const navigate = useNavigate();
   const api = useApi();
+  const { confirmAction } = useNotifications();
   const { canCreate } = usePermissions();
   const [landlords, setLandlords] = useState<Landlord[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -220,7 +222,7 @@ export default function Landlords() {
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
 
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       `Are you sure you want to delete ${selectedIds.length} landlord${selectedIds.length !== 1 ? 's' : ''}? This action cannot be undone.`
     );
 

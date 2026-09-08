@@ -142,6 +142,7 @@ export function completedTenancyAgreementEmail(firstName: string, propertyAddres
     html: renderFinalEmailTemplate('07-completed-tenancy-agreement.html', {
       FIRST_NAME: escapeHtml(firstName || 'there'),
       PROPERTY_SHORT_ADDRESS: escapeHtml(address.short),
+      PROPERTY_ADDRESS_REMAINDER: escapeHtml(address.remainder),
     }),
   };
 }
@@ -176,6 +177,21 @@ export function finalBalanceHandoverEmail(input: FinalBalanceEmailInput): { subj
       SORT_CODE: escapeHtml(input.bankDetails.sortCode),
       ACCOUNT_NUMBER: escapeHtml(input.bankDetails.accountNumber),
       PAYMENT_REFERENCE: escapeHtml(input.paymentReference),
+    }),
+  };
+}
+
+export function maintenanceReportingEmail(
+  firstName: string,
+  propertyAddress: string,
+  reportUrl: string,
+): { subject: string; html: string } {
+  return {
+    subject: 'Report a maintenance issue to Fleming Lettings',
+    html: renderFinalEmailTemplate('10-maintenance-reporting.html', {
+      FIRST_NAME: escapeHtml(firstName || 'there'),
+      PROPERTY_ADDRESS: escapeHtml(normalizePropertyAddress(propertyAddress)),
+      REPORT_URL: escapeHtml(reportUrl),
     }),
   };
 }

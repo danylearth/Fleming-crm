@@ -10,6 +10,7 @@ import CsvImport from '../components/ui/CsvImport';
 import PropertyMap from '../components/ui/PropertyMap';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 import { usePermissions } from '../hooks/usePermissions';
+import { useNotifications } from '../context/NotificationContext';
 
 interface Property {
   id: number; address: string; postcode: string; rent_amount: number;
@@ -54,6 +55,7 @@ function statusLabel(s: string) {
 
 export default function Properties() {
   const api = useApi();
+  const { confirmAction } = useNotifications();
   const navigate = useNavigate();
   const { canCreate } = usePermissions();
   const [properties, setProperties] = useState<Property[]>([]);
@@ -132,7 +134,7 @@ export default function Properties() {
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
 
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       `Are you sure you want to delete ${selectedIds.length} ${selectedIds.length !== 1 ? 'properties' : 'property'}? This action cannot be undone.`
     );
 

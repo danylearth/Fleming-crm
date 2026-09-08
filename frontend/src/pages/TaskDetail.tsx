@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Card, GlassCard, Button, Select, Avatar, EmptyState, DatePicker } from '../components/ui';
 import { useApi } from '../hooks/useApi';
+import { useNotifications } from '../context/NotificationContext';
 import {
   ArrowLeft, Pencil, Save, X, Calendar, Clock, User, Building2,
   CheckCircle2, AlertTriangle, Inbox, Trash2, FileText, Download,
@@ -56,6 +57,7 @@ export default function TaskDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const api = useApi();
+  const { confirmAction } = useNotifications();
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -117,7 +119,7 @@ export default function TaskDetail() {
   };
 
   const deleteTask = async () => {
-    if (!task || !confirm('Delete this task? This will also delete all attached files.')) return;
+    if (!task || !await confirmAction('Delete this task? This will also delete all attached files.')) return;
     try {
       await api.delete(`/api/tasks/${task.id}`);
       navigate('/tasks');
@@ -178,7 +180,7 @@ export default function TaskDetail() {
   };
 
   const deleteDocument = async (docId: number) => {
-    if (!confirm('Delete this file?')) return;
+    if (!await confirmAction('Delete this file?')) return;
     try {
       await api.delete(`/api/documents/${docId}`);
       await load();

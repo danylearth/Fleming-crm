@@ -20,6 +20,7 @@ import { rejectionSms } from '../utils/messages';
 import OnboardingWizard from '../components/ui/OnboardingWizard';
 import EmailPreviewModal from '../components/ui/EmailPreviewModal';
 import { viewingEmailPreview, viewingSmsPreview } from '../utils/viewingMessages';
+import { useNotifications } from '../context/NotificationContext';
 
 // ==================== CONSTANTS ====================
 const STATUS_COLORS: Record<string, string> = {
@@ -197,6 +198,7 @@ export default function EnquiryDetail() {
   const api = useApi();
   const { user } = useAuth();
   const { canDelete } = usePermissions();
+  const { confirmAction } = useNotifications();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<Record<string, any> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -476,7 +478,7 @@ export default function EnquiryDetail() {
   const completionPercent = checklistItems.length ? Math.round((completedCount / checklistItems.length) * 100) : 0;
 
   const deleteEnquiry = async () => {
-    if (!id || !data || !window.confirm(`Delete the enquiry for ${[data.first_name_1, data.last_name_1].filter(Boolean).join(' ')}? This cannot be undone.`)) return;
+    if (!id || !data || !await confirmAction(`Delete the enquiry for ${[data.first_name_1, data.last_name_1].filter(Boolean).join(' ')}? This cannot be undone.`)) return;
     setDeleting(true);
     try {
       await api.delete(`/api/tenant-enquiries/${id}`);

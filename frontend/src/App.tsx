@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { NotificationProvider } from './context/NotificationContext';
 
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -112,11 +113,13 @@ export default function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
-        <AuthProvider>
-          <PortfolioProvider>
-            <AppRoutes />
-          </PortfolioProvider>
-        </AuthProvider>
+        <NotificationProvider>
+          <AuthProvider>
+            <PortfolioProvider>
+              <AppRoutes />
+            </PortfolioProvider>
+          </AuthProvider>
+        </NotificationProvider>
       </BrowserRouter>
     </ThemeProvider>
   );

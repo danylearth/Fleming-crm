@@ -1,4 +1,6 @@
 import PDFDocument from 'pdfkit';
+import fs from 'fs';
+import path from 'path';
 
 export type AgreementType = 'internal' | 'client';
 export type PaymentRoute = 'fleming_operating' | 'fleming_client_money' | 'landlord';
@@ -237,9 +239,13 @@ const ADDENDUM_TERMS = [
 
 export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    const assetDirectory = path.join(__dirname, 'agreement-assets');
+    const headerPath = path.join(assetDirectory, 'letterhead-header.png');
+    const footerPath = path.join(assetDirectory, 'letterhead-footer.png');
+    const robertSignaturePath = path.join(assetDirectory, 'robert-fleming-signature.png');
     const doc = new PDFDocument({
       size: 'A4',
-      margins: { top: 72, right: 48, bottom: 58, left: 48 },
+      margins: { top: 108, right: 29, bottom: 98, left: 29 },
       bufferPages: true,
       info: {
         Title: `Assured Periodic Tenancy - ${input.propertyAddress}`,
@@ -252,29 +258,29 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    const width = doc.page.width - 96;
+    const contentLeft = 29;
+    const width = doc.page.width - 58;
     const brand = '#DC006D';
     const ink = '#24172a';
     const muted = '#665c6b';
 
-    const pageHeader = () => {
+    const letterhead = () => {
       doc.save();
-      doc.rect(0, 0, doc.page.width, 48).fill('#24172a');
-      doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(13).text('FLEMING LETTINGS', 48, 17, { lineBreak: false });
-      doc.fillColor('#e9b5cf').font('Helvetica').fontSize(8).text('ASSURED PERIODIC TENANCY AGREEMENT', 305, 20, { width: 242, align: 'right', lineBreak: false });
+      doc.image(headerPath, 0, 0, { width: doc.page.width, height: 102.4 });
+      doc.image(footerPath, 0, doc.page.height - 77, { width: doc.page.width, height: 77 });
       doc.restore();
-      doc.y = Math.max(doc.y, 72);
+      doc.y = Math.max(doc.y, 108);
     };
-    doc.on('pageAdded', pageHeader);
-    pageHeader();
+    doc.on('pageAdded', letterhead);
+    letterhead();
 
-    const ensure = (height: number) => { if (doc.y + height > doc.page.height - 62) doc.addPage(); };
+    const ensure = (height: number) => { if (doc.y + height > doc.page.height - 98) doc.addPage(); };
     const paragraph = (text: string, options: { bold?: boolean; size?: number; indent?: number; color?: string } = {}) => {
       ensure(28);
       doc.font(options.bold ? 'Helvetica-Bold' : 'Helvetica')
         .fontSize(options.size || 8.6)
         .fillColor(options.color || ink)
-        .text(text, 48 + (options.indent || 0), doc.y, { width: width - (options.indent || 0), lineGap: 1.5, align: 'justify' });
+        .text(text, contentLeft + (options.indent || 0), doc.y, { width: width - (options.indent || 0), lineGap: 1.5, align: 'justify' });
       doc.moveDown(0.45);
     };
     const heading = (text: string, level = 1) => {
@@ -283,13 +289,13 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
       doc.fillColor(level === 1 ? brand : ink).font('Helvetica-Bold').fontSize(level === 1 ? 14 : 10.5).text(text, { width });
       if (level === 1) {
         doc.moveDown(0.18);
-        doc.moveTo(48, doc.y).lineTo(48 + width, doc.y).strokeColor('#e5bfd2').stroke();
+        doc.moveTo(contentLeft, doc.y).lineTo(contentLeft + width, doc.y).strokeColor('#e5bfd2').stroke();
       }
       doc.moveDown(0.45);
     };
     const labelValue = (label: string, value: string) => {
       ensure(26);
-      doc.font('Helvetica-Bold').fontSize(8.5).fillColor(muted).text(label, 48, doc.y, { width: 118, continued: false });
+      doc.font('Helvetica-Bold').fontSize(8.5).fillColor(muted).text(label, contentLeft, doc.y, { width: 118, continued: false });
       const y = doc.y - doc.currentLineHeight() - 1;
       doc.font('Helvetica').fillColor(ink).text(value || 'None', 170, y, { width: width - 122, lineGap: 1.2 });
       doc.moveDown(0.35);
@@ -303,8 +309,6 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     const startDate = longDate(input.tenancyStartDate);
     const rentDay = ordinal(Number(input.tenancyStartDate.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'Europe/London' })));
 
-    doc.font('Helvetica-Bold').fontSize(18).fillColor(ink).text('Assured Periodic Tenancy Agreement');
-    doc.moveDown(0.5);
     paragraph(`This agreement is dated: ${longDate(input.agreementDate)}`, { bold: true, size: 10 });
     paragraph('This agreement is a written statement of the terms and obligations of the assured periodic tenancy that you (the tenant) are entering into with us (the landlord). It sets out the legally binding obligations accepted as soon as the agreement is dated above.');
     paragraph('This tenancy is governed by the Housing Act 1988 as amended by the Renters Rights Act 2025. All new assured tenancies must be periodic from the outset; fixed-term assured tenancies can no longer be granted.');
@@ -341,6 +345,7 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
 
     heading('Permitted Occupiers', 2);
     paragraph(`In addition to you/yourselves, only the following permitted occupiers may live at the property: ${input.permittedOccupiers || 'None'}. Nobody else may live there without written permission.`);
+    doc.addPage();
     heading('Shared Facilities and Parking', 2);
     paragraph(`Shared facilities and common parts: ${input.sharedFacilities || 'None specified'}.`);
     paragraph(`Parking (if allocated): ${input.parking || 'No allocated parking'}.`);
@@ -372,6 +377,7 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     labelValue('Address(es) before tenancy', tenantAddresses);
     paragraph('By providing an email address here you indicate that notices and other tenancy documents may be served by email.');
 
+    doc.addPage();
     heading('Ending the Tenancy', 2);
     paragraph('If any tenant wishes to end this tenancy, at least two months written notice must be given ending on the first or last day of a rental period. The landlord may only seek possession by serving a valid Section 8 notice and obtaining and executing a court order. Section 21 no-fault evictions have been abolished.');
     heading('Unfitness and Disrepair', 2);
@@ -384,6 +390,7 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     heading('Equality Act and Prior Notice', 2);
     paragraph('Where Section 190 of the Equality Act 2010 applies, consent for qualifying disability-related improvements may not be unreasonably withheld. Where a qualifying superior lease exists, the property may be repossessed under Grounds 2ZB or 2ZD of Schedule 2 of the Housing Act 1988 if the statutory conditions are met.');
 
+    doc.addPage();
     heading('Section B - Definitions');
     for (const [term, definition] of DEFINITIONS) {
       paragraph(`“${term}” ${definition}`, { size: 8.2 });
@@ -392,9 +399,11 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
       ? `“us”, “our” and “we” mean the landlord, ${FLEMING_NAME}, which owns the property. Where we appoint an agent, we remain responsible for our obligations.`
       : `“us”, “our” and “we” mean the landlord and do not refer to the agent, ${FLEMING_NAME}, which acts solely as an intermediary and has no liability under this tenancy agreement.`, { size: 8.2 });
 
+    doc.addPage();
     heading('Section C - Terms and Conditions');
     paragraph('The landlord agrees to let the property with the contents to you for the tenancy on the terms in this agreement and any addendum.');
     for (const [title, clauses] of TERMS) {
+      if (title === 'Leaving the property empty' || title === '4. At the end of the tenancy' || title === '9. Pets') doc.addPage();
       if (title === '6. Effect of termination') {
         heading('5. The deposit', 2);
         if (input.agreementType === 'internal') {
@@ -420,20 +429,29 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     heading('Signed as an agreement');
     paragraph('Between us, the Landlord:', { bold: true });
     paragraph(input.agreementType === 'internal' ? `Mr. Robert Fleming (Managing Director), for and on behalf of ${FLEMING_NAME}` : input.landlord.name);
-    paragraph(input.agreementType === 'internal'
-      ? `Electronically signed: Robert Fleming    Date: ${longDate(input.tenancyStartDate)}`
-      : 'Signature: ____________________________________    Date: ____________________');
+    if (input.agreementType === 'internal' && fs.existsSync(robertSignaturePath)) {
+      ensure(72);
+      doc.image(robertSignaturePath, contentLeft, doc.y, { width: 112, height: 52 });
+      doc.y += 56;
+      paragraph(`Signed by Robert Fleming    Date: ${longDate(input.tenancyStartDate)}`);
+    } else {
+      paragraph('Signature: ____________________________________    Date: ____________________');
+    }
     paragraph('And you, the Tenant(s):', { bold: true });
-    paragraph(tenantNames);
-    paragraph('Signature: ____________________________________    Date: ____________________');
+    input.tenants.forEach((tenant, index) => {
+      paragraph(`Tenant ${index + 1}: ${tenant.name}`, { bold: true });
+      paragraph('Signature: ____________________________________    Date: ____________________');
+    });
     if (input.agreementType === 'client') {
       paragraph(`${FLEMING_NAME} acts solely as the managing/letting agent. The landlord remains responsible for all statutory and contractual obligations unless applicable law provides otherwise.`, { size: 8.2 });
     }
 
+    doc.addPage();
     heading('Addendum to Tenancy Agreement');
     paragraph(`This addendum forms part of the tenancy agreement dated ${longDate(input.agreementDate)} between ${input.agreementType === 'internal' ? FLEMING_NAME : input.landlord.name} and ${tenantNames} for ${input.propertyAddress}. If a term below conflicts with a standard term, the addendum prevails to the extent of that inconsistency.`);
     for (const term of ADDENDUM_TERMS) paragraph(`• ${term}`, { indent: 10, size: 8.4 });
 
+    doc.addPage();
     heading('Documents supplied with this agreement', 2);
     paragraph('By signing, the parties confirm receipt and understanding of the following documents:');
     paragraph('• Written Statement of Terms (Section A)');
@@ -452,8 +470,8 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
       doc.page.margins.bottom = 0;
       doc.font('Helvetica').fontSize(7.5).fillColor('#766c7a').text(
         `Fleming Lettings · FL-TA-${input.enquiryId} · Page ${pageIndex + 1} of ${range.count}`,
-        48,
-        doc.page.height - 38,
+        contentLeft,
+        doc.page.height - 91,
         { width, align: 'center', lineBreak: false },
       );
     }

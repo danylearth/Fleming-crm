@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import { Card, GlassCard, SectionHeader, StatusDot, EmptyState, Tag } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import {
   Building2, Users, Wrench, MessageSquare, AlertTriangle,
@@ -46,6 +47,7 @@ interface Enquiry {
 
 export default function Dashboard() {
   const api = useApi();
+  const { confirmAction } = useNotifications();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -114,7 +116,7 @@ export default function Dashboard() {
   };
 
   const deleteTask = async (task: Task) => {
-    if (!confirm(`Delete reminder “${task.title}”?`)) return;
+    if (!await confirmAction(`Delete reminder “${task.title}”?`)) return;
     try {
       await api.delete(`/api/tasks/${task.id}`);
       setTasks(current => current.filter(item => item.id !== task.id));

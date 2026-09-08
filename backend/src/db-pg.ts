@@ -242,6 +242,7 @@ export async function initDb() {
         date_of_birth_1 DATE,
         current_address TEXT,
         previous_address TEXT,
+        address_before_previous TEXT,
         is_joint_tenancy INTEGER DEFAULT 0,
         title_2 TEXT,
         first_name_2 TEXT,
@@ -757,6 +758,7 @@ export async function initDb() {
       ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS balance_payment_requested INTEGER DEFAULT 0;
       ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS balance_payment_received INTEGER DEFAULT 0;
       ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS balance_payment_received_at TIMESTAMP;
+      ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS balance_follow_up_date DATE;
       ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS handover_date DATE;
       ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS handover_time TIME;
       ALTER TABLE tenant_enquiries ADD COLUMN IF NOT EXISTS handover_assigned_to TEXT;
@@ -810,7 +812,39 @@ export async function initDb() {
       ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS tenant_delivery_email_message TEXT;
       ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS tenant_delivery_sms_message TEXT;
       ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS agreement_details JSONB NOT NULL DEFAULT '{}'::jsonb;
+      ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS tenant_slug TEXT;
+      ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS joint_tenant_slug TEXT;
+      ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS landlord_slug TEXT;
+      ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS tenant_opened_at TIMESTAMP;
+      ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS joint_tenant_opened_at TIMESTAMP;
+      ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS landlord_opened_at TIMESTAMP;
+      ALTER TABLE tenancy_agreements ADD COLUMN IF NOT EXISTS joint_tenant_id INTEGER REFERENCES tenants(id) ON DELETE SET NULL;
       CREATE INDEX IF NOT EXISTS idx_tenancy_agreements_joint_token ON tenancy_agreements(joint_tenant_token);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_tenancy_agreements_tenant_slug ON tenancy_agreements(tenant_slug) WHERE tenant_slug IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_tenancy_agreements_joint_slug ON tenancy_agreements(joint_tenant_slug) WHERE joint_tenant_slug IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_tenancy_agreements_landlord_slug ON tenancy_agreements(landlord_slug) WHERE landlord_slug IS NOT NULL;
+    `);
+
+    await client.query(`
+      ALTER TABLE tenants ADD COLUMN IF NOT EXISTS source_enquiry_id INTEGER REFERENCES tenant_enquiries(id) ON DELETE SET NULL;
+      ALTER TABLE tenants ADD COLUMN IF NOT EXISTS linked_tenant_id INTEGER REFERENCES tenants(id) ON DELETE SET NULL;
+      ALTER TABLE tenants ADD COLUMN IF NOT EXISTS maintenance_report_token TEXT;
+      ALTER TABLE tenants ADD COLUMN IF NOT EXISTS address_before_previous TEXT;
+      CREATE INDEX IF NOT EXISTS idx_tenants_source_enquiry ON tenants(source_enquiry_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_maintenance_report_token ON tenants(maintenance_report_token) WHERE maintenance_report_token IS NOT NULL;
+    `);
+
+    await client.query(`
+      UPDATE tenants t
+      SET address_before_previous = t.previous_address,
+          previous_address = t.current_address,
+          current_address = CONCAT_WS(', ', p.address,
+            CASE WHEN COALESCE(p.address, '') ILIKE '%' || COALESCE(p.postcode, '') || '%' THEN NULL ELSE NULLIF(p.postcode, '') END)
+      FROM properties p
+      WHERE p.id = t.property_id
+        AND COALESCE(t.status, 'active') = 'active'
+        AND COALESCE(TRIM(t.current_address), '') <> COALESCE(TRIM(CONCAT_WS(', ', p.address,
+          CASE WHEN COALESCE(p.address, '') ILIKE '%' || COALESCE(p.postcode, '') || '%' THEN NULL ELSE NULLIF(p.postcode, '') END)), '');
     `);
 
     await client.query(`

@@ -9,6 +9,7 @@ import RentPayments from '../components/ui/RentPayments';
 import PropertyExpenses from '../components/PropertyExpenses';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import { activePropertyTenants, type PropertyTenant } from '../utils/propertyTenants';
 import {
@@ -136,6 +137,7 @@ export default function PropertyDetail() {
   const api = useApi();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { confirmAction: confirmCrmAction } = useNotifications();
   const [property, setProperty] = useState<PropertyDetail | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
@@ -587,7 +589,7 @@ export default function PropertyDetail() {
   };
 
   const handleRemoveTenant = async () => {
-    if (!confirm('End the current tenancy? The tenant will remain available under Previous Tenancies.')) return;
+    if (!await confirmCrmAction('End the current tenancy? The tenant will remain available under Previous Tenancies.')) return;
     try {
       await Promise.all(currentTenants
         .filter(tenant => tenant.id)
