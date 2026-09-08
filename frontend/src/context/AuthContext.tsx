@@ -27,14 +27,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
     if (token) {
       fetch(`${API_URL}/api/auth/me`, {
+        signal: controller.signal,
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(async res => {
           if (res.ok) {
             const data = await res.json();
-            if (data.user) setUser(data.user);
+            if (data.user && !controller.signal.aborted) setUser(data.user);
           } else if (res.status === 401 || res.status === 403) {
             // Definitive rejection — token is invalid
             localStorage.removeItem('token');
@@ -46,11 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Network error (backend cold start, offline) — keep the token so a
           // transient blip doesn't permanently log the user out
         })
-        .finally(() => setLoading(false));
+        .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     } else {
       // No token present - immediately mark as not loading
       queueMicrotask(() => setLoading(false));
     }
+    return () => controller.abort();
   }, [token]);
 
   const login = async (email: string, password: string) => {
@@ -61,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
+    localStorage.setItem('fleming-last-activity', String(Date.now()));
     localStorage.setItem('token', data.token);
     setToken(data.token);
     setUser(data.user);
@@ -74,16 +78,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
+    localStorage.setItem('fleming-last-activity', String(Date.now()));
     localStorage.setItem('token', data.token);
     setToken(data.token);
     setUser(data.user);
   };
 
   const logout = useCallback(() => {
+    localStorage.removeItem('fleming-last-activity');
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);
   }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    const key = 'fleming-last-activity';
+    if (!localStorage.getItem(key)) localStorage.setItem(key, String(Date.now()));
+    const expired = () => Date.now() - Number(localStorage.getItem(key) || 0) >= 10 * 60 * 1000;
+    const check = () => {
+      if (!localStorage.getItem('token') || expired()) logout();
+    };
+    const activity = () => {
+      if (expired()) { logout(); return; }
+      // Only human interaction extends the session; background polling does not.
+      if (Date.now() - Number(localStorage.getItem(key)) > 1000) localStorage.setItem(key, String(Date.now()));
+    };
+    const events = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart'] as const;
+    events.forEach(event => window.addEventListener(event, activity, { passive: true }));
+    const timer = window.setInterval(check, 1000);
+    window.addEventListener('focus', check);
+    window.addEventListener('pageshow', check);
+    window.addEventListener('storage', check);
+    document.addEventListener('visibilitychange', check);
+    check();
+    return () => {
+      window.clearInterval(timer);
+      events.forEach(event => window.removeEventListener(event, activity));
+      window.removeEventListener('focus', check);
+      window.removeEventListener('pageshow', check);
+      window.removeEventListener('storage', check);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [token, logout]);
 
   return (
     <AuthContext.Provider value={{ user, token, login, register, logout, loading }}>

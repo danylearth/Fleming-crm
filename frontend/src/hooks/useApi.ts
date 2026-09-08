@@ -56,6 +56,10 @@ export function useApi() {
   return useMemo(() => {
   void dataRevision;
   const request = async (endpoint: string, options: RequestInit = {}) => {
+    if (token && Date.now() - Number(localStorage.getItem('fleming-last-activity') || Date.now()) >= 10 * 60 * 1000) {
+      logout();
+      throw new Error('Session expired — please sign in again');
+    }
     const res = await fetch(`${API_URL}${endpoint}`, {
       ...options,
       headers: {

@@ -835,19 +835,6 @@ export async function initDb() {
     `);
 
     await client.query(`
-      UPDATE tenants t
-      SET address_before_previous = t.previous_address,
-          previous_address = t.current_address,
-          current_address = CONCAT_WS(', ', p.address,
-            CASE WHEN COALESCE(p.address, '') ILIKE '%' || COALESCE(p.postcode, '') || '%' THEN NULL ELSE NULLIF(p.postcode, '') END)
-      FROM properties p
-      WHERE p.id = t.property_id
-        AND COALESCE(t.status, 'active') = 'active'
-        AND COALESCE(TRIM(t.current_address), '') <> COALESCE(TRIM(CONCAT_WS(', ', p.address,
-          CASE WHEN COALESCE(p.address, '') ILIKE '%' || COALESCE(p.postcode, '') || '%' THEN NULL ELSE NULLIF(p.postcode, '') END)), '');
-    `);
-
-    await client.query(`
       UPDATE tenants t SET security_deposit_amount = COALESCE(
         t.security_deposit_amount,
         NULLIF(ta.agreement_details->>'security_deposit', '')::NUMERIC,

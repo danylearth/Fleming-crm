@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const read = (relative: string) => fs.readFileSync(path.resolve(__dirname, relative), 'utf8');
 const backend = read('index-pg.ts');
-const database = read('db-pg.ts');
+const database = read('db-pg.ts') + read('../migrations/0010_existing_tenant_links_and_addresses.sql');
 const pdf = read('tenancy-agreement-pdf.ts');
 const email = read('email.ts');
 const wizard = read('../../frontend/src/components/ui/OnboardingWizard.tsx');
@@ -16,7 +16,8 @@ const vercel = JSON.parse(read('../../tenants-subdomain/vercel.json'));
 
 describe('7 September CRM feedback', () => {
   it('uses short, unique applicant-specific APT links and records their latest open time', () => {
-    expect(backend).toContain('return `apt-${surname}-${initial}-${crypto.randomInt(10000000, 100000000)}`');
+    // Link entropy and per-applicant isolation are exercised over HTTP in test:integration.
+    expect(backend).toContain("crypto.randomBytes(16).toString('hex')");
     expect(backend).toContain('agreement.tenant_slug || agreement.tenant_token');
     expect(backend).toContain('SET ${role}_opened_at = NOW()');
     expect(wizard).toContain('Reissue Tenancy Agreement');

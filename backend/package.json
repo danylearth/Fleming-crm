@@ -5,18 +5,20 @@
   "main": "src/index-pg.ts",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/index-pg.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-assets.cjs",
     "start": "node dist/index-pg.js",
     "migrate": "tsx --env-file=.env src/migrate.ts",
     "seed:pg": "tsx seed-pg.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed:dev": "tsx --env-file=.env seed-dev.ts"
+    "seed:dev": "tsx --env-file=.env seed-dev.ts",
+    "test:integration": "npm run build && node tests/production-readiness.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
     "@sentry/node": "^10.64.0",
     "@types/multer": "^2.0.0",
     "@types/pg": "^8.16.0",
@@ -33,10 +35,11 @@
     "pg": "^8.18.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "pizzip": "^3.2.0",
     "resend": "^6.9.3",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.4",
     "twilio": "^5.5.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -51,6 +54,9 @@
     "vitest": "^4.1.2"
   },
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
+  },
+  "overrides": {
+    "esbuild": "^0.28.2"
   }
 }

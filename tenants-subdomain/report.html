@@ -32,12 +32,12 @@
       </form>
       <div id="message" class="message" hidden></div>
     </section>
-    <section class="emergency"><h2>Emergency contacts</h2><p style="color:#eee">If the issue is urgent, contact your lettings manager or our office on <a href="tel:+441902212415" style="color:#fff">01902 212 415</a>.</p><div class="numbers"><div class="number">Immediate danger<strong>999</strong></div><div class="number">Police (non-emergency)<strong>101</strong></div><div class="number">NHS (non-emergency)<strong>111</strong></div><div class="number">Fire (non-emergency)<strong>112</strong></div></div></section>
+    <section class="emergency"><h2>Emergency contacts</h2><p style="color:#eee">If the issue is urgent, contact your lettings manager or our office on <a href="tel:+441902212415" style="color:#fff">01902 212 415</a>.</p><div class="numbers"><div class="number">Immediate danger<strong>999 / 112</strong></div><div class="number">Police (non-emergency)<strong>101</strong></div><div class="number">NHS (non-emergency)<strong>111</strong></div><div class="number">Gas emergency<strong>0800 111 999</strong></div></div></section>
     <img class="photo" src="maintenance-footer.jpg" alt="Home decorating">
     <footer class="footer"><strong>Fleming Lettings Support Team</strong><br>contact@tenancies.fleminglettings.co.uk · 01902 212 415</footer>
   </main>
   <script>
-    const API=location.hostname==='localhost'?'http://localhost:3001':'https://fleming-crm-api.fly.dev';
+    const API=window.FLEMING_API_URL||(location.hostname==='localhost'?'http://localhost:3001':'https://fleming-crm-api.fly.dev');
     const parts=location.pathname.split('/').filter(Boolean),token=parts.length&&parts[parts.length-1]!=='report'&&parts[parts.length-1]!=='report.html'?parts[parts.length-1]:'';
     const form=document.getElementById('report-form'),button=document.getElementById('submit'),message=document.getElementById('message');
     async function prefill(){if(!token)return;try{const response=await fetch(`${API}/api/public/maintenance-report/${token}`),data=await response.json();if(!response.ok)throw new Error(data.error);['name','email','phone','postcode'].forEach(key=>{const field=document.getElementById(key);field.value=data[key]||'';field.readOnly=true});const property=document.getElementById('property');property.textContent=data.address||'';property.hidden=!data.address}catch(error){message.className='message error';message.textContent=error.message||'This reporting link could not be loaded';message.hidden=false;form.hidden=true}}

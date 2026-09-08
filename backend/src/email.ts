@@ -20,10 +20,7 @@ function renderFinalEmailTemplate(filename: string, values: Record<string, strin
   }
   const unresolved = html.match(/\{\{[A-Z_]+\}\}/g);
   if (unresolved) throw new Error(`Missing values for ${filename}: ${[...new Set(unresolved)].join(', ')}`);
-  // Email clients need absolute, publicly reachable image URLs. The hand-off
-  // omitted two small decorative icons, so remove only those rather than
-  // stripping the supplied Fleming artwork from every template.
-  html = html.replace(/<img\s+src="assets\/(?:apple-glyph|gmaps-pin)\.png"[^>]*\/>/g, '');
+  // Email clients need absolute, publicly reachable image URLs.
   html = html.replace(/src="assets\//g, 'src="https://crm.fleminglettings.co.uk/email-assets/');
   return html;
 }

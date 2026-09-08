@@ -1,3 +1,4 @@
+import { generateSourceTenancyPdf } from './tenancy-template';
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
@@ -238,6 +239,7 @@ const ADDENDUM_TERMS = [
 ];
 
 export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Promise<Buffer> {
+  if (input.agreementType === 'internal') return generateSourceTenancyPdf(input);
   return new Promise((resolve, reject) => {
     const assetDirectory = path.join(__dirname, 'agreement-assets');
     const headerPath = path.join(assetDirectory, 'letterhead-header.png');

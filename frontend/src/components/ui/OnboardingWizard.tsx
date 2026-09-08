@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
 import { Button, DatePicker, TimePicker } from './index';
@@ -152,6 +152,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [balanceSmsMessage, setBalanceSmsMessage] = useState('Hi {{first_name}}, thank you for signing your tenancy agreement and completing our application and screening process. We have emailed your final payment details so we can arrange a handover date and location. Feel free to reach out to your lettings manager or to contact us on 01902 212 415 to book this in.');
   const [balanceFollowUpDate, setBalanceFollowUpDate] = useState(() => new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10));
   const [balanceEmailPreview, setBalanceEmailPreview] = useState<{ subject: string; bodyHtml: string } | null>(null);
+  const [handoverEmailPreview, setHandoverEmailPreview] = useState<{ subject: string; bodyHtml: string } | null>(null);
   const [handoverDate, setHandoverDate] = useState('');
   const [handoverTime, setHandoverTime] = useState('10:00');
   const [handoverAssignedTo, setHandoverAssignedTo] = useState('');
@@ -159,7 +160,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [handoverSendEmail, setHandoverSendEmail] = useState(false);
   const [handoverSendSms, setHandoverSendSms] = useState(false);
   const [handoverEmailMessage, setHandoverEmailMessage] = useState('Finally, we’re nearly there! Your move in and handover appointment is confirmed. We will meet you at the property to conduct the inventory, hand over the keys and answer any final questions that you may have.');
-  const [handoverSmsMessage, setHandoverSmsMessage] = useState('Hi {{first_name}}, your Fleming Lettings move in and handover appointment is confirmed for {{handover_date}} at {{handover_time}} at {{property_address}} with {{appointment_with}}.');
+  const [handoverSmsMessage, setHandoverSmsMessage] = useState('Hi {{first_name}}, your move in and handover appointment is confirmed for {{handover_date}} at {{handover_time}} at {{property_address}} with {{appointment_with}}. If you are running late or need to rearrange then please contact us on 01902 212 415.');
   const [reviewNotes, setReviewNotes] = useState('');
   const [changesRequired, setChangesRequired] = useState('');
   const [sendReviewSms, setSendReviewSms] = useState(false);
@@ -236,7 +237,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   };
 
   // Fetch documents for this enquiry
-  useEffect(() => { fetchDocs(); fetchEmailHistory(); fetchAgreement(); fetchAgreementCompliance(); }, [enquiryId, token]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchDocs(); fetchEmailHistory(); fetchAgreement(); fetchAgreementCompliance(); }, [enquiryId, token, enquiry.updated_at]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => {
     if (documentPreview) URL.revokeObjectURL(documentPreview.url);
   }, [documentPreview]);
@@ -323,6 +324,17 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     }
   };
 
+  const lastHydrated = useRef('');
+  const handoverSnapshot = JSON.stringify([enquiryId, enquiry.handover_date, enquiry.handover_time, enquiry.handover_assigned_to, enquiry.handover_with_landlord]);
+  useEffect(() => {
+    if (lastHydrated.current === handoverSnapshot) return;
+    lastHydrated.current = handoverSnapshot;
+    setHandoverDate(enquiry.handover_date ? String(enquiry.handover_date).slice(0, 10) : '');
+    setHandoverTime(enquiry.handover_time ? String(enquiry.handover_time).slice(0, 5) : '10:00');
+    setHandoverAssignedTo(enquiry.handover_assigned_to || '');
+    setHandoverWithLandlord(Boolean(enquiry.handover_with_landlord));
+  }, [handoverSnapshot, enquiry.handover_date, enquiry.handover_time, enquiry.handover_assigned_to, enquiry.handover_with_landlord]);
+
   // Initialize from enquiry data
   useEffect(() => {
     const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
@@ -332,10 +344,6 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     setHdHoldingDeposit(String(enquiry.holding_deposit_amount || (rent ? Math.round(rent * 12 / 52) : '')));
     setHdReceivedAmount(enquiry.holding_deposit_received_amount ? String(enquiry.holding_deposit_received_amount) : '');
     setCreditScore(enquiry.credit_score || '');
-    setHandoverDate(enquiry.handover_date ? String(enquiry.handover_date).slice(0, 10) : '');
-    setHandoverTime(enquiry.handover_time ? String(enquiry.handover_time).slice(0, 5) : '10:00');
-    setHandoverAssignedTo(enquiry.handover_assigned_to || '');
-    setHandoverWithLandlord(Boolean(enquiry.handover_with_landlord));
     setReviewNotes('');
     setReviewStatusOverride(null);
     setCreditCheckCompleteOverride(false);
@@ -485,15 +493,16 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
   const convertToTenant = async () => {
     setSaving(true);
+    setReviewError('');
     try {
       await api.post(`/api/tenant-enquiries/${enquiryId}/convert`, {
         property_id: enquiry.linked_property_id,
-        tenancy_start_date: agreementStartDate || new Date().toISOString().split('T')[0],
+        tenancy_start_date: agreement?.agreement_details?.tenancyStartDate || agreementStartDate || dateInputValue(enquiry.handover_date),
         tenancy_type: 'Assured Periodic Tenancy',
       });
       await onUpdate();
       onClose();
-    } catch (err) { console.error(err); }
+    } catch (err) { setReviewError(err instanceof Error ? err.message : 'Conversion failed. Please review both applicants and try again.'); }
     setSaving(false);
   };
 
@@ -615,6 +624,17 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       await onUpdate();
     } catch (err) { setReviewError(err instanceof Error ? err.message : 'Balance receipt could not be saved'); }
     finally { setSaving(false); }
+  };
+
+  const previewHandoverEmail = async () => {
+    setReviewError('');
+    try {
+      const preview = await api.post(`/api/tenant-enquiries/${enquiryId}/schedule-handover/email-preview`, {
+        handover_date: handoverDate, handover_time: handoverTime, assigned_to: handoverAssignedTo,
+        with_landlord: handoverWithLandlord, email_message: handoverEmailMessage,
+      });
+      setHandoverEmailPreview({ subject: preview.subject, bodyHtml: preview.body_html });
+    } catch (error) { setReviewError(error instanceof Error ? error.message : 'Email preview could not be prepared'); }
   };
 
   const scheduleHandover = async () => {
@@ -980,7 +1000,6 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   Editable email message
                   <textarea value={hdRequestEmailMessage} onChange={event => setHdRequestEmailMessage(event.target.value)} rows={5}
                     className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
-                  <span>Available fields: {'{{first_name}}'}, {'{{property_address}}'}, {'{{holding_deposit}}'} and {'{{application_link}}'}.</span>
                 </label>
                 <button onClick={() => setShowHDEmailPreview(true)} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline">
                   <Eye size={13} /> Preview email before sending
@@ -1461,7 +1480,6 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       <textarea value={agreementSmsMessage} onChange={event => setAgreementSmsMessage(event.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
                     </label>
                   )}
-                  {(agreementSendEmail || agreementSendSms) && <p className="text-[10px] text-[var(--text-muted)]">Available placeholders: {'{{first_name}}'}, {'{{property_address}}'}, {'{{signing_link}}'}.</p>}
                   <Button variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || agreementCompliance?.ready !== true || !agreementDetailsComplete}>{saving ? 'Generating...' : reissuingAgreement ? 'Reissue Tenancy Agreement' : 'Generate & Issue Agreement'}</Button>
                 </>}
                 {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
@@ -1488,7 +1506,6 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               {!enquiry.balance_payment_requested && balanceSendEmail && <label className="block text-[10px] text-[var(--text-muted)]">Editable email preview<textarea value={balanceEmailMessage} onChange={e => setBalanceEmailMessage(e.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
               {!enquiry.balance_payment_requested && balanceSendEmail && <button onClick={previewBalanceEmail} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview branded email</button>}
               {!enquiry.balance_payment_requested && balanceSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<textarea value={balanceSmsMessage} onChange={e => setBalanceSmsMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
-              {!enquiry.balance_payment_requested && (balanceSendEmail || balanceSendSms) && <p className="text-[10px] text-[var(--text-muted)]">Available placeholders: {'{{first_name}}'}, {'{{property_address}}'}, {'{{balance_due}}'}.</p>}
               {!enquiry.balance_payment_requested ? <Button variant="gradient" size="sm" onClick={requestBalance} disabled={saving || !balanceFollowUpDate}>Request Final Balance</Button>
                 : !enquiry.balance_payment_received ? <Button variant="gradient" size="sm" onClick={confirmBalance} disabled={saving}>Confirm Payment Received</Button>
                 : <p className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle size={14} /> Final balance received{enquiry.balance_payment_received_at ? ` on ${new Date(enquiry.balance_payment_received_at).toLocaleDateString('en-GB')}` : ''}</p>}
@@ -1510,14 +1527,14 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 {users.map(user => <option key={user.id} value={user.name}>{user.name}</option>)}
               </select>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={handoverSendEmail} onChange={e => setHandoverSendEmail(e.target.checked)} /> Email tenant</label>
-                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={handoverSendSms} onChange={e => setHandoverSendSms(e.target.checked)} /> SMS tenant</label>
+                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={handoverSendEmail} onChange={e => setHandoverSendEmail(e.target.checked)} /> Send Email</label>
+                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={handoverSendSms} onChange={e => setHandoverSendSms(e.target.checked)} /> Send SMS</label>
               </div>
               {handoverWithLandlord && <p className="text-[10px] text-[var(--text-muted)]">The landlord is included in the selected email/SMS channels.</p>}
               {handoverSendEmail && <label className="block text-[10px] text-[var(--text-muted)]">Editable email preview<textarea value={handoverEmailMessage} onChange={e => setHandoverEmailMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
+              {handoverSendEmail && <button onClick={previewHandoverEmail} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview branded email</button>}
               {handoverSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<textarea value={handoverSmsMessage} onChange={e => setHandoverSmsMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
-              {(handoverSendEmail || handoverSendSms) && <p className="text-[10px] text-[var(--text-muted)]">Available placeholders: {'{{first_name}}'}, {'{{property_address}}'}, {'{{handover_date}}'}, {'{{handover_time}}'}, {'{{appointment_with}}'}.</p>}
-              <Button variant="gradient" size="sm" onClick={scheduleHandover} disabled={saving || !handoverDate || !handoverTime || !handoverAssignedTo}>{enquiry.handover_date ? 'Update Handover' : 'Add to Team Calendar'}</Button>
+              <Button variant="gradient" size="sm" onClick={scheduleHandover} disabled={saving || !handoverDate || !handoverTime || !handoverAssignedTo}>{enquiry.handover_date ? 'Update Handover' : 'Book Appointment & Add to Calendar'}</Button>
               {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
             </div> : <p className="text-xs text-[var(--text-muted)]">Confirm the final balance first.</p>}
           </StepCard>
@@ -1527,6 +1544,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
             {allPreviousComplete(8) ? <div className="space-y-3">
               <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20"><p className="text-sm font-medium text-emerald-400">All onboarding stages complete</p><p className="text-xs text-[var(--text-muted)] mt-1">{name} is ready to be converted to a tenant.</p></div>
               <Button variant="gradient" onClick={convertToTenant} disabled={saving}>{saving ? 'Converting...' : 'Convert to Tenant'}</Button>
+              {reviewError && <p role="alert" className="text-xs text-red-400">{reviewError}</p>}
             </div> : <p className="text-xs text-[var(--text-muted)]">Complete all previous stages before converting.</p>}
           </StepCard>
 
@@ -1556,6 +1574,16 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         previewOnly
       />
 
+      <EmailPreviewModal
+        open={handoverEmailPreview !== null}
+        onClose={() => setHandoverEmailPreview(null)}
+        onSend={async () => undefined}
+        to={enquiry.email_1 || ''}
+        from="contact@tenancies.fleminglettings.co.uk"
+        initialSubject={handoverEmailPreview?.subject || ''}
+        initialBodyHtml={handoverEmailPreview?.bodyHtml || ''}
+        previewOnly
+      />
       <EmailPreviewModal
         open={balanceEmailPreview !== null}
         onClose={() => setBalanceEmailPreview(null)}
