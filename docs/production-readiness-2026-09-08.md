@@ -20,7 +20,7 @@ Based on the supplied September 7 feedback documents and the previously committe
 - 16 real HTTP/PostgreSQL integration scenarios pass on an isolated, empty local database; migrations run twice. Includes concurrent signatures/conversions, authorisation, document ownership, joint stage progression, handover rescheduling, financial totals and maintenance uploads.
 - Frontend and backend production builds pass. Frontend lint: zero errors, two existing dependency warnings.
 - Both npm dependency audits report zero vulnerabilities.
-- Browser checks cover login, nine CRM routes, session expiration, mobile login, completed/invalid signing links, and mobile maintenance prefill/photo submission. Test fixtures have no live provider credentials.
+- Browser checks cover login, nine CRM routes, session expiration, mobile login, completed/invalid signing links, and mobile maintenance prefill/photo submission, and handover draft preservation after tab focus. Test fixtures have no live provider credentials.
 - The supplied contract and generated signature certificate were rendered and visually inspected. The integration fixture's two compliance pages are intentionally blank test PDFs.
 
 Run integration tests with Node 24, a new empty local PostgreSQL database whose name starts with `fleming_crm_test`, and LibreOffice installed:
@@ -45,3 +45,17 @@ TEST_DATABASE_URL=postgres://USER@127.0.0.1:PORT/fleming_crm_test npm run test:i
 - Barclays/Open Banking remains unavailable until TrueLayer client credentials and account consent are configured; the interface keeps connection disabled while credentials are missing.
 
 These external configuration items prevent describing every integration as fully operational.
+
+## Deployment results
+
+- Code release: `19cc88d`, branch `codex/crm-production-readiness`.
+- CRM: https://crm.fleminglettings.co.uk — Vercel `dpl_58JGQFJeVWcGeKvNZpaDeFd49cU2`.
+- Public forms: https://apply.fleminglettings.co.uk and https://report.fleminglettings.co.uk — Vercel `dpl_5WAqqyRNKqnhjZ3ehjrA1LcQiu6k`.
+- The reporting domain root now redirects to its maintenance form instead of the static application index.
+- API image: `registry.fly.io/fleming-crm-api:deployment-01M215M82KNYBWAKB314Z17CXF`; machine `d891e57df37178`, London, 1 GB. Health reports release `19cc88d` and a working database query.
+- The previous host could not allocate more memory. Its services were cordoned and the machine stopped before forking the upload volume. New volume: `vol_4y8qjm8gke63671r`. Original encrypted volume `vol_vgng79o2n8lqw684` retained for rollback; old machine retired after the replacement passed health checks.
+- Live verification found zero missing document files and eight reciprocal tenant links (four joint pairs). A synthetic agreement also rendered successfully inside the deployed Linux image without database writes or sending messages.
+- Both supplied deposit PDFs were matched to the intended tenant/property, verified by SHA-256, and linked to each record (four document links; two files). No historical bulk re-import was performed: 74 previously supplied filenames already matched existing records.
+- Production browser checks passed on mobile for CRM login, invalid signing links, and the maintenance domain, with no JavaScript errors or broken images.
+
+Rollback: use the previous image with the current volume for a code-only rollback; the schema changes are additive. If a storage rollback is necessary, first stop incoming writes and reconcile post-release uploads before attaching the retained original volume. Do not run two API machines against independent upload copies.

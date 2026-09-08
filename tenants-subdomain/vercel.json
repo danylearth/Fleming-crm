@@ -1,4 +1,7 @@
 {
+  "redirects": [
+    { "source": "/", "has": [{ "type": "host", "value": "report.fleminglettings.co.uk" }], "destination": "/report", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/(.*)", "has": [{ "type": "host", "value": "report.fleminglettings.co.uk" }], "destination": "/report.html" },
     { "source": "/onboarding/:token", "destination": "/application.html" },
