@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { CheckCircle, Upload, Download, Trash2 } from 'lucide-react';
+import { CheckCircle, Clock, Upload, Download, Trash2 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -43,7 +43,7 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
     fetch(`${API_URL}/api/documents/${entityType}/${entityId}${appQuery}`, { headers })
       .then(r => r.json())
       .then((docs: Doc[]) => {
-        const match = docs.find(d => d.doc_type === docType && d.review_status === 'approved');
+        const match = docs.find(d => d.doc_type === docType && d.review_status === 'approved') || docs.find(d => d.doc_type === docType && d.review_status !== 'rejected');
         setDoc(match || null);
       })
       .catch(() => {})
@@ -117,23 +117,25 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
   // Uploaded state
   if (doc) {
     return (
-      <div className="flex-1 min-w-[200px] rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 group">
+      <div className="flex-1 min-w-[200px] rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 group">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-            <CheckCircle size={18} className="text-emerald-400" />
+            {doc.review_status === 'approved' ? <CheckCircle size={18} className="text-emerald-500" /> : <Clock size={18} className="text-amber-500" />}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-emerald-400">{label}</p>
+            <p className="text-sm font-medium text-[var(--text-primary)]">{label}</p><p className="text-xs text-[var(--text-secondary)]">{doc.review_status === 'approved' ? 'Approved' : 'Awaiting review'}</p>
             <p className="text-xs text-[var(--text-muted)] truncate">{truncateName(doc.original_name)}</p>
           </div>
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1">
             <button
+              aria-label={`Download ${label}`}
               onClick={handleDownload}
               className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
             >
               <Download size={14} />
             </button>
             <button
+              aria-label={`Delete ${label}`}
               onClick={handleDelete}
               className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--bg-hover)] transition-colors"
             >

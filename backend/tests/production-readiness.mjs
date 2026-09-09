@@ -267,6 +267,13 @@ try {
     assert.match((await chat('Which rent reviews are due this month?')).text,/calendar month/);
     await sql("INSERT INTO sms_messages(entity_type,entity_id,to_phone,message_body,direction,status) VALUES('tenant',$1,'07700900004','A recorded test message','outbound','sent')",[reviewTenant.id]);
     assert.match((await chat('What was the last SMS to Review A?')).text,/A recorded test message/);
+    for(const type of ['Primary Identification','Secondary Identification']) await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,review_status) VALUES('tenant',$1,$2,'sample.pdf','Pending ID.pdf','pending')",[reviewTenant.id,type]);
+    assert(!(await chat('Which tenants are missing ID?')).text.includes('Review A'));
+    await sql("UPDATE documents SET review_status='rejected' WHERE entity_type='tenant' AND entity_id=$1 AND doc_type='Secondary Identification'",[reviewTenant.id]);
+    assert((await chat('Which tenants are missing ID?')).text.includes('Review A'));
+    await sql("UPDATE tenants SET name='Mathew Woodberry' WHERE id=$1",[reviewTenant.id]);
+    assert.match((await chat('What was the last SMS to Matthew Woodberry?')).text,/A recorded test message/);
+    await sql("UPDATE tenants SET name='Review A' WHERE id=$1",[reviewTenant.id]);
     assert.match((await chat('Delete everything')).text,/one question at a time/);
   });
   await test('clear recent tasks preserves calendar records and is restricted to administrators',async()=>{
