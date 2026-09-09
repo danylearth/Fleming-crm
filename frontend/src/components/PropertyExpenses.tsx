@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, Pencil, Plus, ReceiptText, Trash2, Upload } from 'lucide-react';
+import { BadgePoundSterling, Download, Pencil, Plus, ReceiptText, Trash2, Upload } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { invalidateCache, useApi } from '../hooks/useApi';
@@ -204,7 +204,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
     <Card className="p-4 sm:p-6 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-semibold">Property Costs</h3>
+          <h3 className="font-semibold flex items-center gap-2"><BadgePoundSterling size={16} />Property Costs</h3>
           <p className="text-xs text-[var(--text-muted)]">Running costs and historic expenditure</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>

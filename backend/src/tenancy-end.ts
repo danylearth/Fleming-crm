@@ -35,6 +35,9 @@ export function registerTenancyEndRoutes(app: Express) {
       const previews = tenants.map(t => ({ tenant_id: t.id, name: t.name, to: t.email, phone: t.phone,
         ...tenancyEndEmail(t.first_name_1 || String(t.name).split(' ')[0], normalizePropertyAddress(property.address, property.postcode), endDate) }));
       if (!req.body.send_email) previews.forEach(p => { p.sms = p.sms.replace(' Further details have been sent you via email.', ''); });
+      const smsEdits = req.body.sms_messages || {};
+      if (typeof smsEdits !== 'object' || Array.isArray(smsEdits) || Object.entries(smsEdits).some(([id,value]) => !tenants.some(t => String(t.id) === id) || typeof value !== 'string' || !value.trim() || value.length > 1600)) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Each SMS must belong to this tenancy and contain 1–1,600 characters' }); }
+      previews.forEach(p => { if (smsEdits[p.tenant_id]) p.sms = smsEdits[p.tenant_id].trim(); });
       if (req.body.preview_only === true) { await client.query('ROLLBACK'); return res.json({ previews }); }
       if (req.body.send_email && previews.some(p => !p.to)) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Every linked tenant needs an email address to send email confirmations' }); }
       if (req.body.send_sms && previews.some(p => !p.phone)) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Every linked tenant needs a phone number to send SMS confirmations' }); }

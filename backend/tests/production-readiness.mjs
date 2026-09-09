@@ -2,7 +2,7 @@
 // Provider credentials are deliberately excluded from the child environment.
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync, openSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, openSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
@@ -220,6 +220,111 @@ try {
     const saved=await ok(route,{method:'PUT',token:auth.staff,body});assert.equal(saved.completion_overrides.kyc_primary_id.by,'staff@example.test');
     const tenant=await ok(`/api/tenants/${reviewTenant.id}`,{token:auth.staff});assert.equal(tenant.kyc_primary_id,0);assert.equal(tenant.completion_overrides.kyc_primary_id.reason,body.reason);
     const removed=await ok(route,{method:'PUT',token:auth.staff,body:{key:body.key,complete:false}});assert.deepEqual(removed.completion_overrides,{});
+  });
+  await test('permission requests support viewers, reject duplicates and enforce admin review without self-lockout',async()=>{
+    const viewer=(await one("SELECT id FROM users WHERE role='viewer'"));const admin=(await one("SELECT id FROM users WHERE role='admin'"));
+    const requestBody={requested_role:'staff',reason:'Help maintain property records'};
+    const created=await request('/api/permission-requests',{method:'POST',token:auth.viewer,body:requestBody});assert.equal(created.status,201);const pending=created.data;
+    assert.equal((await request('/api/permission-requests',{method:'POST',token:auth.viewer,body:requestBody})).status,409);
+    assert.equal((await request(`/api/permission-requests/${pending.id}`,{method:'PUT',token:auth.staff,body:{status:'approved'}})).status,403);
+    await ok(`/api/permission-requests/${pending.id}`,{method:'PUT',token:auth.admin,body:{status:'approved'}});
+    assert.equal((await ok('/api/auth/me',{token:auth.viewer})).user.role,'staff');
+    assert.equal((await request(`/api/users/${admin.id}`,{method:'PUT',token:auth.admin,body:{is_active:0}})).status,400);
+    assert.equal((await request(`/api/users/${admin.id}`,{method:'PUT',token:auth.admin,body:{role:'staff'}})).status,400);
+    await ok(`/api/users/${viewer.id}`,{method:'PUT',token:auth.admin,body:{role:'viewer'}});
+  });
+  await test('activity deduplicates minutes and is visible only to administrators',async()=>{
+    const staff=await one("SELECT id FROM users WHERE role='staff'");
+    await Promise.all([1,2,3].map(()=>ok('/api/activity/heartbeat',{method:'POST',token:auth.staff,body:{page:'/tenants/1-test'}})));
+    const stats=await ok(`/api/users/${staff.id}/activity`,{token:auth.admin});assert.equal(stats.usage.today_minutes,1);
+    assert.equal((await request(`/api/users/${staff.id}/activity`,{token:auth.staff})).status,403);
+    assert.equal((await request('/api/activity/heartbeat',{method:'POST',token:auth.viewer,body:{page:'/tenant?token=secret'}})).status,400);
+    await ok('/api/activity/heartbeat',{method:'POST',token:auth.viewer,body:{page:'/settings',navigation:true}});
+    assert.equal((await one("SELECT count(*)::int n FROM audit_log WHERE entity_type='page' AND changes::jsonb->>'page'='/settings'")).n,1);
+    assert.equal((await request(`/api/users/${staff.id}/activity?offset=-1`,{token:auth.admin})).status,400);
+  });
+  await test('tenant dates and consent persist; archive and delete are administrator-only',async()=>{
+    await ok(`/api/tenants/${reviewTenant.id}`,{method:'PUT',token:auth.staff,body:{rent_last_reviewed:today,guarantor_authority_to_contact:true}});
+    const record=await ok(`/api/tenants/${reviewTenant.id}`,{token:auth.staff});assert.equal(record.guarantor_authority_to_contact,1);assert.equal(record.rent_last_reviewed.slice(0,10),today);
+    assert.equal((await request(`/api/tenants/${reviewTenant.id}`,{method:'PUT',token:auth.staff,body:{rent_last_reviewed:'2026-02-30'}})).status,400);
+    assert.equal((await request(`/api/tenants/${reviewTenant.id}`,{method:'PUT',token:auth.staff,body:{status:'inactive'}})).status,403);
+    assert.equal((await request('/api/tenants/bulk-archive',{method:'POST',token:auth.staff,body:{ids:[reviewTenant.id]}})).status,403);
+    assert.equal((await request(`/api/tenants/${reviewTenant.id}`,{method:'DELETE',token:auth.staff})).status,403);
+    assert.equal((await request(`/api/properties/${reviewProperty.id}`,{method:'DELETE',token:auth.staff})).status,403);
+    assert.equal((await request(`/api/tenants/${reviewTenant.id}`,{method:'DELETE',token:auth.admin})).status,409);
+  });
+  await test('incoming SMS matches active tenants, is retry-safe, and appears in their communication history',async()=>{
+    const body={From:'+447700900004',To:'+447700900999',Body:'Integration test reply',MessageSid:'SM'+'a'.repeat(32)};
+    await Promise.all([1,2].map(()=>ok('/api/sms/inbound',{method:'POST',body})));
+    assert.equal((await one('SELECT count(*)::int n FROM sms_messages WHERE twilio_sid=$1',[body.MessageSid])).n,1);
+    const messages=await ok(`/api/tenants/${reviewTenant.id}/communications`,{token:auth.staff});assert(messages.some(m=>m.direction==='inbound'&&m.body===body.Body));
+  });
+  await test('Flemo reads live scoped records and does not fabricate unsupported actions',async()=>{
+    const chat=message=>ok('/api/ai/chat',{method:'POST',token:auth.viewer,body:{message}});
+    assert.match((await chat('What is our monthly rental income?')).text,/Joint tenants count once/);
+    assert.match((await chat('Which tenants are missing ID?')).text,/Review A/);
+    assert.match((await chat('Which tenancies end soon?')).text,/60 days/);
+    assert.match((await chat('Which rent reviews are due this month?')).text,/calendar month/);
+    await sql("INSERT INTO sms_messages(entity_type,entity_id,to_phone,message_body,direction,status) VALUES('tenant',$1,'07700900004','A recorded test message','outbound','sent')",[reviewTenant.id]);
+    assert.match((await chat('What was the last SMS to Review A?')).text,/A recorded test message/);
+    assert.match((await chat('Delete everything')).text,/one question at a time/);
+  });
+  await test('clear recent tasks preserves calendar records and is restricted to administrators',async()=>{
+    const before=(await one('SELECT count(*)::int n FROM tasks')).n;
+    assert.equal((await request('/api/tasks/clear-recent',{method:'POST',token:auth.staff,body:{}})).status,403);
+    await ok('/api/tasks/clear-recent',{method:'POST',token:auth.admin,body:{}});
+    assert.equal((await one('SELECT count(*)::int n FROM tasks')).n,before);
+    assert.equal((await one('SELECT count(*)::int n FROM tasks WHERE dashboard_dismissed_at IS NULL')).n,0);
+  });
+  await test('inventory rooms, notes and completion persist; photos cannot attach to another inventory',async()=>{
+    const inventory=await ok('/api/inventories',{method:'POST',token:auth.staff,body:{property_id:reviewProperty.id,inventory_type:'check_in',inspection_date:today}});
+    const room=await ok(`/api/inventories/${inventory.id}/rooms`,{method:'POST',token:auth.staff,body:{room_name:'Kitchen',room_type:'kitchen'}});
+    await ok(`/api/inventory-rooms/${room.id}`,{method:'PUT',token:auth.staff,body:{condition:'good',notes:'Sink and taps checked'}});
+    assert.equal((await ok(`/api/inventories/${inventory.id}/rooms`,{token:auth.staff}))[0].notes,'Sink and taps checked');
+    const other=await ok('/api/inventories',{method:'POST',token:auth.staff,body:{property_id:reviewProperty.id,inventory_type:'periodic',inspection_date:today}});
+    const form=new FormData();form.append('file',new Blob([Buffer.from(png.split(',')[1],'base64')],{type:'image/png'}),'test.png');
+    assert.equal((await fetch(`${base}/api/inventory-photos/${other.id}/${room.id}`,{method:'POST',headers:{Authorization:`Bearer ${auth.staff}`},body:form})).status,400);
+    const upload=await fetch(`${base}/api/inventory-photos/${inventory.id}/${room.id}`,{method:'POST',headers:{Authorization:`Bearer ${auth.staff}`},body:form});
+    assert.equal(upload.status,200); const photo=await upload.json();
+    assert.equal((await fetch(`${base}/uploads/inventory/${photo.filename}`)).status,401);
+    assert.equal((await fetch(`${base}/uploads/inventory/${photo.filename}`,{headers:{Authorization:`Bearer ${auth.viewer}`}})).status,200);
+    await ok(`/api/inventories/${inventory.id}/complete`,{method:'PUT',token:auth.staff,body:{}});
+    assert.equal((await ok(`/api/inventories/${inventory.id}`,{token:auth.staff})).status,'completed');
+    assert.equal((await request('/api/inventories',{method:'POST',token:auth.viewer,body:{}})).status,403);
+  });
+  await test('property features persist and shared documents survive record deletion and rollback',async()=>{
+    const disposable=await one("INSERT INTO tenants(name,first_name_1,last_name_1) VALUES('Disposable Test','Disposable','Test') RETURNING id");
+    await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name) VALUES('tenant',$1,'Other','sample.pdf','shared.pdf')",[disposable.id]);
+    await ok(`/api/tenants/${disposable.id}`,{method:'DELETE',token:auth.admin}); assert(existsSync(path.join(dir,'sample.pdf')));
+    const blocked=await one("INSERT INTO tenants(name,first_name_1,last_name_1) VALUES('Rollback Test','Rollback','Test') RETURNING id");
+    writeFileSync(path.join(dir,'rollback.pdf'),pdf);
+    await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name) VALUES('tenant',$1,'Other','rollback.pdf','rollback.pdf')",[blocked.id]);
+    await sql('CREATE TABLE deletion_blocker(tenant_id INTEGER REFERENCES tenants(id))');
+    await sql('INSERT INTO deletion_blocker VALUES($1)',[blocked.id]);
+    assert.equal((await request(`/api/tenants/${blocked.id}`,{method:'DELETE',token:auth.admin})).status,500);
+    assert(existsSync(path.join(dir,'rollback.pdf'))); assert(await one('SELECT id FROM tenants WHERE id=$1',[blocked.id]));
+    await sql('DROP TABLE deletion_blocker');
+    await ok(`/api/properties/${reviewProperty.id}`,{method:'PUT',token:auth.staff,body:{amenities:'CCTV,Garden',bedrooms:3}});
+    const saved=await ok(`/api/properties/${reviewProperty.id}`,{token:auth.staff});assert.equal(saved.amenities,'CCTV,Garden');assert.equal(saved.bedrooms,3);
+  });
+  await test('client landlord signs before applicant; completed APT converts with its contract attached',async()=>{
+    const owner=await one("INSERT INTO landlords(name,email,address,landlord_type) VALUES('Client Owner','owner@example.test','2 Test Street','external') RETURNING id");
+    const home=await one("INSERT INTO properties(address,postcode,landlord_id,has_gas,rent_amount,epc_expiry_date,eicr_expiry_date,service_type) VALUES('Client Test Home','WV1 1AA',$1,0,850,'2030-01-01','2030-01-01','full_management') RETURNING id",[owner.id]);
+    for(const type of ['EPC','EICR']) await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('property',$1,$2,'sample.pdf',$3,'application/pdf','approved')",[home.id,type,type+'.pdf']);
+    const applicant=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,phone_1,linked_property_id,holding_deposit_received,application_form_completed,application_review_status,credit_check_completed,monthly_rent_agreed,current_address_1) VALUES('Client','Applicant','client@example.test','07700900009',$1,1,1,'approved',1,850,'Previous Test Home') RETURNING id",[home.id]);
+    await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('tenant_enquiry',$1,'Credit Check Report','sample.pdf','Client credit.pdf','application/pdf','approved')",[applicant.id]);
+    const apt=await ok(`/api/tenant-enquiries/${applicant.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:{...issueBody,rent:850,deposit:850}});
+    assert.equal(apt.agreement_type,'client');assert(apt.landlord_url);
+    const tenantToken=new URL(apt.tenant_url).pathname.slice(1), ownerToken=new URL(apt.landlord_url).pathname.slice(1);
+    const sign=token=>request(`/api/public/tenancy-agreements/${token}/sign`,{method:'POST',body:{signature_name:token===ownerToken?'Client Owner':'Client Applicant',signature:png,accepted_terms:true}});
+    assert.equal((await sign(tenantToken)).status,409);assert.equal((await sign(ownerToken)).status,200);assert.equal((await sign(tenantToken)).status,200);
+    assert.equal((await one('SELECT status FROM tenancy_agreements WHERE id=$1',[apt.agreement_id])).status,'completed');
+    await ok(`/api/tenant-enquiries/${applicant.id}/request-balance`,{method:'POST',token:auth.staff,body:{follow_up_date:today,send_email:false,send_sms:false}});
+    await ok(`/api/tenant-enquiries/${applicant.id}/confirm-balance`,{method:'POST',token:auth.staff,body:{}});
+    await ok(`/api/tenant-enquiries/${applicant.id}/schedule-handover`,{method:'POST',token:auth.staff,body:{handover_date:today,handover_time:'10:00',assigned_to:'Test staff'}});
+    await ok(`/api/tenant-enquiries/${applicant.id}/convert`,{method:'POST',token:auth.staff,body:{property_id:home.id,tenancy_start_date:today}});
+    const tenant=await one('SELECT id FROM tenants WHERE source_enquiry_id=$1',[applicant.id]);
+    assert(await one("SELECT id FROM documents WHERE entity_type='tenant' AND entity_id=$1 AND doc_type='Signed Tenancy Agreement'",[tenant.id]));
   });
   console.log(`\n${passed} integration scenarios passed. Private artifacts: ${dir}`);
 } catch(error) { console.error(error); console.error('Server log:',path.join(dir,'server.log')); process.exitCode=1; }

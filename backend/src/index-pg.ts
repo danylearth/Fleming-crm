@@ -1,3 +1,5 @@
+import { registerFlemoRoutes } from './flemo';
+import { registerTeamActivityRoutes } from './team-activity';
 import { registerRentReviewRoutes } from './rent-review';
 import { registerCompletionRoutes } from './completion-overrides';
 import { syncTenantLifecycle } from './tenant-lifecycle-db';
@@ -399,7 +401,8 @@ app.use(express.urlencoded({ extended: false }));
 app.use('/api', (req: AuthRequest, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)
     || req.path.startsWith('/public/') || req.path.startsWith('/auth/')
-    || ['/sms/status', '/sms/inbound', '/email/webhook'].includes(req.path)) return next();
+    || ['/sms/status', '/sms/inbound', '/email/webhook'].includes(req.path)
+    || (req.method === 'POST' && ['/activity/heartbeat','/permission-requests','/ai/chat'].includes(req.path))) return next();
   return authMiddleware(req, res, () => requirePermission('staff')(req, res, next));
 });
 
@@ -567,7 +570,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     await logAudit(user.id, user.email, 'login', 'user', user.id);
     
     const token = generateToken({ id: user.id, email: user.email, role: user.role, name: user.name });
-    res.json({ user: { id: user.id, email: user.email, role: user.role, name: user.name }, token });
+    res.json({ user: { id: user.id, email: user.email, role: user.role, name: user.name, last_login: new Date().toISOString() }, token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login failed' });
@@ -2570,6 +2573,8 @@ app.post('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
 registerTenancyEndRoutes(app);
 registerRentReviewRoutes(app);
 registerCompletionRoutes(app);
+registerTeamActivityRoutes(app);
+registerFlemoRoutes(app);
 
 app.get('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
@@ -2611,7 +2616,7 @@ app.get('/api/tenants/:id/communications', authMiddleware, async (req: AuthReque
       WHERE (entity_type = 'tenant' AND entity_id = ANY($1::int[]))
         OR (entity_type = 'tenant_enquiry' AND entity_id = ANY($2::int[]))
         OR enquiry_id = ANY($2::int[])
-        OR ($3 <> '' AND RIGHT(REGEXP_REPLACE(COALESCE(to_phone, ''), '\\D', '', 'g'), 10)
+        OR ($3 <> '' AND RIGHT(REGEXP_REPLACE(COALESCE(CASE WHEN direction='inbound' THEN from_phone ELSE to_phone END, ''), '\\D', '', 'g'), 10)
           = RIGHT(REGEXP_REPLACE($3, '\\D', '', 'g'), 10))
       ORDER BY created_at DESC LIMIT 100`, [tenantIds, enquiryIds, tenant.phone || '']);
     res.json([...emails, ...sms].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
@@ -2625,6 +2630,8 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
     const d = req.body;
     const current = await queryOne('SELECT * FROM tenants WHERE id=$1', [req.params.id]);
     if (!current) return res.status(404).json({ error: 'Tenant not found' });
+    if (d.status === 'inactive' && current.status !== 'inactive' && req.user?.role !== 'admin') return res.status(403).json({ error: 'Only administrators can archive tenants' });
+    if (d.rent_last_reviewed && (!isValidDateOnly(d.rent_last_reviewed) || d.rent_last_reviewed > new Date().toISOString().slice(0,10))) return res.status(400).json({ error: 'Last rent reviewed must be a valid date on or before today' });
     if (d.first_name_1 && d.last_name_1 && !d.name) {
       d.name = `${d.first_name_1} ${d.last_name_1}`;
     }
@@ -2657,23 +2664,23 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
       'kyc_primary_id','kyc_secondary_id','kyc_address_verification','kyc_personal_verification',
       'guarantor_required','guarantor_name','guarantor_address','guarantor_phone','guarantor_email',
       'guarantor_date_of_birth','guarantor_employment_status','guarantor_employer','guarantor_annual_income',
-      'guarantor_kyc_completed','guarantor_deed_received','guarantor_primary_id','guarantor_secondary_id',
+      'guarantor_kyc_completed','guarantor_deed_received','guarantor_primary_id','guarantor_secondary_id','guarantor_authority_to_contact',
       'holding_deposit_received','holding_deposit_amount','security_deposit_amount','holding_deposit_date',
       'application_forms_completed','authority_to_contact','proof_of_income','deposit_scheme',
       'income_amount','income_employer','income_contract_type','income_frequency',
-      'property_id','tenancy_start_date','tenancy_type','has_end_date','tenancy_end_date',
+      'rent_last_reviewed','property_id','tenancy_start_date','tenancy_type','has_end_date','tenancy_end_date',
       'monthly_rent','notes','emergency_contact','status'
     ];
     const boolFields = [
       'is_joint_tenancy','kyc_completed_1','kyc_completed_2',
       'kyc_primary_id','kyc_secondary_id','kyc_address_verification','kyc_personal_verification',
-      'guarantor_required','guarantor_kyc_completed','guarantor_deed_received','guarantor_primary_id','guarantor_secondary_id',
+      'guarantor_required','guarantor_kyc_completed','guarantor_deed_received','guarantor_primary_id','guarantor_secondary_id','guarantor_authority_to_contact',
       'holding_deposit_received','application_forms_completed','authority_to_contact',
       'proof_of_income','has_end_date'
     ];
     const nullableDateFields = [
       'date_of_birth_1','date_of_birth_2','holding_deposit_date','guarantor_date_of_birth',
-      'tenancy_start_date','tenancy_end_date'
+      'rent_last_reviewed','tenancy_start_date','tenancy_end_date'
     ];
     const nullableNumberFields = ['guarantor_annual_income','holding_deposit_amount','security_deposit_amount','income_amount','property_id','monthly_rent'];
     for (const key of allowed) {
@@ -2727,7 +2734,7 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-app.post('/api/tenants/bulk-archive', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
+app.post('/api/tenants/bulk-archive', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
     const ids = [...new Set<number>((Array.isArray(req.body?.ids) ? req.body.ids : []).map(Number).filter(Number.isInteger))];
     if (ids.length === 0) return res.status(400).json({ error: 'Invalid or empty ids array' });
@@ -2760,21 +2767,18 @@ app.post('/api/tenants/bulk-archive', authMiddleware, requirePermission('manager
   }
 });
 
-app.post('/api/tenants/bulk-delete', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
+app.post('/api/tenants/bulk-delete', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
 
-    // Delete physical files first (best-effort)
+    // Retain files until the database transaction succeeds.
     if (await queryOne('SELECT id FROM rent_reviews WHERE tenant_ids && $1::int[] LIMIT 1', [ids])) return res.status(409).json({ error: 'Archive tenants with rent review history instead of deleting them' });
+    if (await queryOne('SELECT id FROM tenancy_agreements WHERE tenant_id=ANY($1::int[]) OR joint_tenant_id=ANY($1::int[]) LIMIT 1', [ids])) return res.status(409).json({ error: 'Archive tenants with issued tenancy agreements to preserve their contract history' });
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
     const documents = await query(`SELECT * FROM documents WHERE entity_type = 'tenant' AND entity_id::INTEGER IN (${placeholders})`, ids);
-    for (const doc of documents) {
-      const filePath = path.join(uploadsDir, doc.filename);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    }
 
     const client = await pool.connect();
     try {
@@ -2795,6 +2799,10 @@ app.post('/api/tenants/bulk-delete', authMiddleware, requirePermission('manager'
       throw txErr;
     } finally {
       client.release();
+    }
+    for (const doc of documents) {
+      const referenced = await queryOne('SELECT 1 FROM documents WHERE filename=$1 UNION ALL SELECT 1 FROM tenancy_agreements WHERE filename=$1 OR signed_filename=$1 LIMIT 1', [doc.filename]);
+      if (!referenced) { try { fs.unlinkSync(path.join(uploadsDir, doc.filename)); } catch { console.error('File cleanup after committed deletion failed:', doc.id); } }
     }
 
     for (const id of ids) {
@@ -4230,6 +4238,7 @@ const DOC_TYPES: Record<string, string[]> = {
     'Primary Identification', 'Secondary Identification', 'Address Identification',
     'Application Form(s)', 'Bank Statements', 'Proof of Income', 'Credit Report',
     'Employment Reference', 'Holding Deposit', 'Guarantor Documents',
+    'guarantor_primary_id', 'guarantor_secondary_id',
     'Tenant Deposit Certificate', 'Tenant Deposit Prescribed Information',
     'Signed Tenancy Agreement', 'Other',
   ],
@@ -4240,6 +4249,7 @@ const DOC_TYPES: Record<string, string[]> = {
     'Legal Documents', 'Solicitors Correspondence', 'Management Company Correspondence',
     'Freeholder Correspondence', 'Tenant Communications', 'Damage Reports',
     'Service Connections', 'Expense Receipt', 'Lease', 'Inventory',
+    'guarantor_primary_id', 'guarantor_secondary_id',
     'Tenant Deposit Certificate', 'Tenant Deposit Prescribed Information',
     'Signed Tenancy Agreement', 'Other',
   ],
@@ -4276,6 +4286,7 @@ app.get('/api/documents/download/:id', authMiddleware, async (req: AuthRequest, 
     const filePath = path.join(uploadsDir, doc.filename);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
 
+    await logAudit(req.user?.id,req.user?.email,'view','document',doc.id,{ name: doc.original_name, entity_type: doc.entity_type, entity_id: doc.entity_id });
     const disposition = req.query.disposition === 'inline' ? 'inline' : 'attachment';
     res.setHeader('Content-Disposition', `${disposition}; filename="${doc.original_name}"`);
     if (doc.mime_type) res.type(doc.mime_type);
@@ -4604,10 +4615,10 @@ app.get('/api/users', authMiddleware, requireRole('admin'), async (req: AuthRequ
 app.post('/api/users', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
     const { email, name, role, department } = req.body;
-    if (!email || !name || !role) {
+    if (!email || !name || !['admin','manager','staff','viewer'].includes(role)) {
       return res.status(400).json({ error: 'Email, name, and role are required' });
     }
-    const tempPassword = Math.random().toString(36).slice(-10);
+    const tempPassword = crypto.randomBytes(12).toString('base64url');
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
     const id = await insert(
       'INSERT INTO users (email, password, name, role, department, last_password_change) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)',
@@ -4660,7 +4671,10 @@ app.put('/api/users/:id', authMiddleware, requireRole('admin'), async (req: Auth
   try {
     const userId = parseInt(req.params.id as string);
     const { name, email, role, department, is_active } = req.body;
+    if (role !== undefined && !['admin','manager','staff','viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+    if (is_active !== undefined && ![0,1].includes(is_active)) return res.status(400).json({ error: 'Invalid active status' });
     const isSelf = req.user?.id === userId;
+    if (isSelf && ((role !== undefined && role !== 'admin') || is_active === 0)) return res.status(400).json({ error: 'Cannot deactivate or demote your own administrator account' });
     const isAdmin = req.user?.role === 'admin';
 
     if (!isSelf && !isAdmin) {
@@ -4701,7 +4715,7 @@ app.put('/api/users/:id', authMiddleware, requireRole('admin'), async (req: Auth
 app.put('/api/users/:id/reset-password', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
     const userId = parseInt(req.params.id as string);
-    const tempPassword = Math.random().toString(36).slice(-10);
+    const tempPassword = crypto.randomBytes(12).toString('base64url');
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
     await run('UPDATE users SET password = $1, last_password_change = CURRENT_TIMESTAMP WHERE id = $2', [hashedPassword, userId]);
     await logAudit(req.user?.id, req.user?.email, 'update', 'user', userId, { action: 'password_reset' });
@@ -4749,16 +4763,13 @@ app.put('/api/auth/password', authMiddleware, async (req: AuthRequest, res) => {
 
 // ============ DELETE ENDPOINTS ============
 
-app.delete('/api/tenants/:id', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
+app.delete('/api/tenants/:id', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
     const id = req.params.id;
     if (await queryOne('SELECT id FROM rent_reviews WHERE $1::int=ANY(tenant_ids) LIMIT 1', [id])) return res.status(409).json({ error: 'Archive tenants with rent review history instead of deleting them' });
-    // Delete physical files first (outside transaction — best-effort)
+    if (await queryOne('SELECT id FROM tenancy_agreements WHERE tenant_id=$1 OR joint_tenant_id=$1 LIMIT 1', [id])) return res.status(409).json({ error: 'Archive tenants with issued tenancy agreements to preserve their contract history' });
+    // Retain files until the database transaction succeeds.
     const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['tenant', id]);
-    for (const doc of documents) {
-      const filePath = path.join(uploadsDir, doc.filename);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    }
 
     const client = await pool.connect();
     try {
@@ -4779,6 +4790,10 @@ app.delete('/api/tenants/:id', authMiddleware, requirePermission('manager'), asy
     } finally {
       client.release();
     }
+    for (const doc of documents) {
+      const referenced = await queryOne('SELECT 1 FROM documents WHERE filename=$1 UNION ALL SELECT 1 FROM tenancy_agreements WHERE filename=$1 OR signed_filename=$1 LIMIT 1', [doc.filename]);
+      if (!referenced) { try { fs.unlinkSync(path.join(uploadsDir, doc.filename)); } catch { console.error('File cleanup after committed deletion failed:', doc.id); } }
+    }
 
     await logAudit(req.user?.id, req.user?.email, 'delete', 'tenant', parseInt(id as string));
     res.json({ success: true });
@@ -4787,14 +4802,11 @@ app.delete('/api/tenants/:id', authMiddleware, requirePermission('manager'), asy
   }
 });
 
-app.delete('/api/properties/:id', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
+app.delete('/api/properties/:id', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
     if (await queryOne('SELECT id FROM rent_reviews WHERE property_id=$1 LIMIT 1', [req.params.id])) return res.status(409).json({ error: 'Properties with rent review history cannot be deleted' });
+    if (await queryOne('SELECT id FROM tenancy_agreements WHERE property_id=$1 LIMIT 1', [req.params.id])) return res.status(409).json({ error: 'Properties with issued tenancy agreements cannot be deleted; their contract history is retained' });
     const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['property', req.params.id]);
-    for (const doc of documents) {
-      const filePath = path.join(uploadsDir, doc.filename);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    }
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -4815,6 +4827,10 @@ app.delete('/api/properties/:id', authMiddleware, requirePermission('manager'), 
       throw txErr;
     } finally {
       client.release();
+    }
+    for (const doc of documents) {
+      const referenced = await queryOne('SELECT 1 FROM documents WHERE filename=$1 UNION ALL SELECT 1 FROM tenancy_agreements WHERE filename=$1 OR signed_filename=$1 LIMIT 1', [doc.filename]);
+      if (!referenced) { try { fs.unlinkSync(path.join(uploadsDir, doc.filename)); } catch { console.error('File cleanup after committed deletion failed:', doc.id); } }
     }
     await logAudit(req.user?.id, req.user?.email, 'delete', 'property', parseInt(req.params.id as string));
     res.json({ success: true });
@@ -6107,6 +6123,7 @@ app.post('/api/tenant-enquiries/:id/application-review', authMiddleware, require
   try {
     const enquiryId = Number(req.params.id);
     const status = String(req.body.status || '');
+    if (req.body.sms_message !== undefined && (typeof req.body.sms_message !== 'string' || !req.body.sms_message.trim() || req.body.sms_message.length > 1600)) return res.status(400).json({ error: 'SMS must contain 1–1,600 characters' });
     if (!['pending', 'changes_requested', 'approved'].includes(status)) {
       return res.status(400).json({ error: 'status must be pending, changes_requested, or approved' });
     }
@@ -6163,7 +6180,7 @@ app.post('/api/tenant-enquiries/:id/application-review', authMiddleware, require
           delivery.sms = { success: false, error: 'No applicant phone number is recorded' };
         } else {
           const { sendSms, normalizeUkPhone } = require('./sms');
-          const smsBody = `Hi there ${firstName}, thank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you. Please click on this link to jump back in: ${applicationUrl}. If you need any help, then please contact our office on 01902 212 415.`;
+          const smsBody = req.body.sms_message?.trim() || `Hi there ${firstName}, thank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you. Please click on this link to jump back in: ${applicationUrl}. If you need any help, then please contact our office on 01902 212 415.`;
           const smsResult = await sendSms({ to: normalizeUkPhone(enquiry.phone_1), body: smsBody });
           await insert(`INSERT INTO sms_messages (enquiry_id, entity_type, entity_id, to_phone, from_phone, message_body, status, twilio_sid, error_message, sent_by, sent_by_email)
             VALUES ($1, 'tenant_enquiry', $1, $2, $3, $4, $5, $6, $7, $8, $9)`, [
@@ -6663,42 +6680,35 @@ app.post('/api/sms/status', validateTwilioWebhook, async (req, res) => {
 
 // Twilio inbound SMS webhook (validated via X-Twilio-Signature)
 app.post('/api/sms/inbound', validateTwilioWebhook, async (req, res) => {
+  const { From, To, Body, MessageSid } = req.body || {};
+  if (typeof From !== 'string' || typeof To !== 'string' || typeof Body !== 'string' || !Body.trim() || typeof MessageSid !== 'string' || !/^SM[a-fA-F0-9]{32}$/.test(MessageSid)) return res.status(400).send('Invalid incoming message');
+  const client = await pool.connect();
   try {
-    const { From, Body, MessageSid } = req.body;
-    if (!From || !Body) {
-      return res.status(400).send('Missing From or Body');
+    await client.query('BEGIN');
+    // Provider retries must not create duplicate conversations.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [MessageSid]);
+    const exists = (await client.query("SELECT id FROM sms_messages WHERE twilio_sid=$1 AND direction='inbound'", [MessageSid])).rows[0];
+    if (!exists) {
+      const phone = From.replace(/\D/g,'').slice(-10);
+      const matches = (await client.query(`SELECT id,'tenant' AS entity_type FROM tenants
+        WHERE status='active' AND RIGHT(REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g'),10)=$1
+        UNION ALL SELECT id,'tenant_enquiry' AS entity_type FROM tenant_enquiries
+        WHERE status <> 'converted' AND RIGHT(REGEXP_REPLACE(COALESCE(phone_1,''),'[^0-9]','','g'),10)=$1
+        UNION ALL SELECT id,'landlord' AS entity_type FROM landlords
+        WHERE RIGHT(REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g'),10)=$1`, [phone])).rows;
+      const tenants = matches.filter(m => m.entity_type === 'tenant');
+      const candidates = tenants.length ? tenants : matches;
+      const match = candidates.length === 1 ? candidates[0] : null;
+      const saved = (await client.query(`INSERT INTO sms_messages(enquiry_id,entity_type,entity_id,to_phone,from_phone,message_body,direction,status,twilio_sid)
+        VALUES($1,$2,$3,$4,$5,$6,'inbound','received',$7) RETURNING id`, [match?.entity_type === 'tenant_enquiry' ? match.id : null,match?.entity_type || null,match?.id || null,To,From,Body,MessageSid])).rows[0];
+      await client.query("INSERT INTO audit_log(user_email,action,entity_type,entity_id,changes) VALUES('Twilio','sms_received',$1,$2,$3)", [match?.entity_type || 'sms',match?.id || saved.id,JSON.stringify({ sms_id: saved.id, matched: !!match })]);
     }
-
-    // Try to match sender phone to an existing enquiry, tenant, or landlord
-    const normalizedFrom = normalizePhone(From);
-    let enquiryId: number | null = null;
-
-    // Check tenant_enquiries first (most likely source of inbound SMS)
-    const enquiry = await queryOne(
-      `SELECT id FROM tenant_enquiries WHERE phone_1 = $1 OR phone_1 = $2 ORDER BY created_at DESC LIMIT 1`,
-      [From, normalizedFrom]
-    );
-    if (enquiry) {
-      enquiryId = enquiry.id;
-    }
-
-    await insert(`
-      INSERT INTO sms_messages (enquiry_id, to_phone, from_phone, message_body, direction, status, twilio_sid)
-      VALUES ($1, $2, $3, $4, 'inbound', 'received', $5)
-    `, [enquiryId, process.env.TWILIO_PHONE_NUMBER || null, From, Body, MessageSid || null]);
-
-    if (enquiryId) {
-      await logAudit(undefined, undefined, 'sms_received', 'tenant_enquiry', enquiryId, {
-        from_phone: From, message: Body.substring(0, 100)
-      });
-    }
-
-    // Return empty TwiML response (no auto-reply)
+    await client.query('COMMIT');
     res.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
   } catch (err) {
-    console.error('Error processing inbound SMS:', err);
-    res.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
-  }
+    await client.query('ROLLBACK'); console.error('Error processing inbound SMS:', err);
+    res.status(503).send('Message could not be stored; retry later');
+  } finally { client.release(); }
 });
 
 app.get('/api/sms/enquiry/:enquiryId', authMiddleware, async (req: AuthRequest, res) => {

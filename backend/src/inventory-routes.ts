@@ -1,4 +1,4 @@
-import { Express } from 'express';
+import express, { Express } from 'express';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
@@ -226,6 +226,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         [req.params.id, room_name, room_type, condition || null, notes || null]
       );
 
+      await logAudit(req.user?.id,req.user?.email,'create','inventory_room',id,{ inventory_id: Number(req.params.id), room_name, room_type });
       res.json({ id });
     } catch (err) {
       console.error(err);
@@ -248,6 +249,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
       if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
       values.push(req.params.id);
       await run(`UPDATE inventory_rooms SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+      await logAudit(req.user?.id,req.user?.email,'update','inventory_room',Number(req.params.id),d);
 
       res.json({ success: true });
     } catch (err) {
@@ -307,6 +309,8 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
+      const room = await queryOne('SELECT id FROM inventory_rooms WHERE id=$1 AND inventory_id=$2', [roomId,inventoryId]);
+      if (!room) { fs.unlinkSync(file.path); return res.status(400).json({ error: 'Room does not belong to this inventory' }); }
       // Generate thumbnail
       const thumbnailFilename = `thumb_${file.filename}`;
       const thumbnailPath = path.join(thumbnailsDir, thumbnailFilename);
@@ -341,6 +345,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         ]
       );
 
+      await logAudit(req.user?.id,req.user?.email,'create','inventory_photo',id,{ inventory_id: Number(inventoryId), room_id: Number(roomId) });
       const photo = await queryOne(`SELECT * FROM inventory_photos WHERE id = $1`, [id]);
       res.json(photo);
     } catch (err) {
@@ -373,14 +378,6 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
     }
   });
 
-  // Serve inventory photos
-  app.use('/uploads/inventory', authMiddleware, (req, res, next) => {
-    // Serve static files from inventory uploads directory
-    const filePath = path.join(inventoryUploadsDir, req.path);
-    if (fs.existsSync(filePath)) {
-      res.sendFile(filePath);
-    } else {
-      res.status(404).json({ error: 'File not found' });
-    }
-  });
+  // Express confines static reads to this directory, including thumbnail paths.
+  app.use('/uploads/inventory', authMiddleware, express.static(inventoryUploadsDir, { dotfiles: 'deny', index: false, fallthrough: false }));
 }

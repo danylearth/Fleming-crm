@@ -1,6 +1,7 @@
+import { useRecordAddress } from '../hooks/useRecordAddress';
 import CommunicationsHistory from '../components/ui/CommunicationsHistory';
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, SectionHeader, EmptyState, DatePicker } from '../components/ui';
 import DocumentUpload from '../components/ui/DocumentUpload';
@@ -71,12 +72,13 @@ function Toggle({ label, checked, onChange, disabled }: { label: string; checked
 }
 
 export default function LandlordDetail() {
-  const { id } = useParams();
+
   const navigate = useNavigate();
   const api = useApi();
   const { user } = useAuth();
   const { confirmAction } = useNotifications();
   const [landlord, setLandlord] = useState<Landlord | null>(null);
+  const id = useRecordAddress('landlords', landlord?.name);
   const [properties, setProperties] = useState<Property[]>([]);
   const [directors, setDirectors] = useState<Director[]>([]);
   const [archivedDirectors, setArchivedDirectors] = useState<Director[]>([]);

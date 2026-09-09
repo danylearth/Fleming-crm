@@ -1,3 +1,5 @@
+import { useRecordAddress } from '../hooks/useRecordAddress';
+import ContextualDocSlot from '../components/ui/ContextualDocSlot';
 import RentReviewModal from '../components/ui/RentReviewModal';
 import CompletionModal from '../components/ui/CompletionModal';
 import { tenantCompletion, type CompletionOverride } from '../utils/tenantCompletion';
@@ -5,7 +7,7 @@ import CommunicationsHistory from '../components/ui/CommunicationsHistory';
 import TenancyEndModal from '../components/ui/TenancyEndModal';
 import { useNotifications } from '../context/NotificationContext';
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, DatePicker } from '../components/ui';
 import DocumentUpload from '../components/ui/DocumentUpload';
@@ -16,7 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   Pencil, Mail, Phone, Building2, Calendar, MessageSquare, Clock,
   AlertTriangle, ChevronRight, Plus, User, CheckCircle,
-  ChevronDown, ShieldCheck, UsersRound
+  ChevronDown, BadgePoundSterling, ShieldCheck, UsersRound
 } from 'lucide-react';
 
 // ==================== TYPES ====================
@@ -33,6 +35,7 @@ interface Tenant {
   kyc_completed_1?: number; kyc_completed_2?: number;
   kyc_primary_id?: number; kyc_secondary_id?: number;
   kyc_address_verification?: number; kyc_personal_verification?: number;
+  rent_last_reviewed?: string; guarantor_authority_to_contact?: number;
   guarantor_required?: number; guarantor_name?: string; guarantor_address?: string;
   guarantor_phone?: string; guarantor_email?: string;
   guarantor_date_of_birth?: string; guarantor_employment_status?: string; guarantor_employer?: string; guarantor_annual_income?: string; guarantor_primary_id?: number; guarantor_secondary_id?: number;
@@ -161,7 +164,7 @@ function SectionEditButton({ editing, onEdit, onSave, onCancel, saving }: {
 
 // ==================== COMPONENT ====================
 export default function TenantDetail() {
-  const { id } = useParams();
+
   const navigate = useNavigate();
   const api = useApi();
   const { user } = useAuth();
@@ -170,6 +173,7 @@ export default function TenantDetail() {
   const [showCompletion, setShowCompletion] = useState(false);
   const [showRentReview, setShowRentReview] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const id = useRecordAddress('tenants', tenant?.name);
   const [loading, setLoading] = useState(true);
   const editingRef = useRef<string | null>(null);
   const requestedTenantId = useRef(Number(id));
@@ -219,6 +223,8 @@ export default function TenantDetail() {
       guarantor_employer: t.guarantor_employer || '', guarantor_annual_income: t.guarantor_annual_income || '',
       guarantor_primary_id: !!t.guarantor_primary_id, guarantor_secondary_id: !!t.guarantor_secondary_id,
       guarantor_required: !!t.guarantor_required,
+      guarantor_authority_to_contact: !!t.guarantor_authority_to_contact,
+      rent_last_reviewed: (t.rent_last_reviewed || '').slice(0,10),
       guarantor_name: t.guarantor_name || '', guarantor_address: t.guarantor_address || '',
       guarantor_phone: t.guarantor_phone || '', guarantor_email: t.guarantor_email || '',
       guarantor_kyc_completed: !!t.guarantor_kyc_completed, guarantor_deed_received: !!t.guarantor_deed_received,
@@ -571,7 +577,7 @@ export default function TenantDetail() {
               {isEditing('nok') ? (
                 <div className="space-y-4">
                   <div>
-                    <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Contact 1</p>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <Input label="Name" value={form.nok_name} onChange={v => setForm({ ...form, nok_name: v })} />
                       <Input label="Relationship" value={form.nok_relationship} onChange={v => setForm({ ...form, nok_relationship: v })} />
@@ -596,7 +602,7 @@ export default function TenantDetail() {
                 <div className="space-y-4">
                   {form.nok_name || form.nok_phone ? (
                     <div>
-                      <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Contact 1</p>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <ReadField label="Name" value={form.nok_name} />
                         <ReadField label="Relationship" value={form.nok_relationship} />
@@ -671,21 +677,22 @@ export default function TenantDetail() {
               </div>
             </GlassCard>
 
-            <GlassCard className="p-6">
-              <div className="flex justify-between items-center mb-4"><SectionHeader title="Guarantor" icon={<ShieldCheck size={16} />} /><SectionEditButton editing={isEditing('guarantor')} onEdit={() => setEditingSection('guarantor')} onSave={saveSection} onCancel={cancelSection} saving={saving} /></div>
+            {!!tenant.guarantor_required && <GlassCard className="p-6">
+              <div className="flex justify-between items-center mb-4"><SectionHeader title="Guarantor" icon={<BadgePoundSterling size={16} />} /><SectionEditButton editing={isEditing('guarantor')} onEdit={() => setEditingSection('guarantor')} onSave={saveSection} onCancel={cancelSection} saving={saving} /></div>
               {isEditing('guarantor') ? <div className="space-y-3">
                 <label className="flex gap-2 text-sm"><input type="checkbox" checked={!!form.guarantor_required} onChange={e => setForm({ ...form, guarantor_required: e.target.checked })} />Guarantor required</label>
-                {(['guarantor_name', 'guarantor_address', 'guarantor_email', 'guarantor_phone', 'guarantor_employment_status', 'guarantor_employer', 'guarantor_annual_income'] as const).map(key => <Input key={key} label={key.replace('guarantor_', '').replaceAll('_', ' ')} value={String(form[key] || '')} type={key.includes('email') ? 'email' : key.includes('income') ? 'number' : 'text'} onChange={v => setForm({ ...form, [key]: v })} />)}
+                {(['guarantor_name', 'guarantor_address', 'guarantor_email', 'guarantor_phone', 'guarantor_employment_status', 'guarantor_employer', 'guarantor_annual_income'] as const).map(key => <Input key={key} label={key.replace('guarantor_', '').split('_').map(word => word.charAt(0).toUpperCase()+word.slice(1)).join(' ')} value={String(form[key] || '')} type={key.includes('email') ? 'email' : key.includes('income') ? 'number' : 'text'} onChange={v => setForm({ ...form, [key]: v })} />)}
                 <DatePicker label="Date of birth" value={form.guarantor_date_of_birth} onChange={v => setForm({ ...form, guarantor_date_of_birth: v })} />
-                <label className="flex gap-2 text-sm"><input type="checkbox" checked={!!form.guarantor_primary_id} onChange={e => setForm({ ...form, guarantor_primary_id: e.target.checked })} />Primary ID held</label>
-                <label className="flex gap-2 text-sm"><input type="checkbox" checked={!!form.guarantor_secondary_id} onChange={e => setForm({ ...form, guarantor_secondary_id: e.target.checked })} />Secondary ID held</label>
+
               </div> : <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <ReadField label="Guarantor required" value={tenant.guarantor_required ? 'Yes' : 'Not recorded'} /><ReadField label="Name" value={tenant.guarantor_name} />
                 <ReadField label="Address" value={tenant.guarantor_address} /><ReadField label="Email" value={tenant.guarantor_email} /><ReadField label="Contact number" value={tenant.guarantor_phone} />
                 <ReadField label="Date of birth" value={tenant.guarantor_date_of_birth ? formatDateDMY(tenant.guarantor_date_of_birth) : null} /><ReadField label="Employment" value={tenant.guarantor_employment_status} /><ReadField label="Employer" value={tenant.guarantor_employer} /><ReadField label="Annual income" value={tenant.guarantor_annual_income ? `£${Number(tenant.guarantor_annual_income).toLocaleString()}` : null} />
-                <ReadField label="Primary ID held" value={tenant.guarantor_primary_id ? 'Yes' : 'Not recorded'} /><ReadField label="Secondary ID held" value={tenant.guarantor_secondary_id ? 'Yes' : 'Not recorded'} />
+
               </div>}
-            </GlassCard>
+              <div className="mt-4"><p className="text-xs font-medium mb-2">Authority to Contact</p><YesNo value={form.guarantor_authority_to_contact} onChange={v => setForm({ ...form, guarantor_authority_to_contact: v })} disabled={!isEditing('guarantor')} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"><ContextualDocSlot entityType="tenant" entityId={tenant.id} docType="guarantor_primary_id" label="Primary ID" /><ContextualDocSlot entityType="tenant" entityId={tenant.id} docType="guarantor_secondary_id" label="Secondary ID" /></div>
+            </GlassCard>}
 
             {/* Documents */}
             <DocumentUpload entityType="tenant" entityId={tenant.id} />
@@ -695,7 +702,7 @@ export default function TenantDetail() {
           <div className="lg:col-span-2 space-y-6">
             {/* Tenancy Details */}
             <GlassCard className="p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col items-start gap-3 mb-4">
                 <SectionHeader title="Tenancy Details" icon={<Building2 size={16} />} />
                 {isEditing('tenancy') ? (
                   <SectionEditButton editing onEdit={() => setEditingSection('tenancy')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
@@ -704,11 +711,15 @@ export default function TenantDetail() {
                     <Button variant="outline" className="!bg-yellow-400 !text-yellow-950 !border-yellow-400" size="sm" onClick={() => setEditingSection('tenancy')}>Update Tenancy</Button>
                     {tenant.status !== 'inactive' && <Button variant="outline" className="!bg-red-600 !text-white !border-red-600" size="sm" onClick={() => setShowEndModal(true)}>Schedule Tenancy End</Button>}
                     <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => setShowRentReview(true)}>£ Rent Review</Button>
-                    {['admin', 'manager'].includes(user?.role || '') && tenant.status !== 'inactive' && <Button variant="ghost" size="sm" onClick={async () => {
+                    {user?.role === 'admin' && tenant.status !== 'inactive' && <Button variant="ghost" size="sm" onClick={async () => {
                       if (!await confirmAction(`Archive ${tenant.name}? Their documents and history are retained.`, 'Archive Tenant')) return;
                       try { await api.post('/api/tenants/bulk-archive', { ids: [tenant.id] }); await loadDetail(); notify('Tenant archived', 'success'); }
                       catch (e) { notify(e instanceof Error ? e.message : 'Could not archive tenant', 'error'); }
                     }}>Archive Tenant</Button>}
+                    {user?.role === 'admin' && <Button variant="outline" size="sm" className="!bg-red-600 !text-white !border-red-600" onClick={async () => {
+                      if (!await confirmAction(`Permanently delete ${tenant.name} and their linked documents and payment records? This cannot be undone.`, 'Delete Tenant')) return;
+                      try { await api.delete(`/api/tenants/${tenant.id}`); navigate('/tenants'); } catch (e) { notify(e instanceof Error ? e.message : 'Could not delete tenant', 'error'); }
+                    }}>Delete Tenant</Button>}
                   </div>
                 )}
               </div>
@@ -717,6 +728,8 @@ export default function TenantDetail() {
                   <Select label="Property" value={form.property_id || ''} onChange={v => setForm({ ...form, property_id: v ? Number(v) : null })}
                     options={[{ value: '', label: 'No property linked' }, ...allProperties.map((p) => ({ value: String(p.id), label: `${p.address}, ${p.postcode}` }))]} />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <DatePicker label="Last Rent Reviewed" value={form.rent_last_reviewed} onChange={v => setForm({ ...form, rent_last_reviewed: v })} />
+                    <label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={form.guarantor_required} onChange={e => setForm({ ...form, guarantor_required: e.target.checked })} />Guarantor Required</label>
                     <DatePicker label="Tenancy Start Date" value={form.tenancy_start_date} onChange={v => setForm({ ...form, tenancy_start_date: v })} />
                     <Select label="Tenancy Type" value={form.tenancy_type} onChange={v => setForm({
                       ...form,
@@ -752,6 +765,7 @@ export default function TenantDetail() {
                     <ReadField label="Property" value="No property linked" />
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3">
+                    <ReadField label="Last Rent Reviewed" value={tenant.rent_last_reviewed ? formatDateDMY(tenant.rent_last_reviewed) : null} />
                     <ReadField label="Tenancy Start" value={form.tenancy_start_date ? formatDateDMY(form.tenancy_start_date) : null} />
                     <ReadField label="Tenancy Type" value={form.tenancy_type} />
                   </div>

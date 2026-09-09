@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useRecordAddress } from '../hooks/useRecordAddress';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Card, GlassCard, Button, ProgressRing, SectionHeader, EmptyState, Avatar, Tag, Input, Select, DatePicker, PricePaidData } from '../components/ui';
 import DocumentUpload from '../components/ui/DocumentUpload';
@@ -88,13 +89,14 @@ interface Landlord {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  to_let: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  let_agreed: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  let: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  to_let: 'bg-red-500/20 text-red-400 border-red-500/30',
+  let_agreed: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
   full_management: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   rent_collection: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
 };
 const STATUS_LABELS: Record<string, string> = {
-  to_let: 'To Let', let_agreed: 'Let Agreed', full_management: 'Full Management', rent_collection: 'Rent Collection',
+  let: 'Let', to_let: 'To Let', let_agreed: 'Let Agreed', full_management: 'Full Management', rent_collection: 'Rent Collection',
 };
 const EPC_COLORS: Record<string, string> = {
   A: 'bg-emerald-500 text-white', B: 'bg-emerald-400 text-white', C: 'bg-lime-500 text-white',
@@ -133,17 +135,20 @@ function Toggle({ label, checked, onChange, disabled }: { label: string; checked
 }
 
 export default function PropertyDetail() {
-  const { id } = useParams();
+
   const api = useApi();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { confirmAction: confirmCrmAction } = useNotifications();
   const [property, setProperty] = useState<PropertyDetail | null>(null);
+  const id = useRecordAddress('properties', property?.address);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
   const [saving, setSaving] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form, setForm] = useState<Record<string, any>>({});
@@ -252,7 +257,7 @@ export default function PropertyDetail() {
         api.get('/api/tenants').catch(() => []),
       ]);
       setProperty(prop);
-      populateForm(prop);
+      if (!editingRef.current) populateForm(prop);
       setPropertyLandlords(propLandlords);
       setAllLandlords(landlords);
       setAllTenants(Array.isArray(tenants) ? tenants : []);
@@ -674,6 +679,10 @@ export default function PropertyDetail() {
             <p className="text-white/60 text-xs sm:text-sm">{property.postcode}</p>
           </div>
           <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex gap-2">
+            {user?.role === 'admin' && <Button size="sm" variant="outline" className="!bg-red-600 !border-red-600 !text-white" onClick={async () => {
+              if (!await confirmCrmAction(`Permanently delete ${property.address} and linked property documents, expenses and payment records? This cannot be undone.`, 'Delete Property')) return;
+              try { await api.delete(`/api/properties/${property.id}`); navigate('/properties'); } catch (e) { alert(e instanceof Error ? e.message : 'Could not delete property'); }
+            }}>Delete</Button>}
             {editing ? (
               <>
                 <Button variant="ghost" size="sm" onClick={cancelEdit} className="bg-black/40 backdrop-blur-sm text-white text-xs sm:text-sm">
@@ -762,10 +771,10 @@ export default function PropertyDetail() {
                   </div>
                   <div className="mt-4">
                     <label className="block text-xs font-medium text-[var(--text-secondary)] mb-2">
-                      Amenities & Features
+                      Features
                     </label>
                     <div className="flex flex-wrap gap-2 mb-3">
-                      {['Garden', 'Driveway', 'Parking', 'Garage', 'Balcony', 'Patio', 'Furnished', 'Part Furnished', 'Dishwasher', 'Washing Machine', 'Dryer', 'WiFi', 'Central Heating', 'Double Glazing', 'Security Alarm', 'EV Charging', 'Pets Allowed', 'Storage'].map((amenity) => {
+                      {['Garden', 'Driveway', 'Parking', 'Garage', 'Balcony', 'Patio', 'Furnished', 'Part Furnished', 'Dishwasher', 'Washing Machine', 'Dryer', 'WiFi', 'Central Heating', 'Double Glazing', 'CCTV', 'Security Alarm', 'EV Charging', 'Pets Allowed', 'Storage'].map((amenity) => {
                         const isSelected = form.amenities?.toLowerCase().includes(amenity.toLowerCase());
                         return (
                           <button
@@ -818,7 +827,7 @@ export default function PropertyDetail() {
                   </div>
                   {!!property.amenities && (
                     <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
-                      <p className="text-xs text-[var(--text-muted)] mb-1.5">Amenities & Features</p>
+                      <p className="text-xs text-[var(--text-muted)] mb-1.5">Features</p>
                       <p className="text-sm whitespace-pre-wrap">{property.amenities}</p>
                     </div>
                   )}
@@ -970,7 +979,7 @@ export default function PropertyDetail() {
               </div>
             ) : null}
 
-            {(editing || property.has_management_company) && (
+            {(editing || !!property.has_management_company) && (
               <GlassCard className="p-4 sm:p-6">
                 <SectionHeader title="Management Company" />
                 {editing ? (

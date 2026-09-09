@@ -1,6 +1,7 @@
+import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { X, Send, Sparkles, ChevronDown } from 'lucide-react';
+import { X, Send, Sparkles, ChevronDown, Mic } from 'lucide-react';
 import { useAIChat } from '../../hooks/useAIChat';
 import type { AIAction } from '../../hooks/useAIChat';
 
@@ -8,74 +9,11 @@ const now = () => new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minu
 
 // Context-aware suggestions per page
 const pageSuggestions: Record<string, string[]> = {
-  '/': [
-    'Prioritise my day',
-    'Compliance alerts summary',
-    'What needs attention?',
-    'Show overdue tasks',
-  ],
-  '/enquiries': [
-    'Draft a response to the latest enquiry',
-    'Which enquiries need follow-up?',
-    'Chase pending references',
-    'Show new enquiries',
-  ],
-  '/properties': [
-    'Which properties need cert renewal?',
-    'Show vacant properties',
-    'Compliance overview',
-    'Properties with rent review due',
-  ],
-  '/landlords': [
-    'Email a landlord update',
-    'Who has the most properties?',
-    'Landlords needing KYC renewal',
-    'Draft landlord update email',
-  ],
-  '/tenants': [
-    'Tenants with rent arrears',
-    'Upcoming lease renewals',
-    'Send rent reminders',
-    'Show tenancy expiry dates',
-  ],
-  '/bdm': [
-    'Pipeline conversion rate',
-    'Prospects needing follow-up',
-    'Draft outreach email',
-    'Show new leads',
-  ],
-  '/maintenance': [
-    'Urgent open issues',
-    'Which properties have most issues?',
-    'Show open maintenance',
-    'Schedule contractor for open jobs',
-  ],
-  '/tasks': [
-    'What\'s overdue?',
-    'Show my completed tasks this week',
-    'Create a new task',
-    'Prioritise my tasks',
-  ],
-  '/financials': [
-    'Monthly rent collection summary',
-    'Who\'s in arrears?',
-    'Send rent reminders',
-    'Financial overview',
-  ],
+  '/': ['What is our monthly rental income?', 'Which tenants are missing ID?', 'Which tenancies end soon?', 'Which rent reviews are due this month?'],
+  '/tenants': ['Which tenants are missing ID?', 'What was the last SMS sent to this tenant?'],
 };
-
-// Get greeting based on page
-function getGreeting(pathname: string): string {
-  if (pathname === '/') return "Hi. I can help you manage your day — compliance checks, emails, rent reminders, and more. What do you need?";
-  if (pathname.includes('enquir')) return "Viewing enquiries. I can email applicants, chase references, or move enquiries. What would you like?";
-  if (pathname.includes('properties')) return "Property portfolio. I can check compliance, show voids, or help with rent reviews. Need anything?";
-  if (pathname.includes('landlord')) return "Landlord overview. I can draft update emails or check KYC status. What do you need?";
-  if (pathname.includes('tenant')) return "Tenant management. I can send rent reminders, check arrears, or review leases. How can I help?";
-  if (pathname.includes('bdm')) return "Business development pipeline. I can help with follow-ups or outreach. What would you like?";
-  if (pathname.includes('maintenance')) return "Maintenance requests. I can prioritise issues or help contact contractors. Need anything?";
-  if (pathname.includes('task')) return "Task overview. I can create tasks, mark them complete, or help you prioritise. What do you need?";
-  if (pathname.includes('financial')) return "Financial overview. I can show arrears, send rent reminders, or give a collection summary. What would you like?";
-  return "How can I help?";
+function getGreeting(): string {
+  return 'Hi, I’m Flemo. I can check rent totals, missing ID, tenancy end dates, rent reviews and SMS history using current CRM records. What would you like to check?';
 }
 
 // Parse page context from pathname
@@ -98,6 +36,7 @@ function getPageContext(pathname: string): { page: string; entityType?: string; 
 export default function FloatingAI() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
+  const voice = useVoiceInput(setInput);
   const [hasUnread, setHasUnread] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -107,7 +46,7 @@ export default function FloatingAI() {
 
   // Initial greeting
   useEffect(() => {
-    setMessages([{ role: 'assistant', text: getGreeting(location.pathname), status: 'done' }]);
+    setMessages([{ role: 'assistant', text: getGreeting(), status: 'done' }]);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset greeting when page changes
@@ -115,7 +54,7 @@ export default function FloatingAI() {
     if (location.pathname !== prevPath.current) {
       prevPath.current = location.pathname;
       // Only reset if chat has been idle (no user messages in last set)
-      setMessages([{ role: 'assistant', text: getGreeting(location.pathname), status: 'done' }]);
+      setMessages([{ role: 'assistant', text: getGreeting(), status: 'done' }]);
       if (!open) queueMicrotask(() => setHasUnread(true));
     }
   }, [location.pathname, open, setMessages]);
@@ -131,6 +70,7 @@ export default function FloatingAI() {
   };
 
   const handleSend = (text?: string) => {
+    if (typing) return;
     const msg = (text || input).trim();
     if (!msg) return;
     setInput('');
@@ -153,6 +93,7 @@ export default function FloatingAI() {
       {/* Floating Button */}
       {!open && (
         <button
+          aria-label="Open Flemo"
           onClick={handleOpen}
           className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-50 w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center shadow-lg shadow-pink-500/20 hover:shadow-pink-500/40 hover:scale-105 transition-all group"
         >
@@ -175,15 +116,15 @@ export default function FloatingAI() {
                 <Sparkles size={16} className="text-white" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-[var(--text-primary)]">Assistant</p>
-                <p className="text-[11px] text-[var(--text-muted)]">Fleming AI</p>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Flemo</p>
+                <p className="text-[11px] text-[var(--text-muted)]">Current CRM answers</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
               <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
                 <ChevronDown size={18} />
               </button>
-              <button onClick={() => { setOpen(false); setMessages([{ role: 'assistant', text: getGreeting(location.pathname), status: 'done' }]); }} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
+              <button onClick={() => { setOpen(false); setMessages([{ role: 'assistant', text: getGreeting(), status: 'done' }]); }} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
                 <X size={18} />
               </button>
             </div>
@@ -267,6 +208,7 @@ export default function FloatingAI() {
 
           {/* Input */}
           <div className="px-4 py-3 border-t border-[var(--border-color)]">
+            {voice.error && <p role="status" className="text-xs text-red-400 mb-2">{voice.error}</p>}
             <div className="flex items-center gap-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl px-4 py-2.5">
               <input
                 ref={inputRef}
@@ -276,7 +218,8 @@ export default function FloatingAI() {
                 placeholder='Ask anything...'
                 className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
               />
-              <button onClick={() => handleSend()}
+              {voice.supported && <button title="Dictate using your browser’s speech service, then review before sending" aria-label={voice.listening ? 'Stop dictation' : 'Dictate question'} onClick={voice.toggle} className={voice.listening ? 'text-red-500 animate-pulse' : 'text-[var(--text-muted)]'}><Mic size={18} /></button>}
+              <button disabled={typing} onClick={() => handleSend()}
                 className={`p-1.5 rounded-lg transition-colors ${input.trim() ? 'text-orange-400 hover:text-orange-300' : 'text-[var(--text-faint)]'}`}>
                 <Send size={16} />
               </button>

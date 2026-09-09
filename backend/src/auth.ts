@@ -14,6 +14,7 @@ export interface AuthRequest extends Request {
     email: string;
     role: string;
     name: string;
+    last_login?: string;
   };
 }
 
@@ -39,7 +40,7 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
     // Revocation: deactivating a user or changing their password invalidates
     // every token issued before that moment
     const user = await queryOne(
-      'SELECT is_active, last_password_change, role FROM users WHERE id = $1',
+      'SELECT is_active, last_password_change, role, name, email, last_login FROM users WHERE id = $1',
       [decoded.id]
     );
     if (!user || !user.is_active) {
@@ -50,7 +51,7 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
       return res.status(401).json({ error: 'Invalid token' });
     }
     // Role changes take effect on the next request, not the next login
-    req.user = { ...decoded, role: user.role };
+    req.user = { ...decoded, role: user.role, name: user.name, email: user.email, last_login: user.last_login };
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid token' });

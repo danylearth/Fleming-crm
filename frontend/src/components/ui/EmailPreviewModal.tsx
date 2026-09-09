@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect } from 'react';
 import { Button } from './index';
 import { X, Mail, Pencil, Eye } from 'lucide-react';
@@ -51,7 +52,7 @@ export default function EmailPreviewModal({
     await onSend({ subject, bodyHtml });
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-[110] p-4"
       onClick={onClose}
@@ -170,6 +171,6 @@ export default function EmailPreviewModal({
           </Button>}
         </div>
       </div>
-    </div>
+    </div>, document.body
   );
 }

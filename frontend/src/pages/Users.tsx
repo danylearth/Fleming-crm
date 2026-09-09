@@ -1,3 +1,5 @@
+import PermissionRequests from '../components/ui/PermissionRequests';
+import TeamActivity from '../components/ui/TeamActivity';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
@@ -220,7 +222,7 @@ export default function Users() {
       key: 'last_login',
       header: 'Last Login',
       render: (user) => user.last_login
-        ? new Date(user.last_login).toLocaleDateString()
+        ? new Date(user.last_login).toLocaleString('en-GB')
         : <span className="text-[var(--text-muted)]">Never</span>
     },
     {
@@ -273,6 +275,9 @@ export default function Users() {
             <div className="text-2xl font-semibold mt-1">{users.filter(u => u.role === 'staff' || u.role === 'manager').length}</div>
           </GlassCard>
         </div>
+
+        <PermissionRequests />
+        <TeamActivity users={users} />
 
         {/* Search & Actions */}
         <GlassCard className="p-4">

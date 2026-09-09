@@ -1,3 +1,4 @@
+import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
@@ -44,6 +45,7 @@ function MapAutoFit({ tenants, coords }: {
 }
 
 export default function Tenants() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const api = useApi();
@@ -408,7 +410,7 @@ export default function Tenants() {
         </div>
 
         {/* Bulk Actions */}
-        {editMode && (
+        {editMode && user?.role === 'admin' && (
           <BulkActions
             selectedIds={selectedIds}
             onClearSelection={() => setSelectedIds([])}
@@ -580,9 +582,9 @@ export default function Tenants() {
                 center={[55.953, -3.188]}
                 zoom={12}
                 style={{ height: '100%', width: '100%' }}
-                attributionControl={false}
+                attributionControl={true}
               >
-                <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+                <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
                 <MapAutoFit tenants={filtered} coords={coords} />
                 {filtered.map(t => {
                   const c = coords[t.property_id];

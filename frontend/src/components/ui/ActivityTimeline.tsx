@@ -20,6 +20,7 @@ const ACTION_CONFIG: Record<string, { icon: typeof Clock; color: string; label: 
   login: { icon: LogIn, color: 'text-purple-400 bg-purple-500/20', label: 'Logged in' },
   export: { icon: Upload, color: 'text-cyan-400 bg-cyan-500/20', label: 'Exported' },
   note_added: { icon: StickyNote, color: 'text-pink-400 bg-pink-500/20', label: 'Note added' },
+  sms_received: { icon: MessageSquare, color: 'text-teal-400 bg-teal-500/20', label: 'SMS received' },
   sms_sent: { icon: MessageSquare, color: 'text-teal-400 bg-teal-500/20', label: 'SMS sent' },
   document_upload: { icon: FileUp, color: 'text-orange-400 bg-orange-500/20', label: 'Document uploaded' },
   status_changed: { icon: ArrowRight, color: 'text-indigo-400 bg-indigo-500/20', label: 'Status changed' },

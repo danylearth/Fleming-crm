@@ -23,9 +23,7 @@ export default function CommunicationsHistory({ messages }: { messages: Communic
   return <GlassCard className="p-6">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <SectionHeader title="Communications" icon={<Mail size={16} />} />
-      <select aria-label="Filter communications" value={filter} onChange={e => setFilter(e.target.value)} className="rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-xs">
-        <option value="all">Email & SMS</option><option value="email">Email</option><option value="sms">SMS</option>
-      </select>
+      <div role="group" aria-label="Filter communications" className="flex gap-2">{(['all','email','sms'] as const).map(channel => <button key={channel} aria-pressed={filter===channel} onClick={()=>setFilter(channel)} className={`rounded-full border px-4 py-2 text-xs ${filter===channel?'bg-[#dc006d] text-white border-transparent':'border-[var(--border-input)] text-[var(--text-secondary)]'}`}>{channel==='all'?'All':channel==='email'?'Email':'SMS'}</button>)}</div>
     </div>
     <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto">
       {!filtered.length && <p className="text-xs text-[var(--text-muted)]">No messages recorded.</p>}

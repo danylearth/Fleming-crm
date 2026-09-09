@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, Button, SectionHeader, EmptyState, Input, DatePicker } from './index';
 import { useApi } from '../../hooks/useApi';
-import { PoundSterling, CheckCircle2, Clock, AlertCircle, Plus } from 'lucide-react';
+import { PoundSterling, BadgePoundSterling, CheckCircle2, Clock, AlertCircle, Plus } from 'lucide-react';
 
 interface Payment {
   id: number;
@@ -126,7 +126,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   return (
     <Card className="p-6">
       <SectionHeader
-        title="Rent Payments"
+        title="Rent Payments" icon={<BadgePoundSterling size={16} />}
         action={() => setShowAdd(!showAdd)}
         actionLabel={showAdd ? 'Cancel' : 'Add Payment'}
       />

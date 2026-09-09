@@ -1,3 +1,4 @@
+import { usePortfolio } from '../context/PortfolioContext';
 import { useState, useCallback } from 'react';
 import { useApi } from './useApi';
 
@@ -20,6 +21,7 @@ export interface AIAction {
 
 export function useAIChat() {
   const api = useApi();
+  const { portfolioFilter } = usePortfolio();
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [typing, setTyping] = useState(false);
 
@@ -54,7 +56,7 @@ export function useAIChat() {
     setTyping(true);
 
     try {
-      const result = await api.post('/api/ai/chat', { message: text, context });
+      const result = await api.post('/api/ai/chat', { message: text, context: { ...context, portfolio: portfolioFilter } });
       setTyping(false);
       addMessage({
         role: 'assistant',
@@ -72,7 +74,7 @@ export function useAIChat() {
         status: 'error',
       });
     }
-  }, [api]);
+  }, [api, portfolioFilter]);
 
   return { messages, typing, send, executeAction, addMessage, setMessages };
 }

@@ -1,3 +1,4 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
 // User & Auth Types
 export interface User {
   id: number;
@@ -51,6 +52,8 @@ export interface Inventory {
   created_at: string;
   updated_at: string;
   completed_at?: string;
+  photo_count?: number;
+  room_count?: number;
   // Joined data
   property_address?: string;
   tenant_name?: string;
@@ -111,7 +114,7 @@ export interface ApiResponse<T> {
 // Navigation Types
 export type RootStackParamList = {
   Login: undefined;
-  Main: undefined;
+  Main: NavigatorScreenParams<MainTabParamList> | undefined;
   Dashboard: undefined;
   PropertyList: undefined;
   PropertyDetail: { propertyId: number };

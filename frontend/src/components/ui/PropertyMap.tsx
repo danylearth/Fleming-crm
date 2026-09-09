@@ -124,12 +124,13 @@ export default function PropertyMap({ properties, onPropertyClick, highlightedPr
       center: [53.0, -1.5], // UK center
       zoom: 6,
       zoomControl: false,
-      attributionControl: false,
+      attributionControl: true,
     });
 
-    // Dark tile layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // Standard interactive map tiles; browser caching and visible attribution.
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
     // Zoom control on right

@@ -33,6 +33,7 @@ interface Property {
 }
 
 interface Task {
+  dashboard_dismissed_at?: string;
   id: number; title: string; description: string; status: string;
   priority: string; due_date: string; property_address?: string; assigned_to?: string;
 }
@@ -66,7 +67,7 @@ export default function Dashboard() {
       setDashboard(dash);
       setProperties(Array.isArray(props) ? props : []);
       setTasks(Array.isArray(tks) ? tks : []);
-      setEnquiries(Array.isArray(enqs) ? enqs.filter((enquiry: Enquiry) => enquiry.status !== 'converted') : []);
+      setEnquiries(Array.isArray(enqs) ? enqs.filter((enquiry: Enquiry) => enquiry.status === 'new') : []);
     }).finally(() => setLoading(false));
   }, [api]);
 
@@ -115,6 +116,8 @@ export default function Dashboard() {
     return 'text-emerald-400';
   };
 
+  const visibleRecentTasks = tasks.filter(task => !task.dashboard_dismissed_at);
+
   const deleteTask = async (task: Task) => {
     if (!await confirmAction(`Delete reminder “${task.title}”?`)) return;
     try {
@@ -140,7 +143,7 @@ export default function Dashboard() {
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Greeting */}
         <div className="pt-10 md:pt-0">
-          <h1 className="text-2xl md:text-4xl font-bold">Hello, {firstName} 👋</h1>
+          <h1 className="text-2xl md:text-4xl font-bold">Hi there {firstName} 👋</h1>
           <p className="text-[var(--text-secondary)] mt-1 text-sm">Here's what's happening with your properties today.</p>
         </div>
 
@@ -303,10 +306,10 @@ export default function Dashboard() {
 
         {/* Recent Tasks */}
         <Card className="p-6">
-          <SectionHeader title="Recent Tasks" action={() => navigate('/tasks')} actionLabel="View All" />
-          {tasks.length ? (
+          <div className="flex flex-wrap items-start justify-between gap-2"><SectionHeader title="Recent Tasks" action={() => navigate('/tasks')} actionLabel="View All" />{user?.role === 'admin' && visibleRecentTasks.length > 0 && <button className="text-xs text-red-500 font-medium" onClick={async () => { if (!await confirmAction('Clear all recent tasks from the dashboard? They will remain available in Team Calendar.', 'Clear Recent Tasks')) return; try { await api.post('/api/tasks/clear-recent', {}); setTasks(current => current.map(t => ({ ...t, dashboard_dismissed_at: new Date().toISOString() }))); } catch (e) { alert(e instanceof Error ? e.message : 'Could not clear tasks'); } }}>Clear All</button>}</div>
+          {visibleRecentTasks.length ? (
             <div className="space-y-2">
-              {tasks.slice(0, 5).map(task => (
+              {visibleRecentTasks.slice(0, 5).map(task => (
                 <div key={task.id} className="flex items-center gap-4 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
                     task.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400'

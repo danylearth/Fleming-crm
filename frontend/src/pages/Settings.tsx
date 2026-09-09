@@ -1,13 +1,16 @@
+import PermissionRequests from '../components/ui/PermissionRequests';
+import { useTheme } from '../context/ThemeContext';
 import { useState } from 'react';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Avatar, SectionHeader } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
-import { Camera, Lock, Bell, Palette } from 'lucide-react';
+import { Camera, Lock, Palette } from 'lucide-react';
 
 export default function Settings() {
   const { user } = useAuth();
   const api = useApi();
+  const { theme, toggleTheme } = useTheme();
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -87,27 +90,18 @@ export default function Settings() {
 
         {/* AI Assistant Configuration hidden until AI router is ported to PostgreSQL */}
 
-        {/* Preferences Placeholder */}
+        <PermissionRequests />
+
+        {/* Preferences */}
         <GlassCard className="p-6">
           <SectionHeader title="Preferences" />
           <div className="space-y-4 text-sm text-[var(--text-secondary)]">
             <div className="flex items-center justify-between py-2">
               <div className="flex items-center gap-3">
-                <Bell size={16} className="text-[var(--text-muted)]" />
-                <span>Email Notifications</span>
-              </div>
-              <div className="w-10 h-6 bg-[var(--bg-input)] rounded-full relative cursor-pointer">
-                <div className="w-4 h-4 bg-white/40 rounded-full absolute top-1 left-1" />
-              </div>
-            </div>
-            <div className="flex items-center justify-between py-2">
-              <div className="flex items-center gap-3">
                 <Palette size={16} className="text-[var(--text-muted)]" />
                 <span>Dark Mode</span>
               </div>
-              <div className="w-10 h-6 bg-emerald-500/30 rounded-full relative cursor-pointer">
-                <div className="w-4 h-4 bg-emerald-400 rounded-full absolute top-1 right-1" />
-              </div>
+              <button role="switch" aria-label="Dark Mode" aria-checked={theme==='dark'} onClick={toggleTheme} className={`w-12 h-7 rounded-full relative ${theme==='dark'?'bg-emerald-600':'bg-slate-400'}`}><span className={`w-5 h-5 bg-white rounded-full absolute top-1 ${theme==='dark'?'right-1':'left-1'}`} /></button>
             </div>
           </div>
         </GlassCard>

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import type { ReactNode } from 'react';
 
 interface User {
+  last_login?: string;
   id: number;
   email: string;
   name: string;

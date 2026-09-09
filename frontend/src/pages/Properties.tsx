@@ -40,8 +40,9 @@ interface PropertyForm {
 }
 
 const STATUSES = [
-  { key: 'to_let', label: 'To Let', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  { key: 'let_agreed', label: 'Let Agreed', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  { key: 'let', label: 'Let', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  { key: 'to_let', label: 'To Let', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+  { key: 'let_agreed', label: 'Let Agreed', color: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30' },
   { key: 'full_management', label: 'Full Management', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
   { key: 'rent_collection', label: 'Rent Collection', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
 ];

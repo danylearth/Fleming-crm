@@ -1,3 +1,4 @@
+import SmsEditor from './SmsEditor';
 import React, { useState, useEffect, useRef } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
@@ -163,6 +164,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [handoverSmsMessage, setHandoverSmsMessage] = useState('Hi {{first_name}}, your move in and handover appointment is confirmed for {{handover_date}} at {{handover_time}} at {{property_address}} with {{appointment_with}}. If you are running late or need to rearrange then please contact us on 01902 212 415.');
   const [reviewNotes, setReviewNotes] = useState('');
   const [changesRequired, setChangesRequired] = useState('');
+  const [reviewSmsOverride,setReviewSmsOverride] = useState('');
   const [sendReviewSms, setSendReviewSms] = useState(false);
   const [sendReviewEmail, setSendReviewEmail] = useState(false);
   const [reviewError, setReviewError] = useState('');
@@ -307,6 +309,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         notes: reviewNotes || null,
         changes_required: status === 'changes_requested' ? changesRequired : null,
         send_sms: status === 'changes_requested' && sendReviewSms,
+        ...(reviewSmsOverride ? { sms_message: reviewSmsOverride } : {}),
         send_email: status === 'changes_requested' && sendReviewEmail,
       });
       const delivery = (result?.delivery || {}) as Record<string, { success: boolean; error?: string }>;
@@ -1010,7 +1013,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 {hdRequestSendSms && (
                   <div>
                     <label className="block text-[10px] text-[var(--text-muted)] mb-1">Editable SMS preview</label>
-                    <textarea rows={4} value={hdRequestSmsMessage} onChange={event => setHdRequestSmsMessage(event.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
+                    <SmsEditor value={hdRequestSmsMessage} onChange={setHdRequestSmsMessage} />
                   </div>
                 )}
                 <Button variant="gradient" onClick={requestHoldingDeposit} disabled={saving || !hdMonthlyRent || !hdHoldingDeposit}>
@@ -1106,7 +1109,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   {hdReceiptSendSms && (
                     <div>
                       <label className="block text-[10px] text-[var(--text-muted)] mb-1">Editable SMS preview</label>
-                      <textarea rows={5} value={hdReceiptSmsMessage} onChange={event => setHdReceiptSmsMessage(event.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
+                      <SmsEditor value={hdReceiptSmsMessage} onChange={setHdReceiptSmsMessage} />
                     </div>
                   )}
                   <Button variant="gradient" onClick={confirmDepositReceived} disabled={saving}>
@@ -1301,8 +1304,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   {sendReviewSms && (
                     <div>
                       <label className="block text-[10px] text-[var(--text-muted)] mb-1">SMS preview</label>
-                      <textarea readOnly value={reviewSmsPreview} rows={5}
-                        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] resize-none" />
+                      <SmsEditor value={reviewSmsOverride || reviewSmsPreview} onChange={setReviewSmsOverride} />
                     </div>
                   )}
                   {sendReviewEmail && (
@@ -1477,7 +1479,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   {agreementSendEmail && <button onClick={previewAgreementEmail} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview branded email</button>}
                   {agreementSendSms && (
                     <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview
-                      <textarea value={agreementSmsMessage} onChange={event => setAgreementSmsMessage(event.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
+                      <SmsEditor value={agreementSmsMessage} onChange={setAgreementSmsMessage} />
                     </label>
                   )}
                   <Button variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || agreementCompliance?.ready !== true || !agreementDetailsComplete}>{saving ? 'Generating...' : reissuingAgreement ? 'Reissue Tenancy Agreement' : 'Generate & Issue Agreement'}</Button>
@@ -1505,7 +1507,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               {!enquiry.balance_payment_requested && <DatePicker label="Follow-up date *" value={balanceFollowUpDate} onChange={setBalanceFollowUpDate} />}
               {!enquiry.balance_payment_requested && balanceSendEmail && <label className="block text-[10px] text-[var(--text-muted)]">Editable email preview<textarea value={balanceEmailMessage} onChange={e => setBalanceEmailMessage(e.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
               {!enquiry.balance_payment_requested && balanceSendEmail && <button onClick={previewBalanceEmail} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview branded email</button>}
-              {!enquiry.balance_payment_requested && balanceSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<textarea value={balanceSmsMessage} onChange={e => setBalanceSmsMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
+              {!enquiry.balance_payment_requested && balanceSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<SmsEditor value={balanceSmsMessage} onChange={setBalanceSmsMessage} /></label>}
               {!enquiry.balance_payment_requested ? <Button variant="gradient" size="sm" onClick={requestBalance} disabled={saving || !balanceFollowUpDate}>Request Final Balance</Button>
                 : !enquiry.balance_payment_received ? <Button variant="gradient" size="sm" onClick={confirmBalance} disabled={saving}>Confirm Payment Received</Button>
                 : <p className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle size={14} /> Final balance received{enquiry.balance_payment_received_at ? ` on ${new Date(enquiry.balance_payment_received_at).toLocaleDateString('en-GB')}` : ''}</p>}
@@ -1533,7 +1535,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               {handoverWithLandlord && <p className="text-[10px] text-[var(--text-muted)]">The landlord is included in the selected email/SMS channels.</p>}
               {handoverSendEmail && <label className="block text-[10px] text-[var(--text-muted)]">Editable email preview<textarea value={handoverEmailMessage} onChange={e => setHandoverEmailMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
               {handoverSendEmail && <button onClick={previewHandoverEmail} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview branded email</button>}
-              {handoverSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<textarea value={handoverSmsMessage} onChange={e => setHandoverSmsMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
+              {handoverSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<SmsEditor value={handoverSmsMessage} onChange={setHandoverSmsMessage} /></label>}
               <Button variant="gradient" size="sm" onClick={scheduleHandover} disabled={saving || !handoverDate || !handoverTime || !handoverAssignedTo}>{enquiry.handover_date ? 'Update Handover' : 'Book Appointment & Add to Calendar'}</Button>
               {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
             </div> : <p className="text-xs text-[var(--text-muted)]">Confirm the final balance first.</p>}

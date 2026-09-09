@@ -38,7 +38,7 @@ export async function applyDueRentReviews(): Promise<void> {
       if (invalid) {
         await client.query("UPDATE rent_reviews SET status='paused',status_reason='Tenancy or rent changed since scheduling. Staff review required.',updated_at=NOW() WHERE id=$1", [review.id]);
       } else {
-        await client.query('UPDATE tenants SET monthly_rent=$1,updated_at=NOW() WHERE id=ANY($2::int[])', [review.new_rent, review.tenant_ids]);
+        await client.query('UPDATE tenants SET monthly_rent=$1,rent_last_reviewed=$3,updated_at=NOW() WHERE id=ANY($2::int[])', [review.new_rent, review.tenant_ids, review.effective_date]);
         await client.query('UPDATE properties SET rent_amount=$1,updated_at=NOW() WHERE id=$2', [review.new_rent, review.property_id]);
         await client.query("UPDATE tenancies SET rent_amount=$1 WHERE tenant_id=ANY($2::int[]) AND property_id=$3 AND status='active'", [review.new_rent, review.tenant_ids, review.property_id]);
         // Preserve receipts, partial payments, historic and bespoke/prorated charges.

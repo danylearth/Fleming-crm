@@ -169,12 +169,11 @@ async function runRentReviewChecks(): Promise<number> {
   in30.setDate(in30.getDate() + 30);
 
   const properties = await query(
-    `SELECT id, address, rent_review_date::text
-     FROM properties
-     WHERE rent_review_date IS NOT NULL
-     AND rent_review_date <= $1
-     AND rent_review_date >= $2`,
-    [ymdLondon(in30), ymdLondon(today)]
+    `SELECT p.id,p.address,COALESCE(p.rent_review_date, (MAX(t.rent_last_reviewed)+INTERVAL '1 year')::date)::text AS rent_review_date
+     FROM properties p LEFT JOIN tenants t ON t.property_id=p.id AND t.status='active'
+     GROUP BY p.id
+     HAVING COALESCE(p.rent_review_date,(MAX(t.rent_last_reviewed)+INTERVAL '1 year')::date) <= $1::date`,
+    [ymdLondon(in30)]
   );
 
   for (const prop of properties) {

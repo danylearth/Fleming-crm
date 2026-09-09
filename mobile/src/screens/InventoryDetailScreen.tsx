@@ -207,6 +207,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
+  status_disputed: { backgroundColor: '#b91c1c' },
   status_in_progress: {
     backgroundColor: '#fff3e0',
   },
