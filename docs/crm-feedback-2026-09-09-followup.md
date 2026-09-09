@@ -39,6 +39,17 @@ Official sources checked 9 September 2026: [Form 4A and notes](https://assets.pu
 
 ## Release
 
-Pre-release database data backup: `backups/pre-followup-20260909-125837.json.gz` (outside the Git repository, restricted file permissions; 27 tables, 2,153 rows). Upload-volume snapshot: `vs_QR0ZJ1xl0AjsGyozbD2Q` (created). Deployment details and live verification are recorded below after completion.
+Pre-release database data backup: `backups/pre-followup-20260909-125837.json.gz` (outside the Git repository, restricted file permissions; 27 tables, 2,153 rows). Upload-volume snapshot: `vs_QR0ZJ1xl0AjsGyozbD2Q` (created). 
+
+Released from commit `848efb7` on branch `codex/crm-production-readiness`:
+
+- Fly API image: `deployment-01M230Q8CG8KXHCG8DGWHHJM1W`; migration 0012 applied successfully; live health reports release `848efb7`.
+- CRM production deployment: `dpl_YpfiSGiPt9mYRrKSe8s7XPe8cwvR` at [crm.fleminglettings.co.uk](https://crm.fleminglettings.co.uk).
+- Public forms production deployment: `dpl_Bj11YjnFtWrNDRhj359URTHsKsQU` at [apply.fleminglettings.co.uk](https://apply.fleminglettings.co.uk) and [report.fleminglettings.co.uk](https://report.fleminglettings.co.uk).
+- Live authenticated API checks: health, financial summary, properties, tenant completion fields and rent-review history all returned 200.
+- Live browser checks: completion modal, Form 4A links, service totals and default Month view passed. Public report/application entry checked at 320px and 768px; logo assets load and no horizontal overflow.
+- Signature drawing survives viewport resizing; tested locally with a long legal name. Production backend dependency audit reported zero vulnerabilities (development dependencies excluded).
+
+The existing draft [PR #2](https://github.com/danylearth/Fleming-crm/pull/2) contains the changes and remains available for review; deployment does not imply a merge into the default branch.
 
 Existing Resend/Twilio account setup remains separate from this feature release; see [Resend setup](resend-setup.md).
