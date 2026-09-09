@@ -110,7 +110,7 @@ export default function FloatingAI() {
       {open && (
         <div className="fixed bottom-0 right-0 z-50 w-full h-[85vh] md:bottom-6 md:right-6 md:w-[380px] md:h-[560px] flex flex-col md:rounded-2xl rounded-t-2xl border border-[var(--border-input)] bg-[var(--chat-bg)] shadow-2xl shadow-black/50 overflow-hidden animate-in slide-in-from-bottom-4">
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-color)] bg-gradient-to-r from-[#232323] to-[#1e1e1e]">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-color)] bg-[var(--bg-card)]">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center">
                 <Sparkles size={16} className="text-white" />
@@ -121,10 +121,10 @@ export default function FloatingAI() {
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
+              <button aria-label="Collapse Flemo" onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
                 <ChevronDown size={18} />
               </button>
-              <button onClick={() => { setOpen(false); setMessages([{ role: 'assistant', text: getGreeting(), status: 'done' }]); }} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
+              <button aria-label="Close Flemo" onClick={() => { setOpen(false); setMessages([{ role: 'assistant', text: getGreeting(), status: 'done' }]); }} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
                 <X size={18} />
               </button>
             </div>
