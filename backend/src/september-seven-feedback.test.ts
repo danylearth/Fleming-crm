@@ -62,7 +62,7 @@ describe('7 September CRM feedback', () => {
   it('keeps applicant identity fields on their own records and exposes their communications', () => {
     expect(tenantDetail).toContain('hasInlineJointApplicant');
     expect(tenantDetail).toContain('!tenant?.linked_tenant_id');
-    expect(tenantDetail).toContain('Email & SMS');
+    expect(tenantDetail).toContain('CommunicationsHistory');
     expect(backend).toContain("app.get('/api/tenants/:id/communications'");
     expect(backend).toContain('LOWER(to_email) = LOWER($3)');
   });

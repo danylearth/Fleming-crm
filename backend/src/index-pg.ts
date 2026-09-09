@@ -1,3 +1,5 @@
+import { syncTenantLifecycle } from './tenant-lifecycle-db';
+import { registerTenancyEndRoutes } from './tenancy-end';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -212,29 +214,6 @@ function appendSystemNote(rawNotes: unknown, text: string, prefix: string): stri
   return JSON.stringify(notes);
 }
 
-async function syncTenantLifecycle(): Promise<void> {
-  await run(`UPDATE tenants SET status='inactive', updated_at=NOW()
-    WHERE COALESCE(status, 'active')='active' AND has_end_date=1
-      AND tenancy_end_date IS NOT NULL AND tenancy_end_date < CURRENT_DATE`);
-  await run(`UPDATE tenants scheduled SET status='active', updated_at=NOW()
-    WHERE scheduled.status='scheduled' AND scheduled.tenancy_start_date <= CURRENT_DATE
-      AND NOT EXISTS (
-        SELECT 1 FROM tenants current
-        WHERE current.property_id=scheduled.property_id
-          AND COALESCE(current.status, 'active')='active'
-      )`);
-  await run(`UPDATE properties property SET
-      tenant_id=(SELECT MIN(tenant.id) FROM tenants tenant WHERE tenant.property_id=property.id AND COALESCE(tenant.status, 'active')='active'),
-      has_live_tenancy=CASE WHEN EXISTS (
-        SELECT 1 FROM tenants tenant WHERE tenant.property_id=property.id AND COALESCE(tenant.status, 'active')='active'
-      ) THEN 1 ELSE 0 END,
-      updated_at=NOW()
-    WHERE property.tenant_id IS DISTINCT FROM (
-      SELECT MIN(tenant.id) FROM tenants tenant WHERE tenant.property_id=property.id AND COALESCE(tenant.status, 'active')='active'
-    ) OR property.has_live_tenancy IS DISTINCT FROM CASE WHEN EXISTS (
-      SELECT 1 FROM tenants tenant WHERE tenant.property_id=property.id AND COALESCE(tenant.status, 'active')='active'
-    ) THEN 1 ELSE 0 END`);
-}
 
 function parseAgreementDetails(value: unknown): Record<string, any> {
   if (!value) return {};
@@ -1042,6 +1021,11 @@ app.get('/api/landlords/:landlordId/director-of', authMiddleware, async (req: Au
 
 // ============ PROPERTY LANDLORDS (Many-to-Many) ============
 
+async function isInternalProperty(id: unknown): Promise<boolean> {
+  const row = await queryOne(`SELECT l.landlord_type FROM properties p JOIN landlords l ON l.id=p.landlord_id WHERE p.id=$1`, [id]);
+  return row?.landlord_type === 'internal';
+}
+
 // Get all landlords for a property
 app.get('/api/properties/:propertyId/landlords', authMiddleware, async (req: AuthRequest, res) => {
   try {
@@ -1052,7 +1036,10 @@ app.get('/api/properties/:propertyId/landlords', authMiddleware, async (req: Aut
       WHERE pl.property_id = $1
       ORDER BY pl.is_primary DESC, l.name
     `, [req.params.propertyId]);
-    res.json(landlords);
+    const master = await query(`SELECT l.*, 1 AS is_primary, 100 AS ownership_percentage,
+      CASE WHEN l.company_number IS NOT NULL OR l.landlord_type='internal' THEN 'company' ELSE 'individual' END AS ownership_entity_type, NULL::int AS link_id
+      FROM properties p JOIN landlords l ON l.id=p.landlord_id WHERE p.id=$1`, [req.params.propertyId]);
+    res.json(master[0]?.landlord_type === 'internal' || landlords.length === 0 ? master : landlords);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch property landlords' });
   }
@@ -1061,6 +1048,7 @@ app.get('/api/properties/:propertyId/landlords', authMiddleware, async (req: Aut
 // Add landlord to property
 app.post('/api/properties/:propertyId/landlords', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    if (await isInternalProperty(req.params.propertyId)) return res.status(409).json({ error: 'Fleming portfolio ownership is linked to the master landlord and cannot be changed here' });
     const { landlord_id, is_primary, ownership_percentage, ownership_entity_type } = req.body;
 
     // If setting as primary, unset other primary landlords
@@ -1095,6 +1083,7 @@ app.post('/api/properties/:propertyId/landlords', authMiddleware, async (req: Au
 app.post('/api/property-landlords', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { property_id, landlord_id, is_primary, ownership_percentage, ownership_entity_type } = req.body;
+    if (await isInternalProperty(property_id)) return res.status(409).json({ error: 'Fleming portfolio ownership is linked to the master landlord and cannot be changed here' });
     if (is_primary) {
       await run('UPDATE property_landlords SET is_primary = 0 WHERE property_id = $1', [property_id]);
     }
@@ -1125,6 +1114,7 @@ app.put('/api/property-landlords/:linkId', authMiddleware, async (req: AuthReque
     const link = await queryOne('SELECT * FROM property_landlords WHERE id = $1', [req.params.linkId]);
 
     if (!link) return res.status(404).json({ error: 'Link not found' });
+    if (await isInternalProperty(link.property_id)) return res.status(409).json({ error: 'Fleming portfolio ownership is linked to the master landlord and cannot be changed here' });
 
     // If setting as primary, unset other primary landlords for this property
     if (is_primary) {
@@ -1154,6 +1144,7 @@ app.delete('/api/property-landlords/:linkId', authMiddleware, async (req: AuthRe
   try {
     const link = await queryOne('SELECT * FROM property_landlords WHERE id = $1', [req.params.linkId]);
     if (!link) return res.status(404).json({ error: 'Link not found' });
+    if (await isInternalProperty(link.property_id)) return res.status(409).json({ error: 'Fleming portfolio ownership is linked to the master landlord and cannot be changed here' });
 
     const alternatives = await query(
       'SELECT * FROM property_landlords WHERE property_id = $1 AND id <> $2 ORDER BY is_primary DESC, id ASC',
@@ -2118,6 +2109,9 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
         tenantId,
       ]);
 
+      await client.query(`UPDATE tenants SET guarantor_employment_status=$1, guarantor_annual_income=$2 WHERE id=$3`, [
+        enquiry.app_form_data?.guarantor_employment_status || null,
+        Number.isFinite(Number(enquiry.app_form_data?.guarantor_annual_income)) && enquiry.app_form_data?.guarantor_annual_income ? Number(enquiry.app_form_data.guarantor_annual_income) : null, tenantId]);
       await client.query(`UPDATE tenancy_agreements SET ${Number(completedAgreement.enquiry_id) === Number(enquiry.id) ? 'tenant_id' : 'joint_tenant_id'} = $1 WHERE id = $2`, [tenantId, completedAgreement.id]);
       if (completedAgreement.signed_filename) {
         const signedPath = path.join(uploadsDir, completedAgreement.signed_filename);
@@ -2199,6 +2193,9 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
             partner.id,
             partnerTenantId,
           ]);
+      await client.query(`UPDATE tenants SET guarantor_employment_status=$1, guarantor_annual_income=$2 WHERE id=$3`, [
+        partner.app_form_data?.guarantor_employment_status || null,
+        Number.isFinite(Number(partner.app_form_data?.guarantor_annual_income)) && partner.app_form_data?.guarantor_annual_income ? Number(partner.app_form_data.guarantor_annual_income) : null, partnerTenantId]);
           if (completedAgreement.signed_filename) {
             const signedPath = path.join(uploadsDir, completedAgreement.signed_filename);
             const signedSize = fs.existsSync(signedPath) ? fs.statSync(signedPath).size : null;
@@ -2568,6 +2565,8 @@ app.post('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+registerTenancyEndRoutes(app);
+
 app.get('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     await syncTenantLifecycle();
@@ -2630,7 +2629,11 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
     const nextStartDate = dateOnly(('tenancy_start_date' in d ? d.tenancy_start_date : current.tenancy_start_date) || new Date().toISOString());
     const nextJoint = 'is_joint_tenancy' in d ? Boolean(d.is_joint_tenancy) : Boolean(current.is_joint_tenancy);
     const nextInactive = ('status' in d ? d.status : current.status) === 'inactive';
-    if (nextPropertyId && !nextInactive) {
+    const placementChanged = Number(nextPropertyId) !== Number(current.property_id)
+      || nextStartDate !== dateOnly(current.tenancy_start_date)
+      || nextJoint !== Boolean(current.is_joint_tenancy)
+      || ('status' in d && d.status !== current.status);
+    if (nextPropertyId && !nextInactive && placementChanged) {
       const activeTenants = await query(`SELECT is_joint_tenancy, tenancy_start_date, tenancy_end_date
         FROM tenants WHERE property_id=$1 AND id<>$2 AND COALESCE(status, 'active')='active'`, [nextPropertyId, req.params.id]);
       const placement = tenantPlacementStatus(activeTenants, nextStartDate, nextJoint);
@@ -2649,7 +2652,8 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
       'kyc_completed_1','kyc_completed_2',
       'kyc_primary_id','kyc_secondary_id','kyc_address_verification','kyc_personal_verification',
       'guarantor_required','guarantor_name','guarantor_address','guarantor_phone','guarantor_email',
-      'guarantor_kyc_completed','guarantor_deed_received',
+      'guarantor_date_of_birth','guarantor_employment_status','guarantor_employer','guarantor_annual_income',
+      'guarantor_kyc_completed','guarantor_deed_received','guarantor_primary_id','guarantor_secondary_id',
       'holding_deposit_received','holding_deposit_amount','security_deposit_amount','holding_deposit_date',
       'application_forms_completed','authority_to_contact','proof_of_income','deposit_scheme',
       'income_amount','income_employer','income_contract_type','income_frequency',
@@ -2659,15 +2663,15 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
     const boolFields = [
       'is_joint_tenancy','kyc_completed_1','kyc_completed_2',
       'kyc_primary_id','kyc_secondary_id','kyc_address_verification','kyc_personal_verification',
-      'guarantor_required','guarantor_kyc_completed','guarantor_deed_received',
+      'guarantor_required','guarantor_kyc_completed','guarantor_deed_received','guarantor_primary_id','guarantor_secondary_id',
       'holding_deposit_received','application_forms_completed','authority_to_contact',
       'proof_of_income','has_end_date'
     ];
     const nullableDateFields = [
-      'date_of_birth_1','date_of_birth_2','holding_deposit_date',
+      'date_of_birth_1','date_of_birth_2','holding_deposit_date','guarantor_date_of_birth',
       'tenancy_start_date','tenancy_end_date'
     ];
-    const nullableNumberFields = ['holding_deposit_amount','security_deposit_amount','income_amount','property_id','monthly_rent'];
+    const nullableNumberFields = ['guarantor_annual_income','holding_deposit_amount','security_deposit_amount','income_amount','property_id','monthly_rent'];
     for (const key of allowed) {
       if (key in d) {
         fields.push(`${key}=$${idx++}`);
@@ -3624,11 +3628,13 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
     const d = req.body;
     delete d.leasehold_portal_password_encrypted;
     delete d.management_company_portal_password_encrypted;
-    if ('status' in d && !['to_let', 'let_agreed'].includes(String(d.status))) {
+    if ('status' in d && !['to_let', 'let_agreed', 'let'].includes(String(d.status))) {
       return res.status(400).json({ error: 'Property status must be To Let or Let Agreed' });
     }
-    const currentProperty = await queryOne('SELECT landlord_id, service_type FROM properties WHERE id = $1', [req.params.id]);
+    const currentProperty = await queryOne('SELECT landlord_id, service_type, status FROM properties WHERE id = $1', [req.params.id]);
     if (!currentProperty) return res.status(404).json({ error: 'Property not found' });
+    if (d.status === 'let' && currentProperty.status !== 'let') return res.status(409).json({ error: 'Let status is set automatically when a tenancy becomes active' });
+    if ('landlord_id' in d && Number(d.landlord_id) !== Number(currentProperty.landlord_id) && await isInternalProperty(req.params.id)) return res.status(409).json({ error: 'Fleming portfolio ownership is linked to the master landlord and cannot be changed here' });
     const landlord = await queryOne('SELECT landlord_type FROM landlords WHERE id = $1', [d.landlord_id || currentProperty.landlord_id]);
     if (!landlord) return res.status(400).json({ error: 'Choose a valid landlord' });
     if ('has_management_company' in d && !d.has_management_company) {

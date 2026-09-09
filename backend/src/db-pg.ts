@@ -1,4 +1,7 @@
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
+
+// PostgreSQL DATE has no time zone. Preserve its calendar day in API responses.
+types.setTypeParser(1082, value => value);
 import fs from 'fs';
 import path from 'path';
 import { runInventoryMigration } from './db-inventory-migration';

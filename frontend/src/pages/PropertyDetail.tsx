@@ -626,6 +626,7 @@ export default function PropertyDetail() {
   const statusLbl = STATUS_LABELS[property.status] || property.status;
   const linkedTenants = allTenants.filter(tenant => tenant.property_id === property.id);
   const activeLinkedTenants = activePropertyTenants(allTenants, property.id);
+  const scheduledTenants = linkedTenants.filter(tenant => tenant.status === 'scheduled');
   const previousTenants = linkedTenants.filter(tenant => tenant.status === 'inactive');
   const currentTenants = activeLinkedTenants.length > 0
     ? activeLinkedTenants
@@ -815,7 +816,7 @@ export default function PropertyDetail() {
                     } />
                     {property.landlord_type === 'internal' && <ReadField label="Key Colour Code" value={property.key_colour_code} />}
                   </div>
-                  {property.amenities && (
+                  {!!property.amenities && (
                     <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
                       <p className="text-xs text-[var(--text-muted)] mb-1.5">Amenities & Features</p>
                       <p className="text-sm whitespace-pre-wrap">{property.amenities}</p>
@@ -1013,13 +1014,14 @@ export default function PropertyDetail() {
               <GlassCard className="p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
                   <SectionHeader title="Tenancy Information" />
+                  <div className="flex flex-wrap gap-2 sm:ml-auto">
                   {!editing && previousTenants.length > 0 && (
-                    <Button variant="outline" size="sm" onClick={() => setShowPreviousTenancies(value => !value)}>
+                    <Button variant="outline" className="!bg-red-600 !text-white !border-red-600" size="sm" onClick={() => setShowPreviousTenancies(value => !value)}>
                       Previous Tenancies ({previousTenants.length})
                     </Button>
                   )}
                   {!editing && currentTenants.length === 0 && (
-                    <Button variant="outline" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('select'); }}>
+                    <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('select'); }}>
                       <Plus size={14} className="mr-1.5" /> <span className="hidden sm:inline">Add Tenant</span><span className="sm:hidden">Add</span>
                     </Button>
                   )}
@@ -1029,6 +1031,7 @@ export default function PropertyDetail() {
                     </Button>
                   )}
                 </div>
+                </div>
                 {currentTenants.length > 0 && !editing && (
                   <div className="mb-4 space-y-2">
                     {currentTenants.map(tenant => (
@@ -1037,7 +1040,7 @@ export default function PropertyDetail() {
                           <Avatar name={tenant.name} size="md" />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium">{tenant.name}</p>
-                            <p className="text-xs text-[var(--text-muted)]">{currentTenants.length > 1 ? 'Joint Tenant' : 'Current Tenant'}</p>
+                            <p className="text-xs text-[var(--text-muted)]">{currentTenants.length > 1 ? 'Joint Tenant' : 'Current Tenant'} · End date: {tenant.tenancy_end_date ? formatDate(tenant.tenancy_end_date) : 'Not scheduled'}</p>
                           </div>
                           {tenant.id ? (
                             <button onClick={() => navigate(`/tenants/${tenant.id}`)} className="text-xs text-[var(--accent-orange)] hover:underline">
@@ -1049,6 +1052,7 @@ export default function PropertyDetail() {
                     ))}
                   </div>
                 )}
+                {!editing && scheduledTenants.length > 0 && <div className="mb-4 space-y-2">{scheduledTenants.map(tenant => <button key={tenant.id} onClick={() => navigate(`/tenants/${tenant.id}`)} className="w-full rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-left"><p className="text-sm font-medium">{tenant.name}</p><p className="text-xs text-[var(--text-muted)]">Scheduled · Starts {formatDate(tenant.tenancy_start_date || '')} · End date: {tenant.tenancy_end_date ? formatDate(tenant.tenancy_end_date) : 'Not scheduled'}</p></button>)}</div>}
                 {showPreviousTenancies && !editing && (
                   <div className="mb-4 space-y-2 border-t border-[var(--border-subtle)] pt-4">
                     {previousTenants.map(tenant => (
@@ -1084,7 +1088,7 @@ export default function PropertyDetail() {
                     <ReadField label="Tenancy Type" value={property.tenancy_type} />
                     <ReadField label="Start Date" value={formatDate(property.tenancy_start_date)} />
                     {property.has_end_date === 1 ? <ReadField label="End Date" value={formatDate(property.tenancy_end_date)} /> : null}
-                    <ReadField label="Status" value={property.has_live_tenancy ? 'Active' : 'Inactive'} />
+                    <ReadField label="Status" value={property.has_live_tenancy ? 'Active' : scheduledTenants.length ? 'Scheduled' : 'Inactive'} />
                     {property.has_end_date === 1 && property.tenancy_end_date && (() => {
                       const days = daysUntil(property.tenancy_end_date);
                       if (days === null) return null;
@@ -1219,9 +1223,9 @@ export default function PropertyDetail() {
             <Card className="p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
                 <SectionHeader title="Landlords" />
-                <Button variant="outline" size="sm" onClick={() => setShowAddLandlord(true)}>
+                {property.landlord_type !== 'internal' && <Button variant="outline" size="sm" onClick={() => setShowAddLandlord(true)}>
                   <Plus size={14} className="mr-1.5" /> <span className="hidden sm:inline">Add Landlord</span><span className="sm:hidden">Add</span>
-                </Button>
+                </Button>}
               </div>
               {propertyLandlords.length === 0 ? (
                 <EmptyState message="No landlords linked" />
@@ -1256,7 +1260,7 @@ export default function PropertyDetail() {
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className={`flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity ${property.landlord_type === 'internal' ? '!hidden' : ''}`}>
                           {landlord.is_primary !== 1 && (
                             <Button
                               variant="ghost"
@@ -1311,7 +1315,7 @@ export default function PropertyDetail() {
             </Card>
 
             {/* Land Registry Price Data */}
-            {property.postcode && <PricePaidData postcode={property.postcode} />}
+            {!!property.postcode && <PricePaidData postcode={property.postcode} />}
 
             {/* Documents */}
             <DocumentUpload entityType="property" entityId={property.id} onChange={loadDetail} />
@@ -1333,7 +1337,7 @@ export default function PropertyDetail() {
                 >
                   Property ({notes.length})
                 </button>
-                {property.landlord_id && (
+                {!!property.landlord_id && (
                   <button
                     onClick={() => setNotesFilter('landlord')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${

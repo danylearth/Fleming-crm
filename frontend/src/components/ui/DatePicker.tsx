@@ -15,7 +15,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 
 function formatDisplay(iso: string) {
   if (!iso) return '';
-  const [y, m, d] = iso.split('-');
+  const [y, m, d] = String(iso).slice(0, 10).split('-');
   return `${d}/${m}/${y}`;
 }
 

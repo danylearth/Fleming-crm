@@ -143,6 +143,37 @@ try {
   await test('document categories include deposit certificate and prescribed information',async()=>{
     const types=await ok('/api/documents/types/tenant',{token:auth.staff});assert.match(JSON.stringify(types),/Tenant Deposit Certificate/);assert.match(JSON.stringify(types),/Tenant Deposit Prescribed Information/i);
   });
+  await test('tenancy end preview is personalised, read-only and excludes internal notes', async()=>{
+    const preview=await ok(`/api/tenants/${tenantId}/tenancy-end`,{method:'POST',token:auth.staff,body:{end_date:today,notes:'Private-only test note',send_email:true,preview_only:true}});
+    assert.equal(preview.previews.length,2);for(const p of preview.previews){assert.match(p.html,/tenancy-end.png/);assert(!p.html.includes('Private-only'));assert(!p.html.includes('{{'));assert.match(p.sms,/Further details/);}
+    assert.equal((await one('SELECT tenancy_end_date FROM tenants WHERE id=$1',[tenantId])).tenancy_end_date,null);
+    assert.equal((await request(`/api/tenants/${tenantId}/tenancy-end`,{method:'POST',token:auth.staff,body:{end_date:'2026-02-31'}})).status,400);
+    assert.equal((await request(`/api/tenants/${tenantId}/tenancy-end`,{method:'POST',token:auth.viewer,body:{end_date:today}})).status,403);
+  });
+  await test('end scheduling updates both tenants, preserves notes and retains them through end date',async()=>{
+    const result=await ok(`/api/tenants/${tenantId}/tenancy-end`,{method:'POST',token:auth.staff,body:{end_date:today,notes:'Private-only test note'}});
+    assert.equal(result.scheduled.length,2);assert.deepEqual(result.failures,[]);
+    const rows=await sql('SELECT * FROM tenants WHERE property_id=$1',[property.id]);for(const t of rows){assert.equal(t.has_end_date,1);assert.equal(t.status,'active');assert.match(t.notes,/Private-only/);}
+    assert.equal((await ok(`/api/properties/${property.id}`,{token:auth.staff})).status,'let');
+    await ok(`/api/tenants/${tenantId}`,{method:'PUT',token:auth.staff,body:{guarantor_date_of_birth:'1980-01-01',guarantor_employer:'Test Company',guarantor_primary_id:1}});
+    assert.equal((await one('SELECT guarantor_primary_id FROM tenants WHERE id=$1',[tenantId])).guarantor_primary_id,1);
+  });
+  await test('portfolio master ownership is visible and cannot be changed via either link API',async()=>{
+    const landlords=await ok(`/api/properties/${property.id}/landlords`,{token:auth.staff});assert.equal(landlords.length,1);assert.equal(landlords[0].id,landlord.id);
+    assert.equal((await request(`/api/properties/${property.id}/landlords`,{method:'POST',token:auth.staff,body:{landlord_id:landlord.id,is_primary:true}})).status,409);
+    assert.equal((await request('/api/property-landlords',{method:'POST',token:auth.staff,body:{property_id:property.id,landlord_id:landlord.id}})).status,409);
+  });
+  await test('future tenants make property Let Agreed; prior tenants archive and new tenants activate by UK date',async()=>{
+    await sql("UPDATE tenants SET tenancy_end_date=CURRENT_DATE-1, tenancy_start_date=CURRENT_DATE-365 WHERE property_id=$1",[property.id]);
+    const next=await one("INSERT INTO tenants(name,first_name_1,last_name_1,property_id,status,tenancy_start_date,email,phone) VALUES('Next Tenant','Next','Tenant',$1,'scheduled',CURRENT_DATE+5,'next@example.test','07700900003') RETURNING id",[property.id]);
+    assert.equal((await ok(`/api/properties/${property.id}`,{token:auth.staff})).status,'let_agreed');
+    assert.equal((await one('SELECT status FROM tenants WHERE id=$1',[tenantId])).status,'inactive');
+    await sql('UPDATE tenants SET tenancy_start_date=CURRENT_DATE WHERE id=$1',[next.id]);
+    assert.equal((await ok(`/api/properties/${property.id}`,{token:auth.staff})).status,'let');
+    assert.equal((await one('SELECT status FROM tenants WHERE id=$1',[next.id])).status,'active');
+    const failed=await ok(`/api/tenants/${next.id}/tenancy-end`,{method:'POST',token:auth.staff,body:{end_date:today,send_email:true,send_sms:true}});
+    assert.equal(failed.failures.length,2);assert.equal((await one('SELECT has_end_date FROM tenants WHERE id=$1',[next.id])).has_end_date,1);
+  });
   console.log(`\n${passed} integration scenarios passed. Private artifacts: ${dir}`);
 } catch(error) { console.error(error); console.error('Server log:',path.join(dir,'server.log')); process.exitCode=1; }
 finally { server.kill('SIGTERM'); await once(server,'exit').catch(()=>{}); await db.end(); }

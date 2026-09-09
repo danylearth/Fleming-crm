@@ -1519,7 +1519,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
             {allPreviousComplete(7) ? <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <DatePicker label="Handover date *" value={handoverDate} onChange={setHandoverDate} />
-                <TimePicker value={handoverTime} onChange={setHandoverTime} />
+                <TimePicker label="Handover time *" value={handoverTime} onChange={setHandoverTime} />
               </div>
               <select value={handoverWithLandlord ? '__landlord__' : handoverAssignedTo} onChange={e => { const landlord = e.target.value === '__landlord__'; setHandoverWithLandlord(landlord); setHandoverAssignedTo(landlord ? (agreementCompliance?.landlordName || 'With Landlord') : e.target.value); }} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs">
                 <option value="">Assign team member…</option>

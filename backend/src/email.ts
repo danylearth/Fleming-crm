@@ -248,6 +248,19 @@ export function applicationChangesRequestedEmail(name: string, changes: string, 
   };
 }
 
+// Embed supplied branding assets in the message itself; saved previews retain public URLs.
+export function inlineEmailImages(html: string) {
+  const assets = new Map<string, { filename: string; content: Buffer; contentType: string; contentId: string }>();
+  const rendered = html.replace(/src="https:\/\/crm\.fleminglettings\.co\.uk\/email-assets\/([a-zA-Z0-9_-]+\.(?:png|jpg))"/g, (original, filename: string) => {
+    const file = path.join(__dirname, 'email-assets', filename);
+    if (!fs.existsSync(file)) return original;
+    const contentId = `fleming-${filename}`;
+    if (!assets.has(filename)) assets.set(filename, { filename, content: fs.readFileSync(file), contentType: filename.endsWith('.png') ? 'image/png' : 'image/jpeg', contentId });
+    return `src="cid:${contentId}"`;
+  });
+  return { html: rendered, attachments: [...assets.values()] };
+}
+
 export async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; id?: string; error?: string; simulated?: boolean }> {
   if (!resend) {
     if (ALLOW_SIMULATED_MESSAGES) {
@@ -260,13 +273,14 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
   }
 
   try {
+    const inline = inlineEmailImages(params.html);
     const { data, error } = await resend.emails.send({
       from: EMAIL_FROM,
       to: params.to,
       subject: params.subject,
-      html: params.html,
+      html: inline.html,
       replyTo: OUTBOUND_EMAIL_ADDRESS,
-      attachments: params.attachments,
+      attachments: [...(params.attachments || []), ...inline.attachments],
     });
 
     if (error) {
@@ -506,5 +520,15 @@ export function genericEmail(name: string, topic: string): { subject: string; ht
         <p>Thank you for your enquiry. We wanted to follow up regarding ${topic.toLowerCase()}.</p>
         <p>Please don't hesitate to get in touch if you have any questions.</p>
     `),
+  };
+}
+
+export function tenancyEndEmail(firstName: string, propertyAddress: string, endDate: string): { subject: string; html: string; sms: string } {
+  const date = new Date(`${endDate}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }).replace(',', '');
+  const address = normalizePropertyAddress(propertyAddress);
+  return {
+    subject: `Your tenancy end date – ${address}`,
+    html: renderFinalEmailTemplate('11-tenancy-end.html', { FIRST_NAME: escapeHtml(firstName || 'there'), END_DATE: escapeHtml(date), PROPERTY_ADDRESS: escapeHtml(address), PROPERTY_SUBJECT: encodeURIComponent(address) }),
+    sms: `Hi ${firstName || 'there'}, this message confirms that your tenancy is scheduled to end on ${date} at ${address}. Further details have been sent you via email. If you have not requested this or wish to postpone your scheduled end date, then please get in touch immediately on 01902 212 415.`,
   };
 }

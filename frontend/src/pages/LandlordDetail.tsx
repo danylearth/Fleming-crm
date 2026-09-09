@@ -1,3 +1,4 @@
+import CommunicationsHistory from '../components/ui/CommunicationsHistory';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
@@ -839,34 +840,12 @@ export default function LandlordDetail() {
               </div>
             </GlassCard>
 
-            {/* SMS History */}
+            <CommunicationsHistory messages={[
+              ...emailHistory.map(email => ({ ...email, channel: 'email' as const, recipient: email.to_email, sender: email.from_email, body: email.body_html })),
+              ...smsHistory.map(sms => ({ ...sms, channel: 'sms' as const, recipient: sms.to_phone, sender: sms.from_phone, body: sms.message_body })),
+            ]} />
             <GlassCard className="p-6">
-              <SectionHeader title="SMS History" icon={<Phone size={16} />} action={loadSmsHistory} actionLabel="Refresh" />
-              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                {smsHistory.length === 0 && <p className="text-xs text-[var(--text-muted)]">No messages sent yet</p>}
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                {smsHistory.map((sms: any) => (
-                  <div key={sms.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                        sms.status === 'delivered'   ? 'bg-green-500/20 text-green-400' :
-                        sms.status === 'sent'        ? 'bg-blue-500/20 text-blue-400' :
-                        sms.status === 'queued' || sms.status === 'sending' ? 'bg-amber-500/20 text-amber-400' :
-                        sms.status === 'failed' || sms.status === 'undelivered' ? 'bg-red-500/20 text-red-400' :
-                                                       'bg-gray-500/20 text-gray-400'
-                      }`}>
-                        {sms.status}
-                      </span>
-                      <span className="text-[10px] text-[var(--text-muted)]">{sms.to_phone}</span>
-                    </div>
-                    <p className="text-xs text-[var(--text-primary)] whitespace-pre-wrap">{sms.message_body}</p>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <span className="text-[10px] text-[var(--text-muted)]">{sms.sent_by_email || 'System'}</span>
-                      <span className="text-[10px] text-[var(--text-muted)]">{new Date(sms.created_at).toLocaleString('en-GB')}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <SectionHeader title="Send SMS" icon={<Phone size={16} />} />
               {landlord?.phone && (
                 <div className="mt-3">
                   <div className="flex gap-2">
@@ -877,7 +856,7 @@ export default function LandlordDetail() {
                       className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors resize-none [field-sizing:content]" />
                     <Button variant="gradient" onClick={sendStandaloneSms} disabled={smsSending || !smsCompose.trim()} className="gap-1.5">
                       <Send size={14} />
-                      <span>Send</span>
+                      <span>Send SMS</span>
                     </Button>
                   </div>
                   {smsCompose.trim() && (
@@ -887,35 +866,7 @@ export default function LandlordDetail() {
               )}
             </GlassCard>
 
-            {/* Email History */}
-            <GlassCard className="p-6">
-              <SectionHeader title="Email History" icon={<Mail size={16} />} action={loadEmailHistory} actionLabel="Refresh" />
-              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                {emailHistory.length === 0 && <p className="text-xs text-[var(--text-muted)]">No emails sent yet</p>}
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                {emailHistory.map((email: any) => (
-                  <div key={email.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                        email.status === 'delivered' ? 'bg-green-500/20 text-green-400' :
-                        email.status === 'sent'      ? 'bg-blue-500/20 text-blue-400' :
-                        email.status === 'opened'    ? 'bg-emerald-500/20 text-emerald-400' :
-                        email.status === 'bounced' || email.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-                                                       'bg-gray-500/20 text-gray-400'
-                      }`}>
-                        {email.status}
-                      </span>
-                      <span className="text-[10px] text-[var(--text-muted)]">{email.to_email}</span>
-                    </div>
-                    <p className="text-xs text-[var(--text-primary)] font-medium">{email.subject}</p>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <span className="text-[10px] text-[var(--text-muted)]">{email.sent_by_email || 'System'}</span>
-                      <span className="text-[10px] text-[var(--text-muted)]">{new Date(email.created_at).toLocaleString('en-GB')}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </GlassCard>
+
 
             {/* Activity Timeline */}
             <GlassCard className="p-6">

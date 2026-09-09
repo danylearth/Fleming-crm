@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import CommunicationsHistory from '../components/ui/CommunicationsHistory';
+import TenancyEndModal from '../components/ui/TenancyEndModal';
+import { useNotifications } from '../context/NotificationContext';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, DatePicker } from '../components/ui';
@@ -28,6 +31,7 @@ interface Tenant {
   kyc_address_verification?: number; kyc_personal_verification?: number;
   guarantor_required?: number; guarantor_name?: string; guarantor_address?: string;
   guarantor_phone?: string; guarantor_email?: string;
+  guarantor_date_of_birth?: string; guarantor_employment_status?: string; guarantor_employer?: string; guarantor_annual_income?: string; guarantor_primary_id?: number; guarantor_secondary_id?: number;
   guarantor_kyc_completed?: number; guarantor_deed_received?: number;
   holding_deposit_received?: number; holding_deposit_amount?: number; holding_deposit_date?: string;
   security_deposit_amount?: number;
@@ -157,8 +161,12 @@ export default function TenantDetail() {
   const navigate = useNavigate();
   const api = useApi();
   const { user } = useAuth();
+  const { confirmAction, notify } = useNotifications();
+  const [showEndModal, setShowEndModal] = useState(false);
+  const [showRentReview, setShowRentReview] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
+  const editingRef = useRef<string | null>(null);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -182,6 +190,8 @@ export default function TenantDetail() {
   const [sendingMaintenanceLink, setSendingMaintenanceLink] = useState<'email' | 'sms' | null>(null);
   const [maintenanceForm, setMaintenanceForm] = useState({ title: '', description: '', category: 'other', priority: 'medium' });
 
+  editingRef.current = editingSection;
+
   const tenantToForm = (t: Tenant) => {
     return {
       name: t.name || '', email: t.email || '', phone: t.phone || '',
@@ -197,6 +207,9 @@ export default function TenantDetail() {
       nok_2_name: t.nok_2_name || '', nok_2_relationship: t.nok_2_relationship || '',
       nok_2_phone: t.nok_2_phone || '', nok_2_email: t.nok_2_email || '', nok_2_address: t.nok_2_address || '',
       kyc_completed_1: !!t.kyc_completed_1, kyc_completed_2: !!t.kyc_completed_2,
+      guarantor_date_of_birth: (t.guarantor_date_of_birth || '').slice(0, 10), guarantor_employment_status: t.guarantor_employment_status || '',
+      guarantor_employer: t.guarantor_employer || '', guarantor_annual_income: t.guarantor_annual_income || '',
+      guarantor_primary_id: !!t.guarantor_primary_id, guarantor_secondary_id: !!t.guarantor_secondary_id,
       guarantor_required: !!t.guarantor_required,
       guarantor_name: t.guarantor_name || '', guarantor_address: t.guarantor_address || '',
       guarantor_phone: t.guarantor_phone || '', guarantor_email: t.guarantor_email || '',
@@ -212,8 +225,8 @@ export default function TenantDetail() {
       income_amount: t.income_amount || '', income_employer: t.income_employer || '', income_contract_type: t.income_contract_type || '',
       income_frequency: t.income_frequency || 'monthly',
       deposit_scheme: t.deposit_scheme || '',
-      property_id: t.property_id, tenancy_start_date: t.tenancy_start_date || t.move_in_date || '',
-      tenancy_type: t.tenancy_type || 'Assured Periodic Tenancy', has_end_date: !!t.has_end_date, tenancy_end_date: t.tenancy_end_date || '',
+      property_id: t.property_id, tenancy_start_date: (t.tenancy_start_date || t.move_in_date || '').slice(0, 10),
+      tenancy_type: t.tenancy_type || 'Assured Periodic Tenancy', has_end_date: !!t.has_end_date, tenancy_end_date: (t.tenancy_end_date || '').slice(0, 10),
       monthly_rent: t.monthly_rent || '', status: t.status || 'active',
     };
   };
@@ -222,7 +235,7 @@ export default function TenantDetail() {
     try {
       const t = await api.get(`/api/tenants/${id}`);
       setTenant(t);
-      setForm(tenantToForm(t));
+      if (!editingRef.current) setForm(tenantToForm(t));
       if (t.property_id) {
         const linkedProperty = await api.get(`/api/properties/${t.property_id}`).catch(() => null);
         setPropertyNotes(parseNotes(linkedProperty?.notes));
@@ -665,6 +678,22 @@ export default function TenantDetail() {
               </div>
             </GlassCard>
 
+            <GlassCard className="p-6">
+              <div className="flex justify-between items-center mb-4"><SectionHeader title="Guarantor" icon={<ShieldCheck size={16} />} /><SectionEditButton editing={isEditing('guarantor')} onEdit={() => setEditingSection('guarantor')} onSave={saveSection} onCancel={cancelSection} saving={saving} /></div>
+              {isEditing('guarantor') ? <div className="space-y-3">
+                <label className="flex gap-2 text-sm"><input type="checkbox" checked={!!form.guarantor_required} onChange={e => setForm({ ...form, guarantor_required: e.target.checked })} />Guarantor required</label>
+                {(['guarantor_name', 'guarantor_address', 'guarantor_email', 'guarantor_phone', 'guarantor_employment_status', 'guarantor_employer', 'guarantor_annual_income'] as const).map(key => <Input key={key} label={key.replace('guarantor_', '').replaceAll('_', ' ')} value={String(form[key] || '')} type={key.includes('email') ? 'email' : key.includes('income') ? 'number' : 'text'} onChange={v => setForm({ ...form, [key]: v })} />)}
+                <DatePicker label="Date of birth" value={form.guarantor_date_of_birth} onChange={v => setForm({ ...form, guarantor_date_of_birth: v })} />
+                <label className="flex gap-2 text-sm"><input type="checkbox" checked={!!form.guarantor_primary_id} onChange={e => setForm({ ...form, guarantor_primary_id: e.target.checked })} />Primary ID held</label>
+                <label className="flex gap-2 text-sm"><input type="checkbox" checked={!!form.guarantor_secondary_id} onChange={e => setForm({ ...form, guarantor_secondary_id: e.target.checked })} />Secondary ID held</label>
+              </div> : <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <ReadField label="Guarantor required" value={tenant.guarantor_required ? 'Yes' : 'Not recorded'} /><ReadField label="Name" value={tenant.guarantor_name} />
+                <ReadField label="Address" value={tenant.guarantor_address} /><ReadField label="Email" value={tenant.guarantor_email} /><ReadField label="Contact number" value={tenant.guarantor_phone} />
+                <ReadField label="Date of birth" value={tenant.guarantor_date_of_birth ? formatDateDMY(tenant.guarantor_date_of_birth) : null} /><ReadField label="Employment" value={tenant.guarantor_employment_status} /><ReadField label="Employer" value={tenant.guarantor_employer} /><ReadField label="Annual income" value={tenant.guarantor_annual_income ? `£${Number(tenant.guarantor_annual_income).toLocaleString()}` : null} />
+                <ReadField label="Primary ID held" value={tenant.guarantor_primary_id ? 'Yes' : 'Not recorded'} /><ReadField label="Secondary ID held" value={tenant.guarantor_secondary_id ? 'Yes' : 'Not recorded'} />
+              </div>}
+            </GlassCard>
+
             {/* Documents */}
             <DocumentUpload entityType="tenant" entityId={tenant.id} />
           </div>
@@ -679,8 +708,14 @@ export default function TenantDetail() {
                   <SectionEditButton editing onEdit={() => setEditingSection('tenancy')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
                 ) : (
                   <div className="flex flex-wrap justify-end gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setEditingSection('tenancy')}>Update Tenancy</Button>
-                    <Button variant="ghost" size="sm" onClick={() => { setForm({ ...form, has_end_date: true }); setEditingSection('tenancy'); }}>Schedule Tenancy End</Button>
+                    <Button variant="outline" className="!bg-yellow-400 !text-yellow-950 !border-yellow-400" size="sm" onClick={() => setEditingSection('tenancy')}>Update Tenancy</Button>
+                    {tenant.status !== 'inactive' && <Button variant="outline" className="!bg-red-600 !text-white !border-red-600" size="sm" onClick={() => setShowEndModal(true)}>Schedule Tenancy End</Button>}
+                    <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => setShowRentReview(true)}>£ Rent Review</Button>
+                    {['admin', 'manager'].includes(user?.role || '') && tenant.status !== 'inactive' && <Button variant="ghost" size="sm" onClick={async () => {
+                      if (!await confirmAction(`Archive ${tenant.name}? Their documents and history are retained.`, 'Archive Tenant')) return;
+                      try { await api.post('/api/tenants/bulk-archive', { ids: [tenant.id] }); await loadDetail(); notify('Tenant archived', 'success'); }
+                      catch (e) { notify(e instanceof Error ? e.message : 'Could not archive tenant', 'error'); }
+                    }}>Archive Tenant</Button>}
                   </div>
                 )}
               </div>
@@ -707,13 +742,6 @@ export default function TenantDetail() {
                     <Select label="Deposit Scheme" value={form.deposit_scheme} onChange={v => setForm({ ...form, deposit_scheme: v })}
                       options={[{ value: '', label: 'Select...' }, { value: 'tds', label: 'Tenancy Deposit Scheme' }, { value: 'gov_back', label: 'Gov Back Scheme' }, { value: 'paid_to_landlord', label: 'Paid to Landlord' }, { value: 'other', label: 'Other/TBF' }]} />
                   </div>
-                  <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                    <input type="checkbox" checked={!!form.has_end_date} onChange={event => setForm({ ...form, has_end_date: event.target.checked, tenancy_end_date: event.target.checked ? form.tenancy_end_date : '' })} />
-                    Schedule this tenancy to end
-                  </label>
-                  {form.has_end_date && (
-                    <DatePicker label="End Date" value={form.tenancy_end_date} onChange={v => setForm({ ...form, tenancy_end_date: v })} />
-                  )}
                   <Select label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })}
                     options={[{ value: 'active', label: 'Active' }, { value: 'scheduled', label: 'Scheduled' }, { value: 'inactive', label: 'Archived' }]} />
                 </div>
@@ -947,29 +975,7 @@ export default function TenantDetail() {
               </div>
             </GlassCard>
 
-            {/* Email and SMS thread */}
-            <GlassCard className="p-6">
-              <SectionHeader title={`Email & SMS (${communications.length})`} icon={<Mail size={16} />} />
-              <div className="mt-4 max-h-[390px] space-y-3 overflow-y-auto pr-1">
-                {communications.length === 0 && <p className="text-xs text-[var(--text-muted)]">No email or SMS messages recorded yet.</p>}
-                {communications.map(message => (
-                  <div key={`${message.channel}-${message.id}`} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--accent-orange)]">
-                          {message.channel === 'email' ? <Mail size={12} /> : <MessageSquare size={12} />}{message.channel}
-                        </p>
-                        <p className="mt-1 truncate text-sm font-medium text-[var(--text-primary)]">{message.subject || `Message to ${message.recipient}`}</p>
-                        <p className="text-[10px] text-[var(--text-muted)]">To {message.recipient}</p>
-                      </div>
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${['failed', 'bounced'].includes(message.status) ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'}`}>{message.status}</span>
-                    </div>
-                    <p className="mt-2 line-clamp-3 text-xs text-[var(--text-secondary)]">{message.channel === 'email' ? message.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : message.body}</p>
-                    <p className="mt-2 text-[10px] text-[var(--text-muted)]">{new Date(message.created_at).toLocaleString('en-GB')}{message.opened_at ? ` · opened ${new Date(message.opened_at).toLocaleString('en-GB')}` : ''}</p>
-                  </div>
-                ))}
-              </div>
-            </GlassCard>
+            <CommunicationsHistory messages={communications} />
 
             {/* Activity Timeline */}
             <GlassCard className="p-6">
@@ -979,6 +985,13 @@ export default function TenantDetail() {
           </div>
         </div>
       </div>
+      {showEndModal && <TenancyEndModal tenantId={tenant.id} linkedName={tenant.linked_tenant_name} initialDate={tenant.tenancy_end_date} onClose={() => setShowEndModal(false)} onSaved={loadDetail} />}
+      {showRentReview && <div className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="rent-review-title"><div className="max-w-lg rounded-2xl bg-[var(--bg-card)] p-6 space-y-4">
+        <h2 id="rent-review-title" className="text-lg font-semibold">£ Rent Review</h2>
+        <p className="text-sm text-[var(--text-secondary)]">Proposed process for staff approval:</p>
+        <ol className="list-decimal pl-5 space-y-3 text-sm"><li>Check the tenancy terms, start date and last rent increase.</li><li>Compare similar local properties and record a proposed rent with supporting evidence.</li><li>Confirm the applicable notice, timing and current legal requirements before getting landlord approval.</li><li>Prepare the correct notice for review, then record service and the effective date.</li><li>Update the rent schedule only when the approved increase takes effect.</li></ol>
+        <p className="text-xs text-[var(--text-muted)]">This planning view does not change rent or issue a notice. Record the review and proposed rent in internal notes until the workflow is approved.</p><Button onClick={() => setShowRentReview(false)}>Close</Button>
+      </div></div>}
     </Layout>
   );
 }

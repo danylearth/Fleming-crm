@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tenantPlacementStatus } from './tenant-lifecycle';
+import { dateOnly, tenantPlacementStatus } from './tenant-lifecycle';
 
 describe('tenant placement lifecycle', () => {
   const today = '2026-09-03';
@@ -25,4 +25,9 @@ describe('tenant placement lifecycle', () => {
       { is_joint_tenancy: 0, tenancy_start_date: '2025-09-01' },
     ], '2026-10-01', false, today)).toBeNull();
   });
+});
+
+it('accepts PostgreSQL Date objects when joining a live joint tenancy', () => {
+  expect(dateOnly(new Date('2026-09-03T00:00:00Z'))).toBe('2026-09-03');
+  expect(tenantPlacementStatus([{ is_joint_tenancy: 1, tenancy_start_date: new Date('2026-09-03T00:00:00Z') }], '2026-09-03', true, '2026-09-09')).toBe('active');
 });

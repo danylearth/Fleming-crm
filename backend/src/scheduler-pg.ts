@@ -1,3 +1,4 @@
+import { syncTenantLifecycle } from './tenant-lifecycle-db';
 import { query, queryOne, run, insert } from './db-pg';
 
 const CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour
@@ -269,6 +270,7 @@ async function runDueFollowUps(): Promise<number> {
 }
 
 async function runAllChecks() {
+  await syncTenantLifecycle();
   const complianceTasks = await runComplianceChecks();
   const tenancyTasks = await runTenancyEndChecks();
   const rentReviewTasks = await runRentReviewChecks();
