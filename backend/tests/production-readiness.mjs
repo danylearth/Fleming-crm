@@ -174,6 +174,53 @@ try {
     const failed=await ok(`/api/tenants/${next.id}/tenancy-end`,{method:'POST',token:auth.staff,body:{end_date:today,send_email:true,send_sms:true}});
     assert.equal(failed.failures.length,2);assert.equal((await one('SELECT has_end_date FROM tenants WHERE id=$1',[next.id])).has_end_date,1);
   });
+
+  let reviewTenant, reviewPartner, reviewProperty, reviewId;
+  await test('rent review validates dates, notice ownership and staff permissions; joint duplicate is blocked',async()=>{
+    reviewProperty=await one("INSERT INTO properties(address,postcode,landlord_id,rent_amount) VALUES('Rent Review Test','WV1 1AA',$1,1000) RETURNING id",[landlord.id]);
+    reviewTenant=await one("INSERT INTO tenants(name,first_name_1,last_name_1,email,phone,property_id,status,tenancy_start_date,monthly_rent,is_joint_tenancy) VALUES('Review A','Review','A','review-a@example.test','07700900004',$1,'active','2024-01-15',1000,1) RETURNING id",[reviewProperty.id]);
+    reviewPartner=await one("INSERT INTO tenants(name,first_name_1,last_name_1,email,phone,property_id,status,tenancy_start_date,monthly_rent,is_joint_tenancy,linked_tenant_id) VALUES('Review B','Review','B','review-b@example.test','07700900005',$1,'active','2024-01-15',1000,1,$2) RETURNING id",[reviewProperty.id,reviewTenant.id]);
+    await sql('UPDATE tenants SET linked_tenant_id=$1 WHERE id=$2',[reviewPartner.id,reviewTenant.id]);
+    const doc=await one("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('tenant',$1,'Form 4A','sample.pdf','notice.pdf','application/pdf','approved') RETURNING id",[reviewTenant.id]);
+    const future=new Date(today+'T12:00:00Z');future.setUTCMonth(future.getUTCMonth()+3,15);
+    const body={new_rent:1100,notice_document_id:doc.id,notice_served_date:today,effective_date:future.toISOString().slice(0,10),last_increase_date:'2025-01-15',service_method:'post',notes:'Test evidence of service on both tenants',confirmed:true};
+    const route=`/api/tenants/${reviewTenant.id}/rent-reviews`;
+    assert.equal((await request(route,{method:'POST',token:auth.viewer,body})).status,403);
+    assert.equal((await request(route,{method:'POST',token:auth.staff,body:{...body,effective_date:today}})).status,400);
+    assert.equal((await request(route,{method:'POST',token:auth.staff,body:{...body,notice_document_id:999999}})).status,400);
+    const review=await ok(route,{method:'POST',token:auth.staff,body});reviewId=review.id;
+    assert.equal((await request(`/api/tenants/${reviewPartner.id}/rent-reviews`,{method:'POST',token:auth.staff,body})).status,409);
+    assert.equal((await request(`/api/documents/download/${doc.id}`,{token:auth.staff})).status,200);
+    assert.equal((await request(`/api/documents/${doc.id}`,{method:'DELETE',token:auth.staff})).status,409);
+    assert.equal((await ok(`/api/tenants/${reviewPartner.id}/rent-reviews`,{token:auth.staff}))[0].id,reviewId);
+    assert.equal(Number((await one('SELECT monthly_rent FROM tenants WHERE id=$1',[reviewTenant.id])).monthly_rent),1000);
+  });
+  await test('paused increases never apply; due increases apply once to joint tenancy and preserve historic receipts',async()=>{
+    await ok(`/api/rent-reviews/${reviewId}`,{method:'PATCH',token:auth.staff,body:{status:'paused',reason:'Tenant challenge received'}});
+    await sql('UPDATE rent_reviews SET effective_date=$1 WHERE id=$2',[today,reviewId]);
+    await ok(`/api/tenants/${reviewTenant.id}/rent-reviews`,{token:auth.staff});
+    assert.equal(Number((await one('SELECT monthly_rent FROM tenants WHERE id=$1',[reviewTenant.id])).monthly_rent),1000);
+    const old=await one("INSERT INTO rent_payments(property_id,tenant_id,due_date,amount_due,status) VALUES($1,$2,CURRENT_DATE-1,1000,'late') RETURNING id",[reviewProperty.id,reviewTenant.id]);
+    const pending=await one("INSERT INTO rent_payments(property_id,tenant_id,due_date,amount_due,status) VALUES($1,$2,CURRENT_DATE+1,1000,'pending') RETURNING id",[reviewProperty.id,reviewTenant.id]);
+    const paid=await one("INSERT INTO rent_payments(property_id,tenant_id,due_date,amount_due,amount_paid,status) VALUES($1,$2,CURRENT_DATE+2,1000,1000,'paid') RETURNING id",[reviewProperty.id,reviewTenant.id]);
+    await ok(`/api/rent-reviews/${reviewId}`,{method:'PATCH',token:auth.staff,body:{status:'scheduled',reason:'Challenge withdrawn, original notice remains valid',confirmed:true}});
+    await Promise.all([1,2,3].map(()=>ok(`/api/tenants/${reviewTenant.id}/rent-reviews`,{token:auth.staff})));
+    for(const t of await sql('SELECT monthly_rent FROM tenants WHERE property_id=$1',[reviewProperty.id]))assert.equal(Number(t.monthly_rent),1100);
+    assert.equal(Number((await one('SELECT rent_amount FROM properties WHERE id=$1',[reviewProperty.id])).rent_amount),1100);
+    assert.equal(Number((await one('SELECT amount_due FROM rent_payments WHERE id=$1',[pending.id])).amount_due),1100);
+    for(const p of [old,paid])assert.equal(Number((await one('SELECT amount_due FROM rent_payments WHERE id=$1',[p.id])).amount_due),1000);
+    assert.equal((await one("SELECT count(*)::int n FROM audit_log WHERE entity_id=$1 AND changes::jsonb->>'action'='rent_increase_applied'",[reviewTenant.id])).n,1);
+    assert.equal((await request(`/api/rent-reviews/${reviewId}`,{method:'PATCH',token:auth.staff,body:{status:'cancelled',reason:'Too late'}})).status,409);
+  });
+  await test('completion overrides are audited, reversible, require reasons and preserve actual KYC evidence',async()=>{
+    const route=`/api/tenants/${reviewTenant.id}/completion-overrides`,body={key:'kyc_primary_id',complete:true,reason:'Evidence checked offline'};
+    assert.equal((await request(route,{method:'PUT',token:auth.viewer,body})).status,403);
+    assert.equal((await request(route,{method:'PUT',token:auth.staff,body:{...body,reason:''}})).status,400);
+    assert.equal((await request(route,{method:'PUT',token:auth.staff,body:{...body,key:'monthly_rent'}})).status,400);
+    const saved=await ok(route,{method:'PUT',token:auth.staff,body});assert.equal(saved.completion_overrides.kyc_primary_id.by,'staff@example.test');
+    const tenant=await ok(`/api/tenants/${reviewTenant.id}`,{token:auth.staff});assert.equal(tenant.kyc_primary_id,0);assert.equal(tenant.completion_overrides.kyc_primary_id.reason,body.reason);
+    const removed=await ok(route,{method:'PUT',token:auth.staff,body:{key:body.key,complete:false}});assert.deepEqual(removed.completion_overrides,{});
+  });
   console.log(`\n${passed} integration scenarios passed. Private artifacts: ${dir}`);
 } catch(error) { console.error(error); console.error('Server log:',path.join(dir,'server.log')); process.exitCode=1; }
 finally { server.kill('SIGTERM'); await once(server,'exit').catch(()=>{}); await db.end(); }

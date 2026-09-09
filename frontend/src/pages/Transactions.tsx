@@ -1,3 +1,4 @@
+import { rentServiceGroups } from '../utils/rentServices';
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { Button, Card, GlassCard, EmptyState } from '../components/ui';
@@ -36,6 +37,7 @@ interface BankFeedTransaction {
 interface Property {
   id: number;
   address: string;
+  landlord_type?: string; service_type?: string; active_monthly_rent?: number;
   monthly_rent?: number;
   rent?: number;
   rent_amount?: number;
@@ -127,14 +129,7 @@ export default function Transactions() {
 
   const fmt = (n: number) => `£${n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
-  // Group properties by status
-  const statusGroups = properties.reduce<Record<string, { count: number; rent: number }>>((acc, p) => {
-    const s = p.status || 'unknown';
-    if (!acc[s]) acc[s] = { count: 0, rent: 0 };
-    acc[s].count++;
-    acc[s].rent += Number(p.rent_amount || p.monthly_rent || p.rent || 0);
-    return acc;
-  }, {});
+  const statusGroups = rentServiceGroups(properties);
 
   return (
     <Layout title="Financials" breadcrumb={[{ label: 'Financials' }]}>
@@ -226,7 +221,7 @@ export default function Transactions() {
 
               {/* Property Rent Breakdown */}
               <Card className="p-5">
-                <h3 className="text-lg font-semibold mb-4">Rent by Status</h3>
+                <h3 className="text-lg font-semibold mb-4">Rent by Status</h3><p className="text-xs text-[var(--text-muted)] mb-4">Monthly rental values by service, excluding Fleming-owned properties. These are rents, not service fees.</p>
                 {Object.keys(statusGroups).length === 0 ? (
                   <EmptyState message="No property data available" icon={<Home size={24} />} />
                 ) : (
@@ -242,7 +237,7 @@ export default function Transactions() {
                     ))}
                     {/* Total */}
                     <div className="flex items-center justify-between p-3 bg-gradient-to-r from-orange-500/10 to-pink-500/10 rounded-xl border border-orange-500/20">
-                      <p className="text-sm font-semibold">Total Portfolio</p>
+                      <p className="text-sm font-semibold">Portfolio Turnover (monthly total)</p>
                       <p className="text-sm font-bold">{fmt(totalMonthlyRent)}<span className="text-[var(--text-muted)] text-xs">/mo</span></p>
                     </div>
                   </div>

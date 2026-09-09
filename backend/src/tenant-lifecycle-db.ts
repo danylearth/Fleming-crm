@@ -1,3 +1,4 @@
+import { applyDueRentReviews } from './rent-review';
 import { run } from './db-pg';
 
 export async function syncTenantLifecycle(): Promise<void> {
@@ -38,5 +39,5 @@ export async function syncTenantLifecycle(): Promise<void> {
     WHERE t.property_id=p.id AND (p.tenancy_start_date IS DISTINCT FROM t.tenancy_start_date
       OR p.tenancy_end_date IS DISTINCT FROM t.tenancy_end_date OR p.has_end_date IS DISTINCT FROM COALESCE(t.has_end_date,0)
       OR p.tenancy_type IS DISTINCT FROM t.tenancy_type)`);
-
+  await applyDueRentReviews();
 }

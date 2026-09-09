@@ -138,7 +138,7 @@ export default function Tasks() {
   const [calYear, setCalYear] = useState(now.getFullYear());
   const [calMonth, setCalMonth] = useState(now.getMonth());
   const [selectedMember, setSelectedMember] = useState('all');
-  const [calViewMode, setCalViewMode] = useState<'day' | 'week' | 'month'>('day');
+  const [calViewMode, setCalViewMode] = useState<'day' | 'week' | 'month'>('month');
 
   const teamMembers = useMemo(() => [
     { id: 'all', name: 'Everyone', role: 'All Team', color: 'from-orange-500 to-pink-500', initials: 'All' },

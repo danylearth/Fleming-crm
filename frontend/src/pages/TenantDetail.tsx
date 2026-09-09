@@ -1,3 +1,6 @@
+import RentReviewModal from '../components/ui/RentReviewModal';
+import CompletionModal from '../components/ui/CompletionModal';
+import { tenantCompletion, type CompletionOverride } from '../utils/tenantCompletion';
 import CommunicationsHistory from '../components/ui/CommunicationsHistory';
 import TenancyEndModal from '../components/ui/TenancyEndModal';
 import { useNotifications } from '../context/NotificationContext';
@@ -18,6 +21,7 @@ import {
 
 // ==================== TYPES ====================
 interface Tenant {
+  completion_overrides?: Record<string, CompletionOverride>;
   id: number; name: string; email: string; phone: string;
   title_1?: string; first_name_1?: string; last_name_1?: string; date_of_birth_1?: string;
   current_address?: string; previous_address?: string; address_before_previous?: string;
@@ -163,6 +167,7 @@ export default function TenantDetail() {
   const { user } = useAuth();
   const { confirmAction, notify } = useNotifications();
   const [showEndModal, setShowEndModal] = useState(false);
+  const [showCompletion, setShowCompletion] = useState(false);
   const [showRentReview, setShowRentReview] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
@@ -309,28 +314,7 @@ export default function TenantDetail() {
     setSendingMaintenanceLink(null);
   };
 
-  // Restructured checklist: Authority → KYC → Application Forms → Proof of Income
-  function getChecklistItems() {
-    const items: { label: string; done: boolean }[] = [
-      { label: 'Authority to Contact', done: !!form.authority_to_contact },
-      { label: 'Primary ID', done: !!form.kyc_primary_id },
-      { label: 'Secondary ID', done: !!form.kyc_secondary_id },
-      { label: 'Address Verification', done: !!form.kyc_address_verification },
-      { label: 'In-person Identity Check', done: !!form.kyc_personal_verification },
-    ];
-    if (form.is_joint_tenancy && !tenant?.linked_tenant_id && (form.first_name_2 || form.last_name_2 || form.email_2)) {
-      items.push({ label: 'KYC — Applicant 2', done: !!form.kyc_completed_2 });
-    }
-    items.push({ label: 'Application Forms', done: !!form.application_forms_completed });
-    items.push({ label: 'Proof of Income', done: !!(form.income_amount || form.proof_of_income) });
-    if (form.guarantor_required) {
-      items.push({ label: 'Guarantor KYC', done: !!form.guarantor_kyc_completed });
-      items.push({ label: 'Deed of Guarantee', done: !!form.guarantor_deed_received });
-    }
-    return items;
-  }
-
-  const checklistItems = getChecklistItems();
+  const checklistItems = tenantCompletion(form, tenant?.linked_tenant_id, tenant?.completion_overrides);
   const hasInlineJointApplicant = Boolean(form.is_joint_tenancy && !tenant?.linked_tenant_id && (form.first_name_2 || form.last_name_2 || form.email_2));
   const completedCount = checklistItems.filter(i => i.done).length;
   const completionPercent = checklistItems.length ? Math.round((completedCount / checklistItems.length) * 100) : 0;
@@ -487,7 +471,7 @@ export default function TenantDetail() {
                 </div>
               )}
             </div>
-            <CompletionRing percent={completionPercent} />
+            <button onClick={() => setShowCompletion(true)} aria-label={`Open completion checklist, ${completionPercent}% complete`} className="rounded-full focus-visible:outline-2 focus-visible:outline-orange-400"><CompletionRing percent={completionPercent} /></button>
           </div>
         </GlassCard>
 
@@ -995,12 +979,8 @@ export default function TenantDetail() {
         </div>
       </div>
       {showEndModal && <TenancyEndModal tenantId={tenant.id} linkedName={tenant.linked_tenant_name} initialDate={tenant.tenancy_end_date} onClose={() => setShowEndModal(false)} onSaved={loadDetail} />}
-      {showRentReview && <div className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="rent-review-title"><div className="max-w-lg rounded-2xl bg-[var(--bg-card)] p-6 space-y-4">
-        <h2 id="rent-review-title" className="text-lg font-semibold">£ Rent Review</h2>
-        <p className="text-sm text-[var(--text-secondary)]">Proposed process for staff approval:</p>
-        <ol className="list-decimal pl-5 space-y-3 text-sm"><li>Check the tenancy terms, start date and last rent increase.</li><li>Compare similar local properties and record a proposed rent with supporting evidence.</li><li>Confirm the applicable notice, timing and current legal requirements before getting landlord approval.</li><li>Prepare the correct notice for review, then record service and the effective date.</li><li>Update the rent schedule only when the approved increase takes effect.</li></ol>
-        <p className="text-xs text-[var(--text-muted)]">This planning view does not change rent or issue a notice. Record the review and proposed rent in internal notes until the workflow is approved.</p><Button onClick={() => setShowRentReview(false)}>Close</Button>
-      </div></div>}
+      {showCompletion && <CompletionModal tenantId={tenant.id} items={checklistItems} canEdit={['admin','manager','staff'].includes(user?.role || '')} onClose={() => setShowCompletion(false)} onSaved={loadDetail} />}
+      {showRentReview && <RentReviewModal tenantId={tenant.id} currentRent={tenant.monthly_rent} linkedName={tenant.linked_tenant_name} canEdit={['admin','manager','staff'].includes(user?.role || '') && tenant.status !== 'inactive'} onClose={() => setShowRentReview(false)} onSaved={loadDetail} />}
     </Layout>
   );
 }

@@ -722,13 +722,19 @@
             input[type="number"], select, textarea { min-height: 48px; }
             .checkbox-group input[type="checkbox"] { width: 24px; height: 24px; }
         }
-    </style>
+
+    /* Keep long addresses, uploads and controls within narrow mobile viewports. */
+    img{max-width:100%;object-fit:contain}input,select,textarea{min-width:0;max-width:100%;font-size:16px}button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
+    .grid>*,.two-col>*,.input-group,.panel,.document-card{min-width:0}.header,.top-inner{flex-wrap:wrap;gap:12px}.actions{flex-wrap:wrap}
+    .uploaded-list,.property,.meta,.notice,.message{overflow-wrap:anywhere}.uploaded-list li{flex-wrap:wrap}.date-picker-dropdown{max-height:90dvh;overflow-y:auto}
+    @media(max-width:480px){.top-inner{justify-content:center}.top img{max-width:155px;height:auto}.help{white-space:normal;text-align:center}.back-button{min-height:44px;display:inline-flex;align-items:center;justify-content:center}.field input,.input-group input,.input-group select,.input-group textarea{font-size:16px}.panel{padding:14px}.state{padding:40px 20px}.header{justify-content:center}.button,.actions button{min-height:44px}}
+  </style>
 </head>
 <body>
     <div class="container" id="app">
         <!-- Header -->
         <div class="header">
-            <img src="logo-white.png" alt="Fleming Lettings" class="logo" />
+            <img src="/logo-white.png" alt="Fleming Lettings" class="logo" />
             <a href="tel:+441902212415" class="back-button">Need help? <span class="phone-icon" aria-hidden="true">&#9742;</span></a>
         </div>
 

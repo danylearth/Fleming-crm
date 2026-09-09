@@ -1,3 +1,5 @@
+import { registerRentReviewRoutes } from './rent-review';
+import { registerCompletionRoutes } from './completion-overrides';
 import { syncTenantLifecycle } from './tenant-lifecycle-db';
 import { registerTenancyEndRoutes } from './tenancy-end';
 import express from 'express';
@@ -2566,6 +2568,8 @@ app.post('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
 });
 
 registerTenancyEndRoutes(app);
+registerRentReviewRoutes(app);
+registerCompletionRoutes(app);
 
 app.get('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
@@ -2764,6 +2768,7 @@ app.post('/api/tenants/bulk-delete', authMiddleware, requirePermission('manager'
     }
 
     // Delete physical files first (best-effort)
+    if (await queryOne('SELECT id FROM rent_reviews WHERE tenant_ids && $1::int[] LIMIT 1', [ids])) return res.status(409).json({ error: 'Archive tenants with rent review history instead of deleting them' });
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
     const documents = await query(`SELECT * FROM documents WHERE entity_type = 'tenant' AND entity_id::INTEGER IN (${placeholders})`, ids);
     for (const doc of documents) {
@@ -3457,6 +3462,7 @@ app.get('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
     const { limit, offset } = pageParams(req);
     const properties = await query(`
       SELECT p.*, l.name as landlord_name, l.landlord_type,
+        (SELECT MAX(t.monthly_rent) FROM tenants t WHERE t.property_id=p.id AND COALESCE(t.status,'active')='active') AS active_monthly_rent,
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND COALESCE(t.status, 'active') = 'active' LIMIT 1) as current_tenant,
         (SELECT t.name FROM tenants t WHERE t.property_id = p.id AND t.status = 'scheduled' ORDER BY t.tenancy_start_date LIMIT 1) as scheduled_tenant,
         (SELECT t.tenancy_start_date FROM tenants t WHERE t.property_id = p.id AND t.status = 'scheduled' ORDER BY t.tenancy_start_date LIMIT 1) as scheduled_tenancy_start
@@ -4362,6 +4368,7 @@ app.delete('/api/documents/:id', authMiddleware, requirePermission('staff'), asy
     const doc = await queryOne('SELECT * FROM documents WHERE id = $1', [req.params.id as string]);
     if (!doc) return res.status(404).json({ error: 'Document not found' });
 
+    if (await queryOne('SELECT id FROM rent_reviews WHERE notice_document_id=$1 LIMIT 1', [doc.id])) return res.status(409).json({ error: 'This notice is retained in the rent review audit trail and cannot be deleted' });
     const filePath = path.join(uploadsDir, doc.filename);
     const client = await pool.connect();
     try {
@@ -4745,6 +4752,7 @@ app.put('/api/auth/password', authMiddleware, async (req: AuthRequest, res) => {
 app.delete('/api/tenants/:id', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
     const id = req.params.id;
+    if (await queryOne('SELECT id FROM rent_reviews WHERE $1::int=ANY(tenant_ids) LIMIT 1', [id])) return res.status(409).json({ error: 'Archive tenants with rent review history instead of deleting them' });
     // Delete physical files first (outside transaction — best-effort)
     const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['tenant', id]);
     for (const doc of documents) {
@@ -4781,6 +4789,7 @@ app.delete('/api/tenants/:id', authMiddleware, requirePermission('manager'), asy
 
 app.delete('/api/properties/:id', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   try {
+    if (await queryOne('SELECT id FROM rent_reviews WHERE property_id=$1 LIMIT 1', [req.params.id])) return res.status(409).json({ error: 'Properties with rent review history cannot be deleted' });
     const documents = await query('SELECT * FROM documents WHERE entity_type = $1 AND entity_id = $2', ['property', req.params.id]);
     for (const doc of documents) {
       const filePath = path.join(uploadsDir, doc.filename);
