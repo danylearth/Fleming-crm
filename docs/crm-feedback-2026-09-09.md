@@ -24,6 +24,7 @@ Source: `CRM 09.9.zip`, “feedback and changes.docx”, supplied tenancy-end HT
 ## Remaining input and operational setup
 
 - Mildred’s guarantor requirement is recorded from this feedback. The overview supplies Gavin Cameron as next of kin, without identifying a guarantor. Guarantor identity/contact/employment details still need confirmation; next-of-kin status was not converted into guarantor status.
+- Diane Reaney’s next-of-kin section is blank in the supplied overview; no matching completed source was found. These details remain to be supplied.
 - Primary ID for Julia/Katie’s guarantor is not marked held without a source document. The supplied approved utility bill supports the secondary-ID-held flag.
 - Resend delivery/open/click event tracking still needs the account-side signing-secret setup in [resend-setup.md](resend-setup.md). No live recipient messages were sent during verification.
 - Template HTML, images and provider payloads were tested. A real Outlook inbox rendering test remains part of the account-side test email; browser preview cannot establish identical rendering in every Outlook version.
@@ -38,4 +39,17 @@ Source: `CRM 09.9.zip`, “feedback and changes.docx”, supplied tenancy-end HT
 
 ## Verification
 
-Backend/frontend builds, unit tests, lint, real PostgreSQL/API scenarios and browser checks are run before production deployment. Private source data and backup files remain outside the repository. Deployment details and final results are recorded after release.
+- 171 unit tests passed: 133 backend, 38 frontend.
+- 20 real HTTP/PostgreSQL scenarios passed, including repeated migrations, joint conversion, end-date scheduling, read-only previews, failed-provider reporting, date transitions and portfolio ownership guards.
+- Backend and frontend production builds passed. Lint: zero errors, two pre-existing hook warnings.
+- Browser checks passed on desktop, tablet and mobile: real tenant records, null email bodies, entity decoding, filters, unsaved-date preservation, email/SMS previews, joint end-date save and recovered contact details. All template images loaded.
+- Private database backup: 27 tables before release. Upload volume snapshot: `vs_kmjev12xjZlC7mGzqlzn`.
+- Backend deployed successfully to Fly, release `13a334b`, image `deployment-01M22J71R0ZJ6JQ7GW7B92B8BH`; migration 0011 applied.
+- Frontend deployed successfully to Vercel from `5a9540a`, deployment `dpl_4PqLTxf1RATonnwpHc1HL76w4BmC`.
+- Source-backed restoration committed with audit entries for Julia, Katie and Mildred. Missing fields were filled without overwriting populated contact details.
+- Live API verification passed: Ella/Sam accessible and scheduled for 14 September; 8 Bridgemary shows Let Agreed and master landlord 8; both personalised end-message previews render. No tenancy end was scheduled on production during testing.
+- Live production login and supplied assets checked in Chrome. No live recipient emails/SMS were sent.
+
+Production CRM: https://crm.fleminglettings.co.uk
+
+Private source data and backups remain outside the repository.
