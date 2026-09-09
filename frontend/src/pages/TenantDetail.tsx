@@ -167,6 +167,9 @@ export default function TenantDetail() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
   const editingRef = useRef<string | null>(null);
+  const requestedTenantId = useRef(Number(id));
+  const loadedTenantId = useRef<number | null>(null);
+  requestedTenantId.current = Number(id);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -234,6 +237,12 @@ export default function TenantDetail() {
   const loadDetail = async () => {
     try {
       const t = await api.get(`/api/tenants/${id}`);
+      if (Number(t.id) !== requestedTenantId.current) return;
+      if (loadedTenantId.current !== Number(t.id)) {
+        editingRef.current = null;
+        setEditingSection(null);
+        loadedTenantId.current = Number(t.id);
+      }
       setTenant(t);
       if (!editingRef.current) setForm(tenantToForm(t));
       if (t.property_id) {
