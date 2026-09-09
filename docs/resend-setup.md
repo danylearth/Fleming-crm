@@ -1,6 +1,6 @@
 # Resend setup for Fleming CRM
 
-The CRM sends from `contact@tenancies.fleminglettings.co.uk`. The existing sending key is configured. Delivery/open/click updates require the missing `RESEND_WEBHOOK_SECRET` on the Fly API app.
+Verified live on 9 September 2026: the CRM sends from `contact@tenancies.fleminglettings.co.uk`; its existing sending key remains configured. The Fleming webhook signing secret is now applied on Fly. A controlled email to the accounts inbox was delivered, both sent/delivered events returned HTTP 200, and the CRM recorded `delivered`. The steps below are a maintenance runbook, not outstanding setup.
 
 1. Open [Resend → Webhooks](https://resend.com/webhooks). Edit an existing Fleming CRM endpoint if present; otherwise choose **Add Webhook**.
 2. Set the endpoint to `https://fleming-crm-api.fly.dev/api/email/webhook`. Select `email.sent`, `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained`, `email.opened`, `email.clicked` and `email.failed`. Save it. [Resend webhook instructions](https://resend.com/docs/webhooks/introduction).
