@@ -1,3 +1,4 @@
+import {stampAgreementSignatures} from './agreement-signatures';
 import { registerInventoryReviewRoutes } from './inventory-review';
 import { registerProfileRoutes } from './profile';
 import { registerFeedbackRoutes } from './feedback';
@@ -323,6 +324,9 @@ async function finaliseTenancyAgreement(agreementId: number): Promise<void> {
     await drawSignature('Landlord', 'Robert Fleming', agreement.issued_at, `data:image/png;base64,${image.toString('base64')}`);
   }
   page.drawText(`Agreement reference: FL-TA-${agreement.id}`, { x: 52, y: 80, size: 9, font, color: rgb(0.45, 0.45, 0.45) });
+  const tenantSigners=[{name:agreement.tenant_signature_name,date:agreement.tenant_signed_at,image:signatureDataBytes(agreement.tenant_signature)},...(agreement.requires_joint_tenant_signature?[{name:agreement.joint_tenant_signature_name,date:agreement.joint_tenant_signed_at,image:signatureDataBytes(agreement.joint_tenant_signature)}]:[])];
+  const landlordSigner=agreement.requires_landlord_signature?{name:agreement.landlord_signature_name,date:agreement.landlord_signed_at,image:signatureDataBytes(agreement.landlord_signature)}:{name:'Robert Fleming',date:agreement.issued_at,image:fs.readFileSync(path.join(agreementAssets,'robert-fleming-signature.png'))};
+  await stampAgreementSignatures(pdf,sourcePath,font,tenantSigners,landlordSigner);
   const bytes = await pdf.save();
   signedFilename = `signed-tenancy-agreement-${agreement.id}-${Date.now()}.pdf`;
   fs.writeFileSync(path.join(uploadsDir, signedFilename), bytes);
