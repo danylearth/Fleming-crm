@@ -44,6 +44,7 @@ function emailTime(value: string): string {
 }
 
 export interface SendEmailParams {
+  idempotencyKey?: string;
   to: string | string[];
   subject: string;
   html: string;
@@ -281,7 +282,7 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
       html: inline.html,
       replyTo: OUTBOUND_EMAIL_ADDRESS,
       attachments: [...(params.attachments || []), ...inline.attachments],
-    });
+    }, params.idempotencyKey ? { idempotencyKey: params.idempotencyKey } : undefined);
 
     if (error) {
       console.error('[EMAIL ERROR]', error);

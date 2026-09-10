@@ -1,3 +1,4 @@
+import FeedbackPanel from './FeedbackPanel';
 import { useActivityTracking } from '../hooks/useActivityTracking';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -201,6 +202,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
       </div>
 
       <FloatingAI />
+      <FeedbackPanel />
     </div>
   );
 }

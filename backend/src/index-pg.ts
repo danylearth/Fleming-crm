@@ -1,3 +1,4 @@
+import { registerFeedbackRoutes } from './feedback';
 import { registerFlemoRoutes } from './flemo';
 import { registerTeamActivityRoutes } from './team-activity';
 import { registerRentReviewRoutes } from './rent-review';
@@ -401,6 +402,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use('/api', (req: AuthRequest, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)
     || req.path.startsWith('/public/') || req.path.startsWith('/auth/')
+    || req.path.startsWith('/feedback-agent/')
     || ['/sms/status', '/sms/inbound', '/email/webhook'].includes(req.path)
     || (req.method === 'POST' && ['/activity/heartbeat','/permission-requests','/ai/chat'].includes(req.path))) return next();
   return authMiddleware(req, res, () => requirePermission('staff')(req, res, next));
@@ -2574,6 +2576,7 @@ registerTenancyEndRoutes(app);
 registerRentReviewRoutes(app);
 registerCompletionRoutes(app);
 registerTeamActivityRoutes(app);
+registerFeedbackRoutes(app);
 registerFlemoRoutes(app);
 
 app.get('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
