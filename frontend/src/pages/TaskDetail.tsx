@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Card, GlassCard, Button, Select, Avatar, EmptyState, DatePicker } from '../components/ui';
 import { useApi } from '../hooks/useApi';
+import { useNotifications } from '../context/NotificationContext';
 import {
   ArrowLeft, Pencil, Save, X, Calendar, Clock, User, Building2,
   CheckCircle2, AlertTriangle, Inbox, Trash2, FileText, Download,
@@ -26,6 +27,7 @@ interface Task {
   entity_id?: number;
   task_type?: string;
   relatedEntity?: { address?: string; name?: string; first_name_1?: string; last_name_1?: string };
+  jointApplicant?: {id:number;first_name_1:string;last_name_1:string};
   documents?: Document[];
 }
 
@@ -56,6 +58,7 @@ export default function TaskDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const api = useApi();
+  const { confirmAction } = useNotifications();
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -117,7 +120,7 @@ export default function TaskDetail() {
   };
 
   const deleteTask = async () => {
-    if (!task || !confirm('Delete this task? This will also delete all attached files.')) return;
+    if (!task || !await confirmAction('Delete this task? This will also delete all attached files.')) return;
     try {
       await api.delete(`/api/tasks/${task.id}`);
       navigate('/tasks');
@@ -178,7 +181,7 @@ export default function TaskDetail() {
   };
 
   const deleteDocument = async (docId: number) => {
-    if (!confirm('Delete this file?')) return;
+    if (!await confirmAction('Delete this file?')) return;
     try {
       await api.delete(`/api/documents/${docId}`);
       await load();
@@ -610,11 +613,11 @@ export default function TaskDetail() {
                   )}
                 </div>
               ) : task.entity_type && task.entity_id ? (
-                <button
+                <div className="space-y-2"><button
                   onClick={() => {
                     const base = task.entity_type === 'property' ? 'properties' :
                                  task.entity_type === 'landlord' ? 'landlords' :
-                                 task.entity_type === 'tenant' ? 'tenants' : '';
+                                 task.entity_type === 'tenant' ? 'tenants' : task.entity_type === 'tenant_enquiry' ? 'enquiries' : '';
                     if (base) navigate(`/${base}/${task.entity_id}`);
                   }}
                   className="flex items-center gap-3 w-full p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors"
@@ -622,7 +625,7 @@ export default function TaskDetail() {
                   <div className="w-9 h-9 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center text-[var(--text-muted)]">
                     {task.entity_type === 'property' && <Building2 size={16} />}
                     {task.entity_type === 'landlord' && <UserCircle size={16} />}
-                    {task.entity_type === 'tenant' && <Users size={16} />}
+                    {['tenant','tenant_enquiry'].includes(task.entity_type) && <Users size={16} />}
                   </div>
                   <div className="text-left flex-1">
                     <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{task.entity_type}</p>
@@ -636,7 +639,7 @@ export default function TaskDetail() {
                     )}
                   </div>
                   <ArrowLeft size={16} className="rotate-180 text-[var(--text-muted)]" />
-                </button>
+                </button>{task.jointApplicant&&<button className="w-full text-left p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)]" onClick={()=>navigate(`/enquiries/${task.jointApplicant!.id}`)}><span className="text-xs text-[var(--text-muted)]">Joint applicant</span><p>{task.jointApplicant.first_name_1} {task.jointApplicant.last_name_1}</p></button>}</div>
               ) : (
                 <div className="text-center py-3">
                   <p className="text-sm text-[var(--text-muted)] mb-2">Not linked to any entity</p>

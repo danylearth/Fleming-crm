@@ -13,7 +13,7 @@ const propertyImagesSource = fs.readFileSync(path.resolve(__dirname, '../../fron
 describe('31 August CRM feedback regressions', () => {
   it('casts reviewer IDs as integers in document and application reviews', () => {
     expect(apiSource).toContain("reviewed_by = CASE WHEN $1 = 'pending' THEN NULL ELSE $3::INTEGER END");
-    expect(apiSource).toContain("application_reviewed_by = CASE WHEN $1 = 'approved' THEN $3::INTEGER ELSE NULL END");
+    expect(apiSource).toContain("application_reviewed_by=CASE WHEN $1='approved' THEN $3::INTEGER ELSE NULL END");
   });
 
   it('stores a generated completed application PDF in enquiry documents', () => {

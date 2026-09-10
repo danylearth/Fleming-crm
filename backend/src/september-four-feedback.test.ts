@@ -19,12 +19,12 @@ describe('4 September CRM feedback', () => {
   it('uses secure short application aliases while retaining token lookup compatibility', () => {
     expect(backend).toContain('function createApplicationFormSlug');
     expect(backend).toContain('application_form_token = $1 OR te.application_form_slug = $1');
-    expect(backend).toContain('https://apply.fleminglettings.co.uk/${applicationSlug}');
+    expect(backend).toContain('crypto.randomBytes(12)');
   });
 
   it('supports holding-deposit SMS previews, the supplied wording, and stage progression', () => {
     expect(wizard).toContain('Preview email before sending');
-    expect(wizard).toContain('Also send SMS');
+    expect(wizard).toContain('Send SMS');
     expect(wizard).toContain('setActiveStep(2)');
     expect(backend).toContain('we are pleased to confirm receipt of your holding deposit payment');
   });

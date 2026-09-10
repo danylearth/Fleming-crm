@@ -1,24 +1,27 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import PropertyInventory from '../components/PropertyInventory';
+import { useRecordAddress } from '../hooks/useRecordAddress';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Card, GlassCard, Button, ProgressRing, SectionHeader, EmptyState, Avatar, Tag, Input, Select, DatePicker, PricePaidData } from '../components/ui';
 import DocumentUpload from '../components/ui/DocumentUpload';
 import ActivityTimeline from '../components/ui/ActivityTimeline';
-import AddressAutocomplete from '../components/ui/AddressAutocomplete';
+
 import RentPayments from '../components/ui/RentPayments';
 import PropertyExpenses from '../components/PropertyExpenses';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import { activePropertyTenants, type PropertyTenant } from '../utils/propertyTenants';
 import {
-  User,
+  User, Building2, Briefcase, KeyRound, Landmark, Users, ShieldCheck, ListChecks, FileCheck, History,
   CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
   AlertTriangle, Plus, Wrench, Trash2, StickyNote
 } from 'lucide-react';
 
 interface PropertyDetail {
-  id: number; address: string; postcode: string; rent_amount: number;
+  id: number; address: string; address_line_2?: string; city?: string; postcode: string; rent_amount: number;
   status: string; landlord_name: string; landlord_id?: number; landlord_type?: 'internal' | 'external';
   landlord_phone?: string; landlord_email?: string;
   current_tenant: string | null; current_tenant_id?: number; tenant_id?: number;
@@ -87,13 +90,14 @@ interface Landlord {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  to_let: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  let_agreed: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  let: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  to_let: 'bg-red-500/20 text-red-400 border-red-500/30',
+  let_agreed: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
   full_management: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   rent_collection: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
 };
 const STATUS_LABELS: Record<string, string> = {
-  to_let: 'To Let', let_agreed: 'Let Agreed', full_management: 'Full Management', rent_collection: 'Rent Collection',
+  let: 'Let', to_let: 'To Let', let_agreed: 'Let Agreed', full_management: 'Full Management', rent_collection: 'Rent Collection',
 };
 const EPC_COLORS: Record<string, string> = {
   A: 'bg-emerald-500 text-white', B: 'bg-emerald-400 text-white', C: 'bg-lime-500 text-white',
@@ -132,16 +136,20 @@ function Toggle({ label, checked, onChange, disabled }: { label: string; checked
 }
 
 export default function PropertyDetail() {
-  const { id } = useParams();
+
   const api = useApi();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { confirmAction: confirmCrmAction } = useNotifications();
   const [property, setProperty] = useState<PropertyDetail | null>(null);
+  const id = useRecordAddress('properties', property?.address);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
   const [saving, setSaving] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form, setForm] = useState<Record<string, any>>({});
@@ -201,7 +209,7 @@ export default function PropertyDetail() {
   });
 
   const populateForm = (p: PropertyDetail) => setForm({
-    landlord_id: p.landlord_id, address: p.address || '', postcode: p.postcode || '',
+    landlord_id: p.landlord_id, address: p.address || '', address_line_2: p.address_line_2 || '', city: p.city || '', postcode: p.postcode || '',
     rent_amount: String(p.rent_amount || ''), bedrooms: String(p.bedrooms || ''),
     property_type: p.property_type || 'house', status: p.status || 'to_let',
     service_type: p.service_type || '', charge_percentage: String(p.charge_percentage ?? ''),
@@ -250,7 +258,7 @@ export default function PropertyDetail() {
         api.get('/api/tenants').catch(() => []),
       ]);
       setProperty(prop);
-      populateForm(prop);
+      if (!editingRef.current) populateForm(prop);
       setPropertyLandlords(propLandlords);
       setAllLandlords(landlords);
       setAllTenants(Array.isArray(tenants) ? tenants : []);
@@ -587,7 +595,7 @@ export default function PropertyDetail() {
   };
 
   const handleRemoveTenant = async () => {
-    if (!confirm('End the current tenancy? The tenant will remain available under Previous Tenancies.')) return;
+    if (!await confirmCrmAction('End the current tenancy? The tenant will remain available under Previous Tenancies.')) return;
     try {
       await Promise.all(currentTenants
         .filter(tenant => tenant.id)
@@ -624,6 +632,7 @@ export default function PropertyDetail() {
   const statusLbl = STATUS_LABELS[property.status] || property.status;
   const linkedTenants = allTenants.filter(tenant => tenant.property_id === property.id);
   const activeLinkedTenants = activePropertyTenants(allTenants, property.id);
+  const scheduledTenants = linkedTenants.filter(tenant => tenant.status === 'scheduled');
   const previousTenants = linkedTenants.filter(tenant => tenant.status === 'inactive');
   const currentTenants = activeLinkedTenants.length > 0
     ? activeLinkedTenants
@@ -671,6 +680,10 @@ export default function PropertyDetail() {
             <p className="text-white/60 text-xs sm:text-sm">{property.postcode}</p>
           </div>
           <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex gap-2">
+            {user?.role === 'admin' && <Button size="sm" variant="outline" className="!bg-red-600 !border-red-600 !text-white" onClick={async () => {
+              if (!await confirmCrmAction(`Remove ${property.address}? Properties with tenancy or contract history will be archived; otherwise linked data will be permanently deleted.`, 'Delete / Archive Property')) return;
+              try { await api.post(`/api/properties/${property.id}/remove`, {}); navigate('/properties'); } catch (e) { alert(e instanceof Error ? e.message : 'Could not delete property'); }
+            }}>Delete / Archive</Button>}
             {editing ? (
               <>
                 <Button variant="ghost" size="sm" onClick={cancelEdit} className="bg-black/40 backdrop-blur-sm text-white text-xs sm:text-sm">
@@ -742,13 +755,14 @@ export default function PropertyDetail() {
           <div className="lg:col-span-2 space-y-6">
             {/* Details */}
             <GlassCard className="p-4 sm:p-6">
-              <SectionHeader title="Details" />
+              <SectionHeader title="Details" icon={<Building2 size={16} />} />
               {editing ? (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                    <AddressAutocomplete label="Address" value={form.address} onChange={(v: string) => setForm({ ...form, address: v })}
-                      onSelect={p => { if (p.postcode) setForm(f => ({ ...f, postcode: p.postcode || f.postcode })); }} />
-                    <Input label="Postcode" value={form.postcode} onChange={(v: string) => setForm({ ...form, postcode: v })} />
+                    <Input label="Address line 1 *" value={form.address} onChange={address => setForm({...form,address})} />
+                    <Input label="Address line 2 (optional)" value={form.address_line_2} onChange={address_line_2 => setForm({...form,address_line_2})} />
+                    <Input label="Town / City *" value={form.city} onChange={city => setForm({...form,city})} />
+                    <Input label="Postcode *" value={form.postcode} onChange={postcode => setForm({...form,postcode})} />
                     <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />
                     <Select label="Type" value={form.property_type} onChange={(v: string) => setForm({ ...form, property_type: v })}
                       options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
@@ -759,10 +773,10 @@ export default function PropertyDetail() {
                   </div>
                   <div className="mt-4">
                     <label className="block text-xs font-medium text-[var(--text-secondary)] mb-2">
-                      Amenities & Features
+                      Features
                     </label>
                     <div className="flex flex-wrap gap-2 mb-3">
-                      {['Garden', 'Driveway', 'Parking', 'Garage', 'Balcony', 'Patio', 'Furnished', 'Part Furnished', 'Dishwasher', 'Washing Machine', 'Dryer', 'WiFi', 'Central Heating', 'Double Glazing', 'Security Alarm', 'EV Charging', 'Pets Allowed', 'Storage'].map((amenity) => {
+                      {['Garden', 'Driveway', 'Parking', 'Garage', 'Balcony', 'Patio', 'Furnished', 'Part Furnished', 'Dishwasher', 'Washing Machine', 'Dryer', 'WiFi', 'Central Heating', 'Double Glazing', 'CCTV', 'Security Alarm', 'EV Charging', 'Pets Allowed', 'Storage'].map((amenity) => {
                         const isSelected = form.amenities?.toLowerCase().includes(amenity.toLowerCase());
                         return (
                           <button
@@ -813,9 +827,9 @@ export default function PropertyDetail() {
                     } />
                     {property.landlord_type === 'internal' && <ReadField label="Key Colour Code" value={property.key_colour_code} />}
                   </div>
-                  {property.amenities && (
+                  {!!property.amenities && (
                     <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
-                      <p className="text-xs text-[var(--text-muted)] mb-1.5">Amenities & Features</p>
+                      <p className="text-xs text-[var(--text-muted)] mb-1.5">Features</p>
                       <p className="text-sm whitespace-pre-wrap">{property.amenities}</p>
                     </div>
                   )}
@@ -825,7 +839,7 @@ export default function PropertyDetail() {
 
             {/* Management */}
             <GlassCard className="p-4 sm:p-6">
-              <SectionHeader title="Management" />
+              <SectionHeader title="Management" icon={<Briefcase size={16} />} />
               {editing ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {property.landlord_type !== 'internal' && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v })}
@@ -924,7 +938,7 @@ export default function PropertyDetail() {
             {/* Leasehold (conditional) */}
             {(editing ? form.is_leasehold : property.is_leasehold) ? (
               <GlassCard className="p-4 sm:p-6">
-                <SectionHeader title="Leasehold" />
+                <SectionHeader title="Leasehold" icon={<KeyRound size={16} />} />
                 {editing ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <Toggle label="Leasehold Property" checked={form.is_leasehold} onChange={v => setForm({ ...form, is_leasehold: v })} />
@@ -967,9 +981,9 @@ export default function PropertyDetail() {
               </div>
             ) : null}
 
-            {(editing || property.has_management_company) && (
+            {(editing || !!property.has_management_company) && (
               <GlassCard className="p-4 sm:p-6">
-                <SectionHeader title="Management Company" />
+                <SectionHeader title="Management Company" icon={<Landmark size={16} />} />
                 {editing ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <div className="col-span-full"><Toggle label="Management company in place" checked={form.has_management_company} onChange={v => setForm({ ...form, has_management_company: v })} /></div>
@@ -1010,14 +1024,15 @@ export default function PropertyDetail() {
             {(!isToLet || linkedTenants.length > 0) && (
               <GlassCard className="p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
-                  <SectionHeader title="Tenancy Information" />
+                  <SectionHeader title="Tenancy Information" icon={<Users size={16} />} />
+                  <div className="flex flex-wrap gap-2 sm:ml-auto">
                   {!editing && previousTenants.length > 0 && (
-                    <Button variant="outline" size="sm" onClick={() => setShowPreviousTenancies(value => !value)}>
+                    <Button variant="outline" className="!bg-red-600 !text-white !border-red-600" size="sm" onClick={() => setShowPreviousTenancies(value => !value)}>
                       Previous Tenancies ({previousTenants.length})
                     </Button>
                   )}
                   {!editing && currentTenants.length === 0 && (
-                    <Button variant="outline" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('select'); }}>
+                    <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('select'); }}>
                       <Plus size={14} className="mr-1.5" /> <span className="hidden sm:inline">Add Tenant</span><span className="sm:hidden">Add</span>
                     </Button>
                   )}
@@ -1027,6 +1042,7 @@ export default function PropertyDetail() {
                     </Button>
                   )}
                 </div>
+                </div>
                 {currentTenants.length > 0 && !editing && (
                   <div className="mb-4 space-y-2">
                     {currentTenants.map(tenant => (
@@ -1035,7 +1051,7 @@ export default function PropertyDetail() {
                           <Avatar name={tenant.name} size="md" />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium">{tenant.name}</p>
-                            <p className="text-xs text-[var(--text-muted)]">{currentTenants.length > 1 ? 'Joint Tenant' : 'Current Tenant'}</p>
+                            <p className="text-xs text-[var(--text-muted)]">{currentTenants.length > 1 ? 'Joint Tenant' : 'Current Tenant'} · End date: {tenant.tenancy_end_date ? formatDate(tenant.tenancy_end_date) : 'Not scheduled'}</p>
                           </div>
                           {tenant.id ? (
                             <button onClick={() => navigate(`/tenants/${tenant.id}`)} className="text-xs text-[var(--accent-orange)] hover:underline">
@@ -1047,6 +1063,7 @@ export default function PropertyDetail() {
                     ))}
                   </div>
                 )}
+                {!editing && scheduledTenants.length > 0 && <div className="mb-4 space-y-2">{scheduledTenants.map(tenant => <button key={tenant.id} onClick={() => navigate(`/tenants/${tenant.id}`)} className="w-full rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-left"><p className="text-sm font-medium">{tenant.name}</p><p className="text-xs text-[var(--text-muted)]">Scheduled · Starts {formatDate(tenant.tenancy_start_date || '')} · End date: {tenant.tenancy_end_date ? formatDate(tenant.tenancy_end_date) : 'Not scheduled'}</p></button>)}</div>}
                 {showPreviousTenancies && !editing && (
                   <div className="mb-4 space-y-2 border-t border-[var(--border-subtle)] pt-4">
                     {previousTenants.map(tenant => (
@@ -1082,7 +1099,7 @@ export default function PropertyDetail() {
                     <ReadField label="Tenancy Type" value={property.tenancy_type} />
                     <ReadField label="Start Date" value={formatDate(property.tenancy_start_date)} />
                     {property.has_end_date === 1 ? <ReadField label="End Date" value={formatDate(property.tenancy_end_date)} /> : null}
-                    <ReadField label="Status" value={property.has_live_tenancy ? 'Active' : 'Inactive'} />
+                    <ReadField label="Status" value={property.has_live_tenancy ? 'Active' : scheduledTenants.length ? 'Scheduled' : 'Inactive'} />
                     {property.has_end_date === 1 && property.tenancy_end_date && (() => {
                       const days = daysUntil(property.tenancy_end_date);
                       if (days === null) return null;
@@ -1102,7 +1119,7 @@ export default function PropertyDetail() {
             {/* Compliance Certificates — always visible, not gated by status */}
             {editing && (
               <GlassCard className="p-4 sm:p-6">
-                <SectionHeader title="Compliance Certificates" />
+                <SectionHeader title="Compliance Certificates" icon={<FileCheck size={16} />} />
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   <DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={(v: string) => setForm({ ...form, eicr_expiry_date: v })} />
                   <DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={(v: string) => setForm({ ...form, epc_expiry_date: v })} />
@@ -1111,10 +1128,12 @@ export default function PropertyDetail() {
               </GlassCard>
             )}
 
+            <PropertyInventory propertyId={property.id} tenants={linkedTenants} />
+
             {/* Tasks */}
             <Card className="p-4 sm:p-6">
               <SectionHeader
-                title="Tasks"
+                title="Tasks" icon={<ListChecks size={16} />}
                 action={() => setShowAddTask(true)}
                 actionLabel="Add New"
               />
@@ -1142,7 +1161,7 @@ export default function PropertyDetail() {
 
             {/* Maintenance */}
             <Card className="p-4 sm:p-6">
-              <SectionHeader title="Maintenance" action={() => setShowAddMaintenance(true)} actionLabel="Report Issue" />
+              <SectionHeader title="Maintenance" icon={<Wrench size={16} />} action={() => setShowAddMaintenance(true)} actionLabel="Report Issue" />
               {maintenance.length ? (
                 <div className="space-y-2">
                   {maintenance.slice(0, 5).map(m => (
@@ -1182,7 +1201,7 @@ export default function PropertyDetail() {
           <div className="lg:col-span-1 space-y-4 sm:space-y-6">
             {/* Compliance Overview */}
             <Card className="p-4 sm:p-6">
-              <SectionHeader title="Compliance" />
+              <SectionHeader title="Compliance" icon={<ShieldCheck size={16} />} />
               <div className="flex justify-center mb-4">
                 <ProgressRing value={overallCompliance()} size={90} strokeWidth={7} />
               </div>
@@ -1216,10 +1235,10 @@ export default function PropertyDetail() {
             {/* Landlords */}
             <Card className="p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
-                <SectionHeader title="Landlords" />
-                <Button variant="outline" size="sm" onClick={() => setShowAddLandlord(true)}>
+                <SectionHeader title="Landlords" icon={<User size={16} />} />
+                {property.landlord_type !== 'internal' && <Button variant="outline" size="sm" onClick={() => setShowAddLandlord(true)}>
                   <Plus size={14} className="mr-1.5" /> <span className="hidden sm:inline">Add Landlord</span><span className="sm:hidden">Add</span>
-                </Button>
+                </Button>}
               </div>
               {propertyLandlords.length === 0 ? (
                 <EmptyState message="No landlords linked" />
@@ -1254,7 +1273,7 @@ export default function PropertyDetail() {
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className={`flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity ${property.landlord_type === 'internal' ? '!hidden' : ''}`}>
                           {landlord.is_primary !== 1 && (
                             <Button
                               variant="ghost"
@@ -1309,7 +1328,7 @@ export default function PropertyDetail() {
             </Card>
 
             {/* Land Registry Price Data */}
-            {property.postcode && <PricePaidData postcode={property.postcode} />}
+            {!!property.postcode && <PricePaidData postcode={property.postcode} />}
 
             {/* Documents */}
             <DocumentUpload entityType="property" entityId={property.id} onChange={loadDetail} />
@@ -1317,7 +1336,7 @@ export default function PropertyDetail() {
             {/* Activity */}
             {/* Notes */}
             <Card className="p-4 sm:p-6">
-              <SectionHeader title="Notes" />
+              <SectionHeader title="Notes" icon={<StickyNote size={16} />} />
 
               {/* Filter Tabs */}
               <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -1331,7 +1350,7 @@ export default function PropertyDetail() {
                 >
                   Property ({notes.length})
                 </button>
-                {property.landlord_id && (
+                {!!property.landlord_id && (
                   <button
                     onClick={() => setNotesFilter('landlord')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -1343,7 +1362,7 @@ export default function PropertyDetail() {
                     Landlord ({landlordNotes.length})
                   </button>
                 )}
-                {linkedTenants.map(tenant => (
+                {activeLinkedTenants.map(tenant => (
                   <button
                     key={tenant.id}
                     onClick={() => setNotesFilter(`tenant-${tenant.id}`)}
@@ -1391,7 +1410,7 @@ export default function PropertyDetail() {
             </Card>
 
             <Card className="p-4 sm:p-6">
-              <SectionHeader title="Activity" />
+              <SectionHeader title="Activity" icon={<History size={16} />} />
               <ActivityTimeline entityType="property" entityId={property.id} />
             </Card>
           </div>

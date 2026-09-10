@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property inventory</title>
+<style>
+body { margin:0; padding:0; background:#EEEEEE; -webkit-text-size-adjust:100%; }
+a { color:#DC006D; }
+a:hover { color:#27083D; }
+@media only screen and (max-width:620px) {
+  .h1 { font-size:28px !important; line-height:34px !important; }
+}
+</style>
+</head>
+<body>
+<div style="margin: 0; padding: 0; background: #EEEEEE;">
+<span style="display: none; font-size: 1px; color: #EEEEEE; line-height: 1px; max-height: 0; max-width: 0; opacity: 0; overflow: hidden;">Your property inventory is ready to view and sign. Please review it by the date shown below.</span>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background: #EEEEEE; width: 100%;">
+<tbody><tr><td align="center" style="padding: 24px 12px 40px 12px;">
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width: 600px; max-width: 600px; background: #ffffff;">
+<tbody>
+
+<tr><td bgcolor="#27083D" style="background: #27083D; padding: 34px 40px 30px 40px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+<tbody><tr>
+<td align="left" valign="middle" width="180" style="width: 180px;"><img src="assets/fleming-logo-white.png" width="160" height="57" alt="Fleming Lettings" style="display: block; border: 0; width: 160px; height: 57px;"></td>
+<td align="right" valign="middle" style="font-family: Helvetica, Arial, sans-serif; font-size: 20px; line-height: 26px; font-weight: bold; color: #DC006D;">Property inventory</td>
+</tr></tbody>
+</table>
+</td></tr>
+
+<tr><td bgcolor="#DC006D" style="background: #DC006D; font-size: 0; line-height: 0; height: 6px;" height="6">&nbsp;</td></tr>
+
+<tr><td style="padding: 40px 40px 8px 40px;">
+<div style="font-family: Helvetica, Arial, sans-serif; font-size:34px; line-height:40px; mso-line-height-rule:exactly; font-weight:bold; color:#27083D; letter-spacing:-0.6px;" class="h1">Your inventory is ready to sign</div>
+</td></tr>
+
+<tr><td style="padding: 16px 40px 0 40px; font-family: Helvetica, Arial, sans-serif; font-size: 16px; line-height: 26px; color: #1E1E1E;">
+Hi {{TENANT_NAME}},<br><br>
+Your property inventory has been prepared. It records the condition of the property, its fixtures, fittings and meter readings at the start of your tenancy, and it is the document we compare against when you move out.
+</td></tr>
+
+<tr><td style="padding: 26px 40px 0 40px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width: 100%;">
+<tbody><tr><td bgcolor="#563F6E" style="background: #563F6E; padding: 24px 24px 26px 24px;">
+<div style="font-family: Helvetica, Arial, sans-serif; font-size: 14px; line-height: 20px; color: #EEEEEE;">Please review and sign by</div>
+<div style="font-family: Helvetica, Arial, sans-serif; font-size: 32px; line-height: 40px; font-weight: bold; color: #ffffff; padding-top: 4px;">{{DUE_DATE}}</div>
+<div style="font-family: Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px; color: #EEEEEE; padding-top: 14px;">Property</div>
+<div style="font-family: Helvetica, Arial, sans-serif; font-size: 20px; line-height: 28px; font-weight: bold; color: #ffffff;">{{PROPERTY_ADDRESS}}</div>
+</td></tr></tbody>
+</table>
+</td></tr>
+
+<tr><td style="padding: 28px 40px 0 40px; font-family: Helvetica, Arial, sans-serif; font-size: 16px; line-height: 26px; color: #1E1E1E;">
+Walk round the property with the inventory open and check it against what you see. If anything is missing, damaged or recorded incorrectly, add a comment before you sign. Photographs are welcome.
+</td></tr>
+
+<tr><td style="padding: 30px 40px 0 40px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tbody><tr><td bgcolor="#DC006D" style="padding:18px 34px; mso-padding-alt:18px 34px; background: #DC006D;">
+<a href="{{REVIEW_LINK}}" style="display: block;  font-family: Helvetica, Arial, sans-serif; font-size: 16px; line-height: 20px; font-weight: bold; color: #ffffff; text-decoration: none;">Review and sign inventory</a>
+</td></tr></tbody>
+</table>
+</td></tr>
+
+<tr><td style="padding: 28px 40px 0 40px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width: 100%;">
+<tbody><tr><td bgcolor="#FCE9F2" style="background: #FCE9F2; border-left: 4px solid #DC006D; padding: 22px 24px 24px 22px; font-family: Helvetica, Arial, sans-serif; font-size: 16px; line-height: 26px; color: #1E1E1E;">
+<span style="font-weight: bold; color: #27083D;">If we do not hear from you</span><br>
+Where no comments are received by the date above, the inventory is taken as agreed as it stands. Please get in touch if you need more time or would like to talk anything through.
+</td></tr></tbody>
+</table>
+</td></tr>
+
+<tr><td style="padding: 28px 40px 0 40px; font-family: Helvetica, Arial, sans-serif; font-size: 16px; line-height: 26px; color: #1E1E1E;">
+If you struggle to access the above link, or would like to discuss this further then please get in touch on <a href="tel:01902212415" style="color: #DC006D; text-decoration: underline; white-space: nowrap;">01902 212 415</a>.
+</td></tr>
+
+<tr><td style="font-size: 0; line-height: 0; height: 44px;" height="44">&nbsp;</td></tr>
+
+<tr><td style="padding: 0; font-size: 0; line-height: 0;">
+<img src="assets/inventory-dog-box.png" width="600" height="210" alt="A dachshund sitting in a cardboard moving box" style="display: block; border: 0; width: 100%; max-width: 600px; height: auto;">
+</td></tr>
+
+<tr><td bgcolor="#DC006D" style="background: #DC006D; padding: 26px 40px 28px 40px;">
+<div style="font-family: Helvetica, Arial, sans-serif; font-size: 24px; line-height: 32px; font-weight: bold; color: #ffffff; letter-spacing: -0.3px;">All of your property needs</div>
+<div style="font-family: Helvetica, Arial, sans-serif; font-size: 24px; line-height: 32px; font-weight: bold; color: #27083D; letter-spacing: -0.3px;">Without any of the hassle</div>
+</td></tr>
+
+<tr><td bgcolor="#27083D" style="background: #27083D; padding: 30px 40px 30px 40px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width: 100%;">
+<tbody><tr>
+<td align="left" valign="middle" style="font-family: Helvetica, Arial, sans-serif; font-size: 13px; line-height: 22px; color: #EEEEEE;">
+<span style="color: #ffffff; font-weight: bold;">Lettings Support Team</span><br>
+<a href="mailto:enquiries@fleminglettings.co.uk" style="color: #ffffff; text-decoration: underline;">enquiries@fleminglettings.co.uk</a><br>
+01902 212 415&nbsp; |&nbsp; <a href="https://fleminglettings.co.uk" style="color: #ffffff; text-decoration: none;">fleminglettings.co.uk</a>
+</td>
+<td align="right" valign="middle" width="130" style="width: 130px;">
+<img src="assets/fleming-logo-white.png" width="120" height="43" alt="Fleming Lettings" style="display: block; border: 0; width: 120px; height: 43px;">
+</td>
+</tr></tbody>
+</table>
+</td></tr>
+
+<tr><td bgcolor="#1E1E1E" style="background: #1E1E1E; padding: 22px 40px 26px 40px; font-family: Helvetica, Arial, sans-serif; font-size: 11px; line-height: 18px; color: #9A93A0;">
+This email and any attachments are confidential and intended only for the named recipient. If you received it in error, please delete it and notify us. Fleming Lettings and Developments UK Limited, company number 13943597. Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG.
+</td></tr>
+
+</tbody>
+</table>
+</td></tr></tbody>
+</table>
+</div>
+</body>
+</html>

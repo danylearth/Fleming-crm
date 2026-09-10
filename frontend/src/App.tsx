@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { NotificationProvider } from './context/NotificationContext';
 
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -101,6 +102,8 @@ function AppRoutes() {
       <Route path="/tasks/:id" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
       <Route path="/financials" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
       <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
+      <Route path="/inventories" element={<ProtectedRoute><Navigate to="/properties" replace /></ProtectedRoute>} />
+      <Route path="/inventories/:id" element={<ProtectedRoute><Navigate to="/properties" replace /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
     </Routes>
     </Suspense>
@@ -112,11 +115,13 @@ export default function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
-        <AuthProvider>
-          <PortfolioProvider>
-            <AppRoutes />
-          </PortfolioProvider>
-        </AuthProvider>
+        <NotificationProvider>
+          <AuthProvider>
+            <PortfolioProvider>
+              <AppRoutes />
+            </PortfolioProvider>
+          </AuthProvider>
+        </NotificationProvider>
       </BrowserRouter>
     </ThemeProvider>
   );

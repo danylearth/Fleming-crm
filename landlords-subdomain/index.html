@@ -740,7 +740,10 @@
                 height: 24px;
             }
         }
-    </style>
+
+/* Shared office-approved field dimensions across public applications. */
+.input-group input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),.input-group select,.custom-select-trigger {height:60px;min-height:60px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;}
+</style>
 </head>
 <body>
     <div class="container">
@@ -806,7 +809,7 @@
 
                         <div class="input-group">
                             <label>Registered Office Address *</label>
-                            <input type="text" name="company_address" id="companyAddress" required>
+                            <input type="text" name="company_address" id="companyAddress" required></div><div class="input-group"><label>Company City / Town *</label><input name="companyCity" required></div><div class="input-group"><label>Company Postcode *</label><input name="companyPostcode" required></div><div class="input-group"><label>Ultimate beneficial owners *</label><textarea name="beneficial_owners" required placeholder="Full names and ownership percentages of the people who ultimately own or control the company"></textarea>
                         </div>
                     </div>
 
@@ -859,7 +862,7 @@
 
                     <div class="input-group">
                         <label>Home Address <span class="required">*</span></label>
-                        <input type="text" name="address" required>
+                        <input type="text" name="address" required></div><div class="input-group"><label>Address line 2 (optional)</label><input type="text" name="address_line_2"></div><div class="input-group"><label>City / Town *</label><input type="text" name="city" required>
                     </div>
 
                     <div class="two-col">
@@ -916,7 +919,7 @@
 
                         <div class="input-group">
                             <label>Home Address <span class="required">*</span></label>
-                            <input type="text" name="address2" disabled>
+                            <input type="text" name="address2" disabled></div><div class="input-group"><label>Address line 2 (optional)</label><input type="text" name="address_line_22" disabled></div><div class="input-group"><label>City / Town *</label><input type="text" name="city2" disabled>
                         </div>
 
                         <div class="two-col">
@@ -946,7 +949,7 @@
                         <div class="two-col">
                             <div class="input-group">
                                 <label>Rental Property Address <span class="required">*</span></label>
-                                <input type="text" name="propertyAddress" required>
+                                <input type="text" name="propertyAddress" required></div><div class="input-group"><label>Address line 2 (optional)</label><input type="text" name="propertyAddress2"></div><div class="input-group"><label>City / Town *</label><input type="text" name="propertyCity" required>
                             </div>
                             <div class="input-group">
                                 <label>Property Postcode <span class="required">*</span></label>
@@ -1191,7 +1194,8 @@
                         </div>
                     </div>
 
-                    <!-- Terms & Conditions -->
+                    <div class="input-group"><h3>Property documents</h3><p>Upload proof of ownership and any certificates you already hold. PDF, JPG or PNG; up to 10 MB per file.</p></div>
+<div class="input-group"><label>Proof of Ownership</label><input type="file" class="landlord-upload" data-category="Proof of Ownership" accept=".pdf,.jpg,.jpeg,.png" multiple></div><div class="input-group"><label>EPC</label><input type="file" class="landlord-upload" data-category="EPC" accept=".pdf,.jpg,.jpeg,.png" multiple></div><div class="input-group"><label>EICR</label><input type="file" class="landlord-upload" data-category="EICR" accept=".pdf,.jpg,.jpeg,.png" multiple></div><div class="input-group"><label>Gas Safety</label><input type="file" class="landlord-upload" data-category="Gas Safety" accept=".pdf,.jpg,.jpeg,.png" multiple></div>                    <!-- Terms & Conditions -->
                     <div class="checkbox-group">
                         <input type="checkbox" id="termsConsent" name="termsConsent" required>
                         <label for="termsConsent">
@@ -1526,9 +1530,9 @@
 
                 if (this.value === 'Joint') {
                     jointSection.style.display = 'block';
-                    jointSection.querySelectorAll('input, select').forEach(input => input.removeAttribute('disabled'));
+                    jointSection.querySelectorAll('input, select').forEach(input => {input.removeAttribute('disabled');input.required=input.name!=='address_line_22';});
                     // Disable company fields
-                    companyStep.querySelectorAll('input').forEach(input => {
+                    companyStep.querySelectorAll('input,textarea').forEach(input => {
                         input.removeAttribute('required');
                         input.value = '';
                     });
@@ -1536,13 +1540,13 @@
                     jointSection.style.display = 'none';
                     jointSection.querySelectorAll('input, select').forEach(input => input.setAttribute('disabled', 'disabled'));
                     // Enable company fields
-                    companyStep.querySelectorAll('input[name="company_name"], input[name="company_number"], input[name="company_address"]').forEach(input => {
+                    companyStep.querySelectorAll('input[name="company_name"], input[name="company_number"], input[name="company_address"],input[name="companyCity"],input[name="companyPostcode"],textarea[name="beneficial_owners"]').forEach(input => {
                         input.setAttribute('required', 'required');
                     });
                 } else {
                     jointSection.style.display = 'none';
                     jointSection.querySelectorAll('input, select').forEach(input => input.setAttribute('disabled', 'disabled'));
-                    companyStep.querySelectorAll('input').forEach(input => {
+                    companyStep.querySelectorAll('input,textarea').forEach(input => {
                         input.removeAttribute('required');
                         input.value = '';
                     });
@@ -1651,11 +1655,12 @@
 
         function showMessage(message, type) {
             const container = document.getElementById('messageContainer');
-            container.innerHTML = `<div class="message ${type} show">${message}</div>`;
+            const box=document.createElement('div');box.className=`message ${type} show`;box.textContent=message;container.replaceChildren(box);
             setTimeout(() => { container.innerHTML = ''; }, 5000);
         }
 
         // Form submission
+        let submittedRegistration=null;
         document.getElementById('landlordForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
@@ -1693,7 +1698,10 @@
             data.marketing_preferences = prefs.join(', ');
 
             try {
-                const response = await fetch(`${API_BASE_URL}/api/public/landlord-enquiries`, {
+                const fileInputs=[...document.querySelectorAll('.landlord-upload')];
+                const allFiles=fileInputs.flatMap(input=>[...input.files]);
+                if(allFiles.length>20||allFiles.some(file=>file.size>10*1024*1024))throw new Error('Choose up to 20 files, each no larger than 10 MB.');
+                const response = submittedRegistration?{ok:true,json:async()=>submittedRegistration}:await fetch(`${API_BASE_URL}/api/public/landlord-enquiries`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
@@ -1702,13 +1710,16 @@
                 const result = await response.json();
 
                 if (response.ok) {
+                    submittedRegistration=result;
+                    for(const input of fileInputs){if(!input.files.length)continue;const body=new FormData();body.append('doc_type',input.dataset.category);for(const file of input.files)body.append('documents',file);const uploaded=await fetch(`${API_BASE_URL}/api/public/landlord-enquiries/${result.enquiry_id}/documents?token=${encodeURIComponent(result.upload_token)}`,{method:'POST',body});if(!uploaded.ok){const error=await uploaded.json();throw new Error('Your registration is saved, but documents need retrying: '+(error.error||'Upload failed'));}input.value='';}
+                    hideError();document.getElementById('messageContainer').replaceChildren();
                     showStep(7); // Success step
                 } else {
                     showMessage(result.error || 'An error occurred. Please try again.', 'error');
                 }
             } catch (error) {
                 console.error('Submission error:', error);
-                showMessage('An error occurred. Please try again or contact us directly.', 'error');
+                showMessage(error.message || 'Please try again or contact us directly.', 'error');
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = 'Submit Application ✓';

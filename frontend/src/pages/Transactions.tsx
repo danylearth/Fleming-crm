@@ -1,3 +1,4 @@
+import { rentServiceGroups } from '../utils/rentServices';
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { Button, Card, GlassCard, EmptyState } from '../components/ui';
@@ -7,10 +8,9 @@ import { PoundSterling, TrendingUp, TrendingDown, Home, Landmark, RefreshCw, Clo
 interface RentPayment {
   id: number;
   tenant_name?: string;
-  property_address?: string;
-  amount: number;
-  amount_paid?: number;
-  date: string;
+  address?: string;
+  amount_due: number | string;
+  amount_paid?: number | string;
   due_date?: string;
   payment_date?: string;
   status?: string;
@@ -37,16 +37,9 @@ interface BankFeedTransaction {
 interface Property {
   id: number;
   address: string;
+  landlord_type?: string; service_type?: string; active_monthly_rent?: number;
   monthly_rent?: number;
   rent?: number;
-  status?: string;
-}
-
-interface Tenancy {
-  id: number;
-  property_id: number;
-  property_address?: string;
-  monthly_rent?: number;
   rent_amount?: number;
   status?: string;
 }
@@ -55,30 +48,31 @@ export default function Transactions() {
   const api = useApi();
   const [payments, setPayments] = useState<RentPayment[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
-  const [tenancies, setTenancies] = useState<Tenancy[]>([]);
+  const [summary, setSummary] = useState({ monthly_rent: 0, collected: 0, outstanding: 0, active_tenancies: 0 });
   const [bankStatus, setBankStatus] = useState<BankFeedStatus | null>(null);
   const [bankTransactions, setBankTransactions] = useState<BankFeedTransaction[]>([]);
   const [bankBusy, setBankBusy] = useState(false);
   const [bankMessage, setBankMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     const load = async () => {
       try {
         const [pay, prop, ten, feedStatus, feedTransactions] = await Promise.all([
-          api.get('/api/rent-payments').catch(() => []),
-          api.get('/api/properties').catch(() => []),
-          api.get('/api/tenancies').catch(() => []),
+          api.get('/api/rent-payments'),
+          api.get('/api/properties'),
+          api.get('/api/financial-summary'),
           api.get('/api/bank-feed/status').catch(() => null),
           api.get('/api/bank-feed/transactions?limit=25').catch(() => []),
         ]);
         setPayments(Array.isArray(pay) ? pay : pay?.payments || []);
         setProperties(Array.isArray(prop) ? prop : prop?.properties || []);
-        setTenancies(Array.isArray(ten) ? ten : ten?.tenancies || []);
+        setSummary(ten);
         setBankStatus(feedStatus);
         setBankTransactions(Array.isArray(feedTransactions) ? feedTransactions : []);
       } catch {
-        // Errors already handled by individual .catch() calls above
+        setLoadError('Financial data could not be loaded. Refresh the page to try again.');
       }
       setLoading(false);
     };
@@ -121,15 +115,13 @@ export default function Transactions() {
   };
 
   // Calculate summaries
-  const totalMonthlyRent = tenancies.filter(t => !t.status || t.status === 'active').reduce((sum, t) => sum + (t.monthly_rent || t.rent_amount || 0), 0) ||
-    properties.reduce((sum, p) => sum + (p.monthly_rent || p.rent || 0), 0);
-
-  const collected = payments.filter(p => p.status === 'paid' || !p.status).reduce((sum, p) => sum + (p.amount_paid || p.amount || 0), 0);
-  const outstanding = totalMonthlyRent - collected;
-  const occupiedCount = properties.filter(p => p.status === 'occupied' || p.status === 'let').length;
-  const totalCount = properties.length || 1;
-  const vacancyRate = ((totalCount - occupiedCount) / totalCount) * 100;
-  const vacancyLoss = totalMonthlyRent > 0 ? (totalMonthlyRent / totalCount) * (totalCount - occupiedCount) : 0;
+  const totalMonthlyRent = Number(summary.monthly_rent);
+  const collected = Number(summary.collected);
+  const outstanding = Number(summary.outstanding);
+  const occupiedCount = Math.min(properties.length, Number(summary.active_tenancies));
+  const totalCount = properties.length;
+  const vacancyRate = (totalCount ? (totalCount - occupiedCount) / totalCount : 0) * 100;
+  const vacancyLoss = totalMonthlyRent > 0 && totalCount > 0 ? (totalMonthlyRent / totalCount) * (totalCount - occupiedCount) : 0;
   const paymentDelays = payments
     .filter(payment => payment.due_date && payment.payment_date)
     .map(payment => Math.max(0, Math.round((new Date(payment.payment_date!).getTime() - new Date(payment.due_date!).getTime()) / 86400000)));
@@ -137,19 +129,12 @@ export default function Transactions() {
 
   const fmt = (n: number) => `£${n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
-  // Group properties by status
-  const statusGroups = properties.reduce<Record<string, { count: number; rent: number }>>((acc, p) => {
-    const s = p.status || 'unknown';
-    if (!acc[s]) acc[s] = { count: 0, rent: 0 };
-    acc[s].count++;
-    acc[s].rent += p.monthly_rent || p.rent || 0;
-    return acc;
-  }, {});
+  const statusGroups = rentServiceGroups(properties);
 
   return (
     <Layout title="Financials" breadcrumb={[{ label: 'Financials' }]}>
       <div className="p-4 md:p-8">
-        {loading ? (
+        {loadError ? <p role="alert" className="text-red-400 py-8">{loadError}</p> : loading ? (
           <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
         ) : (
           <>
@@ -192,8 +177,8 @@ export default function Transactions() {
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4 mb-8">
               {[
                 { label: 'Total Monthly Rent', value: fmt(totalMonthlyRent), icon: <PoundSterling size={20} />, color: 'from-blue-500 to-blue-600' },
-                { label: 'Collected', value: fmt(collected), icon: <TrendingUp size={20} />, color: 'from-emerald-500 to-emerald-600' },
-                { label: 'Outstanding', value: fmt(outstanding > 0 ? outstanding : 0), icon: <TrendingDown size={20} />, color: 'from-amber-500 to-orange-500' },
+                { label: 'Collected This Month', value: fmt(collected), icon: <TrendingUp size={20} />, color: 'from-emerald-500 to-emerald-600' },
+                { label: 'Outstanding This Month', value: fmt(outstanding > 0 ? outstanding : 0), icon: <TrendingDown size={20} />, color: 'from-amber-500 to-orange-500' },
                 { label: 'Vacancy Loss', value: fmt(vacancyLoss), icon: <Home size={20} />, color: 'from-red-500 to-pink-500' },
                 { label: 'Average Lateness', value: `${averageDaysLate.toFixed(1)} days`, icon: <Clock3 size={20} />, color: 'from-violet-500 to-purple-600' },
               ].map(card => (
@@ -224,9 +209,9 @@ export default function Transactions() {
                     {payments.slice(0, 15).map(p => (
                       <div key={p.id} className="grid grid-cols-4 gap-2 py-2.5 border-b border-[var(--border-subtle)] text-sm">
                         <span className="truncate">{p.tenant_name || '—'}</span>
-                        <span className="truncate text-[var(--text-secondary)]">{p.property_address || '—'}</span>
-                        <span className="text-right font-medium text-emerald-400">{fmt(p.amount)}</span>
-                        <span className="text-right text-[var(--text-muted)]">{new Date(p.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                        <span className="truncate text-[var(--text-secondary)]">{p.address || '—'}</span>
+                        <span className="text-right font-medium text-emerald-400">{fmt(Number(p.amount_paid || 0))}</span>
+                        <span className="text-right text-[var(--text-muted)]">{p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : Number(p.amount_paid || 0) > 0 ? 'Not recorded' : 'Unpaid'}</span>
                       </div>
                     ))}
                     </div>
@@ -236,7 +221,7 @@ export default function Transactions() {
 
               {/* Property Rent Breakdown */}
               <Card className="p-5">
-                <h3 className="text-lg font-semibold mb-4">Rent by Status</h3>
+                <h3 className="text-lg font-semibold mb-4">Rent by Status</h3><p className="text-xs text-[var(--text-muted)] mb-4">Monthly rental values by service, excluding Fleming-owned properties. These are rents, not service fees.</p>
                 {Object.keys(statusGroups).length === 0 ? (
                   <EmptyState message="No property data available" icon={<Home size={24} />} />
                 ) : (
@@ -252,7 +237,7 @@ export default function Transactions() {
                     ))}
                     {/* Total */}
                     <div className="flex items-center justify-between p-3 bg-gradient-to-r from-orange-500/10 to-pink-500/10 rounded-xl border border-orange-500/20">
-                      <p className="text-sm font-semibold">Total Portfolio</p>
+                      <p className="text-sm font-semibold">Portfolio Turnover (monthly total)</p>
                       <p className="text-sm font-bold">{fmt(totalMonthlyRent)}<span className="text-[var(--text-muted)] text-xs">/mo</span></p>
                     </div>
                   </div>

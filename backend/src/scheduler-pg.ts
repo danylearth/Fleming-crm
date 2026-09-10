@@ -1,3 +1,4 @@
+import { syncTenantLifecycle } from './tenant-lifecycle-db';
 import { query, queryOne, run, insert } from './db-pg';
 
 const CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour
@@ -168,12 +169,11 @@ async function runRentReviewChecks(): Promise<number> {
   in30.setDate(in30.getDate() + 30);
 
   const properties = await query(
-    `SELECT id, address, rent_review_date::text
-     FROM properties
-     WHERE rent_review_date IS NOT NULL
-     AND rent_review_date <= $1
-     AND rent_review_date >= $2`,
-    [ymdLondon(in30), ymdLondon(today)]
+    `SELECT p.id,p.address,COALESCE(p.rent_review_date, (MAX(t.rent_last_reviewed)+INTERVAL '1 year')::date)::text AS rent_review_date
+     FROM properties p LEFT JOIN tenants t ON t.property_id=p.id AND t.status='active'
+     GROUP BY p.id
+     HAVING COALESCE(p.rent_review_date,(MAX(t.rent_last_reviewed)+INTERVAL '1 year')::date) <= $1::date`,
+    [ymdLondon(in30)]
   );
 
   for (const prop of properties) {
@@ -256,6 +256,7 @@ async function runDueFollowUps(): Promise<number> {
         follow_up_return_status = NULL,
         updated_at = CURRENT_TIMESTAMP
     WHERE status = 'awaiting_response'
+      AND NOT (holding_deposit_requested=1 AND COALESCE(application_form_completed,0)=0)
       AND follow_up_date IS NOT NULL
       AND follow_up_date <= CURRENT_DATE
     RETURNING id, status
@@ -269,6 +270,7 @@ async function runDueFollowUps(): Promise<number> {
 }
 
 async function runAllChecks() {
+  await syncTenantLifecycle();
   const complianceTasks = await runComplianceChecks();
   const tenancyTasks = await runTenancyEndChecks();
   const rentReviewTasks = await runRentReviewChecks();

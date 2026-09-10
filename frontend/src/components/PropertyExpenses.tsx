@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, Pencil, Plus, ReceiptText, Trash2, Upload } from 'lucide-react';
+import { BadgePoundSterling, Download, Pencil, Plus, ReceiptText, Trash2, Upload } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { invalidateCache, useApi } from '../hooks/useApi';
 import { Button, Card, DatePicker, EmptyState, Input, Select, Tag } from './ui';
 import { isUkFinancialYearToDate, ukFinancialYear } from '../utils/propertyExpenses';
@@ -61,6 +62,7 @@ function formatCategory(value: string) {
 export default function PropertyExpenses({ propertyId }: { propertyId: number }) {
   const api = useApi();
   const { token } = useAuth();
+  const { confirmAction } = useNotifications();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -189,7 +191,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
           )}
           <button title="Edit expense" onClick={() => edit(expense)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Pencil size={14} /></button>
           <button title="Delete expense" onClick={async () => {
-            if (!confirm(`Delete “${expense.description}”?`)) return;
+            if (!await confirmAction(`Delete “${expense.description}”?`)) return;
             await api.delete(`/api/property-expenses/${expense.id}`);
             await load();
           }} className="text-[var(--text-muted)] hover:text-red-400"><Trash2 size={14} /></button>
@@ -202,7 +204,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
     <Card className="p-4 sm:p-6 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-semibold">Property Costs</h3>
+          <h3 className="font-semibold flex items-center gap-2"><BadgePoundSterling size={16} />Property Costs</h3>
           <p className="text-xs text-[var(--text-muted)]">Running costs and historic expenditure</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
@@ -211,7 +213,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Select label="Financial year" value={year} onChange={setYear} options={yearOptions.map(value => ({ value, label: financialYearLabel(value) }))} />
+        <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><Select label="Financial year" value={year} onChange={setYear} options={yearOptions.map(value => ({ value, label: financialYearLabel(value) }))} /></div>
         <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><p className="text-xs text-[var(--text-muted)]">Year to date</p><p className="text-lg font-bold">£{yearToDateTotal.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p></div>
         <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><p className="text-xs text-[var(--text-muted)]">All-time total</p><p className="text-lg font-bold">£{allTimeTotal.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p></div>
       </div>

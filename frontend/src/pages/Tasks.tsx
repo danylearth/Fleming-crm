@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import { Card, GlassCard, Button, Input, Select, Avatar, ProgressRing, EmptyState, DatePicker } from '../components/ui';
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
+import { useNotifications } from '../context/NotificationContext';
 import {
   Plus, X, CheckCircle2, Clock, Inbox, Calendar, Search, ChevronDown,
   ChevronLeft, ChevronRight, Building2, Users, UserCircle, Tag,
@@ -102,6 +103,7 @@ function FilterDropdown({ icon: Icon, label, value, displayValue, onClear, items
 
 export default function Tasks() {
   const api = useApi();
+  const { confirmAction } = useNotifications();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [properties, setProperties] = useState<{ id: number; address: string; landlord_id: number | null }[]>([]);
@@ -136,7 +138,7 @@ export default function Tasks() {
   const [calYear, setCalYear] = useState(now.getFullYear());
   const [calMonth, setCalMonth] = useState(now.getMonth());
   const [selectedMember, setSelectedMember] = useState('all');
-  const [calViewMode, setCalViewMode] = useState<'day' | 'week' | 'month'>('day');
+  const [calViewMode, setCalViewMode] = useState<'day' | 'week' | 'month'>('month');
 
   const teamMembers = useMemo(() => [
     { id: 'all', name: 'Everyone', role: 'All Team', color: 'from-orange-500 to-pink-500', initials: 'All' },
@@ -242,7 +244,7 @@ export default function Tasks() {
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
 
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       `Are you sure you want to delete ${selectedIds.length} task${selectedIds.length !== 1 ? 's' : ''}? This action cannot be undone.`
     );
 

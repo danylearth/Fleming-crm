@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Upload, FileText, Trash2, Download, X, AlertCircle } from 'lucide-react';
+import { useNotifications } from '../context/NotificationContext';
 
 interface Document {
   id: number;
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export default function DocumentsSection({ entityType, entityId, title }: Props) {
+  const { confirmAction } = useNotifications();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [docTypes, setDocTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +60,7 @@ export default function DocumentsSection({ entityType, entityId, title }: Props)
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this document?')) return;
+    if (!await confirmAction('Delete this document?')) return;
     try { const res = await fetch(`/api/documents/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); if (res.ok) fetchDocuments(); } catch { /* Silently ignore */ }
   };
 

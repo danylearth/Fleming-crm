@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
+
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -12,7 +12,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
-  const { theme } = useTheme();
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +29,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] font-[Lufga] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#25073b] via-[#61114b] to-[#dc006d] font-[Lufga] flex items-center justify-center px-4">
       {/* Background gradient orbs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 -left-32 w-96 h-96 bg-orange-500/10 rounded-full blur-[128px]" />
@@ -40,17 +40,17 @@ export default function Login() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-10">
           <img
-            src={theme === 'dark' ? '/logo-light.png' : '/logo-dark.png'}
+            src="/logo-light.png"
             alt="Fleming Lettings"
-            className="h-14 w-auto object-contain mb-3"
+            className="h-20 w-auto object-contain mb-3"
           />
-          <p className="text-[var(--text-muted)] text-sm">Property management, simplified</p>
+          <p className="text-white/80 text-sm">Property management, simplified</p>
         </div>
 
         {/* Card */}
         <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] p-8">
-          <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-1">Welcome back</h2>
-          <p className="text-sm text-[var(--text-muted)] mb-6">Sign in to your account</p>
+          <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-1">Hi there! 👋</h2>
+          <p className="text-sm text-[var(--text-muted)] mb-6">Sign in to get started.</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

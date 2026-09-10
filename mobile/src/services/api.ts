@@ -2,9 +2,7 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 // Backend API URL
-const API_BASE_URL = __DEV__
-  ? 'http://192.168.0.123:3001' // Your local network IP address for development
-  : 'https://fleming-crm-api.fly.dev'; // Production API URL (Fly.io)
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://fleming-crm-api.fly.dev';
 
 const TOKEN_KEY = 'fleming_auth_token';
 

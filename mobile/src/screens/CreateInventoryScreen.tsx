@@ -1,3 +1,4 @@
+import api from '../services/api';
 import React, { useState } from 'react';
 import {
   View,
@@ -30,6 +31,8 @@ export default function CreateInventoryScreen() {
     new Date().toISOString().split('T')[0]
   );
   const [notes, setNotes] = useState('');
+  const [tenantId,setTenantId] = useState('');
+  const {data:tenants} = useQuery({queryKey:['inventory-tenants'],queryFn:async()=> (await api.get<{id:number;name:string;property_id:number;tenancy_start_date?:string}[]>('/api/tenants')).data});
 
   const { data: properties } = useQuery({
     queryKey: ['properties'],
@@ -55,13 +58,14 @@ export default function CreateInventoryScreen() {
   });
 
   const handleCreate = () => {
-    if (!propertyId || !inventoryType || !inspectionDate) {
+    if (!propertyId || !tenantId || !inventoryType || !inspectionDate) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
     createMutation.mutate({
       property_id: parseInt(propertyId),
+      tenant_id: Number(tenantId),
       inventory_type: inventoryType,
       inspection_date: inspectionDate,
       notes,
@@ -98,6 +102,7 @@ export default function CreateInventoryScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.label}>Tenant / tenancy *</Text><View style={styles.pickerContainer}><Picker selectedValue={tenantId} onValueChange={setTenantId}><Picker.Item label="Choose the tenancy" value=""/>{tenants?.filter(t=>t.property_id===Number(propertyId)).map(t=><Picker.Item key={t.id} value={String(t.id)} label={`${t.name} · ${t.tenancy_start_date?.slice(0,10)||'Start date not recorded'}`}/>)}</Picker></View><Text style={{marginVertical:12}}>Aim to conduct the inventory at handover or within 14 days of the tenancy start.</Text>
         <Text style={styles.label}>Inventory Type *</Text>
         <View style={styles.pickerContainer}>
           <Picker

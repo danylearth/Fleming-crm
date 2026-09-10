@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, SearchDropdown, PostcodeAutocomplete } from '../components/ui';
-import AddressAutocomplete from '../components/ui/AddressAutocomplete';
+import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, SearchDropdown } from '../components/ui';
+
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Building2, Plus, List, Map, X, Search, ChevronDown, User, Upload } from 'lucide-react';
@@ -10,6 +10,7 @@ import CsvImport from '../components/ui/CsvImport';
 import PropertyMap from '../components/ui/PropertyMap';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 import { usePermissions } from '../hooks/usePermissions';
+import { useNotifications } from '../context/NotificationContext';
 
 interface Property {
   id: number; address: string; postcode: string; rent_amount: number;
@@ -26,7 +27,7 @@ interface TenantOption {
 }
 
 interface PropertyForm {
-  landlord_id: string; address: string; postcode: string; property_type: string;
+  landlord_id: string; address: string; address_line_2: string; city: string; postcode: string; property_type: string;
   bedrooms: string; rent_amount: string; status: string; service_type: string;
   council_tax_band: string; has_gas: boolean | null;
   is_leasehold: boolean; leasehold_issued_by: string; leasehold_email: string;
@@ -39,8 +40,9 @@ interface PropertyForm {
 }
 
 const STATUSES = [
-  { key: 'to_let', label: 'To Let', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  { key: 'let_agreed', label: 'Let Agreed', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  { key: 'let', label: 'Let', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  { key: 'to_let', label: 'To Let', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+  { key: 'let_agreed', label: 'Let Agreed', color: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30' },
   { key: 'full_management', label: 'Full Management', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
   { key: 'rent_collection', label: 'Rent Collection', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
 ];
@@ -54,6 +56,7 @@ function statusLabel(s: string) {
 
 export default function Properties() {
   const api = useApi();
+  const { confirmAction } = useNotifications();
   const navigate = useNavigate();
   const { canCreate } = usePermissions();
   const [properties, setProperties] = useState<Property[]>([]);
@@ -66,7 +69,7 @@ export default function Properties() {
   const [showImport, setShowImport] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<PropertyForm>({
-    landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
+    landlord_id: '', address: '', address_line_2: '', city: '', postcode: '', property_type: 'house', bedrooms: '1',
     rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: null,
     is_leasehold: false, leasehold_issued_by: '', leasehold_email: '', leasehold_phone: '', leasehold_reference: '', leasehold_notes: '',
     leasehold_portal_url: '', leasehold_portal_username: '',
@@ -132,7 +135,7 @@ export default function Properties() {
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
 
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       `Are you sure you want to delete ${selectedIds.length} ${selectedIds.length !== 1 ? 'properties' : 'property'}? This action cannot be undone.`
     );
 
@@ -436,7 +439,7 @@ export default function Properties() {
 
   function resetForm() {
     setForm({
-      landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
+      landlord_id: '', address: '', address_line_2: '', city: '', postcode: '', property_type: 'house', bedrooms: '1',
       rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: null,
       is_leasehold: false, leasehold_issued_by: '', leasehold_email: '', leasehold_phone: '', leasehold_reference: '', leasehold_notes: '',
       leasehold_portal_url: '', leasehold_portal_username: '',
@@ -536,7 +539,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
                   </div>
                 </div>
                 <div className="max-h-48 overflow-y-auto">
-                  {landlords.filter(l => l.name.toLowerCase().includes(llSearch.toLowerCase())).map(l => (
+                  {landlords.filter(l => l.landlord_type !== 'internal' && l.name.toLowerCase().includes(llSearch.toLowerCase())).map(l => (
                     <button key={l.id} onClick={() => { setForm((f: PropertyForm) => ({ ...f, landlord_id: String(l.id) })); setLlDropOpen(false); setLlSearch(''); }}
                       className="w-full text-left px-3 py-2.5 text-sm hover:bg-[var(--bg-hover)] transition-colors truncate text-[var(--text-secondary)]">
                       {l.name}
@@ -548,30 +551,11 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
           </div>
         )}
 
-        <div className="relative">
-          <AddressAutocomplete
-            label="Address *"
-            value={form.address}
-            onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, address: v }))}
-            onSelect={(place) => {
-              setForm((f: PropertyForm) => ({
-                ...f,
-                address: place.address,
-                postcode: place.postcode || f.postcode
-              }));
-            }}
-            placeholder="Start typing an address..."
-          />
-        </div>
-        <div>
-          <PostcodeAutocomplete
-            label="Postcode"
-            value={form.postcode}
-            onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, postcode: v }))}
-            onAddressSelect={(address: string) => setForm((f: PropertyForm) => ({ ...f, address: address }))}
-            placeholder="e.g. SW1A 1AA"
-            showDropdownOnAddress={true}
-          />
+        <Input label="Address line 1 *" value={form.address} onChange={address => setForm(f => ({...f,address}))} />
+        <Input label="Address line 2 (optional)" value={form.address_line_2} onChange={address_line_2 => setForm(f => ({...f,address_line_2}))} />
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Town / City *" value={form.city} onChange={city => setForm(f => ({...f,city}))} />
+          <Input label="Postcode *" value={form.postcode} onChange={postcode => setForm(f => ({...f,postcode:postcode.toUpperCase()}))} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Select label="Type" value={form.property_type} onChange={(v: string) => setForm((f: PropertyForm) => ({ ...f, property_type: v }))}
@@ -607,11 +591,8 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
         </div>
 
         <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
-          <button type="button" onClick={() => setForm((current: PropertyForm) => ({ ...current, is_leasehold: !current.is_leasehold }))}
-            className={`w-full rounded-xl border px-4 py-2.5 text-sm font-medium ${form.is_leasehold ? 'border-[var(--accent-orange)] bg-[var(--accent-orange)]/10' : 'border-[var(--border-input)] bg-[var(--bg-input)] text-[var(--text-muted)]'}`}>
-            {form.is_leasehold ? '✓ Leasehold property' : 'Freehold property — click if leasehold'}
-          </button>
-          {form.is_leasehold && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <fieldset><legend className="text-sm font-medium mb-2">Is this a freehold or leasehold property?</legend><div className="flex gap-2">{[false,true].map(value => <button key={String(value)} type="button" aria-pressed={form.is_leasehold === value} onClick={() => setForm(f => ({...f,is_leasehold:value}))} className={`flex-1 rounded-xl border p-3 text-sm ${form.is_leasehold === value ? 'bg-[var(--btn-primary-bg)] text-white' : 'border-[var(--border-input)]'}`}>{value ? 'Leasehold' : 'Freehold'}</button>)}</div></fieldset>
+                    {form.is_leasehold && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Leasehold Issued By" value={form.leasehold_issued_by} onChange={leasehold_issued_by => setForm((current: PropertyForm) => ({ ...current, leasehold_issued_by }))} />
             <Input label="Email Address" type="email" value={form.leasehold_email} onChange={leasehold_email => setForm((current: PropertyForm) => ({ ...current, leasehold_email }))} />
             <Input label="Contact Number" value={form.leasehold_phone} onChange={leasehold_phone => setForm((current: PropertyForm) => ({ ...current, leasehold_phone }))} />
@@ -645,7 +626,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
 
         <div className="flex gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.landlord_id || !form.address || !form.status || form.has_gas === null || form.has_management_company === null || (!isMyPortfolio && !form.service_type)}>
+          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.landlord_id || !form.address.trim() || !form.city.trim() || !form.postcode.trim() || !form.status || form.has_gas === null || form.has_management_company === null || (!isMyPortfolio && !form.service_type)}>
             {saving ? 'Creating...' : 'Create Property'}
           </Button>
         </div>

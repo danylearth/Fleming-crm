@@ -1,3 +1,5 @@
+import FeedbackPanel from './FeedbackPanel';
+import { useActivityTracking } from '../hooks/useActivityTracking';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -7,8 +9,8 @@ import {
   DashboardIcon, EnquiriesIcon, PropertiesIcon, LandlordsIcon, TenantsIcon,
   BdmIcon, MaintenanceIcon, TasksIcon, FinancialsIcon, SettingsIcon
 } from './ui/icons/FlemingIcons';
-// FloatingAI hidden until AI router is ported to PostgreSQL (all /api/ai/* endpoints 404 in production)
-// import FloatingAI from './ui/FloatingAI';
+
+import FloatingAI from './ui/FloatingAI';
 import { useTheme } from '../context/ThemeContext';
 
 const navItems = [
@@ -39,6 +41,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, title, hideTopBar }: LayoutProps) {
+  useActivityTracking();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useAuth();
@@ -64,8 +67,8 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
       {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 flex flex-col bg-[var(--bg-page)] border-r border-[var(--border-subtle)] transition-all duration-200
-        ${mobileOpen ? 'translate-x-0 w-52' : '-translate-x-full w-52'}
-        md:static md:translate-x-0 ${collapsed ? 'md:w-16' : 'md:w-52'} shrink-0
+        ${mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64'}
+        md:static md:translate-x-0 ${collapsed ? 'md:w-16' : 'md:w-64'} shrink-0
       `}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-[var(--border-subtle)]">
@@ -73,7 +76,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
             <img
               src={theme === 'dark' ? '/logo-light.png' : '/logo-dark.png'}
               alt="Fleming Lettings"
-              className="h-8 w-auto object-contain"
+              className="h-11 w-auto max-w-[180px] object-contain"
             />
           ) : (
             <img
@@ -97,10 +100,10 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
         </button>
 
         {/* Nav */}
-        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 py-3 px-2 space-y-1.5 overflow-y-auto">
           {navItems
             .filter(item => !item.roles || (user?.role && item.roles.includes(user.role)))
-            .map(item => (
+            .map((item, index) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -113,8 +116,8 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
                   }`
                 }
               >
-                <item.icon size={18} className="shrink-0" />
-                {(!collapsed || mobileOpen) && <span>{item.label}</span>}
+                <span className="p-2 rounded-xl shrink-0" style={{backgroundColor:['#f973161c','#3b82f61c','#a855f71c','#10b9811c','#ec48991c'][index%5],color:['#ea580c','#3b82f6','#a855f7','#10b981','#ec4899'][index%5]}}><item.icon size={18} /></span>
+                {(!collapsed || mobileOpen) && <span className="whitespace-nowrap">{item.label}</span>}
               </NavLink>
             ))}
         </nav>
@@ -123,20 +126,17 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
         <div className="p-3 border-t border-[var(--border-subtle)]">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
-              {user?.name?.[0] || 'U'}
+              {user?.avatar_url ? <img src={user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" /> : user?.name?.[0] || 'U'}
             </div>
             {(!collapsed || mobileOpen) && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
-                <p className="text-xs text-[var(--text-muted)] truncate">{user?.email || ''}</p>
+                <p className="text-sm font-medium break-words">{user?.role === 'admin' ? 'Administrator' : user?.name || 'User'}</p>
+                <p className="text-[10px] text-[var(--text-muted)] mt-1">Last logged in: {user?.last_login ? new Date(user.last_login).toLocaleString('en-GB') : 'Not recorded'}</p>
               </div>
             )}
-            {(!collapsed || mobileOpen) && (
-              <button onClick={() => { logout(); navigate('/login'); }} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
-                <LogOut size={16} />
-              </button>
-            )}
+
           </div>
+          <button onClick={() => { logout(); navigate('/login'); }} aria-label="Log out" className="mt-3 w-full flex justify-center items-center gap-2 rounded-xl bg-red-600 text-white py-2 text-xs"><LogOut size={16} />{(!collapsed || mobileOpen) && 'Log out'}</button>
         </div>
       </aside>
 
@@ -144,7 +144,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
         {!hideTopBar && (
-          <header className="flex items-center justify-between px-4 md:px-8 h-14 md:h-16 border-b border-[var(--border-subtle)] shrink-0">
+          <header className="flex flex-wrap items-center justify-between gap-2 px-4 md:px-8 py-2 min-h-14 md:min-h-16 border-b border-[var(--border-subtle)] shrink-0">
             <div className="flex items-center gap-3">
               {/* Hamburger on mobile */}
               <button onClick={() => setMobileOpen(true)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden mr-1">
@@ -152,7 +152,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
               </button>
               {title && <h1 className="text-xl md:text-2xl font-bold">{title}</h1>}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 max-w-full">
               {/* Portfolio toggle - Admin only */}
               {user?.role === 'admin' && (
                 <div className="flex items-center gap-0.5 bg-[var(--bg-input)] rounded-xl p-0.5 border border-[var(--border-input)]">
@@ -174,14 +174,14 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
                   ))}
                 </div>
               )}
-              <button onClick={toggleTheme} className="p-2 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-elevated)] border border-[var(--border-color)] transition-colors text-[var(--text-primary)]">
+              <button aria-label="Toggle colour theme" onClick={toggleTheme} className="p-2 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-elevated)] border border-[var(--border-color)] transition-colors text-[var(--text-primary)]">
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-xs font-bold text-white">
-                {user?.name?.[0] || 'U'}
+                {user?.avatar_url ? <img src={user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" /> : user?.name?.[0] || 'U'}
               </div>
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium">{user?.name || 'User'}</p>
+                <p className="text-sm font-medium">{user?.role === 'admin' ? 'Administrator' : user?.name || 'User'}</p>
                 <p className="text-xs text-[var(--text-muted)]">{user?.email || ''}</p>
               </div>
             </div>
@@ -200,7 +200,8 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
         </main>
       </div>
 
-      {/* FloatingAI hidden until AI router is ported to PostgreSQL */}
+      <FloatingAI />
+      <FeedbackPanel />
     </div>
   );
 }

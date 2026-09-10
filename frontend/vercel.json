@@ -1,7 +1,9 @@
 {
-  "buildCommand": "",
+  "framework": null,
+  "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    { "source": "/api/:path*", "destination": "https://fleming-crm-api.fly.dev/api/:path*" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

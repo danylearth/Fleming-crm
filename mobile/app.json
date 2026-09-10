@@ -3,7 +3,7 @@
     "name": "Fleming CRM",
     "slug": "fleming-crm",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
@@ -29,8 +29,7 @@
       },
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -44,6 +43,12 @@
           "cameraPermission": "Allow Fleming CRM to access your camera to capture inventory photos."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "12416fba-30b7-49de-af8d-053e3718abc2"
+      }
+    },
+    "owner": "danylnucleus"
   }
 }

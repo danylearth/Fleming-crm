@@ -1,4 +1,8 @@
 import PDFDocument from 'pdfkit';
+import { PDFDocument as EditablePdf } from 'pdf-lib';
+import fs from 'fs';
+import path from 'path';
+import {pdfFontPath} from './pdf-fonts';
 
 export interface CompletedApplicationPdfInput {
   enquiryId: number;
@@ -77,7 +81,7 @@ export function buildCompletedApplicationSections(formData: Record<string, unkno
     if (key in DECLARATION_LABELS || !hasAnswer(value)) continue;
     const title = sectionFor(key);
     const answers = grouped.get(title) || [];
-    answers.push({ key, label: labelFor(key), value: valueFor(value) });
+    answers.push({ key, label: labelFor(key), value: /income|rent|deposit|salary|amount/.test(key) && /^\d+(\.\d+)?$/.test(String(value)) ? Number(value).toLocaleString('en-GB') : valueFor(value) });
     grouped.set(title, answers);
   }
   return SECTION_ORDER.flatMap(title => grouped.has(title) ? [{ title, answers: grouped.get(title)! }] : []);
@@ -87,7 +91,7 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'A4',
-      margin: 50,
+      margins: {top: 120, bottom: 80, left: 50, right: 50},
       bufferPages: true,
       info: {
         Title: `Completed Tenancy Application - ${input.applicantName}`,
@@ -97,9 +101,22 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
     });
     const chunks: Buffer[] = [];
     doc.on('data', chunk => chunks.push(Buffer.from(chunk)));
-    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('end', async () => {
+      try {
+        const body=await EditablePdf.load(Buffer.concat(chunks));
+        const letterhead=await EditablePdf.load(fs.readFileSync(path.join(__dirname,'agreement-assets/office-letterhead.pdf')));
+        const output=await EditablePdf.create();
+        const [background]=await output.embedPages([letterhead.getPage(0)]);
+        const pages=await output.embedPages(body.getPages());
+        for(const content of pages){const page=output.addPage([595.28,841.89]);page.drawPage(background,{x:0,y:0,width:595.28,height:841.89});page.drawPage(content,{x:0,y:0,width:595.28,height:841.89});}
+        output.setTitle(`Completed Tenancy Application - ${input.applicantName}`);
+        resolve(Buffer.from(await output.save()));
+      }catch(error){reject(error);}
+    });
     doc.on('error', reject);
 
+    doc.registerFont('Arial',pdfFontPath());
+    doc.registerFont('Arial-Bold',pdfFontPath(true));
     const contentWidth = doc.page.width - 100;
     const ensureSpace = (height: number) => {
       if (doc.y + height > doc.page.height - 78) doc.addPage();
@@ -107,19 +124,16 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
     const section = (title: string) => {
       ensureSpace(42);
       doc.moveDown(0.7)
-        .font('Helvetica-Bold').fontSize(13).fillColor('#c7592b').text(title)
+        .font('Arial-Bold').fontSize(13).fillColor('#91236f').text(title)
         .moveDown(0.35);
       doc.moveTo(50, doc.y).lineTo(50 + contentWidth, doc.y).strokeColor('#e8d8ce').stroke();
       doc.moveDown(0.55);
     };
 
-    doc.rect(0, 0, doc.page.width, 104).fill('#20201f');
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(22).text('FLEMING LETTINGS', 50, 34);
-    doc.font('Helvetica').fontSize(10).fillColor('#e7c7b7').text('Completed Tenancy Application', 50, 68);
     doc.y = 126;
 
-    doc.fillColor('#20201f').font('Helvetica-Bold').fontSize(18).text(input.applicantName || 'Applicant');
-    doc.font('Helvetica').fontSize(10).fillColor('#555555');
+    doc.fillColor('#20201f').font('Arial-Bold').fontSize(18).text(input.applicantName || 'Applicant');
+    doc.font('Arial').fontSize(10).fillColor('#555555');
     doc.text(`Property: ${input.propertyAddress || 'Not specified'}`);
     doc.text(`Submitted: ${input.submittedAt.toLocaleString('en-GB', { timeZone: 'Europe/London' })}`);
     doc.text(`CRM enquiry: ${input.enquiryId}`);
@@ -128,8 +142,8 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
       section(applicationSection.title);
       for (const answer of applicationSection.answers) {
         ensureSpace(40);
-        doc.font('Helvetica-Bold').fontSize(9).fillColor('#555555').text(answer.label);
-        doc.font('Helvetica').fontSize(10).fillColor('#20201f').text(answer.value, { width: contentWidth });
+        doc.font('Arial-Bold').fontSize(9).fillColor('#555555').text(answer.label);
+        doc.font('Arial').fontSize(10).fillColor('#20201f').text(answer.value, { width: contentWidth });
         doc.moveDown(0.45);
       }
     }
@@ -137,7 +151,7 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
     section('Holding Deposit Terms');
     for (const paragraph of HOLDING_DEPOSIT_TERMS) {
       ensureSpace(58);
-      doc.font('Helvetica').fontSize(9).fillColor('#20201f').text(paragraph, { width: contentWidth, lineGap: 2 });
+      doc.font('Arial').fontSize(9).fillColor('#20201f').text(paragraph, { width: contentWidth, lineGap: 2 });
       doc.moveDown(0.55);
     }
 
@@ -145,9 +159,9 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
     for (const [key, declaration] of Object.entries(DECLARATION_LABELS)) {
       ensureSpace(38);
       const accepted = input.formData[key] === true;
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(accepted ? '#23744b' : '#a33b32')
+      doc.font('Arial-Bold').fontSize(10).fillColor(accepted ? '#23744b' : '#a33b32')
         .text(accepted ? 'ACCEPTED' : 'NOT ACCEPTED', { continued: true });
-      doc.font('Helvetica').fillColor('#20201f').text(`  ${declaration}`, { width: contentWidth });
+      doc.font('Arial').fillColor('#20201f').text(`  ${declaration}`, { width: contentWidth });
       doc.moveDown(0.4);
     }
 
@@ -156,29 +170,29 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
       for (const entry of input.auditEntries) {
         ensureSpace(34);
         const timestamp = entry.timestamp.toLocaleString('en-GB', { timeZone: 'Europe/London' });
-        doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#555555').text(`${timestamp} - ${entry.action}`);
-        doc.font('Helvetica').fontSize(8.5).fillColor('#20201f').text(entry.detail, { width: contentWidth });
+        doc.font('Arial-Bold').fontSize(8.5).fillColor('#555555').text(`${timestamp} - ${entry.action}`);
+        doc.font('Arial').fontSize(8.5).fillColor('#20201f').text(entry.detail, { width: contentWidth });
         doc.moveDown(0.35);
       }
     }
 
     ensureSpace(180);
     section('Electronic signature');
-    doc.font('Helvetica').fontSize(10).fillColor('#555555').text(`Signed by: ${input.signatureName}`);
+    doc.font('Arial').fontSize(10).fillColor('#555555').text(`Signed by: ${input.signatureName}`);
     doc.text(`Date: ${input.submittedAt.toLocaleDateString('en-GB', { timeZone: 'Europe/London' })}`);
     doc.moveDown(0.5);
     try {
       doc.image(input.signatureDataUrl, { fit: [240, 90] });
     } catch {
-      doc.font('Helvetica-Oblique').fillColor('#a33b32').text('Signature image could not be rendered.');
+      doc.font('Arial').fillColor('#a33b32').text('Signature image could not be rendered.');
     }
 
     const range = doc.bufferedPageRange();
     for (let pageIndex = range.start; pageIndex < range.start + range.count; pageIndex += 1) {
       doc.switchToPage(pageIndex);
       doc.page.margins.bottom = 0;
-      doc.font('Helvetica').fontSize(8).fillColor('#777777')
-        .text(`Fleming Lettings - Page ${pageIndex + 1} of ${range.count}`, 50, doc.page.height - 58, {
+      doc.font('Arial').fontSize(8).fillColor('#777777')
+        .text(`Fleming Lettings - Page ${pageIndex + 1} of ${range.count}`, 50, doc.page.height - 73, {
           width: contentWidth,
           align: 'center',
           lineBreak: false,

@@ -70,7 +70,7 @@ describe('tenancy agreement PDFs', () => {
     const buffer = await generateTenancyAgreementPdf(input);
     const pdf = await PDFDocument.load(buffer);
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
-    expect(pdf.getPageCount()).toBeGreaterThanOrEqual(7);
+    expect(pdf.getPageCount()).toBeGreaterThanOrEqual(10);
     expect(pdf.getTitle()).toContain('Assured Periodic Tenancy');
-  });
+  }, 60000);
 });

@@ -179,3 +179,17 @@ describe('email provider safety', () => {
     expect(email.html).not.toContain('src="assets/');
   });
 });
+
+it('embeds supplied logo, hero and map images once while retaining PDF attachments separately', async () => {
+  const { inlineEmailImages, tenancyEndEmail, handoverAppointmentEmail } = await import('./email');
+  const end = tenancyEndEmail('Jamie', '1 Test Street', '2026-11-30');
+  expect(end.html).not.toContain('29 Wealden');
+  const content = inlineEmailImages(end.html);
+  expect(content.html).toContain('cid:fleming-fleming-logo-white.png');
+  expect(content.attachments).toHaveLength(2);
+  expect(content.attachments.every(a => a.content.length > 100)).toBe(true);
+  const move = handoverAppointmentEmail({ firstName: 'Jamie', propertyAddress: '1 Test Street', appointmentDate: '2026-09-14', appointmentTime: '10:00', appointmentWith: 'Staff' });
+  const images = inlineEmailImages(move.html);
+  expect(images.attachments.some(a => a.filename === 'apple-glyph.png')).toBe(true);
+  expect(images.attachments.some(a => a.filename === 'gmaps-pin.png')).toBe(true);
+});

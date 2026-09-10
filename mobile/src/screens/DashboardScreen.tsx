@@ -102,7 +102,7 @@ export default function DashboardScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, styles.actionButtonSecondary]}
-          onPress={() => navigation.navigate('Properties')}
+          onPress={() => navigation.navigate('Main', { screen: 'Properties' })}
         >
           <Text style={styles.actionButtonTextSecondary}>View Properties</Text>
         </TouchableOpacity>

@@ -20,10 +20,7 @@ function renderFinalEmailTemplate(filename: string, values: Record<string, strin
   }
   const unresolved = html.match(/\{\{[A-Z_]+\}\}/g);
   if (unresolved) throw new Error(`Missing values for ${filename}: ${[...new Set(unresolved)].join(', ')}`);
-  // Email clients need absolute, publicly reachable image URLs. The hand-off
-  // omitted two small decorative icons, so remove only those rather than
-  // stripping the supplied Fleming artwork from every template.
-  html = html.replace(/<img\s+src="assets\/(?:apple-glyph|gmaps-pin)\.png"[^>]*\/>/g, '');
+  // Email clients need absolute, publicly reachable image URLs.
   html = html.replace(/src="assets\//g, 'src="https://crm.fleminglettings.co.uk/email-assets/');
   return html;
 }
@@ -47,6 +44,7 @@ function emailTime(value: string): string {
 }
 
 export interface SendEmailParams {
+  idempotencyKey?: string;
   to: string | string[];
   subject: string;
   html: string;
@@ -142,6 +140,7 @@ export function completedTenancyAgreementEmail(firstName: string, propertyAddres
     html: renderFinalEmailTemplate('07-completed-tenancy-agreement.html', {
       FIRST_NAME: escapeHtml(firstName || 'there'),
       PROPERTY_SHORT_ADDRESS: escapeHtml(address.short),
+      PROPERTY_ADDRESS_REMAINDER: escapeHtml(address.remainder),
     }),
   };
 }
@@ -176,6 +175,21 @@ export function finalBalanceHandoverEmail(input: FinalBalanceEmailInput): { subj
       SORT_CODE: escapeHtml(input.bankDetails.sortCode),
       ACCOUNT_NUMBER: escapeHtml(input.bankDetails.accountNumber),
       PAYMENT_REFERENCE: escapeHtml(input.paymentReference),
+    }),
+  };
+}
+
+export function maintenanceReportingEmail(
+  firstName: string,
+  propertyAddress: string,
+  reportUrl: string,
+): { subject: string; html: string } {
+  return {
+    subject: 'Report a maintenance issue to Fleming Lettings',
+    html: renderFinalEmailTemplate('10-maintenance-reporting.html', {
+      FIRST_NAME: escapeHtml(firstName || 'there'),
+      PROPERTY_ADDRESS: escapeHtml(normalizePropertyAddress(propertyAddress)),
+      REPORT_URL: escapeHtml(reportUrl),
     }),
   };
 }
@@ -228,11 +242,24 @@ export function applicationChangesRequestedEmail(name: string, changes: string, 
   return {
     subject: 'More information required for your tenancy application',
     html: renderFinalEmailTemplate('05-application-review.html', {
-      FIRST_NAME: escapeHtml(name || 'there'),
+      FIRST_NAME: escapeHtml(name?.trim().split(/\s+/)[0] || 'there'),
       REQUESTED_CHANGES: escapeHtml(changes).replace(/\r?\n/g, '<br>'),
       APPLICATION_URL: escapeHtml(applicationUrl),
     }),
   };
+}
+
+// Embed supplied branding assets in the message itself; saved previews retain public URLs.
+export function inlineEmailImages(html: string) {
+  const assets = new Map<string, { filename: string; content: Buffer; contentType: string; contentId: string }>();
+  const rendered = html.replace(/src="https:\/\/crm\.fleminglettings\.co\.uk\/email-assets\/([a-zA-Z0-9_-]+\.(?:png|jpg))"/g, (original, filename: string) => {
+    const file = path.join(__dirname, 'email-assets', filename);
+    if (!fs.existsSync(file)) return original;
+    const contentId = `fleming-${filename}`;
+    if (!assets.has(filename)) assets.set(filename, { filename, content: fs.readFileSync(file), contentType: filename.endsWith('.png') ? 'image/png' : 'image/jpeg', contentId });
+    return `src="cid:${contentId}"`;
+  });
+  return { html: rendered, attachments: [...assets.values()] };
 }
 
 export async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; id?: string; error?: string; simulated?: boolean }> {
@@ -247,14 +274,15 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
   }
 
   try {
+    const inline = inlineEmailImages(params.html);
     const { data, error } = await resend.emails.send({
       from: EMAIL_FROM,
       to: params.to,
       subject: params.subject,
-      html: params.html,
+      html: inline.html,
       replyTo: OUTBOUND_EMAIL_ADDRESS,
-      attachments: params.attachments,
-    });
+      attachments: [...(params.attachments || []), ...inline.attachments],
+    }, params.idempotencyKey ? { idempotencyKey: params.idempotencyKey } : undefined);
 
     if (error) {
       console.error('[EMAIL ERROR]', error);
@@ -276,7 +304,7 @@ export function viewingConfirmationEmail(name: string, address: string, date: st
   return {
     subject: `Your viewing at ${cleanAddress.full}`,
     html: renderFinalEmailTemplate('02-viewing-confirmation.html', {
-      FIRST_NAME: escapeHtml(name || 'there'),
+      FIRST_NAME: escapeHtml(name?.trim().split(/\s+/)[0] || 'there'),
       PROPERTY_ADDRESS: escapeHtml(cleanAddress.full),
       PROPERTY_SHORT_ADDRESS: escapeHtml(cleanAddress.short),
       VIEWING_DATE: escapeHtml(date),
@@ -342,7 +370,7 @@ export function holdingDepositRequestEmail(
   return {
     subject: `Holding Deposit Request - ${address}`,
     html: renderFinalEmailTemplate('03-holding-deposit.html', {
-      FIRST_NAME: escapeHtml(name || 'there'),
+      FIRST_NAME: escapeHtml(name?.trim().split(/\s+/)[0] || 'there'),
       PROPERTY_ADDRESS: escapeHtml(propertyAddress.full),
       PROPERTY_SHORT_ADDRESS: escapeHtml(propertyAddress.short),
       MONTHLY_RENT: emailMoneyCompact(monthlyRent),
@@ -456,7 +484,7 @@ export function enquiryConfirmationEmail(name: string, reference: string, proper
   return {
     subject: 'Welcome to Fleming Lettings!',
     html: renderFinalEmailTemplate('01-welcome.html', {
-      FIRST_NAME: escapeHtml(name || 'there'),
+      FIRST_NAME: escapeHtml(name?.trim() || 'there'),
       REFERENCE: escapeHtml(reference),
     }),
   };
@@ -494,4 +522,26 @@ export function genericEmail(name: string, topic: string): { subject: string; ht
         <p>Please don't hesitate to get in touch if you have any questions.</p>
     `),
   };
+}
+
+export function tenancyEndEmail(firstName: string, propertyAddress: string, endDate: string): { subject: string; html: string; sms: string } {
+  const date = new Date(`${endDate}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }).replace(',', '');
+  const address = normalizePropertyAddress(propertyAddress);
+  return {
+    subject: `Your tenancy end date – ${address}`,
+    html: renderFinalEmailTemplate('11-tenancy-end.html', { FIRST_NAME: escapeHtml(firstName || 'there'), END_DATE: escapeHtml(date), PROPERTY_ADDRESS: escapeHtml(address), PROPERTY_SUBJECT: encodeURIComponent(address) }),
+    sms: `Hi ${firstName || 'there'}, this message confirms that your tenancy is scheduled to end on ${date} at ${address}. Further details have been sent you via email. If you have not requested this or wish to postpone your scheduled end date, then please get in touch immediately on 01902 212 415.`,
+  };
+}
+
+export function propertyInventoryEmail(name: string, address: string, dueDate: string, reviewLink: string): string {
+  return renderFinalEmailTemplate('12-property-inventory.html', {
+    TENANT_NAME:escapeHtml(name), PROPERTY_ADDRESS:escapeHtml(address),
+    DUE_DATE:escapeHtml(new Date(dueDate.slice(0,10)+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})),
+    REVIEW_LINK:escapeHtml(reviewLink),
+  });
+}
+
+export function applicationReminderEmail(name: string, link: string) {
+ return {subject:'Complete your Fleming Lettings application',html:renderFinalEmailTemplate('13-application-reminder.html',{FIRST_NAME:escapeHtml(name),APPLICATION_LINK:escapeHtml(link)})};
 }

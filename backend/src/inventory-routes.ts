@@ -1,4 +1,5 @@
-import { Express } from 'express';
+import { inventoryEditable, issueInventory } from './inventory-review';
+import express, { Express } from 'express';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
@@ -95,6 +96,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         return res.status(400).json({ error: 'property_id, inventory_type, and inspection_date are required' });
       }
 
+      if (!tenant_id || !await queryOne('SELECT id FROM tenants WHERE id=$1 AND property_id=$2',[tenant_id,property_id])) return res.status(400).json({error:'Choose the tenant for this property and tenancy'});
       const id = await insert(
         `INSERT INTO inventories (property_id, tenant_id, inventory_type, inspection_date, conducted_by, notes)
          VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -139,7 +141,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
     }
   });
 
-  app.put('/api/inventories/:id', authMiddleware, async (req: AuthRequest, res) => {
+  app.put('/api/inventories/:id', authMiddleware, inventoryEditable, async (req: AuthRequest, res) => {
     try {
       const { overall_condition, notes, status } = req.body;
 
@@ -158,23 +160,20 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
 
   app.put('/api/inventories/:id/complete', authMiddleware, async (req: AuthRequest, res) => {
     try {
-      await run(
-        `UPDATE inventories SET status='completed', completed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=$1`,
-        [req.params.id]
-      );
-
-      await logAudit(req.user?.id, req.user?.email, 'update', 'inventory', parseInt(req.params.id as string), { status: 'completed' });
-      res.json({ success: true });
+      const delivery = await issueInventory(Number(req.params.id),req.body?.due_date);
+      await logAudit(req.user?.id, req.user?.email, 'issue', 'inventory', Number(req.params.id));
+      res.json({ success: true, delivery });
     } catch (err) {
       console.error(err);
-      res.status(500).json({ error: 'Failed to complete inventory' });
+      res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to complete inventory' });
     }
   });
 
-  app.delete('/api/inventories/:id', authMiddleware, async (req: AuthRequest, res) => {
+  app.delete('/api/inventories/:id', authMiddleware, inventoryEditable, async (req: AuthRequest, res) => {
     try {
       // Delete associated photos from filesystem
       const photos = await query(`SELECT filename, thumbnail_filename FROM inventory_photos WHERE inventory_id = $1`, [req.params.id]);
+      await run(`DELETE FROM inventories WHERE id = $1`, [req.params.id]);
       for (const photo of photos) {
         const filePath = path.join(inventoryUploadsDir, photo.filename);
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -184,7 +183,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         }
       }
 
-      await run(`DELETE FROM inventories WHERE id = $1`, [req.params.id]);
+
       await logAudit(req.user?.id, req.user?.email, 'delete', 'inventory', parseInt(req.params.id as string));
       res.json({ success: true });
     } catch (err) {
@@ -212,7 +211,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
     }
   });
 
-  app.post('/api/inventories/:id/rooms', authMiddleware, async (req: AuthRequest, res) => {
+  app.post('/api/inventories/:id/rooms', authMiddleware, inventoryEditable, async (req: AuthRequest, res) => {
     try {
       const { room_name, room_type, condition, notes } = req.body;
 
@@ -226,6 +225,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         [req.params.id, room_name, room_type, condition || null, notes || null]
       );
 
+      await logAudit(req.user?.id,req.user?.email,'create','inventory_room',id,{ inventory_id: Number(req.params.id), room_name, room_type });
       res.json({ id });
     } catch (err) {
       console.error(err);
@@ -233,7 +233,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
     }
   });
 
-  app.put('/api/inventory-rooms/:id', authMiddleware, async (req: AuthRequest, res) => {
+  app.put('/api/inventory-rooms/:id', authMiddleware, inventoryEditable, async (req: AuthRequest, res) => {
     try {
       const d = req.body;
       const fields: string[] = [];
@@ -248,6 +248,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
       if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
       values.push(req.params.id);
       await run(`UPDATE inventory_rooms SET ${fields.join(', ')} WHERE id=$${idx}`, values);
+      await logAudit(req.user?.id,req.user?.email,'update','inventory_room',Number(req.params.id),d);
 
       res.json({ success: true });
     } catch (err) {
@@ -256,10 +257,11 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
     }
   });
 
-  app.delete('/api/inventory-rooms/:id', authMiddleware, async (req: AuthRequest, res) => {
+  app.delete('/api/inventory-rooms/:id', authMiddleware, inventoryEditable, async (req: AuthRequest, res) => {
     try {
       // Delete associated photos from filesystem
       const photos = await query(`SELECT filename, thumbnail_filename FROM inventory_photos WHERE room_id = $1`, [req.params.id]);
+      await run(`DELETE FROM inventory_rooms WHERE id = $1`, [req.params.id]);
       for (const photo of photos) {
         const filePath = path.join(inventoryUploadsDir, photo.filename);
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -269,7 +271,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         }
       }
 
-      await run(`DELETE FROM inventory_rooms WHERE id = $1`, [req.params.id]);
+
       res.json({ success: true });
     } catch (err) {
       console.error(err);
@@ -297,7 +299,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
     }
   });
 
-  app.post('/api/inventory-photos/:inventoryId/:roomId', authMiddleware, inventoryUpload.single('file'), async (req: AuthRequest, res) => {
+  app.post('/api/inventory-photos/:inventoryId/:roomId', authMiddleware, inventoryEditable, inventoryUpload.single('file'), async (req: AuthRequest, res) => {
     try {
       const { inventoryId, roomId } = req.params;
       const { caption } = req.body;
@@ -307,6 +309,8 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
+      const room = await queryOne('SELECT id FROM inventory_rooms WHERE id=$1 AND inventory_id=$2', [roomId,inventoryId]);
+      if (!room) { fs.unlinkSync(file.path); return res.status(400).json({ error: 'Room does not belong to this inventory' }); }
       // Generate thumbnail
       const thumbnailFilename = `thumb_${file.filename}`;
       const thumbnailPath = path.join(thumbnailsDir, thumbnailFilename);
@@ -341,6 +345,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         ]
       );
 
+      await logAudit(req.user?.id,req.user?.email,'create','inventory_photo',id,{ inventory_id: Number(inventoryId), room_id: Number(roomId) });
       const photo = await queryOne(`SELECT * FROM inventory_photos WHERE id = $1`, [id]);
       res.json(photo);
     } catch (err) {
@@ -349,13 +354,14 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
     }
   });
 
-  app.delete('/api/inventory-photos/:id', authMiddleware, async (req: AuthRequest, res) => {
+  app.delete('/api/inventory-photos/:id', authMiddleware, inventoryEditable, async (req: AuthRequest, res) => {
     try {
       const photo = await queryOne(`SELECT * FROM inventory_photos WHERE id = $1`, [req.params.id]);
       if (!photo) {
         return res.status(404).json({ error: 'Photo not found' });
       }
 
+      await run(`DELETE FROM inventory_photos WHERE id = $1`, [req.params.id]);
       // Delete files
       const filePath = path.join(inventoryUploadsDir, photo.filename);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -365,7 +371,7 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
         if (fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath);
       }
 
-      await run(`DELETE FROM inventory_photos WHERE id = $1`, [req.params.id]);
+
       res.json({ success: true });
     } catch (err) {
       console.error(err);
@@ -373,14 +379,6 @@ export function registerInventoryRoutes(app: Express, authMiddleware: any) {
     }
   });
 
-  // Serve inventory photos
-  app.use('/uploads/inventory', authMiddleware, (req, res, next) => {
-    // Serve static files from inventory uploads directory
-    const filePath = path.join(inventoryUploadsDir, req.path);
-    if (fs.existsSync(filePath)) {
-      res.sendFile(filePath);
-    } else {
-      res.status(404).json({ error: 'File not found' });
-    }
-  });
+  // Express confines static reads to this directory, including thumbnail paths.
+  app.use('/uploads/inventory', authMiddleware, express.static(inventoryUploadsDir, { dotfiles: 'deny', index: false, fallthrough: false }));
 }

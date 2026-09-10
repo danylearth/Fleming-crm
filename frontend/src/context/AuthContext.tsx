@@ -2,6 +2,9 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import type { ReactNode } from 'react';
 
 interface User {
+  last_login?: string;
+  avatar_url?: string;
+  accent_color?: string;
   id: number;
   email: string;
   name: string;
@@ -14,6 +17,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: { email: string; password: string; name: string; role: string; phone?: string }) => Promise<void>;
   logout: () => void;
+  updateUser: (changes: Partial<User>) => void;
   loading: boolean;
 }
 
@@ -27,14 +31,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
     if (token) {
       fetch(`${API_URL}/api/auth/me`, {
+        signal: controller.signal,
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(async res => {
           if (res.ok) {
             const data = await res.json();
-            if (data.user) setUser(data.user);
+            if (data.user && !controller.signal.aborted) setUser(data.user);
           } else if (res.status === 401 || res.status === 403) {
             // Definitive rejection — token is invalid
             localStorage.removeItem('token');
@@ -46,21 +52,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Network error (backend cold start, offline) — keep the token so a
           // transient blip doesn't permanently log the user out
         })
-        .finally(() => setLoading(false));
+        .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     } else {
       // No token present - immediately mark as not loading
       queueMicrotask(() => setLoading(false));
     }
+    return () => controller.abort();
   }, [token]);
 
   const login = async (email: string, password: string) => {
-    const res = await fetch(`${API_URL}/api/auth/login`, {
+    let res: Response;
+    try { res = await fetch(`${API_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+      body: JSON.stringify({ email: email.trim(), password })
+    }); } catch { throw new Error('Cannot reach the CRM. Please check your connection and try again.'); }
+    if (res.status === 401) throw new Error('Invalid login details');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'The CRM is temporarily unavailable. Please try again.');
+    localStorage.setItem('fleming-last-activity', String(Date.now()));
     localStorage.setItem('token', data.token);
     setToken(data.token);
     setUser(data.user);
@@ -74,19 +84,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
+    localStorage.setItem('fleming-last-activity', String(Date.now()));
     localStorage.setItem('token', data.token);
     setToken(data.token);
     setUser(data.user);
   };
 
   const logout = useCallback(() => {
+    localStorage.removeItem('fleming-last-activity');
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);
   }, []);
 
+  useEffect(() => {
+    if (!token) return;
+    const key = 'fleming-last-activity';
+    if (!localStorage.getItem(key)) localStorage.setItem(key, String(Date.now()));
+    const expired = () => Date.now() - Number(localStorage.getItem(key) || 0) >= 10 * 60 * 1000;
+    const check = () => {
+      if (!localStorage.getItem('token') || expired()) logout();
+    };
+    const activity = () => {
+      if (expired()) { logout(); return; }
+      // Only human interaction extends the session; background polling does not.
+      if (Date.now() - Number(localStorage.getItem(key)) > 1000) localStorage.setItem(key, String(Date.now()));
+    };
+    const events = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart'] as const;
+    events.forEach(event => window.addEventListener(event, activity, { passive: true }));
+    const timer = window.setInterval(check, 1000);
+    window.addEventListener('focus', check);
+    window.addEventListener('pageshow', check);
+    window.addEventListener('storage', check);
+    document.addEventListener('visibilitychange', check);
+    check();
+    return () => {
+      window.clearInterval(timer);
+      events.forEach(event => window.removeEventListener(event, activity));
+      window.removeEventListener('focus', check);
+      window.removeEventListener('pageshow', check);
+      window.removeEventListener('storage', check);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [token, logout]);
+
+  useEffect(() => {
+    const color = user?.accent_color || '#a32372';
+    document.documentElement.style.setProperty('--accent-orange', color);
+    document.documentElement.style.setProperty('--btn-primary-bg', color);
+    document.documentElement.style.setProperty('--btn-primary-text', '#ffffff');
+  }, [user?.accent_color]);
+  const updateUser = (changes: Partial<User>) => setUser(current => current ? { ...current, ...changes } : current);
+
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, loading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

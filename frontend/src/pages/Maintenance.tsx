@@ -6,6 +6,7 @@ import { useApi } from '../hooks/useApi';
 import { Plus, X, Wrench, MapPin, ChevronDown, ChevronUp, Search, Building2, User } from 'lucide-react';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 import { useParams } from 'react-router-dom';
+import { useNotifications } from '../context/NotificationContext';
 
 interface MaintenanceItem {
   id: number; property_id: number; address: string; title: string; description: string;
@@ -50,6 +51,7 @@ function formatDate(d: string) {
 
 export default function Maintenance() {
   const api = useApi();
+  const { confirmAction } = useNotifications();
   const { requestId } = useParams();
   const [items, setItems] = useState<MaintenanceItem[]>([]);
   const [properties, setProperties] = useState<{ id: number; address: string }[]>([]);
@@ -159,7 +161,7 @@ export default function Maintenance() {
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
 
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       `Are you sure you want to delete ${selectedIds.length} maintenance ${selectedIds.length !== 1 ? 'items' : 'item'}? This action cannot be undone.`
     );
 

@@ -16,6 +16,7 @@ import { rejectionSms } from '../utils/messages';
 import { usePermissions } from '../hooks/usePermissions';
 import { viewingEmailPreview, viewingSmsPreview } from '../utils/viewingMessages';
 import { formatPropertyAddress } from '../utils/propertyAddress';
+import { useNotifications } from '../context/NotificationContext';
 
 interface EnquiryRaw {
   id: number;
@@ -268,6 +269,7 @@ function EmploymentFields({ form, setField, suffix, editing }: {
 // ─── Main Page ───
 export default function Enquiries() {
   const api = useApi();
+  const { confirmAction } = useNotifications();
   const { canCreate, canDelete } = usePermissions();
   const navigate = useNavigate();
   const [rawEnquiries, setRawEnquiries] = useState<EnquiryRaw[]>([]);
@@ -514,7 +516,7 @@ export default function Enquiries() {
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
 
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       `Are you sure you want to delete ${selectedIds.length} enquir${selectedIds.length !== 1 ? 'ies' : 'y'}? This action cannot be undone.`
     );
 
@@ -535,7 +537,7 @@ export default function Enquiries() {
   const handleBulkStatus = async (status: 'onboarding' | 'rejected') => {
     if (selectedIds.length === 0) return;
     const label = status === 'rejected' ? 'reject and archive' : 'move to onboarding';
-    if (!window.confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${selectedIds.length} selected enquiries?`)) return;
+    if (!await confirmAction(`${label.charAt(0).toUpperCase() + label.slice(1)} ${selectedIds.length} selected enquiries?`)) return;
     try {
       await api.post('/api/tenant-enquiries/bulk-update', { ids: selectedIds, status });
       setSelectedIds([]);

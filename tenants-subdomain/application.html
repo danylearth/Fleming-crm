@@ -15,7 +15,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: 'Lufga', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: Helvetica, Arial, sans-serif;
             background: linear-gradient(135deg, #25073B 0%, #DC006D 100%);
             min-height: 100vh;
             display: flex;
@@ -190,7 +190,7 @@
         }
 
         input, select, textarea, button {
-            font-family: 'Lufga', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: Helvetica, Arial, sans-serif;
         }
 
         input[type="text"],
@@ -245,7 +245,7 @@
             padding: 20px;
             width: 320px;
             display: none;
-            font-family: 'Lufga', sans-serif;
+            font-family: Helvetica, Arial, sans-serif;
         }
         .date-picker-dropdown.open { display: block; }
         .dp-header {
@@ -262,7 +262,7 @@
         .dp-month-btn, .dp-year-btn {
             background: #f5f5f5;
             border: none;
-            font-family: 'Lufga', sans-serif;
+            font-family: Helvetica, Arial, sans-serif;
             font-weight: 700;
             font-size: 15px;
             color: #DC006D;
@@ -322,7 +322,7 @@
             font-weight: 500;
             border: none;
             background: none;
-            font-family: 'Lufga', sans-serif;
+            font-family: Helvetica, Arial, sans-serif;
         }
         .dp-day:hover { background: #fdf2f7; color: #DC006D; }
         .dp-day.today { border: 2px solid #DC006D; }
@@ -344,7 +344,7 @@
         .dp-footer button {
             background: none;
             border: none;
-            font-family: 'Lufga', sans-serif;
+            font-family: Helvetica, Arial, sans-serif;
             font-size: 13px;
             font-weight: 600;
             cursor: pointer;
@@ -375,7 +375,7 @@
             border-radius: 10px;
             border: none;
             background: none;
-            font-family: 'Lufga', sans-serif;
+            font-family: Helvetica, Arial, sans-serif;
             font-size: 14px;
             cursor: pointer;
             transition: all 0.15s;
@@ -560,7 +560,7 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
-            font-family: 'Lufga', sans-serif;
+            font-family: Helvetica, Arial, sans-serif;
             flex: 1;
         }
 
@@ -722,13 +722,23 @@
             input[type="number"], select, textarea { min-height: 48px; }
             .checkbox-group input[type="checkbox"] { width: 24px; height: 24px; }
         }
-    </style>
+
+    /* Keep long addresses, uploads and controls within narrow mobile viewports. */
+    img{max-width:100%;object-fit:contain}input,select,textarea{min-width:0;max-width:100%;font-size:16px}button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
+    .grid>*,.two-col>*,.input-group,.panel,.document-card{min-width:0}.header,.top-inner{flex-wrap:wrap;gap:12px}.actions{flex-wrap:wrap}
+    .uploaded-list,.property,.meta,.notice,.message{overflow-wrap:anywhere}.uploaded-list li{flex-wrap:wrap}.date-picker-dropdown{max-height:90dvh;overflow-y:auto}
+    @media(max-width:480px){.top-inner{justify-content:center}.top img{max-width:155px;height:auto}.help{white-space:normal;text-align:center}.back-button{min-height:44px;display:inline-flex;align-items:center;justify-content:center}.field input,.input-group input,.input-group select,.input-group textarea{font-size:16px}.panel{padding:14px}.state{padding:40px 20px}.header{justify-content:center}.button,.actions button{min-height:44px}}
+
+/* Shared office-approved field dimensions across public applications. */
+.input-group input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),.input-group select,.custom-select-trigger {height:60px;min-height:60px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;}
+</style>
+<link rel="stylesheet" href="/form-typography.css">
 </head>
 <body>
     <div class="container" id="app">
         <!-- Header -->
         <div class="header">
-            <img src="logo-white.png" alt="Fleming Lettings" class="logo" />
+            <img src="/logo-white.png" alt="Fleming Lettings" class="logo" />
             <a href="tel:+441902212415" class="back-button">Need help? <span class="phone-icon" aria-hidden="true">&#9742;</span></a>
         </div>
 
@@ -890,7 +900,7 @@
                     </div>
 
                     <p id="step-2-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(1)">Back</button><button type="button" class="btn btn-primary" onclick="goToStep(3)">Continue</button></div>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(1)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(3)">Continue</button></div>
                 </div>
             </div>
 
@@ -960,13 +970,21 @@
                     <p>The account below should be the main account into which your salary, pension or benefits are paid.</p>
                     <div class="two-col three"><div class="input-group"><label>Account name *</label><input type="text" id="f_bank_account_name" required /></div><div class="input-group"><label>Sort code *</label><input type="text" id="f_bank_sort" placeholder="00-00-00" inputmode="numeric" maxlength="8" pattern="\d{2}-\d{2}-\d{2}" oninput="formatSortCode(this)" required /></div><div class="input-group"><label>Account number *</label><input type="text" id="f_bank_account" placeholder="00000000" inputmode="numeric" maxlength="8" pattern="\d{8}" oninput="formatAccountNumber(this)" required /></div></div>
 
+                    <p id="step-3-error" class="error-text" style="display:none;"></p>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(2)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(4)">Continue →</button></div>
+                </div>
+            </div>
+            <div id="step-4" class="step" style="display:none;">
+                <div class="form-wrapper">
+                    <h2>Tenancy, guarantor and next of kin</h2>
+                    <p class="step-description">Tell us about your tenancy and the people supporting your application.</p>
                     <div class="section-divider"><div class="dot"></div><span>TENANCY INFORMATION</span><div class="line"></div></div>
-                    <div class="two-col"><div class="input-group full-width"><label>Property address *</label><input type="text" id="f_property_address" required /></div><div class="input-group"><label>Preferred start date *</label><div class="date-picker-wrapper"><input type="text" id="f_preferred_start" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_preferred_start')" /><span class="calendar-icon">&#x1F4C5;</span></div></div><div class="input-group"><label>Rental period *</label><select id="f_rental_period" required><option value="">Select...</option><option>Monthly</option><option>Quarterly</option><option>Other</option></select></div><div class="input-group"><label>Preferred tenancy duration *</label><input type="text" id="f_tenancy_duration" placeholder="e.g. 12 months" required /></div><div class="input-group"><label>Rental amount (&pound;) *</label><input type="number" id="f_rental_amount" min="0" step="0.01" required /></div></div>
+                    <div class="two-col"><div class="input-group full-width"><label>Property address *</label><input type="text" id="f_property_address" required /></div><div class="input-group"><label>Preferred start date *</label><div class="date-picker-wrapper"><input type="text" id="f_preferred_start" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_preferred_start')" /><span class="calendar-icon">&#x1F4C5;</span></div></div><div class="input-group"><label>Rental period *</label><select id="f_rental_period" required><option value="">Select...</option><option>Monthly</option><option>Quarterly</option><option>Other</option></select></div><div class="input-group"><label>Preferred tenancy duration *</label><input type="text" id="f_tenancy_duration" placeholder="e.g. 12 months" required /></div><div class="input-group"><label>Rental amount (&pound;) *</label><input type="text" id="f_rental_amount" inputmode="decimal" oninput="formatMoney(this)" required /></div></div>
                     <div class="input-group"><label>Will there be any other occupants, including children or dependants? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_other_occupants" data-value="yes" onclick="setYesNo('f_has_other_occupants','yes'); togglePanelFromYesNo('f_has_other_occupants','other-occupants-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_other_occupants" data-value="no" onclick="setYesNo('f_has_other_occupants','no'); togglePanelFromYesNo('f_has_other_occupants','other-occupants-fields')">No</button></div><input type="hidden" id="f_has_other_occupants" data-required-choice="true" /></div>
                     <div id="other-occupants-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Other occupant details *</label><textarea id="f_other_occupants" placeholder="Names, ages and relationship to you"></textarea></div></div>
                     <div class="input-group"><label>Do you have any pets? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_pets" data-value="yes" onclick="setYesNo('f_has_pets','yes'); togglePanelFromYesNo('f_has_pets','pet-details-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_pets" data-value="no" onclick="setYesNo('f_has_pets','no'); togglePanelFromYesNo('f_has_pets','pet-details-fields')">No</button></div><input type="hidden" id="f_has_pets" data-required-choice="true" /></div>
                     <div id="pet-details-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Pet details *</label><textarea id="f_pets" placeholder="Name, animal type, breed and age"></textarea></div></div>
-                    <div class="two-col"><div class="input-group"><label>Security deposit amount (&pound;) *</label><input type="number" id="f_deposit_amount" min="0" step="0.01" required /></div><div class="input-group"><label>Will anyone else contribute to the deposit? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_deposit_contributor" data-value="yes" onclick="setYesNo('f_deposit_contributor','yes'); togglePanelFromYesNo('f_deposit_contributor','deposit-contributor-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_deposit_contributor" data-value="no" onclick="setYesNo('f_deposit_contributor','no'); togglePanelFromYesNo('f_deposit_contributor','deposit-contributor-fields')">No</button></div><input type="hidden" id="f_deposit_contributor" data-required-choice="true" /></div></div>
+                    <div class="two-col"><div class="input-group"><label>Security deposit amount (&pound;) *</label><input type="text" id="f_deposit_amount" inputmode="decimal" oninput="formatMoney(this)" required /></div><div class="input-group"><label>Will anyone else contribute to the deposit? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_deposit_contributor" data-value="yes" onclick="setYesNo('f_deposit_contributor','yes'); togglePanelFromYesNo('f_deposit_contributor','deposit-contributor-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_deposit_contributor" data-value="no" onclick="setYesNo('f_deposit_contributor','no'); togglePanelFromYesNo('f_deposit_contributor','deposit-contributor-fields')">No</button></div><input type="hidden" id="f_deposit_contributor" data-required-choice="true" /></div></div>
                     <div id="deposit-contributor-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Contributor names, addresses and amounts *</label><textarea id="f_deposit_contributor_details"></textarea></div></div>
                     <div class="input-group"><label>Forwarding address for end-of-tenancy deposit correspondence</label><input type="text" id="f_forwarding_address" /></div>
 
@@ -975,13 +993,13 @@
                     <div id="guarantor-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Full name *</label><input type="text" id="f_guarantor_name" /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_guarantor_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_guarantor_email" /></div><div class="input-group"><label>Address *</label><input type="text" id="f_guarantor_address" /></div><div class="input-group"><label>Annual income (&pound;) *</label><input type="text" inputmode="decimal" id="f_guarantor_income" oninput="formatMoney(this)" /></div><div class="input-group"><label>Employment type *</label><select id="f_guarantor_employment"><option value="">Select...</option><option>Employed</option><option>Part-time Employed</option><option>Self-Employed</option><option>Retired</option><option>Other</option></select></div></div><div class="input-group"><label>May we contact this guarantor? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="yes" onclick="setYesNo('f_guarantor_consent','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="no" onclick="setYesNo('f_guarantor_consent','no')">No</button></div><input type="hidden" id="f_guarantor_consent" data-required-choice="true" /></div></div>
                     <div class="two-col"><div class="input-group"><label>Next of kin full name *</label><input type="text" id="f_nok_name" required /></div><div class="input-group"><label>Relationship *</label><input type="text" id="f_nok_rel" required /></div><div class="input-group full-width"><label>Address *</label><input type="text" id="f_nok_address" required /></div><div class="input-group"><label>Postcode *</label><input type="text" id="f_nok_postcode" oninput="formatPostcode(this)" required /></div><div class="input-group"><label>Contact number *</label><input type="tel" id="f_nok_phone" required /></div><div class="input-group full-width"><label>Email *</label><input type="email" id="f_nok_email" required /></div></div>
 
-                    <p id="step-3-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(2)">Back</button><button type="button" class="btn btn-primary" onclick="goToStep(4)">Continue to documents</button></div>
+                    <p id="step-4-error" class="error-text" style="display:none;"></p>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(3)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(5)">Continue to documents</button></div>
                 </div>
             </div>
 
             <!-- STEP 4: Supporting documents -->
-            <div id="step-4" class="step" style="display:none;">
+            <div id="step-5" class="step" style="display:none;">
                 <div class="form-wrapper">
                     <h2>Supporting documents</h2>
                     <p class="step-description">Upload clear copies. PDF, JPG, PNG and Word files up to 10 MB are accepted; you can add more than one file to each category.</p>
@@ -991,12 +1009,12 @@
                     <div class="document-card"><h3>Bank statements *</h3><p>Three months of statements. Upload one combined file or several named files.</p><label class="upload-button" for="doc-bank">Choose files</label><input class="visually-hidden" type="file" id="doc-bank" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Bank Statements')"><ul class="uploaded-list" data-doc-list="Bank Statements"></ul></div>
                     <div class="document-card"><h3>Other financial document</h3><p>Optional supporting evidence, such as benefit entitlement or savings.</p><label class="upload-button" for="doc-other">Choose files</label><input class="visually-hidden" type="file" id="doc-other" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Other Financial Document')"><ul class="uploaded-list" data-doc-list="Other Financial Document"></ul></div>
                     <p id="document-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(3)">Back</button><button type="button" class="btn btn-primary" onclick="goToStep(5)">Continue to declaration</button></div>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(4)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(6)">Continue to declaration</button></div>
                 </div>
             </div>
 
             <!-- STEP 5: Signature & Declaration -->
-            <div id="step-5" class="step" style="display:none;">
+            <div id="step-6" class="step" style="display:none;">
                 <div class="form-wrapper">
                     <h2>Declaration &amp; signature</h2>
                     <p class="step-description">Review the statements below, type your legal name, then add or generate your signature.</p>
@@ -1020,7 +1038,7 @@
                     <div id="signature-retained" class="info-banner" style="display:none;">Your original signature is retained. You do not need to sign the application again.</div>
                     <div class="input-group" style="margin-top:16px;"><label>Date</label><input type="text" id="f_date" readonly class="pre-filled" /></div>
                     <p id="submit-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(4)">Back</button><button type="button" class="btn btn-primary" onclick="submitForm()" id="submit-btn">Submit application</button></div>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(5)">👈 Back</button><button type="button" class="btn btn-primary" onclick="submitForm()" id="submit-btn">Submit application</button></div>
                 </div>
             </div>
 
@@ -1410,7 +1428,7 @@
         }
 
         function updateProgress(step) {
-            document.getElementById('progress-bar').style.width = Math.round(((step - 1) / 4) * 100) + '%';
+            document.getElementById('progress-bar').style.width = Math.round(((step - 1) / 5) * 100) + '%';
         }
 
         async function loadForm() {
@@ -1553,7 +1571,7 @@
                 else if (['date_of_birth', 'employment_start_date', 'preferred_start_date'].includes(key)) el.value = isoToDDMMYYYY(String(stored[key]));
                 else el.value = stored[key];
             });
-            ['f_gross_income', 'f_current_rent', 'f_self_employed_income', 'f_contractor_income', 'f_guarantor_income'].forEach(id => formatMoney(document.getElementById(id)));
+            ['f_gross_income', 'f_current_rent', 'f_self_employed_income', 'f_contractor_income', 'f_guarantor_income', 'f_rental_amount', 'f_deposit_amount'].forEach(id => formatMoney(document.getElementById(id)));
             ['f_address_postcode', 'f_prev_address_postcode', 'f_nok_postcode'].forEach(id => formatPostcode(document.getElementById(id)));
             formatNationalInsurance(document.getElementById('f_ni'));
             document.getElementById('f_first_name').value = stored.first_name || formData.first_name_1 || '';
@@ -1650,16 +1668,16 @@
 
         function goToStep(n) {
             if (n > currentStep) {
-                if ((currentStep === 2 || currentStep === 3) && !validateStep(currentStep)) return;
-                if (currentStep === 4 && !validateDocuments()) return;
+                if ((currentStep === 2 || currentStep === 3 || currentStep === 4) && !validateStep(currentStep)) return;
+                if (currentStep === 5 && !validateDocuments()) return;
             }
-            [1, 2, 3, 4, 5].forEach(s => {
+            [1, 2, 3, 4, 5, 6].forEach(s => {
                 const el = document.getElementById(`step-${s}`);
                 el.style.display = s === n ? 'block' : 'none';
                 el.classList.toggle('active', s === n);
             });
             currentStep = n; updateProgress(n); window.scrollTo({ top: 0, behavior: 'smooth' });
-            if (n === 5 && !isRevision) initSignature();
+            if (n === 6 && !isRevision) initSignature();
         }
 
         function initSignature() {
@@ -1755,7 +1773,7 @@
                     list.append(item);
                 });
             });
-            const documentSection = document.querySelector('#step-4 .form-wrapper');
+            const documentSection = document.querySelector('#step-5 .form-wrapper');
             const firstCard = documentSection?.querySelector('.document-card');
             const needsAction = documentSection?.querySelector('.document-card.needs-action');
             if (documentSection && firstCard && needsAction && firstCard !== needsAction) {
@@ -1765,7 +1783,7 @@
 
         function collectApplicationData() {
             const data = {};
-            const moneyIds = new Set(['f_gross_income', 'f_current_rent', 'f_self_employed_income', 'f_contractor_income', 'f_guarantor_income']);
+            const moneyIds = new Set(['f_gross_income', 'f_current_rent', 'f_self_employed_income', 'f_contractor_income', 'f_guarantor_income', 'f_rental_amount', 'f_deposit_amount']);
             Object.entries(FIELD_MAP).forEach(([key, id]) => {
                 const el = document.getElementById(id);
                 if (BOOLEAN_SELECT_KEYS.has(key)) data[key] = el.value === '' ? '' : el.value === 'yes';
@@ -1810,7 +1828,7 @@
 
         async function submitForm() {
             const errEl = document.getElementById('submit-error'); errEl.style.display = 'none';
-            if (!validateStep(5)) return;
+            if (![2, 3, 4, 6].every(validateStep)) return;
             const declarationIds = ['f_decl_holding_deposit', 'f_decl_info_accurate', 'f_decl_gdpr', 'f_decl_enquiries', 'f_decl_documents', 'f_decl_credit_check', 'f_decl_terms'];
             if (!declarationIds.every(id => document.getElementById(id).checked)) {
                 errEl.textContent = 'Please agree to every mandatory declaration.'; errEl.style.display = 'block'; return;
@@ -1818,7 +1836,7 @@
             if (!hasSigned && !isRevision) {
                 errEl.textContent = 'Please add or generate your signature.'; errEl.style.display = 'block'; return;
             }
-            if (!validateDocuments()) { goToStep(4); return; }
+            if (!validateDocuments()) { goToStep(5); return; }
             const btn = document.getElementById('submit-btn'); btn.disabled = true; btn.textContent = 'Submitting...';
             try {
                 const canvas = document.getElementById('sig-canvas');
@@ -1833,8 +1851,8 @@
                     const detail = result.missing_fields || result.missing_documents;
                     throw new Error(`${result.error || 'Submission failed'}${detail?.length ? `: ${detail.join(', ')}` : ''}`);
                 }
-                [1, 2, 3, 4, 5].forEach(s => document.getElementById(`step-${s}`).style.display = 'none');
-                document.getElementById('step-success').style.display = 'block'; updateProgress(5); window.scrollTo({ top: 0, behavior: 'smooth' });
+                [1, 2, 3, 4, 5, 6].forEach(s => document.getElementById(`step-${s}`).style.display = 'none');
+                document.getElementById('step-success').style.display = 'block'; updateProgress(6); window.scrollTo({ top: 0, behavior: 'smooth' });
             } catch (err) {
                 errEl.textContent = err.message || 'Something went wrong. Please try again.'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Submit application';
             }

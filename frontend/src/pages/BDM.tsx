@@ -6,6 +6,7 @@ import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Mail, Phone, Calendar, ArrowRight, UserPlus, XCircle, LayoutGrid, List } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
+import { useNotifications } from '../context/NotificationContext';
 
 interface Prospect {
   id: number; name: string; email: string; phone: string; address: string;
@@ -42,6 +43,7 @@ function isOverdue(d: string) {
 export default function BDM() {
   const navigate = useNavigate();
   const api = useApi();
+  const { confirmAction } = useNotifications();
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -174,7 +176,7 @@ export default function BDM() {
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
 
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       `Are you sure you want to delete ${selectedIds.length} prospect${selectedIds.length !== 1 ? 's' : ''}? This action cannot be undone.`
     );
 

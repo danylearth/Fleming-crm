@@ -1,5 +1,15 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import AdditionalGuarantors, {type AdditionalGuarantor} from '../components/AdditionalGuarantors';
+import {formatPropertyAddress} from '../utils/propertyAddress';
+import { useRecordAddress } from '../hooks/useRecordAddress';
+import ContextualDocSlot from '../components/ui/ContextualDocSlot';
+import RentReviewModal from '../components/ui/RentReviewModal';
+import CompletionModal from '../components/ui/CompletionModal';
+import { tenantCompletion, type CompletionOverride } from '../utils/tenantCompletion';
+import CommunicationsHistory from '../components/ui/CommunicationsHistory';
+import TenancyEndModal from '../components/ui/TenancyEndModal';
+import { useNotifications } from '../context/NotificationContext';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, StatusDot, SectionHeader, DatePicker } from '../components/ui';
 import DocumentUpload from '../components/ui/DocumentUpload';
@@ -7,17 +17,18 @@ import RentPayments from '../components/ui/RentPayments';
 import ActivityTimeline from '../components/ui/ActivityTimeline';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
-import {
+import { Users,
   Pencil, Mail, Phone, Building2, Calendar, MessageSquare, Clock,
   AlertTriangle, ChevronRight, Plus, User, CheckCircle,
-  ChevronDown, ShieldCheck
+  ChevronDown, BadgePoundSterling, ShieldCheck, UsersRound
 } from 'lucide-react';
 
 // ==================== TYPES ====================
 interface Tenant {
+  completion_overrides?: Record<string, CompletionOverride>;
   id: number; name: string; email: string; phone: string;
   title_1?: string; first_name_1?: string; last_name_1?: string; date_of_birth_1?: string;
-  current_address?: string; previous_address?: string;
+  current_address?: string; previous_address?: string; address_before_previous?: string;
   is_joint_tenancy?: number;
   title_2?: string; first_name_2?: string; last_name_2?: string;
   email_2?: string; phone_2?: string; date_of_birth_2?: string;
@@ -26,8 +37,11 @@ interface Tenant {
   kyc_completed_1?: number; kyc_completed_2?: number;
   kyc_primary_id?: number; kyc_secondary_id?: number;
   kyc_address_verification?: number; kyc_personal_verification?: number;
+  rent_last_reviewed?: string; guarantor_authority_to_contact?: number;
+  additional_guarantors?: AdditionalGuarantor[];
   guarantor_required?: number; guarantor_name?: string; guarantor_address?: string;
   guarantor_phone?: string; guarantor_email?: string;
+  guarantor_date_of_birth?: string; guarantor_employment_status?: string; guarantor_employer?: string; guarantor_annual_income?: string; guarantor_primary_id?: number; guarantor_secondary_id?: number;
   guarantor_kyc_completed?: number; guarantor_deed_received?: number;
   holding_deposit_received?: number; holding_deposit_amount?: number; holding_deposit_date?: string;
   security_deposit_amount?: number;
@@ -40,6 +54,7 @@ interface Tenant {
   tenancy_start_date?: string; tenancy_type?: string;
   has_end_date?: number; tenancy_end_date?: string; monthly_rent?: number;
   move_in_date: string; status: string; notes: string;
+  linked_tenant_id?: number; linked_tenant_name?: string;
 }
 
 interface TenantNote {
@@ -49,6 +64,12 @@ interface TenantNote {
 interface MaintenanceRequest {
   id: number; tenant_id?: number; title: string; description: string;
   priority: string; status: string; created_at: string;
+}
+
+interface TenantCommunication {
+  id: number; channel: 'email' | 'sms'; recipient: string; sender?: string;
+  subject?: string; body: string; status: string; error_message?: string;
+  opened_at?: string; clicked_at?: string; created_at: string;
 }
 
 function parseNotes(raw?: string | null): TenantNote[] {
@@ -146,12 +167,21 @@ function SectionEditButton({ editing, onEdit, onSave, onCancel, saving }: {
 
 // ==================== COMPONENT ====================
 export default function TenantDetail() {
-  const { id } = useParams();
+
   const navigate = useNavigate();
   const api = useApi();
   const { user } = useAuth();
+  const { confirmAction, notify } = useNotifications();
+  const [showEndModal, setShowEndModal] = useState(false);
+  const [showCompletion, setShowCompletion] = useState(false);
+  const [showRentReview, setShowRentReview] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const id = useRecordAddress('tenants', tenant?.name);
   const [loading, setLoading] = useState(true);
+  const editingRef = useRef<string | null>(null);
+  const requestedTenantId = useRef(Number(id));
+  const loadedTenantId = useRef<number | null>(null);
+  requestedTenantId.current = Number(id);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,9 +200,12 @@ export default function TenantDetail() {
   // Properties list for selector
   const [allProperties, setAllProperties] = useState<{ id: number; address: string; postcode: string }[]>([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
+  const [communications, setCommunications] = useState<TenantCommunication[]>([]);
   const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
   const [sendingMaintenanceLink, setSendingMaintenanceLink] = useState<'email' | 'sms' | null>(null);
   const [maintenanceForm, setMaintenanceForm] = useState({ title: '', description: '', category: 'other', priority: 'medium' });
+
+  editingRef.current = editingSection;
 
   const tenantToForm = (t: Tenant) => {
     return {
@@ -180,6 +213,7 @@ export default function TenantDetail() {
       title_1: t.title_1 || '', first_name_1: t.first_name_1 || '', last_name_1: t.last_name_1 || '',
       date_of_birth_1: t.date_of_birth_1 || '',
       current_address: t.current_address || '', previous_address: t.previous_address || '',
+      address_before_previous: t.address_before_previous || '',
       is_joint_tenancy: !!t.is_joint_tenancy,
       title_2: t.title_2 || '', first_name_2: t.first_name_2 || '', last_name_2: t.last_name_2 || '',
       email_2: t.email_2 || '', phone_2: t.phone_2 || '', date_of_birth_2: t.date_of_birth_2 || '',
@@ -188,7 +222,12 @@ export default function TenantDetail() {
       nok_2_name: t.nok_2_name || '', nok_2_relationship: t.nok_2_relationship || '',
       nok_2_phone: t.nok_2_phone || '', nok_2_email: t.nok_2_email || '', nok_2_address: t.nok_2_address || '',
       kyc_completed_1: !!t.kyc_completed_1, kyc_completed_2: !!t.kyc_completed_2,
+      guarantor_date_of_birth: (t.guarantor_date_of_birth || '').slice(0, 10), guarantor_employment_status: t.guarantor_employment_status || '',
+      guarantor_employer: t.guarantor_employer || '', guarantor_annual_income: t.guarantor_annual_income || '',
+      guarantor_primary_id: !!t.guarantor_primary_id, guarantor_secondary_id: !!t.guarantor_secondary_id,
       guarantor_required: !!t.guarantor_required,
+      guarantor_authority_to_contact: !!t.guarantor_authority_to_contact,
+      rent_last_reviewed: (t.rent_last_reviewed || '').slice(0,10),
       guarantor_name: t.guarantor_name || '', guarantor_address: t.guarantor_address || '',
       guarantor_phone: t.guarantor_phone || '', guarantor_email: t.guarantor_email || '',
       guarantor_kyc_completed: !!t.guarantor_kyc_completed, guarantor_deed_received: !!t.guarantor_deed_received,
@@ -203,8 +242,8 @@ export default function TenantDetail() {
       income_amount: t.income_amount || '', income_employer: t.income_employer || '', income_contract_type: t.income_contract_type || '',
       income_frequency: t.income_frequency || 'monthly',
       deposit_scheme: t.deposit_scheme || '',
-      property_id: t.property_id, tenancy_start_date: t.tenancy_start_date || t.move_in_date || '',
-      tenancy_type: t.tenancy_type || 'Assured Periodic Tenancy', has_end_date: !!t.has_end_date, tenancy_end_date: t.tenancy_end_date || '',
+      property_id: t.property_id, tenancy_start_date: (t.tenancy_start_date || t.move_in_date || '').slice(0, 10),
+      tenancy_type: t.tenancy_type || 'Assured Periodic Tenancy', has_end_date: !!t.has_end_date, tenancy_end_date: (t.tenancy_end_date || '').slice(0, 10),
       monthly_rent: t.monthly_rent || '', status: t.status || 'active',
     };
   };
@@ -212,8 +251,14 @@ export default function TenantDetail() {
   const loadDetail = async () => {
     try {
       const t = await api.get(`/api/tenants/${id}`);
+      if (Number(t.id) !== requestedTenantId.current) return;
+      if (loadedTenantId.current !== Number(t.id)) {
+        editingRef.current = null;
+        setEditingSection(null);
+        loadedTenantId.current = Number(t.id);
+      }
       setTenant(t);
-      setForm(tenantToForm(t));
+      if (!editingRef.current) setForm(tenantToForm(t));
       if (t.property_id) {
         const linkedProperty = await api.get(`/api/properties/${t.property_id}`).catch(() => null);
         setPropertyNotes(parseNotes(linkedProperty?.notes));
@@ -222,6 +267,8 @@ export default function TenantDetail() {
       }
       const maintenance = await api.get('/api/maintenance').catch(() => []);
       setMaintenanceRequests(Array.isArray(maintenance) ? maintenance.filter((request: MaintenanceRequest) => Number(request.tenant_id) === Number(t.id)) : []);
+      const communicationRows = await api.get(`/api/tenants/${t.id}/communications`).catch(() => []);
+      setCommunications(Array.isArray(communicationRows) ? communicationRows : []);
     } catch (e) {
       console.error(e);
       alert(e instanceof Error ? e.message : 'Failed to load tenant');
@@ -263,58 +310,21 @@ export default function TenantDetail() {
     await loadDetail();
   };
 
-  const maintenanceReportUrl = 'https://apply.fleminglettings.co.uk/report';
   const sendMaintenanceLink = async (channel: 'email' | 'sms') => {
     if (!tenant) return;
     setSendingMaintenanceLink(channel);
     try {
-      if (channel === 'email') {
-        if (!tenant.email) throw new Error('This tenant has no email address');
-        await api.post('/api/email/send-generic', {
-          entity_type: 'tenant',
-          entity_id: tenant.id,
-          to_email: tenant.email,
-          subject: 'Report a maintenance issue to Fleming Lettings',
-          body_html: `<div style="font-family:Arial,sans-serif;color:#29232d"><h2 style="color:#27083d">Fleming Lettings</h2><p>Hi ${tenant.name.replace(/[<>&"']/g, '')},</p><p>Use the secure form below to report maintenance, damage, a lost key, flooding or another property issue.</p><p><a href="${maintenanceReportUrl}" style="display:inline-block;background:#dc006d;color:#fff;padding:12px 18px;text-decoration:none;border-radius:8px">Report an issue</a></p><p>If there is an immediate danger to life, call 999.</p></div>`,
-        });
-      } else {
-        if (!tenant.phone) throw new Error('This tenant has no phone number');
-        await api.post('/api/sms/send', {
-          entity_type: 'tenant',
-          entity_id: tenant.id,
-          to_phone: tenant.phone,
-          message_body: `Hi ${tenant.name.split(' ')[0] || 'there'}, report maintenance, damage, a lost key or another property issue to Fleming Lettings here: ${maintenanceReportUrl}`,
-        });
-      }
+      await api.post(`/api/tenants/${tenant.id}/maintenance-report-link`, { channel });
       alert(`Maintenance reporting link sent by ${channel}.`);
+      await loadDetail();
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Maintenance reporting link could not be sent');
     }
     setSendingMaintenanceLink(null);
   };
 
-  // Restructured checklist: Authority → KYC → Application Forms → Proof of Income
-  function getChecklistItems() {
-    const items: { label: string; done: boolean }[] = [
-      { label: 'Authority to Contact', done: !!form.authority_to_contact },
-      { label: 'Primary ID', done: !!form.kyc_primary_id },
-      { label: 'Secondary ID', done: !!form.kyc_secondary_id },
-      { label: 'Address Verification', done: !!form.kyc_address_verification },
-      { label: 'In-person Identity Check', done: !!form.kyc_personal_verification },
-    ];
-    if (form.is_joint_tenancy) {
-      items.push({ label: 'KYC — Applicant 2', done: !!form.kyc_completed_2 });
-    }
-    items.push({ label: 'Application Forms', done: !!form.application_forms_completed });
-    items.push({ label: 'Proof of Income', done: !!(form.income_amount || form.proof_of_income) });
-    if (form.guarantor_required) {
-      items.push({ label: 'Guarantor KYC', done: !!form.guarantor_kyc_completed });
-      items.push({ label: 'Deed of Guarantee', done: !!form.guarantor_deed_received });
-    }
-    return items;
-  }
-
-  const checklistItems = getChecklistItems();
+  const checklistItems = tenantCompletion(form, tenant?.linked_tenant_id, tenant?.completion_overrides);
+  const hasInlineJointApplicant = Boolean(form.is_joint_tenancy && !tenant?.linked_tenant_id && (form.first_name_2 || form.last_name_2 || form.email_2));
   const completedCount = checklistItems.filter(i => i.done).length;
   const completionPercent = checklistItems.length ? Math.round((completedCount / checklistItems.length) * 100) : 0;
   const isOnboarded = completionPercent === 100;
@@ -417,6 +427,11 @@ export default function TenantDetail() {
                     <ShieldCheck size={12} /> Onboarded
                   </span>
                 )}
+                {!!tenant.is_joint_tenancy && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-violet-500/10 text-violet-300 border border-violet-500/20 rounded-lg px-2 py-0.5">
+                    <UsersRound size={12} /> Joint tenancy
+                  </span>
+                )}
               </div>
               {tenant.property_id ? (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -425,7 +440,7 @@ export default function TenantDetail() {
                     <div className="w-7 h-7 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center group-hover:bg-[var(--accent-orange)]/20 transition-colors">
                       <Building2 size={14} className="text-[var(--text-muted)] group-hover:text-[var(--accent-orange)] transition-colors" />
                     </div>
-                    <span>{tenant.property_address || `Property #${tenant.property_id}`}</span>
+                    <span>{formatPropertyAddress(tenant.property_address || `Property #${tenant.property_id}`, allProperties.find(p => p.id === tenant.property_id)?.postcode)}</span>
                     <ChevronRight size={14} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
                   </button>
                   {tenant.property_landlord_id && (
@@ -436,6 +451,14 @@ export default function TenantDetail() {
                       </div>
                       <span>{tenant.property_landlord_name || `Landlord #${tenant.property_landlord_id}`}</span>
                       <ChevronRight size={14} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  )}
+                  {tenant.linked_tenant_id && (
+                    <button onClick={() => navigate(`/tenants/${tenant.linked_tenant_id}`)}
+                      className="flex items-center gap-2 mt-2 text-sm text-violet-300 hover:text-violet-200 transition-colors group">
+                      <div className="w-7 h-7 rounded-lg bg-violet-500/15 flex items-center justify-center"><UsersRound size={14} /></div>
+                      <span>Joint tenant: {tenant.linked_tenant_name || `Tenant #${tenant.linked_tenant_id}`}</span>
+                      <ChevronRight size={14} />
                     </button>
                   )}
                 </div>
@@ -457,7 +480,7 @@ export default function TenantDetail() {
                 </div>
               )}
             </div>
-            <CompletionRing percent={completionPercent} />
+            <button onClick={() => setShowCompletion(true)} aria-label={`Open completion checklist, ${completionPercent}% complete`} className="rounded-full focus-visible:outline-2 focus-visible:outline-orange-400"><CompletionRing percent={completionPercent} /></button>
           </div>
         </GlassCard>
 
@@ -484,15 +507,16 @@ export default function TenantDetail() {
                     <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
                     <DatePicker label="Date of Birth" value={form.date_of_birth_1} onChange={v => setForm({ ...form, date_of_birth_1: v })} />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <Input label="Current Address" value={form.current_address} onChange={v => setForm({ ...form, current_address: v })} />
                     <Input label="Previous Address" value={form.previous_address} onChange={v => setForm({ ...form, previous_address: v })} />
+                    <Input label="Address Before Previous" value={form.address_before_previous} onChange={v => setForm({ ...form, address_before_previous: v })} />
                   </div>
                   <div className="flex items-center gap-3 mt-2">
                     <label className="text-xs text-[var(--text-muted)]">Joint Tenancy?</label>
                     <YesNo value={form.is_joint_tenancy} onChange={v => setForm({ ...form, is_joint_tenancy: v })} />
                   </div>
-                  {form.is_joint_tenancy && (
+                  {hasInlineJointApplicant && (
                     <>
                       <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4">Applicant 2</p>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -526,11 +550,12 @@ export default function TenantDetail() {
                     ))}
                   </div>
                   <div className="h-px bg-[var(--border-subtle)] my-2" />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <ReadField label="Current Address" value={tenant.current_address} />
                     <ReadField label="Previous Address" value={tenant.previous_address} />
+                    <ReadField label="Address Before Previous" value={tenant.address_before_previous} />
                   </div>
-                  {!!tenant.is_joint_tenancy && (
+                  {hasInlineJointApplicant && (
                     <>
                       <div className="h-px bg-[var(--border-subtle)] my-2" />
                       <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Applicant 2</p>
@@ -549,13 +574,13 @@ export default function TenantDetail() {
             {/* Next of Kin */}
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <SectionHeader title="Next of Kin" icon={<User size={16} />} />
+                <SectionHeader title="Next of Kin" icon={<Users size={16} />} />
                 <SectionEditButton editing={isEditing('nok')} onEdit={() => setEditingSection('nok')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
               </div>
               {isEditing('nok') ? (
                 <div className="space-y-4">
                   <div>
-                    <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Contact 1</p>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <Input label="Name" value={form.nok_name} onChange={v => setForm({ ...form, nok_name: v })} />
                       <Input label="Relationship" value={form.nok_relationship} onChange={v => setForm({ ...form, nok_relationship: v })} />
@@ -580,7 +605,7 @@ export default function TenantDetail() {
                 <div className="space-y-4">
                   {form.nok_name || form.nok_phone ? (
                     <div>
-                      <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Contact 1</p>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <ReadField label="Name" value={form.nok_name} />
                         <ReadField label="Relationship" value={form.nok_relationship} />
@@ -655,6 +680,24 @@ export default function TenantDetail() {
               </div>
             </GlassCard>
 
+            {!!tenant.guarantor_required && <GlassCard className="p-6">
+              <div className="flex justify-between items-center mb-4"><SectionHeader title="Primary Guarantor" icon={<BadgePoundSterling size={16} />} /><SectionEditButton editing={isEditing('guarantor')} onEdit={() => setEditingSection('guarantor')} onSave={saveSection} onCancel={cancelSection} saving={saving} /></div>
+              {isEditing('guarantor') ? <div className="space-y-3">
+                <label className="flex gap-2 text-sm"><input type="checkbox" checked={!!form.guarantor_required} onChange={e => setForm({ ...form, guarantor_required: e.target.checked })} />Guarantor required</label>
+                {(['guarantor_name', 'guarantor_address', 'guarantor_email', 'guarantor_phone', 'guarantor_employment_status', 'guarantor_employer', 'guarantor_annual_income'] as const).map(key => <Input key={key} label={key.replace('guarantor_', '').split('_').map(word => word.charAt(0).toUpperCase()+word.slice(1)).join(' ')} value={String(form[key] || '')} type={key.includes('email') ? 'email' : key.includes('income') ? 'number' : 'text'} onChange={v => setForm({ ...form, [key]: v })} />)}
+                <DatePicker label="Date of birth" value={form.guarantor_date_of_birth} onChange={v => setForm({ ...form, guarantor_date_of_birth: v })} />
+
+              </div> : <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <ReadField label="Guarantor required" value={tenant.guarantor_required ? 'Yes' : 'Not recorded'} /><ReadField label="Name" value={tenant.guarantor_name} />
+                <ReadField label="Address" value={tenant.guarantor_address} /><ReadField label="Email" value={tenant.guarantor_email} /><ReadField label="Contact number" value={tenant.guarantor_phone} />
+                <ReadField label="Date of birth" value={tenant.guarantor_date_of_birth ? formatDateDMY(tenant.guarantor_date_of_birth) : null} /><ReadField label="Employment" value={tenant.guarantor_employment_status} /><ReadField label="Employer" value={tenant.guarantor_employer} /><ReadField label="Annual income" value={tenant.guarantor_annual_income ? `£${Number(tenant.guarantor_annual_income).toLocaleString()}` : null} />
+
+              </div>}
+              <div className="mt-4"><p className="text-xs font-medium mb-2">Authority to Contact</p><YesNo value={form.guarantor_authority_to_contact} onChange={v => setForm({ ...form, guarantor_authority_to_contact: v })} disabled={!isEditing('guarantor')} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"><ContextualDocSlot entityType="tenant" entityId={tenant.id} docType="guarantor_primary_id" label="Primary ID" /><ContextualDocSlot entityType="tenant" entityId={tenant.id} docType="guarantor_secondary_id" label="Secondary ID" /></div>
+              <AdditionalGuarantors key={tenant.id} tenantId={tenant.id} records={tenant.additional_guarantors||[]} onSaved={loadDetail} />
+            </GlassCard>}
+
             {/* Documents */}
             <DocumentUpload entityType="tenant" entityId={tenant.id} />
           </div>
@@ -663,14 +706,21 @@ export default function TenantDetail() {
           <div className="lg:col-span-2 space-y-6">
             {/* Tenancy Details */}
             <GlassCard className="p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col items-start gap-3 mb-4">
                 <SectionHeader title="Tenancy Details" icon={<Building2 size={16} />} />
                 {isEditing('tenancy') ? (
                   <SectionEditButton editing onEdit={() => setEditingSection('tenancy')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
                 ) : (
                   <div className="flex flex-wrap justify-end gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setEditingSection('tenancy')}>Update Tenancy</Button>
-                    <Button variant="ghost" size="sm" onClick={() => { setForm({ ...form, has_end_date: true }); setEditingSection('tenancy'); }}>Schedule Tenancy End</Button>
+                    <Button variant="outline" className="!bg-yellow-400 !text-yellow-950 !border-yellow-400" size="sm" onClick={() => setEditingSection('tenancy')}>Update Tenancy</Button>
+                    {tenant.status !== 'inactive' && <Button variant="outline" className="!bg-red-600 !text-white !border-red-600" size="sm" onClick={() => setShowEndModal(true)}>Schedule Tenancy End</Button>}
+                    <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => setShowRentReview(true)}>£ Rent Review</Button>
+                    {user?.role === 'admin' && <Button variant="outline" size="sm" className="!text-red-600" onClick={async () => {
+                      if (!await confirmAction(`Remove ${tenant.name}? Records with issued agreements will be archived; otherwise the record and its linked files will be permanently deleted.`, 'Delete / Archive Tenant')) return;
+                      try { const result = await api.post(`/api/tenants/${tenant.id}/remove`, {}); if (result.archived) { await loadDetail(); notify('Tenant archived; history retained','success'); } else navigate('/tenants'); }
+                      catch (e) { notify(e instanceof Error ? e.message : 'Could not remove tenant','error'); }
+                    }}>Delete / Archive</Button>}
+
                   </div>
                 )}
               </div>
@@ -679,6 +729,8 @@ export default function TenantDetail() {
                   <Select label="Property" value={form.property_id || ''} onChange={v => setForm({ ...form, property_id: v ? Number(v) : null })}
                     options={[{ value: '', label: 'No property linked' }, ...allProperties.map((p) => ({ value: String(p.id), label: `${p.address}, ${p.postcode}` }))]} />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <DatePicker label="Last Rent Reviewed" value={form.rent_last_reviewed} onChange={v => setForm({ ...form, rent_last_reviewed: v })} />
+                    <label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={form.guarantor_required} onChange={e => setForm({ ...form, guarantor_required: e.target.checked })} />Guarantor Required</label>
                     <DatePicker label="Tenancy Start Date" value={form.tenancy_start_date} onChange={v => setForm({ ...form, tenancy_start_date: v })} />
                     <Select label="Tenancy Type" value={form.tenancy_type} onChange={v => setForm({
                       ...form,
@@ -697,13 +749,6 @@ export default function TenantDetail() {
                     <Select label="Deposit Scheme" value={form.deposit_scheme} onChange={v => setForm({ ...form, deposit_scheme: v })}
                       options={[{ value: '', label: 'Select...' }, { value: 'tds', label: 'Tenancy Deposit Scheme' }, { value: 'gov_back', label: 'Gov Back Scheme' }, { value: 'paid_to_landlord', label: 'Paid to Landlord' }, { value: 'other', label: 'Other/TBF' }]} />
                   </div>
-                  <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                    <input type="checkbox" checked={!!form.has_end_date} onChange={event => setForm({ ...form, has_end_date: event.target.checked, tenancy_end_date: event.target.checked ? form.tenancy_end_date : '' })} />
-                    Schedule this tenancy to end
-                  </label>
-                  {form.has_end_date && (
-                    <DatePicker label="End Date" value={form.tenancy_end_date} onChange={v => setForm({ ...form, tenancy_end_date: v })} />
-                  )}
                   <Select label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })}
                     options={[{ value: 'active', label: 'Active' }, { value: 'scheduled', label: 'Scheduled' }, { value: 'inactive', label: 'Archived' }]} />
                 </div>
@@ -714,7 +759,7 @@ export default function TenantDetail() {
                       <p className="text-xs text-[var(--text-muted)]">Property</p>
                       <button onClick={() => navigate(`/properties/${tenant.property_id}`)}
                         className="text-sm mt-0.5 text-[var(--accent-orange)] hover:underline flex items-center gap-1">
-                        <Building2 size={13} /> {tenant.property_address || `Property #${tenant.property_id}`}
+                        <Building2 size={13} /> {formatPropertyAddress(tenant.property_address || `Property #${tenant.property_id}`, allProperties.find(p => p.id === tenant.property_id)?.postcode)}
                       </button>
                     </div>
                   ) : (
@@ -722,6 +767,8 @@ export default function TenantDetail() {
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3">
                     <ReadField label="Tenancy Start" value={form.tenancy_start_date ? formatDateDMY(form.tenancy_start_date) : null} />
+                    <ReadField label={form.tenancy_end_date && form.tenancy_end_date.slice(0,10) < new Date().toLocaleDateString('en-CA') ? 'End date' : 'Scheduled end date'} value={form.tenancy_end_date ? formatDateDMY(form.tenancy_end_date) : 'Not scheduled'} />
+                    <ReadField label="Last Rent Reviewed" value={tenant.rent_last_reviewed ? formatDateDMY(tenant.rent_last_reviewed) : null} />
                     <ReadField label="Tenancy Type" value={form.tenancy_type} />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 py-3">
@@ -734,16 +781,7 @@ export default function TenantDetail() {
                             form.deposit_scheme === 'other' ? 'Other/TBF' : null
                     } />
                   </div>
-                  {form.has_end_date && (
-                    <div className="pt-3">
-                      <p className="text-xs text-[var(--text-muted)]">Scheduled End Date</p>
-                      <p className={`text-sm mt-0.5 ${endDateWarning !== null ? 'text-red-400 font-medium' : ''}`}>
-                        {form.tenancy_end_date ? formatDateDMY(form.tenancy_end_date) : '—'}
-                        {endDateWarning !== null && endDateWarning > 0 && ` (${endDateWarning} days left)`}
-                        {endDateWarning === 0 && ' (Expired)'}
-                      </p>
-                    </div>
-                  )}
+
                 </div>
               )}
             </GlassCard>
@@ -788,7 +826,7 @@ export default function TenantDetail() {
                 </div>
 
                 {/* KYC — Applicant 2 */}
-                {form.is_joint_tenancy && (
+                {hasInlineJointApplicant && (
                   <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
                     <span className="text-xs">KYC — {form.first_name_2 || 'Applicant 2'}</span>
                     <YesNo value={!!form.kyc_completed_2} onChange={v => setForm({ ...form, kyc_completed_2: v })} disabled={!isEditing('checklist')} />
@@ -937,6 +975,8 @@ export default function TenantDetail() {
               </div>
             </GlassCard>
 
+            <CommunicationsHistory messages={communications} />
+
             {/* Activity Timeline */}
             <GlassCard className="p-6">
               <SectionHeader title="Activity Timeline" icon={<Clock size={16} />} />
@@ -945,6 +985,9 @@ export default function TenantDetail() {
           </div>
         </div>
       </div>
+      {showEndModal && <TenancyEndModal tenantId={tenant.id} linkedName={tenant.linked_tenant_name} initialDate={tenant.tenancy_end_date} onClose={() => setShowEndModal(false)} onSaved={loadDetail} />}
+      {showCompletion && <CompletionModal tenantId={tenant.id} items={checklistItems} canEdit={['admin','manager','staff'].includes(user?.role || '')} onClose={() => setShowCompletion(false)} onSaved={loadDetail} />}
+      {showRentReview && <RentReviewModal tenantId={tenant.id} currentRent={tenant.monthly_rent} linkedName={tenant.linked_tenant_name} canEdit={['admin','manager','staff'].includes(user?.role || '') && tenant.status !== 'inactive'} onClose={() => setShowRentReview(false)} onSaved={loadDetail} />}
     </Layout>
   );
 }

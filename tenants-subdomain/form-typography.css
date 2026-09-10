@@ -1,0 +1,15 @@
+/* Shared typography from the September 9 feedback. Logos remain image assets. */
+body, input, select, textarea, button { font-family: Helvetica, Arial, sans-serif; }
+body { font-size: 16px; line-height: 26px; color: #000; }
+h1, .step h2, .form-title, .page-title { font-size: 34px; line-height: 1.2; font-weight: 700; color: #27083d; }
+.header strong, .header-title, .status-title { font-size: 20px; font-weight: 700; color: #dc006d; }
+p, .intro, .form-description, .step p.step-description { font-size: 16px; line-height: 26px; }
+.btn-primary, .button:not(.secondary) { font-size: 15px; font-weight: 700; color: #fff; }
+.footer, footer { font-size: 11px; line-height: 18px; color: #b7b0bb; }
+.footer p, footer p { font-size: inherit; line-height: inherit; }
+.emergency .number strong { font-size: 32px; font-weight: 700; color: #fff; overflow-wrap: anywhere; }
+.step p.step-description { color: #000; }
+.summary-item { background: #27083d; }
+.summary-item .label { color: #eee; }
+.summary-item .value { font-size: 32px; font-weight: 700; color: #fff; overflow-wrap: anywhere; }
+@media (max-width: 480px) { h1, .step h2, .form-title, .page-title { font-size: 30px; } }

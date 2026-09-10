@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useNotifications } from '../../context/NotificationContext';
+import SmsEditor from './SmsEditor';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
 import { Button, DatePicker, TimePicker } from './index';
@@ -17,15 +19,6 @@ function dateInputValue(value: unknown): string {
   if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
   const uk = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
   return uk ? `${uk[3]}-${uk[2]}-${uk[1]}` : '';
-}
-
-const HOLDING_REQUEST_EMAIL_DEFAULT = 'Thank you for your interest in {{property_address}}. We are pleased to confirm that we would like to proceed with your application.\n\nTo secure this property, we require an initial holding deposit. Please see the financial summary below:';
-const HOLDING_REQUEST_SMS_DEFAULT = 'Hi {{first_name}}, your Fleming Lettings holding deposit request for £{{holding_deposit}} has been emailed to you with your secure tenancy application link.';
-const HOLDING_RECEIPT_EMAIL_DEFAULT = 'We confirm that Fleming Lettings received your holding deposit of £{{holding_deposit}} on {{received_date}}.';
-const HOLDING_RECEIPT_SMS_DEFAULT = 'Hi {{first_name}}, we are pleased to confirm receipt of your holding deposit payment of £{{holding_deposit}}. These funds are now held on account and you can now proceed with your tenancy application of which has been issued to you on email.';
-
-function previewMessage(template: string, values: Record<string, string>): string {
-  return template.replace(/\{\{([a-z_]+)\}\}/g, (match, key) => key in values ? values[key] : match);
 }
 
 // Traffic light colours
@@ -91,6 +84,7 @@ interface OnboardingWizardProps {
 
 export default function OnboardingWizard({ enquiryId, enquiry, properties, users, onClose, onUpdate }: OnboardingWizardProps) {
   const api = useApi();
+  const {confirmAction}=useNotifications();
   const { token } = useAuth();
   const [saving, setSaving] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
@@ -100,24 +94,22 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [hdSecurityDeposit, setHdSecurityDeposit] = useState('');
   const [hdHoldingDeposit, setHdHoldingDeposit] = useState('');
   const [hdFollowUpDate, setHdFollowUpDate] = useState('');
+  const [hdRequestSendEmail, setHdRequestSendEmail] = useState(true);
+  const [holdingEmailPreview, setHoldingEmailPreview] = useState<{subject: string; html: string} | null>(null);
   const [hdRequestSendSms, setHdRequestSendSms] = useState(false);
-  const [hdRequestEmailMessage, setHdRequestEmailMessage] = useState(HOLDING_REQUEST_EMAIL_DEFAULT);
-  const [hdRequestSmsMessage, setHdRequestSmsMessage] = useState(HOLDING_REQUEST_SMS_DEFAULT);
 
   // Step 2: Holding Deposit Received
   const [hdReceivedDate, setHdReceivedDate] = useState('');
   const [hdReceivedAmount, setHdReceivedAmount] = useState('');
   const [hdReceiptSendEmail, setHdReceiptSendEmail] = useState(true);
   const [hdReceiptSendSms, setHdReceiptSendSms] = useState(false);
-  const [hdReceiptEmailMessage, setHdReceiptEmailMessage] = useState(HOLDING_RECEIPT_EMAIL_DEFAULT);
-  const [hdReceiptSmsMessage, setHdReceiptSmsMessage] = useState(HOLDING_RECEIPT_SMS_DEFAULT);
 
   // Step 5: Credit check
   const [creditScore, setCreditScore] = useState('');
   const [creditReport, setCreditReport] = useState<File | null>(null);
   const [replacingCreditReport, setReplacingCreditReport] = useState(false);
   const [creditCheckCompleteOverride, setCreditCheckCompleteOverride] = useState(false);
-  const [agreement, setAgreement] = useState<{ id: number; agreement_type: string; original_name: string; status: string; requires_landlord_signature: number; requires_joint_tenant_signature: number; tenant_signed_at?: string; joint_tenant_signed_at?: string; landlord_signed_at?: string; tenant_delivery_email?: number; tenant_delivery_sms?: number; tenant_delivery_sent_at?: string } | null>(null);
+  const [agreement, setAgreement] = useState<{ id: number; agreement_type: string; original_name: string; status: string; signing_slug?: string; applicant_signed_at?: string; requires_landlord_signature: number; requires_joint_tenant_signature: number; tenant_name?: string; joint_tenant_name?: string; landlord_name?: string; tenant_signed_at?: string; joint_tenant_signed_at?: string; landlord_signed_at?: string; tenant_opened_at?: string; joint_tenant_opened_at?: string; landlord_opened_at?: string; tenant_delivery_email?: number; tenant_delivery_sms?: number; tenant_delivery_sent_at?: string; agreement_details?: Record<string, any> } | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [agreementCompliance, setAgreementCompliance] = useState<{
     ready: boolean;
     propertyLinked: boolean;
@@ -143,11 +135,16 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [agreementSendEmail, setAgreementSendEmail] = useState(true);
   const [agreementSendSms, setAgreementSendSms] = useState(false);
   const [agreementEmailMessage, setAgreementEmailMessage] = useState('Your tenancy agreement for {{property_address}} is ready to review and sign.');
-  const [agreementSmsMessage, setAgreementSmsMessage] = useState('Hi {{first_name}}, your Fleming Lettings tenancy agreement is ready to review and sign: {{signing_link}}');
+  const [agreementSmsMessage, setAgreementSmsMessage] = useState('Hi there {{first_name}}, your tenancy agreement is ready to view and for your digital signature. You can access this by clicking here: {{signing_link}}. If you have any questions or are unable to access the link, then please contact us on 01902 212 415.');
+  const [reissuingAgreement, setReissuingAgreement] = useState(false);
+  const [agreementEmailPreview, setAgreementEmailPreview] = useState<{ subject: string; bodyHtml: string } | null>(null);
   const [balanceSendEmail, setBalanceSendEmail] = useState(false);
   const [balanceSendSms, setBalanceSendSms] = useState(false);
   const [balanceEmailMessage, setBalanceEmailMessage] = useState('Your tenancy agreement has been completed. The remaining balance for {{property_address}} is set out below.');
-  const [balanceSmsMessage, setBalanceSmsMessage] = useState('Hi {{first_name}}, thank you for signing your tenancy agreement and completing our application and screening process. We have emailed your final payment details so we can arrange a handover date and location.');
+  const [balanceSmsMessage, setBalanceSmsMessage] = useState('Hi {{first_name}}, thank you for signing your tenancy agreement and completing our application and screening process. We have emailed your final payment details so we can arrange a handover date and location. Feel free to reach out to your lettings manager or to contact us on 01902 212 415 to book this in.');
+  const [balanceFollowUpDate, setBalanceFollowUpDate] = useState(() => new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10));
+  const [balanceEmailPreview, setBalanceEmailPreview] = useState<{ subject: string; bodyHtml: string } | null>(null);
+  const [handoverEmailPreview, setHandoverEmailPreview] = useState<{ subject: string; bodyHtml: string } | null>(null);
   const [handoverDate, setHandoverDate] = useState('');
   const [handoverTime, setHandoverTime] = useState('10:00');
   const [handoverAssignedTo, setHandoverAssignedTo] = useState('');
@@ -155,9 +152,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [handoverSendEmail, setHandoverSendEmail] = useState(false);
   const [handoverSendSms, setHandoverSendSms] = useState(false);
   const [handoverEmailMessage, setHandoverEmailMessage] = useState('Finally, we’re nearly there! Your move in and handover appointment is confirmed. We will meet you at the property to conduct the inventory, hand over the keys and answer any final questions that you may have.');
-  const [handoverSmsMessage, setHandoverSmsMessage] = useState('Hi {{first_name}}, your Fleming Lettings move in and handover appointment is confirmed for {{handover_date}} at {{handover_time}} at {{property_address}} with {{appointment_with}}.');
+  const [handoverSmsMessage, setHandoverSmsMessage] = useState('Hi {{first_name}}, your move in and handover appointment is confirmed for {{handover_date}} at {{handover_time}} at {{property_address}} with {{appointment_with}}. If you are running late or need to rearrange then please contact us on 01902 212 415.');
   const [reviewNotes, setReviewNotes] = useState('');
   const [changesRequired, setChangesRequired] = useState('');
+  const [reviewSmsOverride,setReviewSmsOverride] = useState('');
   const [sendReviewSms, setSendReviewSms] = useState(false);
   const [sendReviewEmail, setSendReviewEmail] = useState(false);
   const [reviewError, setReviewError] = useState('');
@@ -165,11 +163,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [documentPreview, setDocumentPreview] = useState<{ url: string; name: string; mimeType: string } | null>(null);
 
   // Application email modal
-  const [showApplicationEmail, setShowApplicationEmail] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
 
   // Holding deposit email preview modal
-  const [showHDEmailPreview, setShowHDEmailPreview] = useState(false);
 
   // Documents for ID verification step
   const [enquiryDocs, setEnquiryDocs] = useState<{ id: number; doc_type: string; original_name: string; mime_type: string; size: number; uploaded_at: string; review_status?: string; review_notes?: string; reviewed_at?: string }[]>([]);
@@ -197,6 +193,21 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     try {
       const data = await api.get(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement`);
       setAgreement(data || null);
+      const details = data?.agreement_details || {};
+      if (data) {
+        setAgreementStartDate(current => current || dateInputValue(details.tenancyStartDate));
+        setAgreementRent(current => current || String(details.rent || ''));
+        setAgreementDeposit(current => current || String(details.deposit ?? ''));
+        setAgreementOccupiers(current => current || String(details.permittedOccupiers || ''));
+        setAgreementFacilities(current => current || String(details.sharedFacilities || ''));
+        setAgreementParking(current => current || String(details.parking || ''));
+        if (details.bankDetails) {
+          setLandlordBankSortCode(current => current || String(details.bankDetails.sortCode || ''));
+          setLandlordBankAccountNumber(current => current || String(details.bankDetails.accountNumber || ''));
+          setLandlordBankAccountName(current => current || String(details.bankDetails.accountName || ''));
+          setLandlordBankName(current => current || String(details.bankDetails.bankName || ''));
+        }
+      }
       return data || null;
     } catch { setAgreement(null); return null; }
   };
@@ -217,14 +228,16 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   };
 
   // Fetch documents for this enquiry
-  useEffect(() => { fetchDocs(); fetchEmailHistory(); fetchAgreement(); fetchAgreementCompliance(); }, [enquiryId, token]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchDocs(); fetchEmailHistory(); fetchAgreement(); fetchAgreementCompliance(); }, [enquiryId, token, enquiry.updated_at]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => {
     if (documentPreview) URL.revokeObjectURL(documentPreview.url);
   }, [documentPreview]);
 
+  const [documentDecisions, setDocumentDecisions] = useState<Record<number, 'approved' | 'rejected'>>({});
   const reviewDocument = async (docId: number, status: 'approved' | 'rejected') => {
-    if (status === 'rejected' && !changesRequired.trim()) {
-      setReviewError('Enter the changes or information required before rejecting this document.');
+    if (status === 'rejected') {
+      setDocumentDecisions(current => ({...current,[docId]:status}));
+      setReviewError('');
       return;
     }
     setSaving(true);
@@ -232,8 +245,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     try {
       await api.put(`/api/documents/${docId}/review`, {
         status,
-        notes: status === 'rejected' ? changesRequired.trim() : (reviewNotes.trim() || null),
+        notes: reviewNotes.trim() || null,
       });
+      setDocumentDecisions(current => { const next={...current}; delete next[docId]; return next; });
       await Promise.all([fetchDocs(), onUpdate()]);
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : 'Document review could not be saved');
@@ -284,9 +298,11 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     try {
       const result = await api.post(`/api/tenant-enquiries/${enquiryId}/application-review`, {
         status,
+        document_decisions: Object.entries(documentDecisions).map(([id,status]) => ({id:Number(id),status})),
         notes: reviewNotes || null,
         changes_required: status === 'changes_requested' ? changesRequired : null,
         send_sms: status === 'changes_requested' && sendReviewSms,
+        ...(reviewSmsOverride ? { sms_message: reviewSmsOverride } : {}),
         send_email: status === 'changes_requested' && sendReviewEmail,
       });
       const delivery = (result?.delivery || {}) as Record<string, { success: boolean; error?: string }>;
@@ -294,6 +310,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       if (failedDeliveries.length) {
         setReviewError(`Review saved, but communication failed: ${failedDeliveries.map(item => item.error).join('; ')}`);
       }
+      setDocumentDecisions({});
       setReviewStatusOverride(status);
       await Promise.all([fetchEmailHistory(), fetchDocs(), onUpdate()]);
       setActiveStep(status === 'changes_requested' ? 3 : 4);
@@ -304,8 +321,22 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     }
   };
 
-  // Initialize from enquiry data
+  const lastHydrated = useRef('');
+  const handoverSnapshot = JSON.stringify([enquiryId, enquiry.handover_date, enquiry.handover_time, enquiry.handover_assigned_to, enquiry.handover_with_landlord]);
   useEffect(() => {
+    if (lastHydrated.current === handoverSnapshot) return;
+    lastHydrated.current = handoverSnapshot;
+    setHandoverDate(enquiry.handover_date ? String(enquiry.handover_date).slice(0, 10) : '');
+    setHandoverTime(enquiry.handover_time ? String(enquiry.handover_time).slice(0, 5) : '10:00');
+    setHandoverAssignedTo(enquiry.handover_assigned_to || '');
+    setHandoverWithLandlord(Boolean(enquiry.handover_with_landlord));
+  }, [handoverSnapshot, enquiry.handover_date, enquiry.handover_time, enquiry.handover_assigned_to, enquiry.handover_with_landlord]);
+
+  // Hydrate once per opened record; focus, previews and uploads must preserve drafts.
+  const initialisedEnquiry = useRef<number | null>(null);
+  useEffect(() => {
+    if (initialisedEnquiry.current === enquiryId) return;
+    initialisedEnquiry.current = enquiryId;
     const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
     const rent = enquiry.monthly_rent_agreed || prop?.rent_amount || 0;
     setHdMonthlyRent(String(rent || ''));
@@ -313,10 +344,6 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     setHdHoldingDeposit(String(enquiry.holding_deposit_amount || (rent ? Math.round(rent * 12 / 52) : '')));
     setHdReceivedAmount(enquiry.holding_deposit_received_amount ? String(enquiry.holding_deposit_received_amount) : '');
     setCreditScore(enquiry.credit_score || '');
-    setHandoverDate(enquiry.handover_date ? String(enquiry.handover_date).slice(0, 10) : '');
-    setHandoverTime(enquiry.handover_time ? String(enquiry.handover_time).slice(0, 5) : '10:00');
-    setHandoverAssignedTo(enquiry.handover_assigned_to || '');
-    setHandoverWithLandlord(Boolean(enquiry.handover_with_landlord));
     setReviewNotes('');
     setReviewStatusOverride(null);
     setCreditCheckCompleteOverride(false);
@@ -330,12 +357,11 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     else if (!enquiry.credit_check_completed) setActiveStep(4);
     else if (agreement?.status !== 'completed') setActiveStep(5);
     else if (!enquiry.balance_payment_received) setActiveStep(6);
-    else if (!enquiry.handover_date) setActiveStep(7);
+    else if (!enquiry.handover_date && !enquiry.handover_not_required) setActiveStep(7);
     else setActiveStep(8);
-  }, [enquiry, properties, agreement]);
+  }, [enquiryId, enquiry, properties, agreement]);
 
   const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
-  const firstName = enquiry.first_name_1 || 'there';
   const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
   const creditReportDocument = enquiryDocs.find(document => document.doc_type === 'Credit Check Report');
   const applicationReviewStatus = reviewStatusOverride || enquiry.application_review_status;
@@ -345,7 +371,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       label: 'Request Holding Deposit',
       icon: Mail,
       getStatus: () => enquiry.holding_deposit_requested ? 'green' : 'red',
-      desc: enquiry.holding_deposit_requested ? `Sent to ${enquiry.email_1}` : 'Send email with deposit details & application form',
+      desc: enquiry.holding_deposit_requested ? `Request recorded for ${enquiry.email_1}` : 'Send email with deposit details & application form',
     },
     {
       label: 'Holding Deposit Received',
@@ -396,8 +422,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     {
       label: 'Schedule Handover',
       icon: CalendarDays,
-      getStatus: () => enquiry.handover_date ? 'green' : 'red',
-      desc: enquiry.handover_date ? `${String(enquiry.handover_date).slice(0, 10)} at ${String(enquiry.handover_time || '').slice(0, 5)}` : 'Assign the property handover to the team calendar',
+      getStatus: () => enquiry.handover_date || enquiry.handover_not_required ? 'green' : 'red',
+      desc: enquiry.handover_not_required ? 'No handover required — confirmed by office' : enquiry.handover_date ? `${String(enquiry.handover_date).slice(0, 10)} at ${String(enquiry.handover_time || '').slice(0, 5)}` : 'Assign the property handover to the team calendar',
     },
     {
       label: 'Convert to Tenant',
@@ -417,6 +443,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   // Actions
   const requestHoldingDeposit = async () => {
     if (!hdMonthlyRent || !hdHoldingDeposit) return;
+    if (!await confirmAction(`Save this holding deposit request${hdRequestSendEmail || hdRequestSendSms ? " and send the selected messages to all applicants" : ""}?`)) return;
     setSaving(true);
     setReviewError('');
     try {
@@ -426,8 +453,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         holding_deposit: Number(hdHoldingDeposit),
         follow_up_date: hdFollowUpDate || null,
         send_sms: hdRequestSendSms,
-        email_message: hdRequestEmailMessage,
-        sms_message: hdRequestSmsMessage,
+        send_email: hdRequestSendEmail,
       });
       const failed = Object.values((result?.delivery || {}) as Record<string, { success: boolean; error?: string }>).filter(item => !item.success);
       if (failed.length) setReviewError(`Request saved, but communication failed: ${failed.map(item => item.error).join('; ')}`);
@@ -441,6 +467,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   };
 
   const confirmDepositReceived = async () => {
+    if (!await confirmAction("Confirm the deposit has been received and send the selected confirmations to all applicants?")) return;
     setSaving(true);
     setReviewError('');
     try {
@@ -451,8 +478,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         received_date: receivedDate,
         send_email: hdReceiptSendEmail,
         send_sms: hdReceiptSendSms,
-        email_message: hdReceiptEmailMessage,
-        sms_message: hdReceiptSmsMessage,
+
       });
       const failed = Object.values((result?.delivery || {}) as Record<string, { success: boolean; error?: string }>).filter(item => !item.success);
       if (failed.length) setReviewError(`Deposit saved, but communication failed: ${failed.map(item => item.error).join('; ')}`);
@@ -466,15 +492,16 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
   const convertToTenant = async () => {
     setSaving(true);
+    setReviewError('');
     try {
       await api.post(`/api/tenant-enquiries/${enquiryId}/convert`, {
         property_id: enquiry.linked_property_id,
-        tenancy_start_date: agreementStartDate || new Date().toISOString().split('T')[0],
+        tenancy_start_date: agreement?.agreement_details?.tenancyStartDate || agreementStartDate || dateInputValue(enquiry.handover_date),
         tenancy_type: 'Assured Periodic Tenancy',
       });
       await onUpdate();
       onClose();
-    } catch (err) { console.error(err); }
+    } catch (err) { setReviewError(err instanceof Error ? err.message : 'Conversion failed. Please review both applicants and try again.'); }
     setSaving(false);
   };
 
@@ -505,6 +532,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
   const issueAgreement = async () => {
     if (!token) return;
+    if (!await confirmAction(agreement ? 'Issue a new agreement? Existing unsigned links for both applicants will stop working and both must sign the replacement.' : 'Issue this agreement and send the selected messages?')) return;
+    const previousAgreementId = agreement?.id;
     setSaving(true); setReviewError('');
     try {
       const result = await api.post(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement`, {
@@ -525,10 +554,11 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       });
       const failures = Object.values(result.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
       if (failures.length) setReviewError(`Agreement issued, but ${failures.length} communication${failures.length === 1 ? '' : 's'} failed. Check the email/SMS history.`);
+      setReissuingAgreement(false);
       await Promise.all([fetchAgreement(), fetchAgreementCompliance(), fetchEmailHistory(), onUpdate()]);
     } catch (err) {
       const refreshed = await fetchAgreement();
-      if (refreshed) {
+      if (refreshed && refreshed.id !== previousAgreementId) {
         setReviewError('The agreement was created, but the response or delivery was interrupted. Its current status has been refreshed; use Retry Delivery if the signing link was not sent.');
         await Promise.all([fetchAgreementCompliance(), fetchEmailHistory(), onUpdate()]);
       } else {
@@ -536,6 +566,28 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       }
     }
     finally { setSaving(false); }
+  };
+
+  const previewAgreementEmail = async () => {
+    setReviewError('');
+    try {
+      const preview = await api.post(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement/email-preview`, {
+        tenancy_start_date: agreementStartDate, rent: agreementRent, deposit: agreementDeposit, email_message: agreementEmailMessage,
+      });
+      setAgreementEmailPreview({ subject: preview.subject, bodyHtml: preview.body_html });
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Agreement email preview could not be prepared');
+    }
+  };
+
+  const previewBalanceEmail = async () => {
+    setReviewError('');
+    try {
+      const preview = await api.post(`/api/tenant-enquiries/${enquiryId}/request-balance/email-preview`, { email_message: balanceEmailMessage });
+      setBalanceEmailPreview({ subject: preview.subject, bodyHtml: preview.body_html });
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Balance email preview could not be prepared');
+    }
   };
 
   const retryAgreementDelivery = async () => {
@@ -556,6 +608,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       const result = await api.post(`/api/tenant-enquiries/${enquiryId}/request-balance`, {
         send_email: balanceSendEmail, send_sms: balanceSendSms,
         email_message: balanceEmailMessage, sms_message: balanceSmsMessage,
+        follow_up_date: balanceFollowUpDate,
       });
       const failures = Object.values(result?.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
       if (failures.length) setReviewError('Balance request saved, but the email failed. Check the email history.');
@@ -571,6 +624,17 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       await onUpdate();
     } catch (err) { setReviewError(err instanceof Error ? err.message : 'Balance receipt could not be saved'); }
     finally { setSaving(false); }
+  };
+
+  const previewHandoverEmail = async () => {
+    setReviewError('');
+    try {
+      const preview = await api.post(`/api/tenant-enquiries/${enquiryId}/schedule-handover/email-preview`, {
+        handover_date: handoverDate, handover_time: handoverTime, assigned_to: handoverAssignedTo,
+        with_landlord: handoverWithLandlord, email_message: handoverEmailMessage,
+      });
+      setHandoverEmailPreview({ subject: preview.subject, bodyHtml: preview.body_html });
+    } catch (error) { setReviewError(error instanceof Error ? error.message : 'Email preview could not be prepared'); }
   };
 
   const scheduleHandover = async () => {
@@ -595,143 +659,25 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   })();
 
   // Values below come from the public enquiry form — escape before interpolating into email HTML
-  const escapeHtml = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-
-  const buildTenancyApplicationEmailHtml = (): string => {
-    const rent = Number(hdMonthlyRent || enquiry.monthly_rent_agreed || 0);
-    const secDep = Number(hdSecurityDeposit || enquiry.security_deposit_amount || 0);
-    const holdDep = Number(hdHoldingDeposit || enquiry.holding_deposit_amount || 0);
-    const formUrl = enquiry.application_form_slug || enquiry.application_form_token
-      ? `https://apply.fleminglettings.co.uk/${enquiry.application_form_slug || enquiry.application_form_token}`
-      : '#';
-    const deadline = new Date();
-    deadline.setDate(deadline.getDate() + 14);
-    const deadlineStr = deadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const introMessage = previewMessage(hdRequestEmailMessage, {
-      first_name: firstName,
-      property_address: propertyAddress,
-      holding_deposit: holdDep.toLocaleString('en-GB', { minimumFractionDigits: 2 }),
-      application_link: formUrl,
-    });
-
-    return `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
-        <h1 style="color: #fff; margin: 0; font-size: 22px;">Fleming Lettings</h1>
-        <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px;">Tenancy Application</p>
-      </div>
-      <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
-        <p style="font-size: 15px; color: #333;">Dear ${escapeHtml(firstName)},</p>
-        <p style="font-size: 14px; color: #555; line-height: 1.6;">${escapeHtml(introMessage).replace(/\r?\n/g, '<br>')}</p>
-        <p style="font-size: 14px; color: #555; line-height: 1.6;">
-          Please review the financial details below and complete your application within <strong>14 days</strong> (by ${deadlineStr}).
-        </p>
-        <h3 style="font-size: 15px; color: #333; margin: 24px 0 12px; border-bottom: 2px solid #DC006D; padding-bottom: 8px;">Financial Summary</h3>
-        <table style="width: 100%; border-collapse: collapse; margin: 0 0 20px;">
-          <tr style="background: #f8f8f8;">
-            <td style="padding: 12px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Monthly Rent</td>
-            <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">&pound;${rent.toLocaleString()}</td>
-          </tr>
-          <tr>
-            <td style="padding: 12px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Security Deposit</td>
-            <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">&pound;${secDep.toLocaleString()}</td>
-          </tr>
-          <tr style="background: #f0f8ff;">
-            <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #DC006D; border-bottom: 2px solid #DC006D;">Holding Deposit</td>
-            <td style="padding: 12px 16px; font-size: 16px; font-weight: 700; color: #DC006D; text-align: right; border-bottom: 2px solid #DC006D;">&pound;${holdDep.toLocaleString()}</td>
-          </tr>
-        </table>
-        <h3 style="font-size: 15px; color: #333; margin: 24px 0 12px; border-bottom: 2px solid #DC006D; padding-bottom: 8px;">Bank Details for Payment</h3>
-        <table style="width: 100%; border-collapse: collapse; margin: 0 0 20px;">
-          <tr style="background: #f8f8f8;">
-            <td style="padding: 10px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Account Name</td>
-            <td style="padding: 10px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">Fleming Lettings and Developments UK Limited</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Bank</td>
-            <td style="padding: 10px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">Barclays</td>
-          </tr>
-          <tr style="background: #f8f8f8;">
-            <td style="padding: 10px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Sort Code</td>
-            <td style="padding: 10px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">20-08-64</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #eee;">Account Number</td>
-            <td style="padding: 10px 16px; font-size: 14px; font-weight: 600; color: #333; text-align: right; border-bottom: 1px solid #eee;">03803880</td>
-          </tr>
-        </table>
-        <p style="font-size: 14px; color: #555; line-height: 1.6;">
-          Please complete your tenancy application by clicking the button below:
-        </p>
-        <div style="text-align: center; margin: 24px 0;">
-          <a href="${formUrl}" style="display: inline-block; background: linear-gradient(135deg, #DC006D, #a5004f); color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;">
-            Complete Tenancy Application
-          </a>
-        </div>
-        <p style="font-size: 13px; color: #888; line-height: 1.6;">
-          Please ensure your application is completed by <strong>${deadlineStr}</strong>. Failure to complete within this timeframe may result in the property being offered to another applicant.
-        </p>
-        <p style="font-size: 13px; color: #555; line-height: 1.6;">
-          You can save your application and resume it later by reopening this same secure link.
-        </p>
-        <p style="font-size: 14px; color: #555;">
-          Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>
-          <span style="font-size: 12px; color: #888;">01902 212 415 | contact@tenancies.fleminglettings.co.uk</span>
-        </p>
-      </div>
-      <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
-        <p style="font-size: 11px; color: #999; margin: 0;">
-          Fleming Lettings and Developments UK Limited<br/>
-          Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG
-        </p>
-      </div>
-    </div>`;
+  const previewHoldingEmail = async (receipt = false) => {
+    setReviewError('');
+    try {
+      const preview = await api.post(`/api/tenant-enquiries/${enquiryId}/holding-deposit/email-preview`, {
+        receipt, monthly_rent: Number(hdMonthlyRent), security_deposit: Number(hdSecurityDeposit),
+        holding_deposit: Number(hdHoldingDeposit), amount: Number(hdReceivedAmount) || enquiry.holding_deposit_amount,
+        received_date: hdReceivedDate || new Date().toISOString().slice(0, 10),
+      });
+      setHoldingEmailPreview(preview);
+    } catch (error) { setReviewError(error instanceof Error ? error.message : 'Could not load the email preview'); }
   };
 
-  const buildResendApplicationEmailHtml = (): string => {
-    const firstName = enquiry.first_name_1 || 'there';
-    const formUrl = enquiry.application_form_slug || enquiry.application_form_token
-      ? `https://apply.fleminglettings.co.uk/${enquiry.application_form_slug || enquiry.application_form_token}`
-      : '#';
-    return `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <div style="background: linear-gradient(135deg, #25073B, #DC006D); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
-        <h1 style="color: #fff; margin: 0; font-size: 22px;">Fleming Lettings</h1>
-      </div>
-      <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-top: none;">
-        <p style="font-size: 15px; color: #333;">Dear ${escapeHtml(firstName)},</p>
-        <p style="font-size: 14px; color: #555; line-height: 1.6;">Welcome to Fleming Lettings!</p>
-        <p style="font-size: 14px; color: #555; line-height: 1.6;">
-          We are still waiting on your application form(s) to be completed by clicking on the following link:
-        </p>
-        <div style="text-align: center; margin: 24px 0;">
-          <a href="${formUrl}" style="display: inline-block; background: linear-gradient(135deg, #DC006D, #a5004f); color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;">
-            Complete Your Application
-          </a>
-        </div>
-        <p style="font-size: 13px; color: #555; line-height: 1.6;">
-          You can save your application and resume it later by reopening this same secure link.
-        </p>
-        <p style="font-size: 14px; color: #555; line-height: 1.6;">
-          If you get stuck, need some help or if you would like our friendly team to guide you through the process then please do not hesitate to get in touch on <strong>01902 212 415</strong>.
-        </p>
-        <p style="font-size: 14px; color: #555;">Kind regards,<br/><strong>Lettings Support Team | fleminglettings.co.uk</strong><br/>contact@tenancies.fleminglettings.co.uk | 01902 212 415</p>
-      </div>
-      <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; border: 1px solid #eee; border-top: none;">
-        <p style="font-size: 11px; color: #999; margin: 0;">
-          Fleming Lettings and Developments UK Limited<br/>
-          Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG
-        </p>
-      </div>
-    </div>`;
-  };
-
-  const sendApplicationEmail = async ({ subject, bodyHtml }: { subject: string; bodyHtml: string }) => {
+  const sendApplicationEmail = async (_preview: { subject: string; bodyHtml: string }) => {
+    void _preview;
     setSendingEmail(true);
     try {
-      await api.post(`/api/tenant-enquiries/${enquiryId}/send-application-email`, {
-        subject,
-        body_html: bodyHtml,
-      });
-      setShowApplicationEmail(false);
+      const result = await api.post(`/api/tenant-enquiries/${enquiryId}/send-application-email`, {send_email:true});
+      const failed=Object.values(result.delivery as Record<string,{success:boolean;error?:string}>).filter(r=>!r.success);
+      if(failed.length)setReviewError(failed.map(r=>r.error).join('; '));
       fetchEmailHistory();
       onUpdate();
     } catch (err) {
@@ -748,7 +694,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     requiredReviewDocumentTypes.push('Proof of Income or Employment');
   }
   const allRequiredDocsApproved = requiredReviewDocumentTypes.every(docType =>
-    enquiryDocs.some(doc => doc.doc_type === docType && doc.review_status === 'approved')
+    enquiryDocs.some(doc => doc.doc_type === docType && (documentDecisions[doc.id] || doc.review_status) === 'approved')
   );
   const latestApplicationEmail = emailMessages.find(message =>
     message.template === 'tenancy_application' || message.template === 'holding_deposit_request'
@@ -766,6 +712,16 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const agreementDetailsComplete = Boolean(agreementStartDate && agreementRent && agreementDeposit !== ''
     && agreementOccupiers.trim() && agreementFacilities.trim() && agreementParking.trim()
     && landlordBankComplete && agreementServiceComplete);
+  const outstandingAgreementSigners = agreement ? [
+    !agreement.tenant_signed_at ? agreement.tenant_name || enquiry.first_name_1 : null,
+    agreement.requires_joint_tenant_signature && !agreement.joint_tenant_signed_at ? agreement.joint_tenant_name || 'joint tenant' : null,
+    agreement.requires_landlord_signature && !agreement.landlord_signed_at ? agreement.landlord_name || 'landlord' : null,
+  ].filter(Boolean) as string[] : [];
+  const lastAgreementOpenedAt = agreement
+    ? [agreement.tenant_opened_at, agreement.joint_tenant_opened_at, agreement.landlord_opened_at]
+      .filter(Boolean).sort((a, b) => new Date(b as string).getTime() - new Date(a as string).getTime())[0]
+    : null;
+  const showAgreementForm = !agreement || reissuingAgreement;
 
   return (
     <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -800,7 +756,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               <div className="space-y-3">
                 {/* Email sent confirmation */}
                 <div className="text-xs text-emerald-400 flex items-center gap-2">
-                  <CheckCircle size={14} /> Email sent to {enquiry.email_1} on {enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at as string | number).toLocaleDateString('en-GB') : 'N/A'}
+                  <CheckCircle size={14} /> Request recorded for {enquiry.email_1} · {enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at as string | number).toLocaleDateString('en-GB') : 'Delivery shown below'}
                 </div>
                 {latestHoldingEmail && (
                   <div className={`rounded-lg px-3 py-2 text-xs border ${['failed', 'bounced', 'complained'].includes(latestHoldingEmail.status)
@@ -869,7 +825,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     </div>
                   </div>
                   <button
-                    onClick={() => setShowHDEmailPreview(true)}
+                    onClick={() => previewHoldingEmail()}
                     className="flex items-center gap-1.5 text-[10px] font-medium text-[var(--accent-orange)] hover:underline mt-1"
                   >
                     <Eye size={12} /> View Email Preview
@@ -900,7 +856,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Monthly Rent (£)</label>
-                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdMonthlyRent} onChange={e => {
+                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdMonthlyRent.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} onChange={e => {
                       const v = e.target.value.replace(/[^0-9.]/g, '');
                       setHdMonthlyRent(v);
                       const r = Number(v);
@@ -909,11 +865,11 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   </div>
                   <div>
                     <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Security Dep. (£)</label>
-                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdSecurityDeposit} onChange={e => setHdSecurityDeposit(e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdSecurityDeposit.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} onChange={e => setHdSecurityDeposit(e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Holding Dep. (£)</label>
-                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdHoldingDeposit} onChange={e => setHdHoldingDeposit(e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
+                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdHoldingDeposit.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} onChange={e => setHdHoldingDeposit(e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
                   </div>
                 </div>
                 <DatePicker label="Follow-up Date" value={hdFollowUpDate} onChange={setHdFollowUpDate} />
@@ -922,26 +878,14 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   <p>From: contact@tenancies.fleminglettings.co.uk</p>
                   <p>Includes: Holding Deposit Summary + Application Form Link</p>
                 </div>
-                <label className="block text-[10px] text-[var(--text-muted)]">
-                  Editable email message
-                  <textarea value={hdRequestEmailMessage} onChange={event => setHdRequestEmailMessage(event.target.value)} rows={5}
-                    className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
-                  <span>Available fields: {'{{first_name}}'}, {'{{property_address}}'}, {'{{holding_deposit}}'} and {'{{application_link}}'}.</span>
-                </label>
-                <button onClick={() => setShowHDEmailPreview(true)} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline">
-                  <Eye size={13} /> Preview email before sending
-                </button>
-                <label className="flex items-center gap-2 rounded-lg bg-[var(--bg-subtle)] px-3 py-2 text-xs cursor-pointer">
-                  <input type="checkbox" checked={hdRequestSendSms} onChange={event => setHdRequestSendSms(event.target.checked)} className="accent-orange-500" /> Also send SMS
-                </label>
-                {hdRequestSendSms && (
-                  <div>
-                    <label className="block text-[10px] text-[var(--text-muted)] mb-1">Editable SMS preview</label>
-                    <textarea rows={4} value={hdRequestSmsMessage} onChange={event => setHdRequestSmsMessage(event.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
-                  </div>
-                )}
+                <button onClick={() => previewHoldingEmail()} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview email before sending</button>
+                <div className="flex gap-4 text-xs">
+                  <label className="flex gap-2 items-center"><input type="checkbox" checked={hdRequestSendEmail} onChange={event => setHdRequestSendEmail(event.target.checked)} /> Send Email</label>
+                  <label className="flex gap-2 items-center"><input type="checkbox" checked={hdRequestSendSms} onChange={event => setHdRequestSendSms(event.target.checked)} /> Send SMS</label>
+                </div>
+                {Boolean(enquiry.joint_partner_id) && <p className="text-xs text-[var(--text-muted)]">Both applicants receive their own application link.</p>}
                 <Button variant="gradient" onClick={requestHoldingDeposit} disabled={saving || !hdMonthlyRent || !hdHoldingDeposit}>
-                  {saving ? 'Sending...' : hdRequestSendSms ? 'Send Email, SMS & Application Link' : 'Send Email & Application Link'}
+                  {saving ? 'Sending...' : 'Save & Send Selected Messages'}
                 </Button>
                 {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
               </>
@@ -969,7 +913,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                         <div className="w-px h-full bg-emerald-500/30 min-h-[16px]" />
                       </div>
                       <div className="pb-2">
-                        <p className="text-xs text-[var(--text-primary)] font-medium">Email sent to {enquiry.email_1}</p>
+                        <p className="text-xs text-[var(--text-primary)] font-medium">Confirmation for {enquiry.email_1}</p>
                         <p className="text-[10px] text-[var(--text-muted)]">{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at as string | number).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</p>
                       </div>
                     </div>
@@ -1010,32 +954,20 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[10px] text-[var(--text-muted)] mb-1 font-medium">Amount Received (£)</label>
-                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdReceivedAmount} onChange={e => setHdReceivedAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder={String(enquiry.holding_deposit_amount || '')}
+                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={hdReceivedAmount.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} onChange={e => setHdReceivedAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder={String(enquiry.holding_deposit_amount || '')}
                         className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
                     </div>
                     <DatePicker label="Date Deposit Received" value={hdReceivedDate} onChange={setHdReceivedDate} />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <label className="flex items-center gap-2 rounded-lg bg-[var(--bg-subtle)] px-3 py-2 text-xs cursor-pointer">
-                      <input type="checkbox" checked={hdReceiptSendEmail} onChange={event => setHdReceiptSendEmail(event.target.checked)} className="accent-orange-500" /> Email confirmation
+                      <input type="checkbox" checked={hdReceiptSendEmail} onChange={event => setHdReceiptSendEmail(event.target.checked)} className="accent-orange-500" /> Send Email
                     </label>
                     <label className="flex items-center gap-2 rounded-lg bg-[var(--bg-subtle)] px-3 py-2 text-xs cursor-pointer">
-                      <input type="checkbox" checked={hdReceiptSendSms} onChange={event => setHdReceiptSendSms(event.target.checked)} className="accent-orange-500" /> SMS confirmation
+                      <input type="checkbox" checked={hdReceiptSendSms} onChange={event => setHdReceiptSendSms(event.target.checked)} className="accent-orange-500" /> Send SMS
                     </label>
                   </div>
-                  {hdReceiptSendEmail && (
-                    <label className="block text-[10px] text-[var(--text-muted)]">
-                      Editable email preview
-                      <textarea rows={4} value={hdReceiptEmailMessage} onChange={event => setHdReceiptEmailMessage(event.target.value)}
-                        className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
-                    </label>
-                  )}
-                  {hdReceiptSendSms && (
-                    <div>
-                      <label className="block text-[10px] text-[var(--text-muted)] mb-1">Editable SMS preview</label>
-                      <textarea rows={5} value={hdReceiptSmsMessage} onChange={event => setHdReceiptSmsMessage(event.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
-                    </div>
-                  )}
+                  <button onClick={() => previewHoldingEmail(true)} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview confirmation email</button>
                   <Button variant="gradient" onClick={confirmDepositReceived} disabled={saving}>
                     {saving ? 'Saving...' : 'Confirm Deposit Received'}
                   </Button>
@@ -1121,7 +1053,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                         ) : <p className="text-xs text-amber-400">The completed application PDF is being prepared.</p>;
                       })()}
                     </div>
-                  ) : sent ? (
+                  ) : (sent || !!enquiry.application_form_token) ? (
                     <div className="space-y-3">
                       {enquiry.application_form_token && (
                         <div className="bg-[var(--bg-subtle)] rounded-lg p-3">
@@ -1131,7 +1063,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                           </p>
                         </div>
                       )}
-                      <Button variant="ghost" onClick={() => setShowApplicationEmail(true)} disabled={!enquiry.email_1} className="flex items-center gap-2">
+                      <Button variant="ghost" onClick={async() => { if (await confirmAction('Send each applicant their own application link?')) void sendApplicationEmail({subject:'',bodyHtml:''}); }} disabled={sendingEmail} className="flex items-center gap-2">
                         <Send size={14} /> Resend Application Form Link
                       </Button>
                     </div>
@@ -1176,7 +1108,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
                   <div className="space-y-2">
                     <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Supporting documents</p>
-                    {requiredReviewDocumentTypes.map(docType => {
+                    {[...new Set([...requiredReviewDocumentTypes, ...enquiryDocs.filter(doc=>!['Completed Tenancy Application','Tenancy Agreement','Signed Tenancy Agreement'].includes(doc.doc_type)).map(doc=>doc.doc_type)])].map(docType => {
                       const docs = enquiryDocs.filter(doc => doc.doc_type === docType);
                       return (
                         <div key={docType} className="bg-[var(--bg-hover)]/50 rounded-lg p-3 space-y-2">
@@ -1189,12 +1121,15 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                           {docs.map(doc => (
                             <div key={doc.id} className="flex items-center gap-2 bg-[var(--bg-subtle)] rounded px-2 py-2">
                               <FileText size={12} className="text-[var(--text-muted)] shrink-0" />
+                              <select aria-label={`Category for ${doc.original_name}`} value={doc.doc_type} disabled={saving} className="max-w-28 text-xs bg-[var(--bg-input)] rounded" onChange={async event=>{setSaving(true);try{await api.put(`/api/documents/${doc.id}/category`,{doc_type:event.target.value});setReviewStatusOverride(null);await Promise.all([fetchDocs(),onUpdate()]);}catch(error){setReviewError(error instanceof Error?error.message:'Category could not be saved');}finally{setSaving(false);}}}>
+                                {['Primary Identification','Secondary Identification','Bank Statements','Proof of Income or Employment','Credit Check Report','Other'].map(type=><option key={type}>{type}</option>)}
+                              </select>
                               <div className="text-left min-w-0 flex-1">
                                 <p className="text-[11px] text-[var(--text-primary)] truncate">{doc.original_name}</p>
                                 <p className="text-[10px] text-[var(--text-muted)]">{new Date(doc.uploaded_at).toLocaleDateString('en-GB')}</p>
                               </div>
                               <span className={`text-[10px] font-medium ${doc.review_status === 'approved' ? 'text-emerald-400' : doc.review_status === 'rejected' ? 'text-red-400' : 'text-amber-400'}`}>
-                                {doc.review_status || 'pending'}
+                                {documentDecisions[doc.id] || doc.review_status || 'pending'}
                               </span>
                               <button onClick={() => viewDocument(doc.id, doc.original_name)} className="px-2 py-1 rounded text-[10px] bg-sky-500/15 text-sky-400 flex items-center gap-1"><Eye size={10} />View</button>
                               <button onClick={() => downloadDocument(doc.id, doc.original_name)} className="px-2 py-1 rounded text-[10px] bg-[var(--bg-hover)] text-[var(--text-secondary)] flex items-center gap-1"><Download size={10} />Download</button>
@@ -1228,8 +1163,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   {sendReviewSms && (
                     <div>
                       <label className="block text-[10px] text-[var(--text-muted)] mb-1">SMS preview</label>
-                      <textarea readOnly value={reviewSmsPreview} rows={5}
-                        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] resize-none" />
+                      <SmsEditor value={reviewSmsOverride || reviewSmsPreview} onChange={setReviewSmsOverride} />
                     </div>
                   )}
                   {sendReviewEmail && (
@@ -1310,15 +1244,28 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               <div className="space-y-3">
                 {agreement && <div className={`p-3 rounded-lg border ${agreement.status === 'completed' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
                   <p className="text-sm font-medium">{agreement.original_name}</p>
-                  <p className="text-xs mt-1">{agreement.status === 'completed' ? 'All required signatures completed; signed PDF stored in Documents.' : `Status: ${agreement.status.replace('_', ' ')}${agreement.requires_joint_tenant_signature ? ' · both tenants must sign' : ''}${agreement.requires_landlord_signature ? ' · landlord must sign' : ''}`}</p>
+                  <p className="text-xs">{name}: {agreement.applicant_signed_at ? 'Signed' : 'Awaiting signature'}</p>
+                  {agreement.signing_slug && <button className="text-xs underline mt-1" onClick={async()=>{try {await navigator.clipboard.writeText(`https://apply.fleminglettings.co.uk/${agreement.signing_slug}`);}catch{setReviewError('Could not copy link');}}}>Copy this applicant’s agreement link</button>}
+                  <p className="text-xs mt-1">{agreement.status === 'completed' ? 'All required signatures completed; signed PDF stored in the property and tenant documents.' : `Waiting on ${outstandingAgreementSigners.join(' and ') || 'signature processing'}`}</p>
+                  <p className="mt-1 text-[10px] opacity-80">Last opened: {lastAgreementOpenedAt ? new Date(lastAgreementOpenedAt as string).toLocaleString('en-GB') : 'Not opened yet'}</p>
                 </div>}
                 {agreement && agreement.status !== 'completed' && <div className="flex flex-wrap gap-2">
                   <Button variant="ghost" size="sm" onClick={fetchAgreement}>Refresh Signatures</Button>
+                  <Button variant="outline" size="sm" disabled={saving} onClick={async () => {
+                    if (!await confirmAction('Resend the existing agreement to both applicants using the selected channels? Their links and signatures will be preserved.')) return;
+                    setSaving(true); setReviewError('');
+                    try { const result=await api.post(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement/resend`,{agreement_id:agreement.id,send_email:agreementSendEmail,send_sms:agreementSendSms});
+                      const failed=Object.values(result.delivery as Record<string,{success:boolean;error?:string}>).filter(r=>!r.success); if(failed.length)setReviewError(failed.map(r=>r.error).join('; ')); await fetchEmailHistory();
+                    } catch(error) {setReviewError(error instanceof Error?error.message:'Could not resend');} finally {setSaving(false);}
+                  }}>Resend Existing Agreement</Button>
+                  <label className="text-xs"><input type="checkbox" checked={agreementSendEmail} onChange={e=>setAgreementSendEmail(e.target.checked)}/> Send Email</label>
+                  <label className="text-xs"><input type="checkbox" checked={agreementSendSms} onChange={e=>setAgreementSendSms(e.target.checked)}/> Send SMS</label>
+                  <Button className="text-red-500 border-red-500/40" variant="outline" size="sm" onClick={() => setReissuingAgreement(value => !value)}>{reissuingAgreement ? 'Cancel Reissue' : 'Reissue New Agreement'}</Button>
                   {!agreement.tenant_delivery_sent_at && !agreement.requires_landlord_signature && (agreement.tenant_delivery_email || agreement.tenant_delivery_sms) && (
                     <Button variant="outline" size="sm" onClick={retryAgreementDelivery} disabled={saving}>Retry Agreement Delivery</Button>
                   )}
                 </div>}
-                {agreement?.status !== 'completed' && <>
+                {showAgreementForm && <>
                   <div className={`rounded-lg border p-3 ${agreementCompliance?.ready ? 'border-emerald-500/20 bg-emerald-500/10' : 'border-amber-500/20 bg-amber-500/10'}`}>
                     <p className="text-xs font-medium">Property compliance</p>
                     {!agreementCompliance?.propertyLinked ? (
@@ -1336,7 +1283,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                             )}
                           </div>
                         ))}
-                        {agreementCompliance.ready && <p className="pt-1 text-[10px] text-emerald-400">These documents will be attached when the signing link is emailed.</p>}
+                        {agreementCompliance.ready && <p className="pt-1 text-[10px] text-emerald-400">These documents will be merged after the APT agreement and attached to the signing email.</p>}
                       </div>
                     )}
                   </div>
@@ -1375,7 +1322,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label className="text-[10px] text-[var(--text-muted)]">Who are the permitted occupiers? *<input type="text" value={agreementOccupiers} onChange={event => setAgreementOccupiers(event.target.value)} placeholder="Enter names, or None" className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
+                    <label className="text-[10px] text-[var(--text-muted)]">Are there any other occupants? *<input type="text" value={agreementOccupiers} onChange={event => setAgreementOccupiers(event.target.value)} placeholder="Enter any other parties who are not the named tenants/or None." className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
                     <label className="text-[10px] text-[var(--text-muted)]">Are there shared facilities? *<input type="text" value={agreementFacilities} onChange={event => setAgreementFacilities(event.target.value)} placeholder="Describe them, or None" className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
                     <label className="text-[10px] text-[var(--text-muted)] sm:col-span-2">Is there permitted parking, and if so where? *<input type="text" value={agreementParking} onChange={event => setAgreementParking(event.target.value)} placeholder="Describe it, or None" className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
                   </div>
@@ -1391,21 +1338,21 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     </div>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendEmail} onChange={e => setAgreementSendEmail(e.target.checked)} /> {agreementCompliance?.agreementType === 'client' ? 'Email landlord, then tenant' : 'Email tenant signing link'}</label>
-                    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendSms} onChange={e => setAgreementSendSms(e.target.checked)} /> {agreementCompliance?.agreementType === 'client' ? 'SMS tenant after landlord signs' : 'SMS tenant signing link'}</label>
+                    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendEmail} onChange={e => setAgreementSendEmail(e.target.checked)} /> {agreementCompliance?.agreementType === 'client' ? 'Email landlord, then tenant' : 'Send Email'}</label>
+                    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={agreementSendSms} onChange={e => setAgreementSendSms(e.target.checked)} /> {agreementCompliance?.agreementType === 'client' ? 'SMS tenant after landlord signs' : 'Send SMS'}</label>
                   </div>
                   {agreementSendEmail && (
                     <label className="block text-[10px] text-[var(--text-muted)]">Editable tenant email preview
                       <textarea value={agreementEmailMessage} onChange={event => setAgreementEmailMessage(event.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
                     </label>
                   )}
+                  {agreementSendEmail && <button onClick={previewAgreementEmail} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview branded email</button>}
                   {agreementSendSms && (
                     <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview
-                      <textarea value={agreementSmsMessage} onChange={event => setAgreementSmsMessage(event.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
+                      <SmsEditor value={agreementSmsMessage} onChange={setAgreementSmsMessage} />
                     </label>
                   )}
-                  {(agreementSendEmail || agreementSendSms) && <p className="text-[10px] text-[var(--text-muted)]">Available placeholders: {'{{first_name}}'}, {'{{property_address}}'}, {'{{signing_link}}'}.</p>}
-                  <Button variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || agreementCompliance?.ready !== true || !agreementDetailsComplete}>{saving ? 'Generating...' : agreement ? 'Generate Replacement Agreement' : 'Generate & Issue Agreement'}</Button>
+                  <Button variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || agreementCompliance?.ready !== true || !agreementDetailsComplete}>{saving ? 'Generating...' : reissuingAgreement ? 'Reissue New Agreement' : 'Generate & Issue Agreement'}</Button>
                 </>}
                 {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
               </div>
@@ -1427,12 +1374,14 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={balanceSendEmail} onChange={e => setBalanceSendEmail(e.target.checked)} /> Email payment request</label>
                 <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={balanceSendSms} onChange={e => setBalanceSendSms(e.target.checked)} /> SMS payment request</label>
               </div>}
+              {!enquiry.balance_payment_requested && <DatePicker label="Follow-up date *" value={balanceFollowUpDate} onChange={setBalanceFollowUpDate} />}
               {!enquiry.balance_payment_requested && balanceSendEmail && <label className="block text-[10px] text-[var(--text-muted)]">Editable email preview<textarea value={balanceEmailMessage} onChange={e => setBalanceEmailMessage(e.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
-              {!enquiry.balance_payment_requested && balanceSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<textarea value={balanceSmsMessage} onChange={e => setBalanceSmsMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
-              {!enquiry.balance_payment_requested && (balanceSendEmail || balanceSendSms) && <p className="text-[10px] text-[var(--text-muted)]">Available placeholders: {'{{first_name}}'}, {'{{property_address}}'}, {'{{balance_due}}'}.</p>}
-              {!enquiry.balance_payment_requested ? <Button variant="gradient" size="sm" onClick={requestBalance} disabled={saving}>Request Final Balance</Button>
+              {!enquiry.balance_payment_requested && balanceSendEmail && <button onClick={previewBalanceEmail} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview branded email</button>}
+              {!enquiry.balance_payment_requested && balanceSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<SmsEditor value={balanceSmsMessage} onChange={setBalanceSmsMessage} /></label>}
+              {!enquiry.balance_payment_requested ? <Button variant="gradient" size="sm" onClick={requestBalance} disabled={saving || !balanceFollowUpDate}>Request Final Balance</Button>
                 : !enquiry.balance_payment_received ? <Button variant="gradient" size="sm" onClick={confirmBalance} disabled={saving}>Confirm Payment Received</Button>
                 : <p className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle size={14} /> Final balance received{enquiry.balance_payment_received_at ? ` on ${new Date(enquiry.balance_payment_received_at).toLocaleDateString('en-GB')}` : ''}</p>}
+              {enquiry.balance_payment_requested && !enquiry.balance_payment_received && enquiry.balance_follow_up_date && <p className="text-xs text-amber-300">Follow-up scheduled for {new Date(`${enquiry.balance_follow_up_date}T00:00:00`).toLocaleDateString('en-GB')}.</p>}
               {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
             </div> : <p className="text-xs text-[var(--text-muted)]">Complete the signed agreement first.</p>}
           </StepCard>
@@ -1440,9 +1389,15 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           {/* Step 8: Handover */}
           <StepCard idx={7} step={steps[7]} {...stepCardProps}>
             {allPreviousComplete(7) ? <div className="space-y-3">
+              <div className="rounded-lg p-3 border border-[var(--border-input)]">
+                {enquiry.handover_not_required ? <p className="text-sm text-emerald-500">No handover required — confirmed by office.</p> : <Button size="sm" variant="outline" disabled={saving} onClick={async()=>{
+                  if(!await confirmAction('Confirm no handover is required? Any existing handover calendar task will be completed.'))return;
+                  setSaving(true);try{await api.post(`/api/tenant-enquiries/${enquiryId}/no-handover`,{confirmed:true});await onUpdate();setActiveStep(8);}catch(error){setReviewError(error instanceof Error?error.message:'Could not save');}finally{setSaving(false);}
+                }}>No Handover Required</Button>}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <DatePicker label="Handover date *" value={handoverDate} onChange={setHandoverDate} />
-                <TimePicker value={handoverTime} onChange={setHandoverTime} />
+                <TimePicker label="Handover time *" value={handoverTime} onChange={setHandoverTime} />
               </div>
               <select value={handoverWithLandlord ? '__landlord__' : handoverAssignedTo} onChange={e => { const landlord = e.target.value === '__landlord__'; setHandoverWithLandlord(landlord); setHandoverAssignedTo(landlord ? (agreementCompliance?.landlordName || 'With Landlord') : e.target.value); }} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs">
                 <option value="">Assign team member…</option>
@@ -1450,14 +1405,14 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 {users.map(user => <option key={user.id} value={user.name}>{user.name}</option>)}
               </select>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={handoverSendEmail} onChange={e => setHandoverSendEmail(e.target.checked)} /> Email tenant</label>
-                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={handoverSendSms} onChange={e => setHandoverSendSms(e.target.checked)} /> SMS tenant</label>
+                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={handoverSendEmail} onChange={e => setHandoverSendEmail(e.target.checked)} /> Send Email</label>
+                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={handoverSendSms} onChange={e => setHandoverSendSms(e.target.checked)} /> Send SMS</label>
               </div>
               {handoverWithLandlord && <p className="text-[10px] text-[var(--text-muted)]">The landlord is included in the selected email/SMS channels.</p>}
               {handoverSendEmail && <label className="block text-[10px] text-[var(--text-muted)]">Editable email preview<textarea value={handoverEmailMessage} onChange={e => setHandoverEmailMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
-              {handoverSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<textarea value={handoverSmsMessage} onChange={e => setHandoverSmsMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
-              {(handoverSendEmail || handoverSendSms) && <p className="text-[10px] text-[var(--text-muted)]">Available placeholders: {'{{first_name}}'}, {'{{property_address}}'}, {'{{handover_date}}'}, {'{{handover_time}}'}, {'{{appointment_with}}'}.</p>}
-              <Button variant="gradient" size="sm" onClick={scheduleHandover} disabled={saving || !handoverDate || !handoverTime || !handoverAssignedTo}>{enquiry.handover_date ? 'Update Handover' : 'Add to Team Calendar'}</Button>
+              {handoverSendEmail && <button onClick={previewHandoverEmail} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview branded email</button>}
+              {handoverSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<SmsEditor value={handoverSmsMessage} onChange={setHandoverSmsMessage} /></label>}
+              <Button variant="gradient" size="sm" onClick={scheduleHandover} disabled={saving || !handoverDate || !handoverTime || !handoverAssignedTo}>{enquiry.handover_date ? 'Update Handover' : 'Book Appointment & Add to Calendar'}</Button>
               {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
             </div> : <p className="text-xs text-[var(--text-muted)]">Confirm the final balance first.</p>}
           </StepCard>
@@ -1467,6 +1422,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
             {allPreviousComplete(8) ? <div className="space-y-3">
               <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20"><p className="text-sm font-medium text-emerald-400">All onboarding stages complete</p><p className="text-xs text-[var(--text-muted)] mt-1">{name} is ready to be converted to a tenant.</p></div>
               <Button variant="gradient" onClick={convertToTenant} disabled={saving}>{saving ? 'Converting...' : 'Convert to Tenant'}</Button>
+              {reviewError && <p role="alert" className="text-xs text-red-400">{reviewError}</p>}
             </div> : <p className="text-xs text-[var(--text-muted)]">Complete all previous stages before converting.</p>}
           </StepCard>
 
@@ -1474,15 +1430,35 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       </div>
 
       <EmailPreviewModal
-        open={showApplicationEmail}
-        onClose={() => setShowApplicationEmail(false)}
-        onSend={sendApplicationEmail}
-        sending={sendingEmail}
+        open={agreementEmailPreview !== null}
+        onClose={() => setAgreementEmailPreview(null)}
+        onSend={async () => undefined}
         to={enquiry.email_1 || ''}
         from="contact@tenancies.fleminglettings.co.uk"
-        initialSubject={`Your Fleming Lettings Application Form`}
-        initialBodyHtml={buildResendApplicationEmailHtml()}
-        sendLabel="Resend Application Form Link"
+        initialSubject={agreementEmailPreview?.subject || ''}
+        initialBodyHtml={agreementEmailPreview?.bodyHtml || ''}
+        previewOnly
+      />
+
+      <EmailPreviewModal
+        open={handoverEmailPreview !== null}
+        onClose={() => setHandoverEmailPreview(null)}
+        onSend={async () => undefined}
+        to={enquiry.email_1 || ''}
+        from="contact@tenancies.fleminglettings.co.uk"
+        initialSubject={handoverEmailPreview?.subject || ''}
+        initialBodyHtml={handoverEmailPreview?.bodyHtml || ''}
+        previewOnly
+      />
+      <EmailPreviewModal
+        open={balanceEmailPreview !== null}
+        onClose={() => setBalanceEmailPreview(null)}
+        onSend={async () => undefined}
+        to={enquiry.email_1 || ''}
+        from="contact@tenancies.fleminglettings.co.uk"
+        initialSubject={balanceEmailPreview?.subject || ''}
+        initialBodyHtml={balanceEmailPreview?.bodyHtml || ''}
+        previewOnly
       />
 
       {documentPreview && (
@@ -1507,28 +1483,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         </div>
       )}
 
-      {/* Holding deposit email preview (read-only) */}
-      {showHDEmailPreview && (
-        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={() => setShowHDEmailPreview(false)}>
-          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border-subtle)]">
-              <h4 className="text-sm font-bold text-[var(--text-primary)]">Email Preview</h4>
-              <button onClick={() => setShowHDEmailPreview(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={16} /></button>
-            </div>
-            <div className="p-4 space-y-2 text-xs text-[var(--text-secondary)]">
-              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">To:</span><span>{enquiry.email_1}</span></div>
-              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">From:</span><span>contact@tenancies.fleminglettings.co.uk</span></div>
-              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">Subject:</span><span className="font-medium">Tenancy Application – {propertyAddress || 'Property'}</span></div>
-              <div className="flex gap-2"><span className="text-[var(--text-muted)] w-12">Sent:</span><span>{enquiry.onboarding_email_sent_at ? new Date(enquiry.onboarding_email_sent_at as string | number).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span></div>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 pb-4">
-              <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden bg-white">
-                <div dangerouslySetInnerHTML={{ __html: buildTenancyApplicationEmailHtml() }} />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <EmailPreviewModal open={holdingEmailPreview !== null} onClose={() => setHoldingEmailPreview(null)}
+        onSend={async () => undefined} to={enquiry.email_1 || ''} from="contact@tenancies.fleminglettings.co.uk"
+        initialSubject={holdingEmailPreview?.subject || ''} initialBodyHtml={holdingEmailPreview?.html || ''} previewOnly />
+
     </div>
   );
 }

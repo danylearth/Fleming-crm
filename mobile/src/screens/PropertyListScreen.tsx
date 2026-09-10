@@ -38,7 +38,7 @@ export default function PropertyListScreen() {
           <Text style={styles.landlord}>Landlord: {item.landlord_name}</Text>
         )}
       </View>
-      <View style={[styles.statusBadge, styles[`status_${item.status}`]]}>
+      <View style={[styles.statusBadge, item.status === 'let' ? styles.status_let : item.status === 'let_agreed' ? styles.status_let_agreed : styles.status_to_let]}>
         <Text style={styles.statusText}>{item.status.replace('_', ' ')}</Text>
       </View>
     </TouchableOpacity>
@@ -124,6 +124,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
+  status_let: { backgroundColor: '#16a34a' },
   status_to_let: {
     backgroundColor: '#e3f2fd',
   },

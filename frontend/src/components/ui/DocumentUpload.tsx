@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Button, SectionHeader, EmptyState, Select, Input } from './index';
-import { Upload, FileText, Trash2, Download } from 'lucide-react';
+import { Upload, FileText, Image, Paperclip, Trash2, Download } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -129,15 +129,15 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
   };
 
   const mimeIcon = (mime: string) => {
-    if (mime?.startsWith('image/')) return '🖼️';
-    if (mime?.includes('pdf')) return '📄';
-    return '📎';
+    if (mime?.startsWith('image/')) return <Image size={16} />;
+    if (mime?.includes('pdf')) return <FileText size={16} />;
+    return <Paperclip size={16} />;
   };
 
   return (
     <Card className="p-6">
       <SectionHeader
-        title={title || "Documents"}
+        title={title || "Documents"} icon={<FileText size={16} />}
         action={() => setShowUpload(!showUpload)}
         actionLabel={showUpload ? 'Cancel' : 'Upload'}
       />
