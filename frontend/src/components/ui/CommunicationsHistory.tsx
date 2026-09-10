@@ -30,7 +30,7 @@ export default function CommunicationsHistory({ messages }: { messages: Communic
       {filtered.map(message => <div key={`${message.channel}-${message.id}`} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0"><p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--accent-orange)]">
-            {message.channel === 'email' ? <Mail size={12} /> : <MessageSquare size={12} />}{message.channel === 'email' ? 'Email' : 'SMS'} · {message.direction === 'inbound' ? 'Received' : 'Sent'}
+            {message.channel === 'email' ? <Mail size={12} /> : <MessageSquare size={12} />}{message.channel === 'email' ? 'Email' : 'SMS'} · {message.direction === 'inbound' ? 'Received' : 'Outgoing'}
           </p><p className="mt-1 text-sm font-medium break-words">{message.subject || (message.channel === 'sms' ? 'Text message' : 'Email')}</p>
           <p className="text-xs text-[var(--text-muted)] break-all">{message.direction === 'inbound' ? message.sender : message.recipient}</p></div>
           <span className="text-[10px] capitalize text-[var(--text-muted)]">{message.status || 'Recorded'}</span>

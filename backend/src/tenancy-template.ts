@@ -15,7 +15,7 @@ const xmlText = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&
 
 /** Preserve the supplied contract's clauses, tables, headers and page settings. */
 export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput): Promise<Buffer> {
-  if (pending >= 5) throw new Error('Other agreements are being prepared. Please try again shortly.');
+  if (pending >= 1) throw new Error('Other agreements are being prepared. Please try again shortly.');
   pending++;
   const work = queue.then(async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fleming-agreement-'));
@@ -28,7 +28,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         AGREEMENT_DATE: date(input.agreementDate), START_DATE: date(input.tenancyStartDate),
         RENT_DAY: input.tenancyStartDate.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'Europe/London' }),
         TENANT_NAMES: names, PROPERTY_ADDRESS: input.propertyAddress,
-        RENT: input.rent.toFixed(2), DEPOSIT: input.deposit.toFixed(2), PAYMENT_REFERENCE: input.paymentReference,
+        RENT: input.rent.toLocaleString('en-GB',{minimumFractionDigits:2}), DEPOSIT: input.deposit.toLocaleString('en-GB',{minimumFractionDigits:2}), PAYMENT_REFERENCE: input.paymentReference,
         OCCUPIERS: input.permittedOccupiers || 'None', SHARED_FACILITIES: input.sharedFacilities || 'None', PARKING: input.parking || 'None',
         TENANT_EMAILS: input.tenants.map(t => t.email).filter(Boolean).join('; '),
         TENANT_PHONES: input.tenants.map(t => t.phone).filter(Boolean).join('; '),
@@ -43,7 +43,12 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         return xmlText(values[key]);
       });
       if (/#####|\{\{[A-Z_]+\}\}/.test(xml)) throw new Error('Agreement template contains an unfilled field');
+      // Keep the supplied wording and layout while applying the requested body font.
+      xml=xml.replace(/<w:rFonts[^>]*\/>/g, '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>');
+      xml=xml.replace(/(<w:t[^>]*>)Signed:(<\/w:t>)/g, '$1Signed: signatures and dates for each party are recorded in the electronic signature certificate, applying to this addendum.$2');
       zip.file('word/document.xml', xml);
+      const styles=zip.file('word/styles.xml');
+      if(styles)zip.file('word/styles.xml',styles.asText().replace(/<w:rFonts[^>]*\/>/g,'<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>'));
       const docx = path.join(dir, 'agreement.docx');
       await fs.writeFile(docx, zip.generate({ type: 'nodebuffer' }));
       await exec(process.env.LIBREOFFICE_PATH || 'soffice', [

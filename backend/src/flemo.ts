@@ -1,3 +1,5 @@
+import {flemoAccount,flemoAccountStatus,registerFlemoOAuthRoutes} from './flemo-oauth';
+import {flemoEvidence} from './flemo-records';
 import type { Express } from 'express';
 import { authMiddleware, AuthRequest } from './auth';
 import { query } from './db-pg';
@@ -14,8 +16,9 @@ export function flemoIntent(message: string) {
 }
 const money = (n: unknown) => Number(n || 0).toLocaleString('en-GB',{style:'currency',currency:'GBP'});
 export function registerFlemoRoutes(app: Express) {
+  registerFlemoOAuthRoutes(app);
   app.post('/api/ai/chat', authMiddleware, async (req: AuthRequest,res) => {
-    const { message, context } = req.body || {};
+    const { message, context, history } = req.body || {};
     if (typeof message !== 'string' || !message.trim() || message.length > 2000) return res.status(400).json({ error: 'Ask a question up to 2,000 characters' });
     const portfolio = ['internal','external'].includes(context?.portfolio) ? context.portfolio : 'all';
     const scope = "($1='all' OR l.landlord_type=$1)";
@@ -23,7 +26,21 @@ export function registerFlemoRoutes(app: Express) {
       await syncTenantLifecycle();
       let text = ''; let records: any[] = [];
       const intent = flemoIntent(message);
-      if (intent === 'rent') {
+      const previous = Array.isArray(history) ? history.slice(-8).filter(item=>item && ['user','assistant'].includes(item.role)&&typeof item.text==='string').map(item=>({role:item.role,text:item.text.slice(0,3000)})) : [];
+      const accountStatus=await flemoAccountStatus(req.user.id).catch(()=>({connected:false}));
+      if(accountStatus.connected){
+        const evidence=await flemoEvidence([...previous.filter(item=>item.role==='user').slice(-2).map(item=>item.text),message].join(' '),portfolio,context,true);
+        const text=await(await flemoAccount(req.user.id)).answer(message,JSON.stringify({...evidence,conversation:previous}));
+        return res.json({text,actions:evidence.records.slice(0,10).map(r=>({id:`${r.entity}-${r.id}`,type:'link',label:r.name,href:`/${r.entity}/${r.id}`})),as_of:new Date().toISOString()});
+      }
+      if (/late|overdue|arrears|payment.*trend/i.test(message)) {
+        const evidence=await flemoEvidence(message,portfolio,context);
+        const namedIds=new Set(evidence.records.filter(r=>r.entity==='tenants').map(r=>r.id));
+        const history=namedIds.size?evidence.paymentHistory.filter(r=>namedIds.has(r.tenant_id)):evidence.paymentHistory;
+        text=history.length?history.map(r=>`${r.name}: ${r.paid_late} recorded late payments${r.average_days_late ? ` (average ${r.average_days_late} days late)` : ''}; ${r.overdue_charges} overdue charges (${money(r.overdue_amount)}).`).join('\n')+'\nBased on recorded charges and payments, not a live bank balance.': 'No recorded payment history is available for this selection. Payment timing and late-payment trends cannot be established yet.';
+        records=evidence.records;
+      } else
+if (intent === 'rent') {
         const rows = await query(`SELECT p.id,p.address,MAX(COALESCE(t.monthly_rent,p.rent_amount,0)) AS rent FROM tenants t JOIN properties p ON p.id=t.property_id LEFT JOIN landlords l ON l.id=p.landlord_id WHERE t.status='active' AND ${scope} GROUP BY p.id ORDER BY p.address`,[portfolio]);
         const payments = await query(`SELECT COALESCE(SUM(r.amount_paid),0) AS paid,COALESCE(SUM(GREATEST(0,r.amount_due-COALESCE(r.amount_paid,0))),0) AS outstanding FROM rent_payments r JOIN properties p ON p.id=r.property_id LEFT JOIN landlords l ON l.id=p.landlord_id WHERE ${scope} AND r.due_date >= date_trunc('month',NOW() AT TIME ZONE 'Europe/London')::date AND r.due_date < (date_trunc('month',NOW() AT TIME ZONE 'Europe/London')+INTERVAL '1 month')::date`,[portfolio]);
         text = `Scheduled monthly rent is ${money(rows.reduce((sum,r) => sum+Number(r.rent),0))} across ${rows.length} active tenancies. Joint tenants count once per property.\nFor charges due this calendar month: ${money(payments[0].paid)} recorded as paid; ${money(payments[0].outstanding)} outstanding. These figures use CRM records, not a live bank balance.`;
@@ -49,7 +66,11 @@ export function registerFlemoRoutes(app: Express) {
           text=rows.length ? `Latest outgoing SMS recorded for ${tenant.name}, ${new Date(rows[0].created_at).toLocaleString('en-GB',{timeZone:'Europe/London'})} (${rows[0].status}):\n${rows[0].message_body}` : `No outgoing SMS is recorded for ${tenant.name}.`;
           records=[{...tenant,entity:'tenants'}];
         }
-      } else text='I can check monthly rent, missing tenant ID, tenancies ending in the next 60 days, rent reviews this month, and the last SMS to a named tenant. Ask one question at a time; my answers come from current CRM records.';
+      } else {
+        const evidence=await flemoEvidence(message,portfolio,context);
+        records=evidence.records;
+        text=evidence.summary+'\nConnect ChatGPT in Settings for open-ended chat and document analysis.';
+      }
       res.json({text,actions:records.slice(0,10).map(r => ({id:`${r.entity}-${r.id}`,type:'link',label:r.name || r.address,href:`/${r.entity}/${r.id}`})),as_of:new Date().toISOString()});
     } catch(error) { console.error('Flemo lookup failed:',error); res.status(500).json({ error:'Could not read the CRM records. Please try again.' }); }
   });

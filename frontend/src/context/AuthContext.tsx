@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 
 interface User {
   last_login?: string;
+  avatar_url?: string;
+  accent_color?: string;
   id: number;
   email: string;
   name: string;
@@ -15,6 +17,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: { email: string; password: string; name: string; role: string; phone?: string }) => Promise<void>;
   logout: () => void;
+  updateUser: (changes: Partial<User>) => void;
   loading: boolean;
 }
 
@@ -58,13 +61,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token]);
 
   const login = async (email: string, password: string) => {
-    const res = await fetch(`${API_URL}/api/auth/login`, {
+    let res: Response;
+    try { res = await fetch(`${API_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+      body: JSON.stringify({ email: email.trim(), password })
+    }); } catch { throw new Error('Cannot reach the CRM. Please check your connection and try again.'); }
+    if (res.status === 401) throw new Error('Invalid login details');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'The CRM is temporarily unavailable. Please try again.');
     localStorage.setItem('fleming-last-activity', String(Date.now()));
     localStorage.setItem('token', data.token);
     setToken(data.token);
@@ -123,8 +128,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [token, logout]);
 
+  useEffect(() => {
+    const color = user?.accent_color || '#a32372';
+    document.documentElement.style.setProperty('--accent-orange', color);
+    document.documentElement.style.setProperty('--btn-primary-bg', color);
+    document.documentElement.style.setProperty('--btn-primary-text', '#ffffff');
+  }, [user?.accent_color]);
+  const updateUser = (changes: Partial<User>) => setUser(current => current ? { ...current, ...changes } : current);
+
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, loading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

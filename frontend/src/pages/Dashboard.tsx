@@ -53,6 +53,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [teamMembers,setTeamMembers]=useState<{id:number;name:string}[]>([]);
+  const [taskOwner,setTaskOwner]=useState('all');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +65,9 @@ export default function Dashboard() {
       api.get('/api/properties').catch(() => []),
       api.get('/api/tasks').catch(() => []),
       api.get('/api/tenant-enquiries').catch(() => []),
-    ]).then(([dash, props, tks, enqs]) => {
+      api.get('/api/users/options').catch(()=>[]),
+    ]).then(([dash, props, tks, enqs, members]) => {
+      setTeamMembers(members);
       setDashboard(dash);
       setProperties(Array.isArray(props) ? props : []);
       setTasks(Array.isArray(tks) ? tks : []);
@@ -116,7 +120,7 @@ export default function Dashboard() {
     return 'text-emerald-400';
   };
 
-  const visibleRecentTasks = tasks.filter(task => !task.dashboard_dismissed_at);
+  const visibleRecentTasks = tasks.filter(task => !task.dashboard_dismissed_at && (taskOwner==='all' || (taskOwner==='me' ? [String(user?.id),user?.name].includes(task.assigned_to) : task.assigned_to===taskOwner)));
 
   const deleteTask = async (task: Task) => {
     if (!await confirmAction(`Delete reminder “${task.title}”?`)) return;
@@ -284,7 +288,7 @@ export default function Dashboard() {
                 <span className="block text-lg font-semibold mt-0.5">{date.getDate()}</span>
                 <div className="flex flex-wrap gap-1 mt-3" aria-label={`${dayTasks.length} open tasks`}>
                   {dayTasks.slice(0, 6).map(task => (
-                    <span key={task.id} title={`${task.title}${task.assigned_to ? ` — ${task.assigned_to}` : ''}`} className={`w-2 h-2 rounded-full ${colorForMember(task.assigned_to)}`} />
+                    <span key={task.id} title={`${task.title}${task.assigned_to ? ` — ${teamMembers.find(member=>String(member.id)===task.assigned_to)?.name || task.assigned_to}` : ''}`} className={`w-2 h-2 rounded-full ${colorForMember(task.assigned_to)}`} />
                   ))}
                   {dayTasks.length > 6 && <span className="text-[9px] text-[var(--text-muted)]">+{dayTasks.length - 6}</span>}
                 </div>
@@ -295,7 +299,7 @@ export default function Dashboard() {
             <CalendarDays size={14} />
             {[...new Set(calendarDays.flatMap(day => day.tasks.map(task => task.assigned_to).filter(Boolean)))].map(name => (
               <span key={name} className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${colorForMember(name)}`} />{name}
+                <span className={`w-2 h-2 rounded-full ${colorForMember(name)}`} />{teamMembers.find(member=>String(member.id)===name)?.name || name}
               </span>
             ))}
             {calendarDays.some(day => day.tasks.some(task => !task.assigned_to)) && (
@@ -306,7 +310,7 @@ export default function Dashboard() {
 
         {/* Recent Tasks */}
         <Card className="p-6">
-          <div className="flex flex-wrap items-start justify-between gap-2"><SectionHeader title="Recent Tasks" action={() => navigate('/tasks')} actionLabel="View All" />{user?.role === 'admin' && visibleRecentTasks.length > 0 && <button className="text-xs text-red-500 font-medium" onClick={async () => { if (!await confirmAction('Clear all recent tasks from the dashboard? They will remain available in Team Calendar.', 'Clear Recent Tasks')) return; try { await api.post('/api/tasks/clear-recent', {}); setTasks(current => current.map(t => ({ ...t, dashboard_dismissed_at: new Date().toISOString() }))); } catch (e) { alert(e instanceof Error ? e.message : 'Could not clear tasks'); } }}>Clear All</button>}</div>
+          <div className="flex flex-wrap items-start justify-between gap-4"><div className="flex-1 min-w-48"><SectionHeader title="Recent Tasks" action={() => navigate('/tasks')} actionLabel="View All" /></div><select aria-label="Filter tasks by team member" value={taskOwner} onChange={e=>setTaskOwner(e.target.value)} className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs"><option value="all">All team members</option><option value="me">My tasks</option>{[...new Set(tasks.map(t=>t.assigned_to).filter(Boolean))].map(owner=><option key={owner} value={owner}>{teamMembers.find(member=>String(member.id)===owner)?.name || owner}</option>)}</select>{user?.role === 'admin' && visibleRecentTasks.length > 0 && <button className="text-xs text-red-500 font-medium" onClick={async () => { if (!await confirmAction('Clear all recent tasks from the dashboard? They will remain available in Team Calendar.', 'Clear Recent Tasks')) return; try { await api.post('/api/tasks/clear-recent', {}); setTasks(current => current.map(t => ({ ...t, dashboard_dismissed_at: new Date().toISOString() }))); } catch (e) { alert(e instanceof Error ? e.message : 'Could not clear tasks'); } }}>Clear All</button>}</div>
           {visibleRecentTasks.length ? (
             <div className="space-y-2">
               {visibleRecentTasks.slice(0, 5).map(task => (

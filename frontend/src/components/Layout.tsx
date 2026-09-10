@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
-import { Menu, LogOut, ChevronLeft, ChevronRight, X, Sun, Moon, Users, ClipboardList } from 'lucide-react';
+import { Menu, LogOut, ChevronLeft, ChevronRight, X, Sun, Moon, Users } from 'lucide-react';
 import {
   DashboardIcon, EnquiriesIcon, PropertiesIcon, LandlordsIcon, TenantsIcon,
   BdmIcon, MaintenanceIcon, TasksIcon, FinancialsIcon, SettingsIcon
@@ -21,7 +21,6 @@ const navItems = [
   { to: '/enquiries', icon: EnquiriesIcon, label: 'Tenant Enquiries', roles: null },
   { to: '/bdm', icon: BdmIcon, label: 'Landlord Enquiries', roles: null },
   { to: '/maintenance', icon: MaintenanceIcon, label: 'Maintenance', roles: null },
-  { to: '/inventories', icon: ClipboardList, label: 'Inventory', roles: null },
   { to: '/tasks', icon: TasksIcon, label: 'Team Calendar', roles: null },
   { to: '/financials', icon: FinancialsIcon, label: 'Financials', roles: null },
   { to: '/users', icon: Users, label: 'Team', roles: ['admin'] }, // Admin only
@@ -68,8 +67,8 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
       {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 flex flex-col bg-[var(--bg-page)] border-r border-[var(--border-subtle)] transition-all duration-200
-        ${mobileOpen ? 'translate-x-0 w-52' : '-translate-x-full w-52'}
-        md:static md:translate-x-0 ${collapsed ? 'md:w-16' : 'md:w-52'} shrink-0
+        ${mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64'}
+        md:static md:translate-x-0 ${collapsed ? 'md:w-16' : 'md:w-64'} shrink-0
       `}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-[var(--border-subtle)]">
@@ -118,7 +117,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
                 }
               >
                 <span className="p-2 rounded-xl shrink-0" style={{backgroundColor:['#f973161c','#3b82f61c','#a855f71c','#10b9811c','#ec48991c'][index%5],color:['#ea580c','#3b82f6','#a855f7','#10b981','#ec4899'][index%5]}}><item.icon size={18} /></span>
-                {(!collapsed || mobileOpen) && <span>{item.label}</span>}
+                {(!collapsed || mobileOpen) && <span className="whitespace-nowrap">{item.label}</span>}
               </NavLink>
             ))}
         </nav>
@@ -127,12 +126,12 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
         <div className="p-3 border-t border-[var(--border-subtle)]">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
-              {user?.name?.[0] || 'U'}
+              {user?.avatar_url ? <img src={user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" /> : user?.name?.[0] || 'U'}
             </div>
             {(!collapsed || mobileOpen) && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium break-words">{user?.role === 'admin' ? 'Administrator' : user?.name || 'User'}</p>
-                <p className="text-xs text-[var(--text-muted)] break-all">{user?.email || ''}</p><p className="text-[10px] text-[var(--text-muted)] mt-1">Last logged in: {user?.last_login ? new Date(user.last_login).toLocaleString('en-GB') : 'Not recorded'}</p>
+                <p className="text-[10px] text-[var(--text-muted)] mt-1">Last logged in: {user?.last_login ? new Date(user.last_login).toLocaleString('en-GB') : 'Not recorded'}</p>
               </div>
             )}
 
@@ -179,7 +178,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-xs font-bold text-white">
-                {user?.name?.[0] || 'U'}
+                {user?.avatar_url ? <img src={user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" /> : user?.name?.[0] || 'U'}
               </div>
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium">{user?.role === 'admin' ? 'Administrator' : user?.name || 'User'}</p>

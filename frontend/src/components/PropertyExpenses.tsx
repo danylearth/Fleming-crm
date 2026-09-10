@@ -213,7 +213,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Select label="Financial year" value={year} onChange={setYear} options={yearOptions.map(value => ({ value, label: financialYearLabel(value) }))} />
+        <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><Select label="Financial year" value={year} onChange={setYear} options={yearOptions.map(value => ({ value, label: financialYearLabel(value) }))} /></div>
         <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><p className="text-xs text-[var(--text-muted)]">Year to date</p><p className="text-lg font-bold">£{yearToDateTotal.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p></div>
         <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><p className="text-xs text-[var(--text-muted)]">All-time total</p><p className="text-lg font-bold">£{allTimeTotal.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p></div>
       </div>

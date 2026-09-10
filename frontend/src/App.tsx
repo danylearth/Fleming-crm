@@ -22,7 +22,6 @@ const Tasks = lazy(() => import('./pages/Tasks'));
 const TaskDetail = lazy(() => import('./pages/TaskDetail'));
 const Transactions = lazy(() => import('./pages/Transactions'));
 const Settings = lazy(() => import('./pages/Settings'));
-const Inventories = lazy(() => import('./pages/Inventories'));
 const Users = lazy(() => import('./pages/Users'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -103,8 +102,8 @@ function AppRoutes() {
       <Route path="/tasks/:id" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
       <Route path="/financials" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
       <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
-      <Route path="/inventories" element={<ProtectedRoute><Inventories /></ProtectedRoute>} />
-      <Route path="/inventories/:id" element={<ProtectedRoute><Inventories /></ProtectedRoute>} />
+      <Route path="/inventories" element={<ProtectedRoute><Navigate to="/properties" replace /></ProtectedRoute>} />
+      <Route path="/inventories/:id" element={<ProtectedRoute><Navigate to="/properties" replace /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
     </Routes>
     </Suspense>

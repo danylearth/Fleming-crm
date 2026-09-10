@@ -20,7 +20,7 @@ describe('7 September CRM feedback', () => {
     expect(backend).toContain("crypto.randomBytes(16).toString('hex')");
     expect(backend).toContain('agreement.tenant_slug || agreement.tenant_token');
     expect(backend).toContain('SET ${role}_opened_at = NOW()');
-    expect(wizard).toContain('Reissue Tenancy Agreement');
+    expect(wizard).toContain('Reissue New Agreement');
     expect(wizard).toContain('Last opened:');
     expect(wizard).toContain('Waiting on ${outstandingAgreementSigners.join');
   });

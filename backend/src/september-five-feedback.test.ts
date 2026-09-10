@@ -112,13 +112,12 @@ describe('5 September CRM feedback', () => {
     expect(migration).not.toContain('DELETE FROM properties');
   });
 
-  it('lets staff edit holding-deposit emails and texts before sending', () => {
-    expect(onboardingWizard).toContain('Editable email message');
+  it('uses the current readonly holding-deposit preview and message options', () => {
+    expect(onboardingWizard).not.toContain('Editable email message');
     expect(onboardingWizard).toContain('Editable SMS preview');
-    expect(onboardingWizard).toContain('email_message: hdRequestEmailMessage');
-    expect(onboardingWizard).toContain('sms_message: hdRequestSmsMessage');
-    expect(onboardingWizard).toContain('email_message: hdReceiptEmailMessage');
-    expect(onboardingWizard).toContain('sms_message: hdReceiptSmsMessage');
+    expect(onboardingWizard).toContain('previewHoldingEmail');
+    expect(onboardingWizard).toContain('Send Email');
+    expect(onboardingWizard).toContain('Send SMS');
     expect(backend).toContain('req.body.email_message');
     expect(backend).toContain('req.body.sms_message');
   });

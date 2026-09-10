@@ -56,7 +56,7 @@ export function useAIChat() {
     setTyping(true);
 
     try {
-      const result = await api.post('/api/ai/chat', { message: text, context: { ...context, portfolio: portfolioFilter } });
+      const result = await api.post('/api/ai/chat', { message: text, history:messages.slice(-8).map(({role,text})=>({role,text})), context: { ...context, portfolio: portfolioFilter } });
       setTyping(false);
       addMessage({
         role: 'assistant',
@@ -74,7 +74,7 @@ export function useAIChat() {
         status: 'error',
       });
     }
-  }, [api, portfolioFilter]);
+  }, [api, portfolioFilter,messages]);
 
   return { messages, typing, send, executeAction, addMessage, setMessages };
 }

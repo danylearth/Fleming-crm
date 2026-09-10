@@ -256,6 +256,7 @@ async function runDueFollowUps(): Promise<number> {
         follow_up_return_status = NULL,
         updated_at = CURRENT_TIMESTAMP
     WHERE status = 'awaiting_response'
+      AND NOT (holding_deposit_requested=1 AND COALESCE(application_form_completed,0)=0)
       AND follow_up_date IS NOT NULL
       AND follow_up_date <= CURRENT_DATE
     RETURNING id, status

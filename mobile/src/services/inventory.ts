@@ -51,8 +51,8 @@ export const inventoryService = {
     return response.data;
   },
 
-  async completeInventory(id: number): Promise<{ success: boolean }> {
-    const response = await api.put<{ success: boolean }>(
+  async completeInventory(id: number): Promise<{ success: boolean; delivery?: {tenant:string;email:string;sms:string}[] }> {
+    const response = await api.put<{ success: boolean; delivery?: {tenant:string;email:string;sms:string}[] }>(
       `/api/inventories/${id}/complete`
     );
     return response.data;

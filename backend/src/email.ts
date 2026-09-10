@@ -242,7 +242,7 @@ export function applicationChangesRequestedEmail(name: string, changes: string, 
   return {
     subject: 'More information required for your tenancy application',
     html: renderFinalEmailTemplate('05-application-review.html', {
-      FIRST_NAME: escapeHtml(name || 'there'),
+      FIRST_NAME: escapeHtml(name?.trim().split(/\s+/)[0] || 'there'),
       REQUESTED_CHANGES: escapeHtml(changes).replace(/\r?\n/g, '<br>'),
       APPLICATION_URL: escapeHtml(applicationUrl),
     }),
@@ -304,7 +304,7 @@ export function viewingConfirmationEmail(name: string, address: string, date: st
   return {
     subject: `Your viewing at ${cleanAddress.full}`,
     html: renderFinalEmailTemplate('02-viewing-confirmation.html', {
-      FIRST_NAME: escapeHtml(name || 'there'),
+      FIRST_NAME: escapeHtml(name?.trim().split(/\s+/)[0] || 'there'),
       PROPERTY_ADDRESS: escapeHtml(cleanAddress.full),
       PROPERTY_SHORT_ADDRESS: escapeHtml(cleanAddress.short),
       VIEWING_DATE: escapeHtml(date),
@@ -370,7 +370,7 @@ export function holdingDepositRequestEmail(
   return {
     subject: `Holding Deposit Request - ${address}`,
     html: renderFinalEmailTemplate('03-holding-deposit.html', {
-      FIRST_NAME: escapeHtml(name || 'there'),
+      FIRST_NAME: escapeHtml(name?.trim().split(/\s+/)[0] || 'there'),
       PROPERTY_ADDRESS: escapeHtml(propertyAddress.full),
       PROPERTY_SHORT_ADDRESS: escapeHtml(propertyAddress.short),
       MONTHLY_RENT: emailMoneyCompact(monthlyRent),
@@ -484,7 +484,7 @@ export function enquiryConfirmationEmail(name: string, reference: string, proper
   return {
     subject: 'Welcome to Fleming Lettings!',
     html: renderFinalEmailTemplate('01-welcome.html', {
-      FIRST_NAME: escapeHtml(name || 'there'),
+      FIRST_NAME: escapeHtml(name?.trim() || 'there'),
       REFERENCE: escapeHtml(reference),
     }),
   };
@@ -532,4 +532,16 @@ export function tenancyEndEmail(firstName: string, propertyAddress: string, endD
     html: renderFinalEmailTemplate('11-tenancy-end.html', { FIRST_NAME: escapeHtml(firstName || 'there'), END_DATE: escapeHtml(date), PROPERTY_ADDRESS: escapeHtml(address), PROPERTY_SUBJECT: encodeURIComponent(address) }),
     sms: `Hi ${firstName || 'there'}, this message confirms that your tenancy is scheduled to end on ${date} at ${address}. Further details have been sent you via email. If you have not requested this or wish to postpone your scheduled end date, then please get in touch immediately on 01902 212 415.`,
   };
+}
+
+export function propertyInventoryEmail(name: string, address: string, dueDate: string, reviewLink: string): string {
+  return renderFinalEmailTemplate('12-property-inventory.html', {
+    TENANT_NAME:escapeHtml(name), PROPERTY_ADDRESS:escapeHtml(address),
+    DUE_DATE:escapeHtml(new Date(dueDate.slice(0,10)+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})),
+    REVIEW_LINK:escapeHtml(reviewLink),
+  });
+}
+
+export function applicationReminderEmail(name: string, link: string) {
+ return {subject:'Complete your Fleming Lettings application',html:renderFinalEmailTemplate('13-application-reminder.html',{FIRST_NAME:escapeHtml(name),APPLICATION_LINK:escapeHtml(link)})};
 }

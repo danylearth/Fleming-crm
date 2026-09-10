@@ -1,3 +1,4 @@
+import PropertyInventory from '../components/PropertyInventory';
 import { useRecordAddress } from '../hooks/useRecordAddress';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -5,7 +6,7 @@ import Layout from '../components/Layout';
 import { Card, GlassCard, Button, ProgressRing, SectionHeader, EmptyState, Avatar, Tag, Input, Select, DatePicker, PricePaidData } from '../components/ui';
 import DocumentUpload from '../components/ui/DocumentUpload';
 import ActivityTimeline from '../components/ui/ActivityTimeline';
-import AddressAutocomplete from '../components/ui/AddressAutocomplete';
+
 import RentPayments from '../components/ui/RentPayments';
 import PropertyExpenses from '../components/PropertyExpenses';
 import { useApi } from '../hooks/useApi';
@@ -14,13 +15,13 @@ import { useNotifications } from '../context/NotificationContext';
 import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import { activePropertyTenants, type PropertyTenant } from '../utils/propertyTenants';
 import {
-  User,
+  User, Building2, Briefcase, KeyRound, Landmark, Users, ShieldCheck, ListChecks, FileCheck, History,
   CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
   AlertTriangle, Plus, Wrench, Trash2, StickyNote
 } from 'lucide-react';
 
 interface PropertyDetail {
-  id: number; address: string; postcode: string; rent_amount: number;
+  id: number; address: string; address_line_2?: string; city?: string; postcode: string; rent_amount: number;
   status: string; landlord_name: string; landlord_id?: number; landlord_type?: 'internal' | 'external';
   landlord_phone?: string; landlord_email?: string;
   current_tenant: string | null; current_tenant_id?: number; tenant_id?: number;
@@ -208,7 +209,7 @@ export default function PropertyDetail() {
   });
 
   const populateForm = (p: PropertyDetail) => setForm({
-    landlord_id: p.landlord_id, address: p.address || '', postcode: p.postcode || '',
+    landlord_id: p.landlord_id, address: p.address || '', address_line_2: p.address_line_2 || '', city: p.city || '', postcode: p.postcode || '',
     rent_amount: String(p.rent_amount || ''), bedrooms: String(p.bedrooms || ''),
     property_type: p.property_type || 'house', status: p.status || 'to_let',
     service_type: p.service_type || '', charge_percentage: String(p.charge_percentage ?? ''),
@@ -680,9 +681,9 @@ export default function PropertyDetail() {
           </div>
           <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex gap-2">
             {user?.role === 'admin' && <Button size="sm" variant="outline" className="!bg-red-600 !border-red-600 !text-white" onClick={async () => {
-              if (!await confirmCrmAction(`Permanently delete ${property.address} and linked property documents, expenses and payment records? This cannot be undone.`, 'Delete Property')) return;
-              try { await api.delete(`/api/properties/${property.id}`); navigate('/properties'); } catch (e) { alert(e instanceof Error ? e.message : 'Could not delete property'); }
-            }}>Delete</Button>}
+              if (!await confirmCrmAction(`Remove ${property.address}? Properties with tenancy or contract history will be archived; otherwise linked data will be permanently deleted.`, 'Delete / Archive Property')) return;
+              try { await api.post(`/api/properties/${property.id}/remove`, {}); navigate('/properties'); } catch (e) { alert(e instanceof Error ? e.message : 'Could not delete property'); }
+            }}>Delete / Archive</Button>}
             {editing ? (
               <>
                 <Button variant="ghost" size="sm" onClick={cancelEdit} className="bg-black/40 backdrop-blur-sm text-white text-xs sm:text-sm">
@@ -754,13 +755,14 @@ export default function PropertyDetail() {
           <div className="lg:col-span-2 space-y-6">
             {/* Details */}
             <GlassCard className="p-4 sm:p-6">
-              <SectionHeader title="Details" />
+              <SectionHeader title="Details" icon={<Building2 size={16} />} />
               {editing ? (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                    <AddressAutocomplete label="Address" value={form.address} onChange={(v: string) => setForm({ ...form, address: v })}
-                      onSelect={p => { if (p.postcode) setForm(f => ({ ...f, postcode: p.postcode || f.postcode })); }} />
-                    <Input label="Postcode" value={form.postcode} onChange={(v: string) => setForm({ ...form, postcode: v })} />
+                    <Input label="Address line 1 *" value={form.address} onChange={address => setForm({...form,address})} />
+                    <Input label="Address line 2 (optional)" value={form.address_line_2} onChange={address_line_2 => setForm({...form,address_line_2})} />
+                    <Input label="Town / City *" value={form.city} onChange={city => setForm({...form,city})} />
+                    <Input label="Postcode *" value={form.postcode} onChange={postcode => setForm({...form,postcode})} />
                     <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />
                     <Select label="Type" value={form.property_type} onChange={(v: string) => setForm({ ...form, property_type: v })}
                       options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
@@ -837,7 +839,7 @@ export default function PropertyDetail() {
 
             {/* Management */}
             <GlassCard className="p-4 sm:p-6">
-              <SectionHeader title="Management" />
+              <SectionHeader title="Management" icon={<Briefcase size={16} />} />
               {editing ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {property.landlord_type !== 'internal' && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v })}
@@ -936,7 +938,7 @@ export default function PropertyDetail() {
             {/* Leasehold (conditional) */}
             {(editing ? form.is_leasehold : property.is_leasehold) ? (
               <GlassCard className="p-4 sm:p-6">
-                <SectionHeader title="Leasehold" />
+                <SectionHeader title="Leasehold" icon={<KeyRound size={16} />} />
                 {editing ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <Toggle label="Leasehold Property" checked={form.is_leasehold} onChange={v => setForm({ ...form, is_leasehold: v })} />
@@ -981,7 +983,7 @@ export default function PropertyDetail() {
 
             {(editing || !!property.has_management_company) && (
               <GlassCard className="p-4 sm:p-6">
-                <SectionHeader title="Management Company" />
+                <SectionHeader title="Management Company" icon={<Landmark size={16} />} />
                 {editing ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <div className="col-span-full"><Toggle label="Management company in place" checked={form.has_management_company} onChange={v => setForm({ ...form, has_management_company: v })} /></div>
@@ -1022,7 +1024,7 @@ export default function PropertyDetail() {
             {(!isToLet || linkedTenants.length > 0) && (
               <GlassCard className="p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
-                  <SectionHeader title="Tenancy Information" />
+                  <SectionHeader title="Tenancy Information" icon={<Users size={16} />} />
                   <div className="flex flex-wrap gap-2 sm:ml-auto">
                   {!editing && previousTenants.length > 0 && (
                     <Button variant="outline" className="!bg-red-600 !text-white !border-red-600" size="sm" onClick={() => setShowPreviousTenancies(value => !value)}>
@@ -1117,7 +1119,7 @@ export default function PropertyDetail() {
             {/* Compliance Certificates — always visible, not gated by status */}
             {editing && (
               <GlassCard className="p-4 sm:p-6">
-                <SectionHeader title="Compliance Certificates" />
+                <SectionHeader title="Compliance Certificates" icon={<FileCheck size={16} />} />
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   <DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={(v: string) => setForm({ ...form, eicr_expiry_date: v })} />
                   <DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={(v: string) => setForm({ ...form, epc_expiry_date: v })} />
@@ -1126,10 +1128,12 @@ export default function PropertyDetail() {
               </GlassCard>
             )}
 
+            <PropertyInventory propertyId={property.id} tenants={linkedTenants} />
+
             {/* Tasks */}
             <Card className="p-4 sm:p-6">
               <SectionHeader
-                title="Tasks"
+                title="Tasks" icon={<ListChecks size={16} />}
                 action={() => setShowAddTask(true)}
                 actionLabel="Add New"
               />
@@ -1157,7 +1161,7 @@ export default function PropertyDetail() {
 
             {/* Maintenance */}
             <Card className="p-4 sm:p-6">
-              <SectionHeader title="Maintenance" action={() => setShowAddMaintenance(true)} actionLabel="Report Issue" />
+              <SectionHeader title="Maintenance" icon={<Wrench size={16} />} action={() => setShowAddMaintenance(true)} actionLabel="Report Issue" />
               {maintenance.length ? (
                 <div className="space-y-2">
                   {maintenance.slice(0, 5).map(m => (
@@ -1197,7 +1201,7 @@ export default function PropertyDetail() {
           <div className="lg:col-span-1 space-y-4 sm:space-y-6">
             {/* Compliance Overview */}
             <Card className="p-4 sm:p-6">
-              <SectionHeader title="Compliance" />
+              <SectionHeader title="Compliance" icon={<ShieldCheck size={16} />} />
               <div className="flex justify-center mb-4">
                 <ProgressRing value={overallCompliance()} size={90} strokeWidth={7} />
               </div>
@@ -1231,7 +1235,7 @@ export default function PropertyDetail() {
             {/* Landlords */}
             <Card className="p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
-                <SectionHeader title="Landlords" />
+                <SectionHeader title="Landlords" icon={<User size={16} />} />
                 {property.landlord_type !== 'internal' && <Button variant="outline" size="sm" onClick={() => setShowAddLandlord(true)}>
                   <Plus size={14} className="mr-1.5" /> <span className="hidden sm:inline">Add Landlord</span><span className="sm:hidden">Add</span>
                 </Button>}
@@ -1332,7 +1336,7 @@ export default function PropertyDetail() {
             {/* Activity */}
             {/* Notes */}
             <Card className="p-4 sm:p-6">
-              <SectionHeader title="Notes" />
+              <SectionHeader title="Notes" icon={<StickyNote size={16} />} />
 
               {/* Filter Tabs */}
               <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -1358,7 +1362,7 @@ export default function PropertyDetail() {
                     Landlord ({landlordNotes.length})
                   </button>
                 )}
-                {linkedTenants.map(tenant => (
+                {activeLinkedTenants.map(tenant => (
                   <button
                     key={tenant.id}
                     onClick={() => setNotesFilter(`tenant-${tenant.id}`)}
@@ -1406,7 +1410,7 @@ export default function PropertyDetail() {
             </Card>
 
             <Card className="p-4 sm:p-6">
-              <SectionHeader title="Activity" />
+              <SectionHeader title="Activity" icon={<History size={16} />} />
               <ActivityTimeline entityType="property" entityId={property.id} />
             </Card>
           </div>

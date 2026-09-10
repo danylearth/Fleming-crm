@@ -1129,15 +1129,18 @@
     .grid>*,.two-col>*,.input-group,.panel,.document-card{min-width:0}.header,.top-inner{flex-wrap:wrap;gap:12px}.actions{flex-wrap:wrap}
     .uploaded-list,.property,.meta,.notice,.message{overflow-wrap:anywhere}.uploaded-list li{flex-wrap:wrap}.date-picker-dropdown{max-height:90dvh;overflow-y:auto}
     @media(max-width:480px){.top-inner{justify-content:center}.top img{max-width:155px;height:auto}.help{white-space:normal;text-align:center}.back-button{min-height:44px;display:inline-flex;align-items:center;justify-content:center}.field input,.input-group input,.input-group select,.input-group textarea{font-size:16px}.panel{padding:14px}.state{padding:40px 20px}.header{justify-content:center}.button,.actions button{min-height:44px}}
-  </style>
+
+/* Shared office-approved field dimensions across public applications. */
+.input-group input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),.input-group select,.custom-select-trigger {height:60px;min-height:60px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;}
+</style>
 <link rel="stylesheet" href="/form-typography.css">
-</head>
+<style>.radio-option label{font-size:16px!important;font-weight:600!important}input,select{min-height:46px}select{max-width:100%;} .input-group{min-width:0}</style></head>
 <body>
     <div class="container">
         <!-- Header -->
         <div class="header">
             <img src="/logo-white.png" alt="Fleming Lettings" class="logo">
-            <a href="https://fleminglettings.co.uk" class="back-button">← Back to Website</a>
+            <a href="https://fleminglettings.co.uk" class="back-button">🏠 Back to Website</a>
         </div>
 
         <!-- Progress Bar -->
@@ -1206,7 +1209,7 @@
                     </div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">👈 Back</button>
                         <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
@@ -1221,6 +1224,7 @@
                             <label>Current Address *</label>
                             <input type="text" name="address" placeholder="Street address" required>
                         </div>
+                        <div class="input-group"><label>City / Town *</label><input type="text" name="city" required></div>
                         <div class="input-group">
                             <label>Postcode *</label>
                             <input type="text" name="Postcode" required>
@@ -1241,7 +1245,7 @@
                     </div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">👈 Back</button>
                         <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
@@ -1272,7 +1276,7 @@
 
                         <div class="input-group">
                             <label>Annual Income (£) *</label>
-                            <input type="text" name="AnnualSalary" id="annualIncome" placeholder="e.g. 30000" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                            <input type="text" name="AnnualSalary" id="annualIncome" placeholder="e.g. 30000" inputmode="numeric" oninput="formatMoneyInput(this)">
                         </div>
 
                         <div class="input-group employment-role-only">
@@ -1288,7 +1292,7 @@
                     </div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">👈 Back</button>
                         <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
@@ -1340,6 +1344,7 @@
                             <label>Current Address</label>
                             <input type="text" name="address2">
                         </div>
+                        <div class="input-group"><label>City / Town *</label><input type="text" name="city2" required></div>
                         <div class="input-group">
                             <label>Postcode</label>
                             <input type="text" name="Postcode2">
@@ -1367,7 +1372,7 @@
                             </div>
                             <div class="input-group">
                                 <label>Annual Income (£) *</label>
-                                <input type="text" name="AnnualSalary2" id="annualIncome2" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                                <input type="text" name="AnnualSalary2" id="annualIncome2" inputmode="numeric" oninput="formatMoneyInput(this)">
                             </div>
                         </div>
                         <div class="input-group employment-role-only">
@@ -1383,7 +1388,7 @@
                     </div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">👈 Back</button>
                         <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
@@ -1446,7 +1451,7 @@
                     </div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">👈 Back</button>
                         <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
@@ -1470,7 +1475,7 @@
 
                         <div class="input-group">
                             <label>Maximum Monthly Budget (£) *</label>
-                            <input type="text" name="rent_max" placeholder="e.g. 1200" required inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                            <input type="text" name="rent_max" placeholder="e.g. 1200" required inputmode="numeric" oninput="formatMoneyInput(this)">
                         </div>
                     </div>
 
@@ -1493,14 +1498,14 @@
                     </div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">👈 Back</button>
                         <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
 
                 <!-- Step 8: Final Page - Notes, Upload, Property Interest, Marketing, T&Cs -->
                 <div class="step" data-step="8">
-                    <h2>Finally here! &#x1F973;</h2>
+                    <h2>Finally there! &#x1F973;</h2>
                     <p class="step-description">Ready. Set. Let!</p>
 
                     <!-- Property Interest (moved here from step 6) -->
@@ -1567,14 +1572,14 @@
                     <div class="checkbox-group">
                         <input type="checkbox" id="termsConsent" name="termsConsent" required>
                         <label for="termsConsent">
-                            Please tick here to accept our <a href="https://fleminglettings.co.uk/terms-and-conditions/" target="_blank">terms and conditions</a>.&nbsp;*
+                            Please tick here to accept our <a href="https://fleminglettings.co.uk/terms-and-conditions/" target="_blank">Terms and Conditions</a>.&nbsp;*
                         </label>
                     </div>
 
                     <div class="checkbox-group">
                         <input type="checkbox" id="marketingPolicyConsent" name="marketingPolicyConsent" required>
                         <label for="marketingPolicyConsent">
-                            Please tick here to accept our marketing and communications policies.&nbsp;*
+                            Please tick here to accept our <a href="https://fleminglettings.co.uk/privacy-policy/" target="_blank" rel="noopener">marketing and communications policies</a>.&nbsp;*
                         </label>
                     </div>
 
@@ -1584,7 +1589,7 @@
                     </div> -->
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">👈 Back</button>
                         <button type="button" class="btn btn-primary" id="submitBtn" onclick="submitForm()">Submit Application ✓</button>
                     </div>
                 </div>
@@ -2176,6 +2181,7 @@
                 return;
             }
 
+            hideError();
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Checking...';
@@ -2249,15 +2255,17 @@
 
                         const uploadUrl = apiUrl.replace('/tenant-enquiries', `/tenant-enquiries/${result.enquiry_id}/documents?token=${encodeURIComponent(result.upload_token || '')}`);
                         try {
-                            await fetch(uploadUrl, {
+                            const uploaded=await fetch(uploadUrl, {
                                 method: 'POST',
                                 body: fileFormData
                             });
+                            if(!uploaded.ok)throw new Error('Your enquiry was saved, but the files could not be uploaded. Please contact the office with your documents.');
                         } catch (e) {
-                            console.error('File upload failed:', e);
+                            hideError();showStep(9);showError(e.message || 'Your enquiry was saved, but files need to be sent to the office.');return;
                         }
                     }
 
+                    hideError();
                     showStep(9); // Show success step
                 } else {
                     throw new Error(result.error || 'Submission failed');
@@ -2267,6 +2275,11 @@
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Submit Application ✓';
             }
+        }
+
+        function formatMoneyInput(input) {
+            const parts = input.value.replace(/[^0-9.]/g, '').split('.');
+            input.value = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (parts.length > 1 ? '.' + parts[1].slice(0, 2) : '');
         }
 
         // Load available properties (deduplicated — returns shared promise if already in-flight)

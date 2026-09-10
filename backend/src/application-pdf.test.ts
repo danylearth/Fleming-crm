@@ -1,3 +1,4 @@
+import {PDFDocument} from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
 import { buildCompletedApplicationSections, generateCompletedApplicationPdf } from './application-pdf';
@@ -50,6 +51,8 @@ describe('completed tenancy application PDF', () => {
 
     expect(result.subarray(0, 5).toString()).toBe('%PDF-');
     expect(result.length).toBeGreaterThan(3_000);
-    expect(result.toString('latin1')).toContain('/Title');
+    const pdf=await PDFDocument.load(result);
+    expect(pdf.getTitle()).toBe('Completed Tenancy Application - Test Applicant');
+    expect(pdf.getPageCount()).toBeGreaterThan(1);
   });
 });

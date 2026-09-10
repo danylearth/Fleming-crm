@@ -150,8 +150,8 @@ export default function EmailPreviewModal({
                 <iframe
                   title="Email preview"
                   sandbox=""
-                  srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:0;font-family:Arial,sans-serif;}</style></head><body>${bodyHtml}</body></html>`}
-                  className="w-full h-64 border-0"
+                  srcDoc={bodyHtml}
+                  className="w-full h-[60vh] min-h-96 border-0"
                 />
               </div>
             )}

@@ -30,7 +30,7 @@ const base = `http://127.0.0.1:${port}`;
 let passed = 0;
 async function test(name, fn) { await fn(); passed++; console.log(`PASS ${name}`); }
 async function request(route, { method = 'GET', body, token, ...extra } = {}) {
-  const res = await fetch(base + route, { method, headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined, ...extra });
+  const res = await fetch(base + route, { method, headers: { 'X-Forwarded-For':`192.0.2.${passed+1}`, ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined, ...extra });
   const text = await res.text(); let data; try { data = JSON.parse(text); } catch { data = text; }
   return { status: res.status, data, headers: res.headers };
 }
@@ -80,6 +80,11 @@ try {
     const row = await one('SELECT filename FROM tenancy_agreements WHERE id=$1',[agreement.agreement_id]);
     const pack = await PDFDocument.load(readFileSync(path.join(dir,row.filename))); assert(pack.getPageCount() > 3);
   });
+  await test('bulk removal cannot bypass property contract retention or administrator access',async()=>{
+    assert.equal((await request('/api/properties/bulk-delete',{method:'POST',token:auth.staff,body:{ids:[property.id]}})).status,403);
+    assert.equal((await request('/api/properties/bulk-delete',{method:'POST',token:auth.admin,body:{ids:[property.id]}})).status,409);
+    assert(await one('SELECT id FROM properties WHERE id=$1',[property.id]));
+  });
   const ta = new URL(agreement.tenant_url).pathname.slice(1), tb = new URL(agreement.joint_tenant_url).pathname.slice(1);
   await test('handover preview validates dates without sending messages or scheduling tasks', async () => {
     const preview = await ok(`/api/tenant-enquiries/${a}/schedule-handover/email-preview`,{method:'POST',token:auth.staff,body:{handover_date:today,handover_time:'10:30',assigned_to:'Test staff'}});
@@ -88,11 +93,11 @@ try {
   const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l1kAAAAASUVORK5CYII=';
   await test('signature requires affirmative consent and a decodable image',async()=>{
     assert.equal((await request(`/api/public/tenancy-agreements/${ta}/sign`,{method:'POST',body:{signature_name:'Alex Test',signature:png}})).status,400);
-    assert.equal((await request(`/api/public/tenancy-agreements/${ta}/sign`,{method:'POST',body:{signature_name:'Alex Test',signature:'data:image/png;base64,aGVsbG8=',accepted_terms:true}})).status,400);
+    assert.equal((await request(`/api/public/tenancy-agreements/${ta}/sign`,{method:'POST',body:{signature_name:'Alex Test',signature:'data:image/png;base64,aGVsbG8=',accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true}})).status,400);
     assert.equal((await one('SELECT tenant_signed_at FROM tenancy_agreements WHERE id=$1',[agreement.agreement_id])).tenant_signed_at,null);
   });
   await test('two concurrent signers finalise one PDF and advance both enquiry records', async()=>{
-    const results = await Promise.all([request(`/api/public/tenancy-agreements/${ta}/sign`,{method:'POST',body:{signature_name:'Alex Łukasz Test',signature:png,accepted_terms:true}}),request(`/api/public/tenancy-agreements/${tb}/sign`,{method:'POST',body:{signature_name:'Jamie Test',signature:png,accepted_terms:true}})]);
+    const results = await Promise.all([request(`/api/public/tenancy-agreements/${ta}/sign`,{method:'POST',body:{signature_name:'Alex Łukasz Test',signature:png,accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true}}),request(`/api/public/tenancy-agreements/${tb}/sign`,{method:'POST',body:{signature_name:'Jamie Test',signature:png,accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true}})]);
     results.forEach(r=>assert.equal(r.status,200,JSON.stringify(r.data)));
     const row=await one('SELECT * FROM tenancy_agreements WHERE id=$1',[agreement.agreement_id]); assert.equal(row.status,'completed'); assert(row.signed_filename);
     const docs=await sql("SELECT * FROM documents WHERE doc_type='Signed Tenancy Agreement'"); assert.equal(docs.length,3); assert.equal(new Set(docs.map(x=>x.filename)).size,1);
@@ -101,7 +106,7 @@ try {
   });
   await test('reopening a signed link reports its immutable completed state',async()=>{
     const r=await ok(`/api/public/tenancy-agreements/${ta}`);assert.equal(r.signer_signed,true);assert.deepEqual(r.outstanding_signers,[]);
-    assert.equal((await request(`/api/public/tenancy-agreements/${ta}/sign`,{method:'POST',body:{signature_name:'Someone Else',signature:png,accepted_terms:true}})).status,409);
+    assert.equal((await request(`/api/public/tenancy-agreements/${ta}/sign`,{method:'POST',body:{signature_name:'Someone Else',signature:png,accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true}})).status,409);
   });
   await test('balance request, receipt and handover advance both records',async()=>{
     await ok(`/api/tenant-enquiries/${b}/request-balance`,{method:'POST',token:auth.staff,body:{follow_up_date:today,send_email:false,send_sms:false}});
@@ -274,7 +279,10 @@ try {
     await sql("UPDATE tenants SET name='Mathew Woodberry' WHERE id=$1",[reviewTenant.id]);
     assert.match((await chat('What was the last SMS to Matthew Woodberry?')).text,/A recorded test message/);
     await sql("UPDATE tenants SET name='Review A' WHERE id=$1",[reviewTenant.id]);
-    assert.match((await chat('Delete everything')).text,/one question at a time/);
+    assert.match((await chat('Delete everything')).text,/No matching record/);
+    assert.match((await chat('Tell me about Review A')).text,/Review A/);
+    assert.match((await chat('Who pays late?')).text,/recorded.*payments/);
+    assert.equal((await ok('/api/ai/account',{token:auth.viewer})).connected,false);
   });
   await test('clear recent tasks preserves calendar records and is restricted to administrators',async()=>{
     const before=(await one('SELECT count(*)::int n FROM tasks')).n;
@@ -283,12 +291,35 @@ try {
     assert.equal((await one('SELECT count(*)::int n FROM tasks')).n,before);
     assert.equal((await one('SELECT count(*)::int n FROM tasks WHERE dashboard_dismissed_at IS NULL')).n,0);
   });
+  await test('joint holding requests and reminders preserve individual recipients and links from either record',async()=>{
+    const pair=[];
+    for(const name of ['First','Second'])pair.push(await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,phone_1,linked_property_id,is_joint_application,status) VALUES($1,'Applicant',$2,$3,$4,1,'new') RETURNING id",[name,name.toLowerCase()+'-applicant@example.test',name==='First'?'07700900007':'07700900008',reviewProperty.id]));
+    const [x,y]=pair.map(p=>p.id);await sql('UPDATE tenant_enquiries SET joint_partner_id=$2 WHERE id=$1',[x,y]);await sql('UPDATE tenant_enquiries SET joint_partner_id=$2 WHERE id=$1',[y,x]);
+    const amounts={monthly_rent:1234,security_deposit:1400,holding_deposit:250,send_email:true,send_sms:true,follow_up_date:today};
+    const preview=await ok(`/api/tenant-enquiries/${y}/holding-deposit/email-preview`,{method:'POST',token:auth.staff,body:amounts});assert.match(preview.html,/1,234/);assert.match(preview.html,/Second/);
+    const issued=await ok(`/api/tenant-enquiries/${y}/request-holding-deposit`,{method:'POST',token:auth.staff,body:amounts});assert.equal(Object.keys(issued.delivery).length,4);
+    const rows=await sql('SELECT id,application_form_slug,status,monthly_rent_agreed FROM tenant_enquiries WHERE id=ANY($1::int[]) ORDER BY id',[[x,y]]);
+    assert.notEqual(rows[0].application_form_slug,rows[1].application_form_slug);assert(rows.every(r=>r.status==='awaiting_response'&&Number(r.monthly_rent_agreed)===1234));
+    const emailRows=await sql("SELECT entity_id,to_email,body_html FROM email_messages WHERE entity_id=ANY($1::int[]) AND template='holding_deposit_request' ORDER BY entity_id",[[x,y]]);
+    assert.equal(emailRows.length,2);for(let i=0;i<2;i++){assert(emailRows[i].body_html.includes(rows[i].application_form_slug));assert(!emailRows[i].body_html.includes(rows[1-i].application_form_slug));}
+    await ok(`/api/tenant-enquiries/${x}/send-application-email`,{method:'POST',token:auth.staff,body:{send_email:true,send_sms:false}});
+    const reminders=await sql("SELECT entity_id,to_email,body_html FROM email_messages WHERE entity_id=ANY($1::int[]) AND template='tenancy_application' ORDER BY entity_id",[[x,y]]);assert.equal(reminders.length,2);for(let i=0;i<2;i++){assert(reminders[i].body_html.includes(rows[i].application_form_slug));assert(reminders[i].body_html.includes('Dear '+(i===0?'First':'Second')));assert(!reminders[i].body_html.includes('Dear Kirsty'));}
+    const noMessages=await ok(`/api/tenant-enquiries/${x}/send-application-email`,{method:'POST',token:auth.staff,body:{send_email:false,send_sms:false}});assert.equal(Object.keys(noMessages.delivery).length,0);
+    await ok(`/api/tenant-enquiries/${y}/confirm-holding-deposit`,{method:'POST',token:auth.staff,body:{amount:250,received_date:today,send_email:true,send_sms:false}});
+    const receipts=await sql("SELECT entity_id,to_email,body_html FROM email_messages WHERE entity_id=ANY($1::int[]) AND template='holding_deposit_receipt'",[[x,y]]);assert.equal(receipts.length,2);assert(receipts.find(r=>r.entity_id===y).body_html.includes('Second'));
+    await ok(`/api/tenant-enquiries/${x}`,{method:'PUT',token:auth.staff,body:{preferred_property_type:'House,Bungalow'}});assert.equal((await one('SELECT preferred_property_type FROM tenant_enquiries WHERE id=$1',[y])).preferred_property_type,'House,Bungalow');
+    await Promise.all(['Note one','Note two'].map(text=>ok(`/api/tenant-enquiries/${x}/notes`,{method:'POST',token:auth.staff,body:{text}})));
+    const notes=JSON.parse((await one('SELECT notes FROM tenant_enquiries WHERE id=$1',[x])).notes);assert(notes.some(n=>n.text==='Note one'));assert(notes.some(n=>n.text==='Note two'));
+    assert.equal((await request(`/api/tenant-enquiries/${x}/no-handover`,{method:'POST',token:auth.staff,body:{confirmed:true}})).status,409);
+    await sql('UPDATE tenant_enquiries SET balance_payment_received=1 WHERE id=ANY($1::int[])',[[x,y]]);
+    await ok(`/api/tenant-enquiries/${y}/no-handover`,{method:'POST',token:auth.staff,body:{confirmed:true}});assert((await sql('SELECT handover_not_required FROM tenant_enquiries WHERE id=ANY($1::int[])',[[x,y]])).every(r=>r.handover_not_required));
+  });
   await test('inventory rooms, notes and completion persist; photos cannot attach to another inventory',async()=>{
-    const inventory=await ok('/api/inventories',{method:'POST',token:auth.staff,body:{property_id:reviewProperty.id,inventory_type:'check_in',inspection_date:today}});
+    const inventory=await ok('/api/inventories',{method:'POST',token:auth.staff,body:{property_id:reviewProperty.id,tenant_id:reviewTenant.id,inventory_type:'check_in',inspection_date:today}});
     const room=await ok(`/api/inventories/${inventory.id}/rooms`,{method:'POST',token:auth.staff,body:{room_name:'Kitchen',room_type:'kitchen'}});
     await ok(`/api/inventory-rooms/${room.id}`,{method:'PUT',token:auth.staff,body:{condition:'good',notes:'Sink and taps checked'}});
     assert.equal((await ok(`/api/inventories/${inventory.id}/rooms`,{token:auth.staff}))[0].notes,'Sink and taps checked');
-    const other=await ok('/api/inventories',{method:'POST',token:auth.staff,body:{property_id:reviewProperty.id,inventory_type:'periodic',inspection_date:today}});
+    const other=await ok('/api/inventories',{method:'POST',token:auth.staff,body:{property_id:reviewProperty.id,tenant_id:reviewTenant.id,inventory_type:'periodic',inspection_date:today}});
     const form=new FormData();form.append('file',new Blob([Buffer.from(png.split(',')[1],'base64')],{type:'image/png'}),'test.png');
     assert.equal((await fetch(`${base}/api/inventory-photos/${other.id}/${room.id}`,{method:'POST',headers:{Authorization:`Bearer ${auth.staff}`},body:form})).status,400);
     const upload=await fetch(`${base}/api/inventory-photos/${inventory.id}/${room.id}`,{method:'POST',headers:{Authorization:`Bearer ${auth.staff}`},body:form});
@@ -297,6 +328,22 @@ try {
     assert.equal((await fetch(`${base}/uploads/inventory/${photo.filename}`,{headers:{Authorization:`Bearer ${auth.viewer}`}})).status,200);
     await ok(`/api/inventories/${inventory.id}/complete`,{method:'PUT',token:auth.staff,body:{}});
     assert.equal((await ok(`/api/inventories/${inventory.id}`,{token:auth.staff})).status,'completed');
+    const reviews=await sql('SELECT * FROM inventory_reviews WHERE inventory_id=$1 ORDER BY tenant_id',[inventory.id]);
+    assert.equal(reviews.length,2);assert.notEqual(reviews[0].token,reviews[1].token);
+    const [reviewA,reviewB]=reviews;
+    assert.equal((await request(`/api/inventory-rooms/${room.id}`,{method:'PUT',token:auth.staff,body:{notes:'Change issued content'}})).status,409);
+    await assert.rejects(()=>sql('UPDATE inventories SET notes=$1 WHERE id=$2',['Change issued content',inventory.id]),/Issued inventories/);
+    const reviewPath=`/api/public/inventory/${reviewA.token}`;
+    assert.equal((await request(`${reviewPath}/sign`,{method:'POST',body:{signature_name:'Review A',confirmed:true}})).status,400);
+    await ok(`${reviewPath}/photos/${photo.id}`,{method:'PUT',body:{approved:false,comment:'Scratch next to the tap'}});
+    assert.equal((await ok(`/api/public/inventory/${reviewB.token}`)).photos[0].comment,null);
+    await ok(`${reviewPath}/sign`,{method:'POST',body:{signature_name:'Review A',confirmed:true,general_comments:'Recorded at move-in'}});
+    assert.equal((await request(`${reviewPath}/photos/${photo.id}`,{method:'PUT',body:{approved:true,comment:''}})).status,409);
+    const office=await ok(`/api/inventories/${inventory.id}/reviews/${reviewA.id}`,{token:auth.staff});
+    assert.equal(office.signature_name,'Review A');assert.equal(office.photos[0].comment,'Scratch next to the tap');
+    assert.equal((await one('SELECT signed_at FROM inventory_reviews WHERE id=$1',[reviewB.id])).signed_at,null);
+    assert.equal((await request(`/api/inventories/${other.id}/reviews/${reviewA.id}`,{token:auth.staff})).status,404);
+
     assert.equal((await request('/api/inventories',{method:'POST',token:auth.viewer,body:{}})).status,403);
   });
   await test('property features persist and shared documents survive record deletion and rollback',async()=>{
@@ -323,7 +370,7 @@ try {
     const apt=await ok(`/api/tenant-enquiries/${applicant.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:{...issueBody,rent:850,deposit:850}});
     assert.equal(apt.agreement_type,'client');assert(apt.landlord_url);
     const tenantToken=new URL(apt.tenant_url).pathname.slice(1), ownerToken=new URL(apt.landlord_url).pathname.slice(1);
-    const sign=token=>request(`/api/public/tenancy-agreements/${token}/sign`,{method:'POST',body:{signature_name:token===ownerToken?'Client Owner':'Client Applicant',signature:png,accepted_terms:true}});
+    const sign=token=>request(`/api/public/tenancy-agreements/${token}/sign`,{method:'POST',body:{signature_name:token===ownerToken?'Client Owner':'Client Applicant',signature:png,accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true}});
     assert.equal((await sign(tenantToken)).status,409);assert.equal((await sign(ownerToken)).status,200);assert.equal((await sign(tenantToken)).status,200);
     assert.equal((await one('SELECT status FROM tenancy_agreements WHERE id=$1',[apt.agreement_id])).status,'completed');
     await ok(`/api/tenant-enquiries/${applicant.id}/request-balance`,{method:'POST',token:auth.staff,body:{follow_up_date:today,send_email:false,send_sms:false}});
@@ -332,6 +379,31 @@ try {
     await ok(`/api/tenant-enquiries/${applicant.id}/convert`,{method:'POST',token:auth.staff,body:{property_id:home.id,tenancy_start_date:today}});
     const tenant=await one('SELECT id FROM tenants WHERE source_enquiry_id=$1',[applicant.id]);
     assert(await one("SELECT id FROM documents WHERE entity_type='tenant' AND entity_id=$1 AND doc_type='Signed Tenancy Agreement'",[tenant.id]));
+  });
+  await test('application review is atomic and supports revising approved documents',async()=>{
+    const e=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,status,notes) VALUES('Review','Draft','review-draft@example.test','onboarding','[]') RETURNING id");
+    const d=await one("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('tenant_enquiry',$1,'Other','sample.pdf','Draft ID.pdf','application/pdf','pending') RETURNING id",[e.id]);
+    const review=body=>request(`/api/tenant-enquiries/${e.id}/application-review`,{method:'POST',token:auth.staff,body});
+    assert.equal((await review({status:'approved',document_decisions:[{id:d.id,status:'approved'}]})).status,409);
+    assert.equal((await one('SELECT review_status FROM documents WHERE id=$1',[d.id])).review_status,'pending');
+    assert.equal((await review({status:'changes_requested',document_decisions:[{id:d.id,status:'rejected'}]})).status,400);
+    await ok(`/api/documents/${d.id}/review`,{method:'PUT',token:auth.staff,body:{status:'approved'}});
+    assert.equal((await review({status:'changes_requested',changes_required:'Clear image required',notes:'Office review note',document_decisions:[{id:d.id,status:'rejected'}],send_email:false,send_sms:false})).status,200);
+    assert.equal((await one('SELECT review_status FROM documents WHERE id=$1',[d.id])).review_status,'rejected');
+    assert(JSON.parse((await one('SELECT notes FROM tenant_enquiries WHERE id=$1',[e.id])).notes).some(n=>n.text==='Office review note'));
+    await ok(`/api/documents/${d.id}/category`,{method:'PUT',token:auth.staff,body:{doc_type:'Primary Identification'}});
+    assert.equal((await one('SELECT application_review_status FROM tenant_enquiries WHERE id=$1',[e.id])).application_review_status,'pending');
+  });
+  await test('landlord registration validates addresses and company owners; token protects attached documents',async()=>{
+    const base={registration_type:'Limited Company',firstName:'Owner',surname:'Test',email:'intake@example.test',phone:'07700900111',address:'10 Test Road',city:'Wolverhampton',postcode:'WV1 1AA',propertyAddress:'20 Test Road',propertyCity:'Wolverhampton',propertyPostcode:'WV1 1BB',company_name:'Example Ltd',company_number:'12345678',company_address:'30 Test Road',companyCity:'Wolverhampton',companyPostcode:'WV1 1CC'};
+    assert.equal((await request('/api/public/landlord-enquiries',{method:'POST',body:base})).status,400);
+    const created=await request('/api/public/landlord-enquiries',{method:'POST',body:{...base,beneficial_owners:'Owner Test 100%'}});assert.equal(created.status,201,JSON.stringify(created.data));
+    const url=`/api/public/landlord-enquiries/${created.data.enquiry_id}/documents`;
+    const body=new FormData();body.append('documents',new Blob([pdf],{type:'application/pdf'}),'Ownership.pdf');body.append('doc_type','Proof of Ownership');
+    assert.equal((await fetch(`http://127.0.0.1:${port}`+url,{method:'POST',headers:{'X-Forwarded-For':`192.0.2.${passed+1}`},body})).status,403);
+    const response=await fetch(`http://127.0.0.1:${port}`+url+'?token='+created.data.upload_token,{method:'POST',headers:{'X-Forwarded-For':`192.0.2.${passed+1}`},body});assert.equal(response.status,200,await response.text());
+    const docs=await ok(`/api/documents/landlord_bdm/${created.data.enquiry_id}`,{token:auth.staff});assert(docs.some(d=>d.doc_type==='Proof of Ownership'&&d.review_status==='pending'));
+    assert.equal((await one('SELECT intake_data FROM landlords_bdm WHERE id=$1',[created.data.enquiry_id])).intake_data.beneficial_owners,'Owner Test 100%');
   });
   console.log(`\n${passed} integration scenarios passed. Private artifacts: ${dir}`);
 } catch(error) { console.error(error); console.error('Server log:',path.join(dir,'server.log')); process.exitCode=1; }

@@ -35,11 +35,12 @@ export default function InventoryDetailScreen() {
 
   const completeMutation = useMutation({
     mutationFn: () => inventoryService.completeInventory(inventoryId),
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['inventory', inventoryId] });
       queryClient.invalidateQueries({ queryKey: ['inventories'] });
-      Alert.alert('Success', 'Inventory marked as completed');
+      Alert.alert('Inventory issued', result.delivery?.map(r=>`${r.tenant}: email ${r.email}; SMS ${r.sms}`).join('\n') || 'Inventory issued for tenant review');
     },
+    onError: (error: Error) => Alert.alert('Could not issue inventory', error.message),
   });
 
   if (isLoading) {
@@ -61,7 +62,7 @@ export default function InventoryDetailScreen() {
   const handleComplete = () => {
     Alert.alert(
       'Complete Inventory',
-      'Mark this inventory as completed? You can still add photos later.',
+      'Send the completed inventory to the tenants for review and signature? Photos and room notes will be locked.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

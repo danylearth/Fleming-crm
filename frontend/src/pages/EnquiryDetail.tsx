@@ -1,14 +1,12 @@
 import CommunicationsHistory from '../components/ui/CommunicationsHistory';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Avatar, Input, Select, EmptyState, DatePicker, SectionHeader, TimePicker } from '../components/ui';
 import DocumentUpload from '../components/ui/DocumentUpload';
 import ContextualDocSlot from '../components/ui/ContextualDocSlot';
 import ActivityTimeline from '../components/ui/ActivityTimeline';
-import AddressAutocomplete from '../components/ui/AddressAutocomplete';
 import { useApi } from '../hooks/useApi';
-import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import {
   Pencil, X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle,
@@ -197,13 +195,14 @@ export default function EnquiryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const api = useApi();
-  const { user } = useAuth();
   const { canDelete } = usePermissions();
   const { confirmAction } = useNotifications();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<Record<string, any> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form, setForm] = useState<Record<string, any>>({});
+  const draftFields = useRef<Record<string, unknown>>({});
+  const loadedId = useRef<string | undefined>(undefined);
   const [properties, setProperties] = useState<{ id: number; address: string; postcode?: string; rent_amount?: number }[]>([]);
   const [users, setUsers] = useState<{ id: number; name: string; role: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,6 +217,7 @@ export default function EnquiryDetail() {
 
   // Workflow
   const [showWorkflow, setShowWorkflow] = useState(false);
+  const [followUpNote,setFollowUpNote]=useState('');
   const [workflowMode, setWorkflowMode] = useState<'choose' | 'viewing' | 'follow_up' | 'onboarding' | 'reject' | 'convert'>('choose');
   const [wfDate, setWfDate] = useState('');
   const [wfTime, setWfTime] = useState('10:00');
@@ -278,7 +278,8 @@ export default function EnquiryDetail() {
         api.get('/api/users/options').catch(() => []),
       ]);
       setData(d);
-      setForm({ ...d });
+      if (loadedId.current !== id) { draftFields.current = {}; loadedId.current = id; }
+      setForm({ ...d, ...draftFields.current });
       setProperties(Array.isArray(props) ? props : []);
       setUsers(Array.isArray(usersList) ? usersList : []);
       // Parse notes
@@ -298,7 +299,6 @@ export default function EnquiryDetail() {
     setLoading(false);
   }, [id, api]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadDetail(); loadDocs(); }, [loadDetail, loadDocs]);
 
   // Load SMS history
@@ -308,7 +308,6 @@ export default function EnquiryDetail() {
       setSmsHistory(Array.isArray(msgs) ? msgs : []);
     } catch { /* SMS history fetch failed */ }
   }, [id, api]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadSmsHistory(); }, [loadSmsHistory]);
 
   // Load Email history
@@ -318,7 +317,6 @@ export default function EnquiryDetail() {
       setEmailHistory(Array.isArray(msgs) ? msgs : []);
     } catch { /* Email history fetch failed */ }
   }, [id, api]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadEmailHistory(); }, [loadEmailHistory]);
 
   const sendStandaloneSms = async () => {
@@ -336,30 +334,26 @@ export default function EnquiryDetail() {
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const setField = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
+  const setField = (k: string, v: any) => { draftFields.current[k] = v; setForm(prev => ({ ...prev, [k]: v })); };
   const isEditing = (section: string) => editingSection === section;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const saveSection = async (extra?: Record<string, any>) => {
     setSaving(true);
     try {
-      await api.put(`/api/tenant-enquiries/${id}`, {
-        ...form,
-        is_joint_application: form.is_joint_application ? 1 : 0,
-        kyc_completed_1: form.kyc_completed_1 ? 1 : 0,
-        kyc_completed_2: form.kyc_completed_2 ? 1 : 0,
-        is_permanent_address: form.is_permanent_address ? 1 : 0,
-        ...extra,
-      });
+      await api.put(`/api/tenant-enquiries/${id}`, { ...draftFields.current, ...extra });
+      draftFields.current = {};
       await loadDetail();
       setEditingSection(null);
+      return true;
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Changes could not be saved');
-    }
-    setSaving(false);
+      return false;
+    } finally {setSaving(false);}
   };
 
   const cancelSection = () => {
+    draftFields.current = {};
     setEditingSection(null);
     if (data) setForm({ ...data });
   };
@@ -398,7 +392,8 @@ export default function EnquiryDetail() {
           break;
         case 'follow_up':
           if (wfDate) {
-            await saveSection({ status: 'awaiting_response', follow_up_date: wfDate });
+            if(!await saveSection({ status: 'awaiting_response', follow_up_date: wfDate }))return;
+            if(followUpNote.trim()){await api.post(`/api/tenant-enquiries/${id}/notes`,{text:followUpNote});setFollowUpNote('');await loadDetail();}
             if (smsEnabled && form.phone_1 && smsBody) {
               await api.post('/api/sms/send', { enquiry_id: Number(id), to_phone: form.phone_1, message_body: smsBody });
               await loadSmsHistory();
@@ -406,10 +401,10 @@ export default function EnquiryDetail() {
           }
           break;
         case 'onboarding':
-          await saveSection({ status: 'onboarding', follow_up_date: wfDate || null });
+          if(!await saveSection({ status: 'onboarding', follow_up_date: wfDate || null }))return;
           break;
         case 'reject':
-          await saveSection({ status: 'rejected', rejection_reason: wfReason });
+          if(!await saveSection({ status: 'rejected', rejection_reason: wfReason }))return;
           if (smsEnabled && form.phone_1 && smsBody) {
             await api.post('/api/sms/send', { enquiry_id: Number(id), to_phone: form.phone_1, message_body: smsBody });
             await loadSmsHistory();
@@ -435,12 +430,8 @@ export default function EnquiryDetail() {
     if (!newNote.trim()) return;
     setAddingNote(true);
     const noteText = newNote.trim();
-    const note = { id: Date.now().toString(), text: noteText, author: user?.email || 'Unknown', created_at: new Date().toISOString() };
-    const updated = [...notes, note];
-    setNewNote('');
     try {
-      await api.put(`/api/tenant-enquiries/${id}`, { ...form, notes: JSON.stringify(updated) });
-      api.post('/api/activity', { action: 'note_added', entity_type: 'tenant_enquiry', entity_id: Number(id), changes: { text: noteText } }).catch(() => {});
+      await api.post(`/api/tenant-enquiries/${id}/notes`, { text: noteText });
       await loadDetail();
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Note could not be saved');
@@ -572,7 +563,7 @@ export default function EnquiryDetail() {
             </div>
             <div className="flex items-center gap-3">
               <CompletionRing percent={completionPercent} />
-              {form.status === 'onboarding' && (
+              {(!['converted','rejected'].includes(form.status) && (form.status === 'onboarding' || !!form.holding_deposit_requested || !!form.application_form_sent)) && (
                 <Button variant="gradient" size="sm" onClick={() => setShowOnboardingWizard(true)}>
                   <CheckCircle size={14} className="mr-1.5" /> Onboarding
                 </Button>
@@ -591,7 +582,7 @@ export default function EnquiryDetail() {
           </div>
         </GlassCard>
 
-        {form.application_form_completed && form.application_review_status === 'pending' && (
+        {Boolean(form.application_form_completed) && form.application_review_status === 'pending' && (
           <button onClick={() => setShowOnboardingWizard(true)} className="w-full text-left rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-center gap-3">
             <AlertTriangle size={18} className="text-amber-400 shrink-0" />
             <div className="flex-1"><p className="text-sm font-semibold text-amber-300">Application ready for review</p><p className="text-xs text-[var(--text-muted)]">The applicant has completed and signed the form. Review their answers and supporting documents.</p></div>
@@ -619,7 +610,9 @@ export default function EnquiryDetail() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <Input label="Email" value={form.email_1 || ''} onChange={v => setField('email_1', v)} type="email" />
                     <Input label="Phone" value={form.phone_1 || ''} onChange={v => setField('phone_1', v)} />
-                    <AddressAutocomplete label="Address" value={form.current_address_1 || ''} onChange={v => setField('current_address_1', v)} />
+                    <Input label="Address (including city / town)" value={form.current_address_1 || ''} onChange={v => setField('current_address_1', v)} />
+                    <Input label="Postcode" value={form.postcode_1 || ''} onChange={v => setField('postcode_1', v)} />
+                    <Input label="Years at this address" value={String(form.years_at_address_1 || '')} onChange={v => setField('years_at_address_1', v)} />
                   </div>
                   {!hasLinkedPartner && (
                     <div className="flex items-center gap-3 mt-2">
@@ -635,7 +628,7 @@ export default function EnquiryDetail() {
                       <ChevronRight size={14} className="text-pink-400" />
                     </button>
                   )}
-                  {!hasLinkedPartner && form.is_joint_application && (
+                  {!hasLinkedPartner && Boolean(form.is_joint_application) && (
                     <>
                       <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4">Applicant 2</p>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -657,7 +650,9 @@ export default function EnquiryDetail() {
                       { icon: Mail, label: 'Email', value: data.email_1 },
                       { icon: Phone, label: 'Phone', value: data.phone_1 },
                       { icon: Calendar, label: 'Date of Birth', value: data.date_of_birth_1 ? formatDateDMY(data.date_of_birth_1) : null },
-                      { icon: Home, label: 'Address', value: data.current_address_1 },
+                      { icon: Home, label: 'Address', value: [data.current_address_1, data.postcode_1].filter(Boolean).join(', ') },
+                      { icon: Clock, label: 'Years at this address', value: data.years_at_address_1 },
+                      { icon: Home, label: 'Previous address', value: [data.app_form_data?.previous_address_line_1, data.app_form_data?.previous_address_city, data.app_form_data?.previous_address_postcode].filter(Boolean).join(', ') },
                     ].map(({ icon: Icon, label, value }) => (
                       <div key={label} className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
@@ -703,15 +698,6 @@ export default function EnquiryDetail() {
                   <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Primary Identification" label="Primary ID" applicantNumber={1} onDocChange={loadDocs} />
                   <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Secondary Identification" label="Secondary ID" applicantNumber={1} onDocChange={loadDocs} />
                 </div>
-                {hasLinkedPartner && (
-                  <>
-                    <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4 mb-3">Identity Documents — Applicant 2</p>
-                    <div className="flex flex-wrap gap-3">
-                      <ContextualDocSlot entityType="tenant_enquiry" entityId={data.joint_partner_id} docType="Primary Identification" label="Primary ID" applicantNumber={1} onDocChange={loadDocs} />
-                      <ContextualDocSlot entityType="tenant_enquiry" entityId={data.joint_partner_id} docType="Secondary Identification" label="Secondary ID" applicantNumber={1} onDocChange={loadDocs} />
-                    </div>
-                  </>
-                )}
                 {!hasLinkedPartner && jointApp && (
                   <>
                     <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4 mb-3">Identity Documents — Applicant 2</p>
@@ -724,10 +710,21 @@ export default function EnquiryDetail() {
               </div>
             </GlassCard>
 
+            <GlassCard className="p-6">
+              <SectionHeader title="Property Preferences" icon={<Home size={16}/>}/>
+              <div className="grid grid-cols-2 gap-4">
+                <ReadField label="Property types" value={form.preferred_property_type}/>
+                <ReadField label="Bedrooms" value={form.preferred_bedrooms}/>
+                <ReadField label="Tenancy type" value={form.preferred_tenancy_type}/>
+                <ReadField label="Maximum monthly rent" value={form.max_rent ? `£${Number(form.max_rent).toLocaleString('en-GB')}` : null}/>
+                <ReadField label="Parking" value={form.preferred_parking}/>
+              </div>
+            </GlassCard>
+
             {/* Employment & Address */}
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <SectionHeader title="Employment & Address" icon={<Briefcase size={16} />} />
+                <SectionHeader title="Employment & Financial Details" icon={<Briefcase size={16} />} />
                 <SectionEditButton editing={isEditing('employment')} onEdit={() => setEditingSection('employment')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
               </div>
               {isEditing('employment') ? (
@@ -737,15 +734,6 @@ export default function EnquiryDetail() {
                     <Input label="Employer" value={form.employer_1 || ''} onChange={v => setField('employer_1', v)} />
                     <Input label="Annual Salary (£)" value={form.income_1?.toString() || ''} onChange={v => setField('income_1', v ? Number(v) : null)} type="number" />
                   </div>
-                  <div className="h-px bg-[var(--border-subtle)]" />
-                  <AddressAutocomplete label="Current Address" value={form.current_address_1 || ''} onChange={v => setField('current_address_1', v)} />
-                  <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] w-fit">
-                    <input type="checkbox" checked={!!form.is_permanent_address} onChange={e => setField('is_permanent_address', e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
-                    <span className="text-sm text-[var(--text-primary)] font-medium">This is a permanent address</span>
-                  </label>
-                  {!form.is_permanent_address && (
-                    <AddressAutocomplete label="Secondary / Previous Address" value={form.current_address_2 || ''} onChange={v => setField('current_address_2', v)} placeholder="Required if not permanent" />
-                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -754,15 +742,6 @@ export default function EnquiryDetail() {
                     <ReadField label="Employer" value={form.employer_1} />
                     <ReadField label="Annual Salary" value={form.income_1 ? `£${Number(form.income_1).toLocaleString()}` : null} />
                   </div>
-                  <div className="h-px bg-[var(--border-subtle)]" />
-                  <ReadField label="Current Address" value={form.current_address_1} />
-                  {form.is_permanent_address ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">
-                      <CheckCircle size={12} /> Permanent Address
-                    </span>
-                  ) : (
-                    <ReadField label="Secondary / Previous Address" value={form.current_address_2} />
-                  )}
                 </div>
               )}
 
@@ -1329,6 +1308,7 @@ export default function EnquiryDetail() {
                 {workflowMode === 'follow_up' && (
                   <>
                     <DatePicker label="Follow-up Date *" value={wfDate} onChange={setWfDate} />
+                    <label className="text-sm">Follow-up note<textarea value={followUpNote} onChange={e=>setFollowUpNote(e.target.value)} className="w-full rounded-lg p-3 bg-[var(--bg-input)]" /></label>
 
                     {/* SMS */}
                     <div className="h-px bg-[var(--border-subtle)] my-1" />
