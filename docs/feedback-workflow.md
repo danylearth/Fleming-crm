@@ -28,3 +28,12 @@ A heartbeat attached to the existing Codex task runs every six hours. It depends
 ## Validation
 
 From `backend/`, run `TEST_DATABASE_URL=postgresql://USER@127.0.0.1:PORT/fleming_crm_test_feedback node tests/feedback.mjs`. It requires a new, empty local database and a built backend. Providers are excluded from the test server environment. The test covers access boundaries, durable attachments, retries, claims, reply races, completion evidence, email failures and expired provider deduplication.
+
+## Production release — 10 September 2026
+
+- API and frontend source: `477439a`. Vercel deployment `dpl_HeHvPGDDCYhTmmGpWS1Vtziha9Qf` is aliased to the live CRM; Fly health reports that release.
+- Validation: 178 unit tests and 42 PostgreSQL/HTTP scenarios passed. Builds pass; lint has zero errors and two pre-existing warnings. Desktop dark/light and 390 px phone layouts, pin placement, replies and uploads were checked in the browser.
+- Production feedback #1 records this feature request and includes Sam's quick guide. The live uploaded guide was downloaded by the scoped worker with its checksum verified. It is completed at revision 2.
+- First completion email: Resend `46f6ecd1-3fc0-421c-a00b-05efbc5ce510`, delivery confirmed by the CRM webhook. The queue and notification outbox were empty after verification.
+- Heartbeat `fleming-crm-office-feedback` is ACTIVE in the original task, every six hours. Created at 09:12 UTC on 10 September 2026. It runs on the existing Codex host.
+- Pre-migration backup: `/Users/danyl/Documents/ChatGPT/fleming/backups/pre-followup-20260910-100626.json.gz` (30 tables, 2,450 rows).
