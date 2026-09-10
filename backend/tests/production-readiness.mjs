@@ -103,7 +103,7 @@ try {
     const docs=await sql("SELECT * FROM documents WHERE doc_type='Signed Tenancy Agreement'"); assert.equal(docs.length,3); assert.equal(new Set(docs.map(x=>x.filename)).size,1);
     for(const x of await sql('SELECT onboarding_step FROM tenant_enquiries WHERE id=ANY($1::int[])',[[a,b]])) assert(x.onboarding_step>=7);
     const signedPdf=await PDFDocument.load(readFileSync(path.join(dir,row.signed_filename))); assert(signedPdf.getPageCount()>4);
-    const signedText=spawnSync('pdftotext',[path.join(dir,row.signed_filename),'-'],{encoding:'utf8'});assert.equal(signedText.status,0);assert((signedText.stdout.match(/Signed on:/g)||[]).length>=5,'Both tenants and landlord must sign inside the addendum; tenant signatures also appear in the main agreement');
+    const signedText=spawnSync('pdftotext',[path.join(dir,row.signed_filename),'-'],{encoding:'utf8'});assert.equal(signedText.status,0);assert((signedText.stdout.match(/Signed on:/g)||[]).length>=13,'Document receipt acknowledgements, both tenants and landlord must sign inside the addendum; tenant signatures also appear in the main agreement');
   });
   await test('reopening a signed link reports its immutable completed state',async()=>{
     const r=await ok(`/api/public/tenancy-agreements/${ta}`);assert.equal(r.signer_signed,true);assert.deepEqual(r.outstanding_signers,[]);
