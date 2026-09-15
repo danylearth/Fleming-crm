@@ -1,3 +1,4 @@
+import DeleteNoteButton from '../components/DeleteNoteButton';
 import CommunicationsHistory from '../components/ui/CommunicationsHistory';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -318,7 +319,7 @@ export default function BDMDetail() {
                 {notes.length === 0 && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
                 {notes.map(note => (
                   <div key={note.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
-                    <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p>
+                    <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p><DeleteNoteButton entity="landlord_bdm" id={id!} note={note} onDeleted={loadDetail} />
                     <div className="flex items-center justify-between mt-1.5">
                       <span className="text-[10px] text-[var(--text-muted)]">{note.author}</span>
                       <TimeAgo date={note.created_at} />

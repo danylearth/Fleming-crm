@@ -93,9 +93,7 @@ export default function Landlords() {
     );
   };
 
-  const portfolioFiltered = portfolioFilter === 'all'
-    ? landlords.filter(landlord => landlord.landlord_type !== 'internal')
-    : filterByPortfolio(landlords, portfolioFilter);
+  const portfolioFiltered = filterByPortfolio(landlords.filter(landlord => landlord.landlord_type !== 'internal'), portfolioFilter);
   const filtered = portfolioFiltered.filter(l => {
     // Check if search matches landlord details
     const matchesLandlord = !search || [l.name, l.email, l.phone, l.address, l.company_number]

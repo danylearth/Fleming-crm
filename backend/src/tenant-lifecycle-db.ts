@@ -5,13 +5,16 @@ export async function syncTenantLifecycle(): Promise<void> {
   await run(`UPDATE tenants SET status='inactive', updated_at=NOW()
     WHERE COALESCE(status, 'active') IN ('active','scheduled') AND has_end_date=1
       AND tenancy_end_date IS NOT NULL AND tenancy_end_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date`);
-  await run(`UPDATE tenants scheduled SET status='active', updated_at=NOW()
-    WHERE scheduled.status='scheduled' AND scheduled.tenancy_start_date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date
-      AND NOT EXISTS (
-        SELECT 1 FROM tenants current
-        WHERE current.property_id=scheduled.property_id
-          AND COALESCE(current.status, 'active')='active'
-      )`);
+  await run(`WITH placements AS (
+      SELECT t.id,concat_ws(', ',p.address,CASE WHEN position(lower(COALESCE(p.postcode,'')) in lower(p.address))=0 THEN p.postcode END) AS address
+      FROM tenants t JOIN properties p ON p.id=t.property_id
+      WHERE t.status='scheduled' AND t.tenancy_start_date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date
+      AND NOT EXISTS (SELECT 1 FROM tenants current WHERE current.property_id=t.property_id AND COALESCE(current.status,'active')='active')
+    ) UPDATE tenants scheduled SET status='active', updated_at=NOW(),
+      address_before_previous=CASE WHEN NULLIF(trim(scheduled.current_address),'') IS NOT NULL AND lower(trim(scheduled.current_address))<>lower(placements.address) THEN scheduled.previous_address ELSE scheduled.address_before_previous END,
+      previous_address=CASE WHEN NULLIF(trim(scheduled.current_address),'') IS NOT NULL AND lower(trim(scheduled.current_address))<>lower(placements.address) THEN scheduled.current_address ELSE scheduled.previous_address END,
+      current_address=placements.address
+    FROM placements WHERE scheduled.id=placements.id AND scheduled.status='scheduled'`);
   await run(`UPDATE properties property SET
       tenant_id=(SELECT MIN(tenant.id) FROM tenants tenant WHERE tenant.property_id=property.id AND COALESCE(tenant.status, 'active')='active'),
       has_live_tenancy=CASE WHEN EXISTS (

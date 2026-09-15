@@ -13,7 +13,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { useNotifications } from '../context/NotificationContext';
 
 interface Property {
-  id: number; address: string; postcode: string; rent_amount: number;
+  id: number; city?: string; address_line_2?: string; address: string; postcode: string; rent_amount: number;
   status: string; landlord_name: string; current_tenant: string | null;
   bedrooms: number; property_type: string; landlord_type?: string;
 }
@@ -80,6 +80,7 @@ export default function Properties() {
   const [llSearch, setLlSearch] = useState('');
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   // Filter state
+  const [cityFilter,setCityFilter] = useState('');
   const [landlordFilter, setLandlordFilter] = useState<number | null>(null);
   const [tenantFilter, setTenantFilter] = useState<number | null>(null);
   const { portfolioFilter } = usePortfolio();
@@ -113,7 +114,8 @@ export default function Properties() {
     }
   }, [portfolioFilter, statusFilter]);
   const filtered = portfolioFiltered.filter(p => {
-    const matchSearch = !search || [p.address, p.postcode, p.landlord_name, p.current_tenant]
+    if(cityFilter && p.city !== cityFilter) return false;
+    const matchSearch = !search || [p.address, p.city, p.postcode, p.landlord_name, p.current_tenant]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
     if (statusFilter !== 'all' && p.status !== statusFilter) return false;
     if (landlordFilter) {
@@ -339,11 +341,13 @@ export default function Properties() {
                 </span>
               </div>
             )}
+            <div className="max-w-xs mb-3"><Select label="Filter by City/Town" value={cityFilter} onChange={setCityFilter} options={[{value:'',label:'All Towns'},...[...new Set(properties.map(p=>p.city).filter((city):city is string=>!!city))].sort().map(city=>({value:city,label:city}))]} /></div>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
                   {editMode && <th className="text-left py-3 px-4 font-medium w-12"></th>}
                   <th className="text-left py-3 px-4 font-medium">Address</th>
+                  <th className="text-left py-3 px-4 font-medium">City/Town</th>
                   <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Postcode</th>
                   <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Landlord</th>
                   <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Tenant</th>
@@ -377,11 +381,12 @@ export default function Properties() {
                           <Building2 size={15} className="text-[var(--text-muted)]" />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium truncate">{p.address}</p>
+                          <p className="font-medium truncate">{p.address.split(',').filter(part=>![p.city,p.postcode].some(value=>value && part.trim().toLowerCase()===value.toLowerCase())).join(',')}</p>
                           <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{p.postcode}</p>
                         </div>
                       </div>
                     </td>
+                    <td className="py-3 px-4 text-xs">{p.city || '—'}</td>
                     <td className="py-3 px-4 hidden md:table-cell">
                       <span className="text-xs text-[var(--text-muted)]">{p.postcode}</span>
                     </td>
@@ -462,7 +467,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
   const [portfolioType, setPortfolioType] = useState<'internal' | 'external'>('internal');
 
   // Find Fleming verandas landlord (internal portfolio)
-  const flemingLandlord = landlords.find(l => l.name.toLowerCase().includes('fleming'));
+  const flemingLandlord = landlords.find(l => l.landlord_type === 'internal');
 
   // Auto-populate Fleming verandas when My Portfolio is selected
   useEffect(() => {
@@ -499,14 +504,14 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
             </button>
             <button
               type="button"
-              onClick={() => setPortfolioType('external')}
+              onClick={() => {setPortfolioType('external');setForm(f=>({...f,landlord_id:''}));}}
               className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                 portfolioType === 'external'
                   ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
               }`}
             >
-              My Client
+              My Clients
             </button>
           </div>
         </div>
@@ -516,7 +521,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
           <div>
             <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Landlord</label>
             <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] opacity-70">
-              {lockedLandlord ? lockedLandlord.name : 'Fleming Lettings'}
+              {lockedLandlord ? lockedLandlord.name : 'Fleming Lettings and Developments UK Limited'}
             </div>
           </div>
         ) : (

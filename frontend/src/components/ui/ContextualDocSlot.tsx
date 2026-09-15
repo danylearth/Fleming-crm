@@ -80,11 +80,12 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
   const handleDelete = async () => {
     if (!doc) return;
     try {
-      await fetch(`${API_URL}/api/documents/${doc.id}`, { method: 'DELETE', headers });
+      const response = await fetch(`${API_URL}/api/documents/${doc.id}`, { method: 'DELETE', headers });
+      if (!response.ok) throw new Error((await response.json()).error || 'Document could not be deleted');
       setDoc(null);
       onDocChange?.();
     } catch (e) {
-      console.error(e);
+      alert(e instanceof Error ? e.message : 'Document could not be deleted');
     }
   };
 
@@ -120,10 +121,10 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
       <div className="flex-1 min-w-[200px] rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 group">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-            {doc.review_status === 'approved' ? <CheckCircle size={18} className="text-emerald-500" /> : <Clock size={18} className="text-amber-500" />}
+            {(entityType === 'tenant' || doc.review_status === 'approved') ? <CheckCircle size={18} className="text-emerald-500" /> : <Clock size={18} className="text-amber-500" />}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[var(--text-primary)]">{label}</p><p className="text-xs text-[var(--text-secondary)]">{doc.review_status === 'approved' ? 'Approved' : 'Awaiting review'}</p>
+            <p className="text-sm font-medium text-[var(--text-primary)]">{label}</p><p className="text-xs text-[var(--text-secondary)]">{entityType === 'tenant' ? 'On File' : doc.review_status === 'approved' ? 'Approved' : 'Awaiting review'}</p>
             <p className="text-xs text-[var(--text-muted)] truncate">{truncateName(doc.original_name)}</p>
           </div>
           <div className="flex items-center gap-1">

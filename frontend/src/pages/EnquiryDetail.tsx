@@ -1,3 +1,4 @@
+import DeleteNoteButton from '../components/DeleteNoteButton';
 import CommunicationsHistory from '../components/ui/CommunicationsHistory';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -1070,7 +1071,7 @@ export default function EnquiryDetail() {
                     <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p>
                     <div className="flex items-center justify-between mt-1.5">
                       <span className="text-[10px] text-[var(--text-muted)]">{note.author}</span>
-                      <TimeAgo date={note.created_at} />
+                      <TimeAgo date={note.created_at} /><DeleteNoteButton entity="tenant_enquiry" id={id!} note={note} onDeleted={loadDetail} />
                     </div>
                   </div>
                 ))}

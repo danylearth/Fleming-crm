@@ -343,6 +343,13 @@ try {
     const office=await ok(`/api/inventories/${inventory.id}/reviews/${reviewA.id}`,{token:auth.staff});
     assert.equal(office.signature_name,'Review A');assert.equal(office.photos[0].comment,'Scratch next to the tap');
     assert.equal((await one('SELECT signed_at FROM inventory_reviews WHERE id=$1',[reviewB.id])).signed_at,null);
+    const ownPhoto=new FormData();ownPhoto.append('file',new Blob([await (await import('sharp')).default({create:{width:8,height:8,channels:3,background:'#ffffff'}}).png().toBuffer()],{type:'image/png'}),'review-photo.png');ownPhoto.append('caption','Extra tenant evidence');
+    assert.equal((await fetch(`${base}/api/public/inventory/${reviewB.token}/photos`,{method:'POST',body:ownPhoto})).status,200);
+    await ok(`/api/public/inventory/${reviewB.token}/photos/${photo.id}`,{method:'PUT',body:{approved:true,comment:''}});
+    await ok(`/api/public/inventory/${reviewB.token}/sign`,{method:'POST',body:{signature_name:'Review B',confirmed:true}});
+    const finalDocs=await sql('SELECT * FROM documents WHERE inventory_id=$1',[inventory.id]);assert.equal(finalDocs.length,3);assert(finalDocs.every(d=>d.original_name.startsWith('Signed Inventory')));
+    const finalPdf=await PDFDocument.load(readFileSync(path.join(dir,finalDocs[0].filename)));assert(finalPdf.getPageCount()>=5);
+
     assert.equal((await request(`/api/inventories/${other.id}/reviews/${reviewA.id}`,{token:auth.staff})).status,404);
 
     assert.equal((await request('/api/inventories',{method:'POST',token:auth.viewer,body:{}})).status,403);
@@ -405,6 +412,40 @@ try {
     const response=await fetch(`http://127.0.0.1:${port}`+url+'?token='+created.data.upload_token,{method:'POST',headers:{'X-Forwarded-For':`192.0.2.${passed+1}`},body});assert.equal(response.status,200,await response.text());
     const docs=await ok(`/api/documents/landlord_bdm/${created.data.enquiry_id}`,{token:auth.staff});assert(docs.some(d=>d.doc_type==='Proof of Ownership'&&d.review_status==='pending'));
     assert.equal((await one('SELECT intake_data FROM landlords_bdm WHERE id=$1',[created.data.enquiry_id])).intake_data.beneficial_owners,'Owner Test 100%');
+  });
+
+  await test('administrator note deletion is atomic and staff cannot bypass it through full-record updates',async()=>{
+    const note={id:'keep',text:'Office note',author:'Test',created_at:'2026-01-01'};
+    await sql('UPDATE tenants SET notes=$1 WHERE id=$2',[JSON.stringify([note]),reviewTenant.id]);
+    assert.equal((await request(`/api/record-notes/tenant/${reviewTenant.id}/delete`,{method:'POST',token:auth.staff,body:{note_id:note.id,text:note.text}})).status,403);
+    assert.equal((await request(`/api/tenants/${reviewTenant.id}/notes`,{method:'PATCH',token:auth.staff,body:{notes:'[]'}})).status,403);
+    assert.equal((await request(`/api/tenants/${reviewTenant.id}`,{method:'PUT',token:auth.staff,body:{notes:'[]'}})).status,403);
+    await ok(`/api/record-notes/tenant/${reviewTenant.id}/delete`,{method:'POST',token:auth.admin,body:{note_id:note.id,text:note.text}});
+    assert.deepEqual(JSON.parse((await one('SELECT notes FROM tenants WHERE id=$1',[reviewTenant.id])).notes),[]);
+    assert.equal((await request(`/api/record-notes/tenant/${reviewTenant.id}/delete`,{method:'POST',token:auth.admin,body:{note_id:note.id,text:note.text}})).status,409);
+  });
+  await test('signed inventories require dates, link Documents, reject duplicate uploads and protect staff edits',async()=>{
+    const upload=async(extra={},token=auth.staff)=>{const f=new FormData();f.append('file',new Blob([pdf],{type:'application/pdf'}),'Signed Inventory.pdf');f.append('tenant_id',String(reviewTenant.id));f.append('inspection_date',today);for(const [k,v] of Object.entries(extra))f.append(k,v);const res=await fetch(base+`/api/properties/${reviewProperty.id}/inventory-document`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:f});return {status:res.status,data:await res.json()};};
+    assert.equal((await upload()).status,400);
+    const saved=await upload({signed_date:today});assert.equal(saved.status,200,JSON.stringify(saved));
+    assert.equal((await upload({signed_date:today})).status,409);
+    assert.equal((await request(`/api/inventories/${saved.data.id}`,{method:'DELETE',token:auth.staff})).status,403);
+    const docs=await sql('SELECT * FROM documents WHERE inventory_id=$1',[saved.data.id]);assert(docs.some(d=>d.entity_type==='property'));assert(docs.some(d=>d.entity_type==='tenant'));
+    assert.equal((await request(`/api/documents/${docs[0].id}`,{method:'DELETE',token:auth.staff})).status,409);
+    assert.equal((await upload({signed_date:today,inventory_id:String(saved.data.id)},auth.admin)).status,200);
+    await ok(`/api/inventories/${saved.data.id}`,{method:'DELETE',token:auth.admin});assert.equal((await sql('SELECT id FROM documents WHERE inventory_id=$1',[saved.data.id])).length,0);
+  });
+  await test('identical document retries return one stored record without changing its category',async()=>{
+    const upload=async(name)=>{const body=new FormData();body.append('file',new Blob([pdf],{type:'application/pdf'}),name);body.append('doc_type','Other');const r=await fetch(base+`/api/documents/tenant/${reviewTenant.id}`,{method:'POST',headers:{Authorization:`Bearer ${auth.staff}`},body});assert.equal(r.status,200);return r.json();};
+    const first=await upload('Evidence A.pdf'),again=await upload('Evidence B.pdf');assert.equal(first.id,again.id);assert.equal(again.duplicate,true);
+  });
+  await test('tenancy activation rotates address history exactly once',async()=>{
+    const p=await one("INSERT INTO properties(address,postcode,landlord_id,status) VALUES('21A New Street','WV1 2AB',$1,'let_agreed') RETURNING id",[landlord.id]);
+    const t=await one("INSERT INTO tenants(first_name_1,last_name_1,name,property_id,status,tenancy_start_date,current_address,previous_address) VALUES('Moving','Test','Moving Test',$1,'scheduled',CURRENT_DATE,'26 Old Street','Earlier Home') RETURNING id",[p.id]);
+    await ok('/api/tenants',{token:auth.admin});
+    const first=await one('SELECT status,current_address,previous_address,address_before_previous FROM tenants WHERE id=$1',[t.id]);
+    assert.deepEqual(first,{status:'active',current_address:'21A New Street, WV1 2AB',previous_address:'26 Old Street',address_before_previous:'Earlier Home'});
+    await ok('/api/tenants',{token:auth.admin});assert.deepEqual(await one('SELECT status,current_address,previous_address,address_before_previous FROM tenants WHERE id=$1',[t.id]),first);
   });
   console.log(`\n${passed} integration scenarios passed. Private artifacts: ${dir}`);
 } catch(error) { console.error(error); console.error('Server log:',path.join(dir,'server.log')); process.exitCode=1; }

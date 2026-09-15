@@ -60,8 +60,11 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
   label?: string; value: string; onChange: (v: string) => void; placeholder?: string;
   type?: string; className?: string;
 }) {
-  const shouldCap = !['email', 'number', 'password', 'time', 'tel'].includes(type);
+  const currency = type === 'currency';
+  const shown = currency ? value.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : value;
+  const shouldCap = !currency && !['email', 'number', 'password', 'time', 'tel'].includes(type);
   const handleChange = (raw: string) => {
+    if (currency) { const numeric = raw.replace(/[£,\s]/g, ''); if (/^\d*(\.\d{0,2})?$/.test(numeric)) onChange(numeric); return; }
     if (shouldCap && raw.length > 0 && (value.length === 0 || raw.length === 1)) {
       onChange(raw.charAt(0).toUpperCase() + raw.slice(1));
     } else {
@@ -71,8 +74,8 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
   return (
     <div className={className}>
       {label && <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">{label}</label>}
-      <input type={type} value={value} onChange={e => handleChange(e.target.value)} placeholder={placeholder}
-        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors" />
+      <div className="relative">{currency && <span className="absolute left-3 top-2.5 text-sm" aria-hidden="true">£</span>}<input aria-label={label} type={currency ? 'text' : type} inputMode={currency ? 'decimal' : undefined} style={currency ? {paddingLeft:28} : undefined} value={shown} onChange={e => handleChange(e.target.value)} placeholder={placeholder}
+        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors" /></div>
     </div>
   );
 }

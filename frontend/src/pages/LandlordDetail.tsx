@@ -1,3 +1,4 @@
+import DeleteNoteButton from '../components/DeleteNoteButton';
 import { useRecordAddress } from '../hooks/useRecordAddress';
 import CommunicationsHistory from '../components/ui/CommunicationsHistory';
 import { useState, useEffect, useCallback } from 'react';
@@ -793,7 +794,7 @@ export default function LandlordDetail() {
                       <StickyNote size={14} className="text-[var(--text-muted)]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm">{n.text}</p>
+                      <div className="flex items-start justify-between gap-2"><p className="text-sm whitespace-pre-wrap">{n.text}</p><DeleteNoteButton entity={n.source || 'landlord'} id={n.source==='property'?n.propertyId!:id!} note={n} onDeleted={loadDetail} /></div>
                       <div className="flex items-center gap-2 flex-wrap mt-0.5">
                         <p className="text-[10px] text-[var(--text-muted)]">
                           {n.author}{n.created_at ? ` · ${new Date(n.created_at).toLocaleDateString()}` : ''}

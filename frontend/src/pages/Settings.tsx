@@ -1,3 +1,4 @@
+import FreeAgentConnection from '../components/FreeAgentConnection';
 import FlemoConnection from '../components/FlemoConnection';
 import PermissionRequests from '../components/ui/PermissionRequests';
 import { useTheme } from '../context/ThemeContext';
@@ -73,6 +74,7 @@ export default function Settings() {
   return (
     <Layout title="Settings" breadcrumb={[{ label: 'Settings' }]}>
       <div className="p-4 md:p-8 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+        <div className="space-y-6 min-w-0">
         {/* Profile */}
         <GlassCard className="p-6">
           <SectionHeader title="Profile" />
@@ -91,6 +93,11 @@ export default function Settings() {
           <p role="status" className="mt-4 text-sm">{profileMessage || 'Click your photo to upload a JPG, PNG or WebP (up to 5 MB).'}</p>
         </GlassCard>
 
+        <PermissionRequests />
+        <FlemoConnection />
+        <FreeAgentConnection />
+        </div>
+        <div className="space-y-6 min-w-0">
         {/* Password */}
         <GlassCard className="p-6">
           <SectionHeader title="Change Password" />
@@ -109,9 +116,7 @@ export default function Settings() {
           </div>
         </GlassCard>
 
-        {/* AI Assistant Configuration hidden until AI router is ported to PostgreSQL */}
 
-        <PermissionRequests />
 
         {/* Preferences */}
         <GlassCard className="p-6">
@@ -128,7 +133,7 @@ export default function Settings() {
             </div>
           </div>
         </GlassCard>
-      <FlemoConnection />
+        </div>
       </div>
     </Layout>
   );

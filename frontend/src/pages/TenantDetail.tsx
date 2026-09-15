@@ -1,3 +1,4 @@
+import DeleteNoteButton from '../components/DeleteNoteButton';
 import AdditionalGuarantors, {type AdditionalGuarantor} from '../components/AdditionalGuarantors';
 import {formatPropertyAddress} from '../utils/propertyAddress';
 import { useRecordAddress } from '../hooks/useRecordAddress';
@@ -312,6 +313,7 @@ export default function TenantDetail() {
 
   const sendMaintenanceLink = async (channel: 'email' | 'sms') => {
     if (!tenant) return;
+    if (!await confirmAction(`Send the maintenance reporting link to ${tenant.name} by ${channel === 'email' ? 'email' : 'SMS'}?`, 'Confirm Reporting Link')) return;
     setSendingMaintenanceLink(channel);
     try {
       await api.post(`/api/tenants/${tenant.id}/maintenance-report-link`, { channel });
@@ -420,7 +422,7 @@ export default function TenantDetail() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold">{displayName}</h1>
-                <StatusDot status={(form.status || 'active') === 'active' ? 'active' : 'inactive'} size="md" />
+                <StatusDot status={form.status === 'scheduled' ? 'warning' : (form.status || 'active') === 'active' ? 'active' : 'inactive'} size="md" />
                 <span className="text-xs text-[var(--text-muted)] capitalize">{form.status || 'active'}</span>
                 {isOnboarded && (
                   <span className="inline-flex items-center gap-1 text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg px-2 py-0.5">
@@ -644,10 +646,10 @@ export default function TenantDetail() {
                 actionLabel={showMaintenanceForm ? 'Cancel' : 'Add Request'} />
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" disabled={!tenant.email || sendingMaintenanceLink !== null} onClick={() => sendMaintenanceLink('email')}>
-                  <Mail size={13} className="mr-1.5" /> {sendingMaintenanceLink === 'email' ? 'Sending…' : 'Email reporting link'}
+                  <Mail size={13} className="mr-1.5" /> {sendingMaintenanceLink === 'email' ? 'Sending…' : 'Email Reporting Link'}
                 </Button>
                 <Button variant="outline" size="sm" disabled={!tenant.phone || sendingMaintenanceLink !== null} onClick={() => sendMaintenanceLink('sms')}>
-                  <MessageSquare size={13} className="mr-1.5" /> {sendingMaintenanceLink === 'sms' ? 'Sending…' : 'SMS reporting link'}
+                  <MessageSquare size={13} className="mr-1.5" /> {sendingMaintenanceLink === 'sms' ? 'Sending…' : 'SMS Reporting Link'}
                 </Button>
               </div>
               {showMaintenanceForm && (
@@ -684,13 +686,13 @@ export default function TenantDetail() {
               <div className="flex justify-between items-center mb-4"><SectionHeader title="Primary Guarantor" icon={<BadgePoundSterling size={16} />} /><SectionEditButton editing={isEditing('guarantor')} onEdit={() => setEditingSection('guarantor')} onSave={saveSection} onCancel={cancelSection} saving={saving} /></div>
               {isEditing('guarantor') ? <div className="space-y-3">
                 <label className="flex gap-2 text-sm"><input type="checkbox" checked={!!form.guarantor_required} onChange={e => setForm({ ...form, guarantor_required: e.target.checked })} />Guarantor required</label>
-                {(['guarantor_name', 'guarantor_address', 'guarantor_email', 'guarantor_phone', 'guarantor_employment_status', 'guarantor_employer', 'guarantor_annual_income'] as const).map(key => <Input key={key} label={key.replace('guarantor_', '').split('_').map(word => word.charAt(0).toUpperCase()+word.slice(1)).join(' ')} value={String(form[key] || '')} type={key.includes('email') ? 'email' : key.includes('income') ? 'number' : 'text'} onChange={v => setForm({ ...form, [key]: v })} />)}
-                <DatePicker label="Date of birth" value={form.guarantor_date_of_birth} onChange={v => setForm({ ...form, guarantor_date_of_birth: v })} />
+                {(['guarantor_name', 'guarantor_address', 'guarantor_email', 'guarantor_phone', 'guarantor_employment_status', 'guarantor_employer', 'guarantor_annual_income'] as const).map(key => <Input key={key} label={key.replace('guarantor_', '').split('_').map(word => word.charAt(0).toUpperCase()+word.slice(1)).join(' ')} value={String(form[key] || '')} type={key.includes('email') ? 'email' : key.includes('income') ? 'currency' : 'text'} onChange={v => setForm({ ...form, [key]: v })} />)}
+                <DatePicker label="Date of Birth" value={form.guarantor_date_of_birth} onChange={v => setForm({ ...form, guarantor_date_of_birth: v })} />
 
               </div> : <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <ReadField label="Guarantor required" value={tenant.guarantor_required ? 'Yes' : 'Not recorded'} /><ReadField label="Name" value={tenant.guarantor_name} />
                 <ReadField label="Address" value={tenant.guarantor_address} /><ReadField label="Email" value={tenant.guarantor_email} /><ReadField label="Contact number" value={tenant.guarantor_phone} />
-                <ReadField label="Date of birth" value={tenant.guarantor_date_of_birth ? formatDateDMY(tenant.guarantor_date_of_birth) : null} /><ReadField label="Employment" value={tenant.guarantor_employment_status} /><ReadField label="Employer" value={tenant.guarantor_employer} /><ReadField label="Annual income" value={tenant.guarantor_annual_income ? `£${Number(tenant.guarantor_annual_income).toLocaleString()}` : null} />
+                <ReadField label="Date of Birth" value={tenant.guarantor_date_of_birth ? formatDateDMY(tenant.guarantor_date_of_birth) : null} /><ReadField label="Employment" value={tenant.guarantor_employment_status} /><ReadField label="Employer" value={tenant.guarantor_employer} /><ReadField label="Annual income" value={tenant.guarantor_annual_income ? `£${Number(tenant.guarantor_annual_income).toLocaleString()}` : null} />
 
               </div>}
               <div className="mt-4"><p className="text-xs font-medium mb-2">Authority to Contact</p><YesNo value={form.guarantor_authority_to_contact} onChange={v => setForm({ ...form, guarantor_authority_to_contact: v })} disabled={!isEditing('guarantor')} /></div>
@@ -699,7 +701,8 @@ export default function TenantDetail() {
             </GlassCard>}
 
             {/* Documents */}
-            <DocumentUpload entityType="tenant" entityId={tenant.id} />
+            <DocumentUpload entityType="tenant" entityId={tenant.id} group="tenant" />
+            <DocumentUpload entityType="tenant" entityId={tenant.id} group="guarantor" title="Guarantor(s) Documentation" />
           </div>
 
           {/* ==================== RIGHT COLUMN ==================== */}
@@ -959,7 +962,7 @@ export default function TenantDetail() {
                     <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p>
                     <div className="flex items-center justify-between mt-1.5">
                       <span className="text-[10px] text-[var(--text-muted)]">{note.author}</span>
-                      <TimeAgo date={note.created_at} />
+                      <TimeAgo date={note.created_at} /><DeleteNoteButton entity={notesFilter} id={notesFilter==='property'?tenant.property_id!:tenant.id} note={note} onDeleted={loadDetail} />
                     </div>
                   </div>
                 ))}

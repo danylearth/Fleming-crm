@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNotifications } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Button, SectionHeader, EmptyState, Select, Input } from './index';
 import { Upload, FileText, Image, Paperclip, Trash2, Download } from 'lucide-react';
@@ -19,6 +20,8 @@ interface Props {
   entityId: number;
   applicantNumber?: number;
   title?: string;
+  group?: 'tenant' | 'guarantor';
+  refreshKey?: number;
   onChange?: () => void | Promise<void>;
 }
 
@@ -28,7 +31,8 @@ function formatBytes(bytes: number) {
   return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
-export default function DocumentUpload({ entityType, entityId, applicantNumber, title, onChange }: Props) {
+export default function DocumentUpload({ entityType, entityId, applicantNumber, title, group, refreshKey, onChange }: Props) {
+  const {confirmAction}=useNotifications();
   const { token } = useAuth();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [docTypes, setDocTypes] = useState<string[]>([]);
@@ -49,12 +53,12 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
       fetch(`${API_URL}/api/documents/${entityType}/${entityId}${appQuery}`, { headers }).then(r => r.json()),
       fetch(`${API_URL}/api/documents/types/${entityType}`, { headers }).then(r => r.json()),
     ]).then(([d, t]) => {
-      setDocs(Array.isArray(d) ? d : []);
-      setDocTypes(Array.isArray(t) ? t : []);
-      if (Array.isArray(t) && t.length) setSelectedType(t[0]);
+      setDocs(Array.isArray(d) ? d.filter(doc => !group || (/^guarantor/i.test(doc.doc_type) === (group==='guarantor'))) : []);
+      setDocTypes(Array.isArray(t) ? t.filter(type => !group || (/^guarantor/i.test(type) === (group==='guarantor'))) : []);
+      if (Array.isArray(t) && t.length) setSelectedType(group==='guarantor' ? (t.find((type: string) => /^guarantor/i.test(type)) || t[0]) : t[0]);
     }).catch(() => { })
       .finally(() => setLoading(false));
-  }, [entityType, entityId, applicantNumber]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [entityType, entityId, applicantNumber, group, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUpload = async (file: File) => {
     if (!selectedType) {
@@ -88,7 +92,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
 
       const newDoc = await res.json();
       if (newDoc.id) {
-        setDocs(prev => [{ ...newDoc, uploaded_at: new Date().toISOString() }, ...prev]);
+        setDocs(prev => [{ ...newDoc, uploaded_at: new Date().toISOString() }, ...prev.filter(doc=>doc.id!==newDoc.id)]);
         setShowUpload(false);
         setSelectedType(docTypes[0] || '');
         setCustomTypeName('');
@@ -102,11 +106,13 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
   };
 
   const handleDelete = async (id: number) => {
+    if (!await confirmAction('Delete this document?')) return;
     try {
-      await fetch(`${API_URL}/api/documents/${id}`, { method: 'DELETE', headers });
+      const response = await fetch(`${API_URL}/api/documents/${id}`, { method: 'DELETE', headers });
+      if (!response.ok) { const data=await response.json(); throw new Error(data.error || 'Delete failed'); }
       setDocs(prev => prev.filter(d => d.id !== id));
       await onChange?.();
-    } catch (e) { console.error(e); }
+    } catch (e) { alert(e instanceof Error ? e.message : 'Could not delete document'); }
   };
 
   const handleDownload = async (id: number, name: string) => {

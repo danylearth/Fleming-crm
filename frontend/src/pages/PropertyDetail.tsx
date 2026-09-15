@@ -1,3 +1,5 @@
+import DeleteNoteButton from '../components/DeleteNoteButton';
+import TenancyEndModal from '../components/ui/TenancyEndModal';
 import PropertyInventory from '../components/PropertyInventory';
 import { useRecordAddress } from '../hooks/useRecordAddress';
 import { useEffect, useMemo, useState, useRef } from 'react';
@@ -594,19 +596,10 @@ export default function PropertyDetail() {
     }
   };
 
-  const handleRemoveTenant = async () => {
-    if (!await confirmCrmAction('End the current tenancy? The tenant will remain available under Previous Tenancies.')) return;
-    try {
-      await Promise.all(currentTenants
-        .filter(tenant => tenant.id)
-        .map(tenant => api.put(`/api/tenants/${tenant.id}`, { status: 'inactive' })));
-      await loadDetail();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } }; message?: string };
-      console.error('Failed to remove tenant:', err);
-      alert(err.response?.data?.error || 'Failed to remove tenant');
-    }
-  };
+  const [inventoryRefresh,setInventoryRefresh]=useState(0);
+  const [showEndTenancy,setShowEndTenancy]=useState(false);
+  const handleRemoveTenant = () => {setShowEndTenancy(true);};
+
 
   if (loading) {
     return (
@@ -981,12 +974,12 @@ export default function PropertyDetail() {
               </div>
             ) : null}
 
-            {(editing || !!property.has_management_company) && (
+            {(editing || !!property.has_management_company || !!property.is_leasehold) && (
               <GlassCard className="p-4 sm:p-6">
                 <SectionHeader title="Management Company" icon={<Landmark size={16} />} />
                 {editing ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                    <div className="col-span-full"><Toggle label="Management company in place" checked={form.has_management_company} onChange={v => setForm({ ...form, has_management_company: v })} /></div>
+                    <div className="col-span-full"><Toggle label="Management Company Appointed" checked={form.has_management_company} onChange={v => setForm({ ...form, has_management_company: v })} /></div>
                     {form.has_management_company && <>
                       <Input label="Company Name" value={form.management_company_name} onChange={(v: string) => setForm({ ...form, management_company_name: v })} />
                       <Input label="Email Address" value={form.management_company_email} onChange={(v: string) => setForm({ ...form, management_company_email: v })} type="email" />
@@ -998,7 +991,7 @@ export default function PropertyDetail() {
                       <Input label="Portal Notes" value={form.management_company_notes} onChange={(v: string) => setForm({ ...form, management_company_notes: v })} className="col-span-full" />
                     </>}
                   </div>
-                ) : (
+                ) : !property.has_management_company ? <p className="text-sm text-[var(--text-secondary)]">No Management Company Appointed</p> : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                     <ReadField label="Company Name" value={property.management_company_name} />
                     <ReadField label="Email Address" value={property.management_company_email} />
@@ -1037,7 +1030,7 @@ export default function PropertyDetail() {
                     </Button>
                   )}
                   {!editing && currentTenants.length > 0 && (
-                    <Button variant="ghost" size="sm" onClick={handleRemoveTenant} className="text-red-400 hover:text-red-300">
+                    <Button variant="outline" size="sm" onClick={handleRemoveTenant} className="!bg-red-600 !text-white !border-red-600 rounded-full">
                       <Trash2 size={14} className="mr-1.5" /> <span className="hidden sm:inline">End Tenancy</span>
                     </Button>
                   )}
@@ -1128,7 +1121,7 @@ export default function PropertyDetail() {
               </GlassCard>
             )}
 
-            <PropertyInventory propertyId={property.id} tenants={linkedTenants} />
+            <PropertyInventory propertyId={property.id} tenants={linkedTenants} onSaved={()=>setInventoryRefresh(n=>n+1)} />
 
             {/* Tasks */}
             <Card className="p-4 sm:p-6">
@@ -1331,7 +1324,7 @@ export default function PropertyDetail() {
             {!!property.postcode && <PricePaidData postcode={property.postcode} />}
 
             {/* Documents */}
-            <DocumentUpload entityType="property" entityId={property.id} onChange={loadDetail} />
+            <DocumentUpload refreshKey={inventoryRefresh} entityType="property" entityId={property.id} onChange={loadDetail} />
 
             {/* Activity */}
             {/* Notes */}
@@ -1387,7 +1380,7 @@ export default function PropertyDetail() {
                       <StickyNote size={14} className="text-[var(--text-muted)]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm">{n.text}</p>
+                      <div className="flex items-start justify-between gap-2"><p className="text-sm whitespace-pre-wrap">{n.text}</p><DeleteNoteButton entity={notesFilter.startsWith('tenant-')?'tenant':notesFilter} id={notesFilter==='property'?property.id:notesFilter==='landlord'?property.landlord_id!:Number(notesFilter.replace('tenant-',''))} note={n} onDeleted={loadDetail} /></div>
                       <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
                         {n.author}{n.created_at ? ` · ${new Date(n.created_at).toLocaleDateString()}` : ''}
                       </p>
@@ -1732,7 +1725,8 @@ export default function PropertyDetail() {
         )}
 
         {/* Add/Select Tenant Modal */}
-        {showTenantModal && (
+        {showEndTenancy && currentTenants[0]?.id && <TenancyEndModal tenantId={currentTenants[0].id} linkedName={currentTenants[1]?.name} initialDate={currentTenants[0].tenancy_end_date || undefined} onClose={()=>setShowEndTenancy(false)} onSaved={loadDetail} />}
+      {showTenantModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setShowTenantModal(false)}>
             <div className="bg-[var(--bg-elevated)] rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="sticky top-0 bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)] px-4 sm:px-6 py-4 flex items-center justify-between">

@@ -12,6 +12,7 @@ interface Expense {
   amount: number | string;
   category: string;
   expense_date: string | null;
+  expense_year?: number | null;
   is_recurring: number;
   recurrence_frequency: string | null;
   receipt_document_id: number | null;
@@ -48,6 +49,7 @@ const CATEGORIES = [
 const RUNNING_COSTS = new Set(['ground_rent', 'service_charge', 'communal_charge']);
 
 function financialYearLabel(value: string) {
+  if (value.startsWith('calendar:')) return value.slice(9) + ' (year only)';
   if (value === 'all') return 'All time';
   if (value === 'undated') return 'Date not recorded';
   const [start, end] = value.split('-');
@@ -81,12 +83,12 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
   useEffect(() => { load(); }, [load]);
 
   const yearOptions = useMemo(() => {
-    const values = new Set(expenses.map(expense => ukFinancialYear(expense.expense_date)));
+    const values = new Set(expenses.map(expense => expense.expense_date ? ukFinancialYear(expense.expense_date) : expense.expense_year ? `calendar:${expense.expense_year}` : 'undated'));
     values.add(currentFinancialYear);
     return ['all', ...[...values].sort().reverse()];
   }, [currentFinancialYear, expenses]);
 
-  const visibleExpenses = year === 'all' ? expenses : expenses.filter(expense => ukFinancialYear(expense.expense_date) === year);
+  const visibleExpenses = year === 'all' ? expenses : expenses.filter(expense => (expense.expense_date ? ukFinancialYear(expense.expense_date) : expense.expense_year ? `calendar:${expense.expense_year}` : 'undated') === year);
   const runningCosts = visibleExpenses.filter(expense => RUNNING_COSTS.has(expense.category));
   const historicCosts = visibleExpenses.filter(expense => !RUNNING_COSTS.has(expense.category));
   const total = (items: Expense[]) => items.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
@@ -173,6 +175,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
             <p className="text-sm truncate">{expense.description}</p>
             <div className="flex flex-wrap gap-1.5 mt-1 text-[10px] text-[var(--text-muted)]">
               <span>{formatCategory(expense.category)}</span>
+              {!expense.expense_date && expense.expense_year && <span>· {expense.expense_year}</span>}
               {expense.expense_date && <span>· {new Date(`${expense.expense_date.slice(0, 10)}T12:00:00`).toLocaleDateString('en-GB')}</span>}
               {expense.is_recurring ? <Tag>Repeats {expense.recurrence_frequency}</Tag> : null}
             </div>

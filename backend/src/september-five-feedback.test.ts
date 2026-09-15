@@ -68,7 +68,7 @@ describe('5 September CRM feedback', () => {
   it('labels tenancy information, keeps history, and verifies tenancy removal', () => {
     expect(propertyDetail).toContain('Tenancy Information');
     expect(propertyDetail).toContain('Previous Tenancies');
-    expect(propertyDetail).toContain('End the current tenancy');
+    expect(propertyDetail).toContain('<TenancyEndModal');
     expect(propertyDetail).not.toContain('<SectionHeader title="Current Tenancy"');
   });
 
@@ -86,8 +86,8 @@ describe('5 September CRM feedback', () => {
 
   it('creates linked maintenance requests from a tenant and refreshes fresh data after actions', () => {
     expect(tenantDetail).toContain('Add Request');
-    expect(tenantDetail).toContain('Email reporting link');
-    expect(tenantDetail).toContain('SMS reporting link');
+    expect(tenantDetail).toContain('Email Reporting Link');
+    expect(tenantDetail).toContain('SMS Reporting Link');
     expect(tenantDetail).toContain("tenant_id: tenant.id");
     expect(backend).toContain("'pending','maintenance',$4,CURRENT_DATE,'maintenance'");
     expect(app).toContain('path="/maintenance/:requestId"');

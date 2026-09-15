@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Card, GlassCard, SectionHeader, StatusDot, EmptyState, Tag } from '../components/ui';
+import { Card, GlassCard, SectionHeader, StatusDot, EmptyState, Tag, Select, Button } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import {
   Building2, Users, Wrench, MessageSquare, AlertTriangle,
-  Clock, CheckCircle2, ArrowRight, CalendarDays, Trash2
+  Clock, CheckCircle2, ArrowRight, CalendarDays, Trash2, X
 } from 'lucide-react';
 
 interface MaintenanceItem {
@@ -54,7 +54,8 @@ export default function Dashboard() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [teamMembers,setTeamMembers]=useState<{id:number;name:string}[]>([]);
-  const [taskOwner,setTaskOwner]=useState('all');
+  const [taskOwner,setTaskOwner]=useState('me');
+  const [selectedTask,setSelectedTask]=useState<Task|null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,7 +121,7 @@ export default function Dashboard() {
     return 'text-emerald-400';
   };
 
-  const visibleRecentTasks = tasks.filter(task => !task.dashboard_dismissed_at && (taskOwner==='all' || (taskOwner==='me' ? [String(user?.id),user?.name].includes(task.assigned_to) : task.assigned_to===taskOwner)));
+  const visibleRecentTasks = tasks.filter(task => !task.dashboard_dismissed_at && (taskOwner==='all' || (taskOwner==='me' ? [String(user?.id),user?.name].includes(task.assigned_to) : [taskOwner,teamMembers.find(member=>String(member.id)===taskOwner)?.name].includes(String(task.assigned_to)))));
 
   const deleteTask = async (task: Task) => {
     if (!await confirmAction(`Delete reminder “${task.title}”?`)) return;
@@ -144,6 +145,7 @@ export default function Dashboard() {
 
   return (
     <Layout hideTopBar>
+      {selectedTask && <div role="dialog" aria-modal="true" aria-labelledby="task-detail-title" className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4" onClick={()=>setSelectedTask(null)}><div className="w-full max-w-lg rounded-2xl bg-[var(--bg-card)] p-6 space-y-4" onClick={e=>e.stopPropagation()}><div className="flex justify-between gap-4"><h2 id="task-detail-title" className="font-semibold text-lg">{selectedTask.title}</h2><button aria-label="Close task" onClick={()=>setSelectedTask(null)}><X size={20}/></button></div><p className="whitespace-pre-wrap text-sm">{selectedTask.description || 'No description'}</p><p className="text-sm">{selectedTask.property_address}</p><p className="text-sm">Assigned To: {teamMembers.find(m=>String(m.id)===String(selectedTask.assigned_to))?.name || selectedTask.assigned_to || 'Unassigned'}</p><p className="text-sm capitalize">{selectedTask.status} · {selectedTask.priority} Priority</p><p className="text-sm">Due: {selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString('en-GB') : 'Not Set'}</p><Button onClick={()=>navigate(`/tasks/${selectedTask.id}`)}>Open Task</Button></div></div>}
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Greeting */}
         <div className="pt-10 md:pt-0">
@@ -310,7 +312,7 @@ export default function Dashboard() {
 
         {/* Recent Tasks */}
         <Card className="p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4"><div className="flex-1 min-w-48"><SectionHeader title="Recent Tasks" action={() => navigate('/tasks')} actionLabel="View All" /></div><select aria-label="Filter tasks by team member" value={taskOwner} onChange={e=>setTaskOwner(e.target.value)} className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs"><option value="all">All team members</option><option value="me">My tasks</option>{[...new Set(tasks.map(t=>t.assigned_to).filter(Boolean))].map(owner=><option key={owner} value={owner}>{teamMembers.find(member=>String(member.id)===owner)?.name || owner}</option>)}</select>{user?.role === 'admin' && visibleRecentTasks.length > 0 && <button className="text-xs text-red-500 font-medium" onClick={async () => { if (!await confirmAction('Clear all recent tasks from the dashboard? They will remain available in Team Calendar.', 'Clear Recent Tasks')) return; try { await api.post('/api/tasks/clear-recent', {}); setTasks(current => current.map(t => ({ ...t, dashboard_dismissed_at: new Date().toISOString() }))); } catch (e) { alert(e instanceof Error ? e.message : 'Could not clear tasks'); } }}>Clear All</button>}</div>
+          <div className="flex flex-wrap items-start justify-between gap-4"><div className="flex-1 min-w-48"><SectionHeader title="Recent Tasks" action={() => navigate('/tasks')} actionLabel="View All" /></div><Select className="w-52" label="Assigned To" value={taskOwner} onChange={setTaskOwner} options={[{value:'me',label:'My Tasks'},...teamMembers.map(member=>({value:String(member.id),label:member.name})),{value:'all',label:'View All'}]} />{user?.role === 'admin' && visibleRecentTasks.length > 0 && <button className="self-end rounded-full bg-red-600 px-4 py-2.5 text-xs text-white font-medium whitespace-nowrap" onClick={async () => { if (!await confirmAction('Clear all recent tasks from the dashboard? They will remain available in Team Calendar.', 'Clear Recent Tasks')) return; try { await api.post('/api/tasks/clear-recent', {}); setTasks(current => current.map(t => ({ ...t, dashboard_dismissed_at: new Date().toISOString() }))); } catch (e) { alert(e instanceof Error ? e.message : 'Could not clear tasks'); } }}>Clear All</button>}</div>
           {visibleRecentTasks.length ? (
             <div className="space-y-2">
               {visibleRecentTasks.slice(0, 5).map(task => (
@@ -322,10 +324,10 @@ export default function Dashboard() {
                   }`}>
                     {task.status === 'completed' ? <CheckCircle2 size={16} /> : <Clock size={16} />}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <button type="button" onClick={()=>setSelectedTask(task)} className="flex-1 min-w-0 text-left">
                     <p className="text-sm font-medium truncate">{task.title}</p>
                     <p className="text-xs text-[var(--text-muted)] truncate">{task.property_address || task.description}</p>
-                  </div>
+                  </button>
                   <div className="text-right shrink-0">
                     <Tag active={task.priority === 'high'}>{task.priority}</Tag>
                     {task.due_date && (

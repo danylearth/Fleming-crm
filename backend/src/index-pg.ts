@@ -1,3 +1,6 @@
+import {registerFreeAgentRoutes} from './freeagent';
+import {storeUniqueDocument} from './document-dedup';
+import {registerRecordNoteRoutes} from './record-notes';
 import {stampAgreementSignatures} from './agreement-signatures';
 import { registerInventoryReviewRoutes } from './inventory-review';
 import { registerProfileRoutes } from './profile';
@@ -544,6 +547,9 @@ app.get('/', (req, res) => {
 });
 
 // Serve static files (disabled in production - frontend deployed separately)
+registerRecordNoteRoutes(app);
+registerFreeAgentRoutes(app);
+
 // app.use(express.static(path.join(__dirname, '../../frontend/dist')));
 
 // ============ AUDIT LOGGING ============
@@ -4396,12 +4402,9 @@ app.post('/api/documents/:entityType/:entityId', authMiddleware, requirePermissi
     const file = req.file;
     if (!file) return res.status(400).json({ error: 'No file uploaded' });
 
-    const id = await insert(
-      `INSERT INTO documents
-       (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by, applicant_number, review_status, reviewed_at, reviewed_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'approved', NOW(), $8)`,
-      [entityType, entityId, doc_type, file.filename, file.originalname, file.mimetype, file.size, req.user?.id, appNum]
-    );
+    const stored = await storeUniqueDocument({entityType:String(entityType),entityId:Number(entityId),docType:doc_type,applicantNumber:appNum,file,userId:req.user.id,uploadsDir});
+    const id=stored.id;
+    if(stored.duplicate)return res.json(stored);
     if (entityType === 'property' && doc_type === 'Property Photo' && file.mimetype.startsWith('image/')) {
       await run('UPDATE properties SET image_url=$1, updated_at=NOW() WHERE id=$2', [`/api/public/properties/${entityId}/thumbnail`, entityId]);
     }
@@ -4466,6 +4469,7 @@ app.delete('/api/documents/:id', authMiddleware, requirePermission('staff'), asy
     const doc = await queryOne('SELECT * FROM documents WHERE id = $1', [req.params.id as string]);
     if (!doc) return res.status(404).json({ error: 'Document not found' });
 
+    if(doc.inventory_id)return res.status(409).json({error:'Use the Inventory section to change or delete a completed inventory; administrator access is required'});
     if (await queryOne('SELECT id FROM rent_reviews WHERE notice_document_id=$1 LIMIT 1', [doc.id])) return res.status(409).json({ error: 'This notice is retained in the rent review audit trail and cannot be deleted' });
     const filePath = path.join(uploadsDir, doc.filename);
     const client = await pool.connect();
@@ -4482,7 +4486,7 @@ app.delete('/api/documents/:id', authMiddleware, requirePermission('staff'), asy
       }
       await client.query('COMMIT');
       // Unlink file only after DB commit succeeds
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (!await queryOne('SELECT id FROM documents WHERE filename=$1 LIMIT 1',[doc.filename]) && fs.existsSync(filePath)) fs.unlinkSync(filePath);
     } catch (txErr) {
       await client.query('ROLLBACK');
       throw txErr;
@@ -7009,7 +7013,7 @@ app.get('/api/bank-feed/status', authMiddleware, async (_req, res) => {
   try {
     const connection = await queryOne(`
       SELECT id, provider, status, provider_name, last_synced_at, last_error, created_at
-      FROM bank_feed_connections ORDER BY created_at DESC LIMIT 1
+      FROM bank_feed_connections WHERE provider='truelayer' ORDER BY created_at DESC LIMIT 1
     `);
     const totals = await queryOne(`
       SELECT COUNT(*)::INTEGER AS total,
@@ -7073,7 +7077,7 @@ app.post('/api/bank-feed/sync', authMiddleware, requirePermission('manager'), as
   try {
     const config = bankFeedConfig();
     if (!config) return res.status(503).json({ error: 'Open Banking credentials are not configured' });
-    const connection = await queryOne("SELECT * FROM bank_feed_connections WHERE status='connected' ORDER BY created_at DESC LIMIT 1");
+    const connection = await queryOne("SELECT * FROM bank_feed_connections WHERE status='connected' AND provider='truelayer' ORDER BY created_at DESC LIMIT 1");
     if (!connection?.refresh_token_encrypted) return res.status(409).json({ error: 'Connect Barclays before syncing' });
 
     const refreshed = await refreshAccess(config, decryptToken(connection.refresh_token_encrypted));
@@ -7125,7 +7129,7 @@ app.post('/api/bank-feed/sync', authMiddleware, requirePermission('manager'), as
     const unmatchedRows = await query(`
       SELECT id, external_id AS transaction_id, booked_at AS timestamp, description, amount::FLOAT,
         currency, transaction_type, transaction_category, merchant_name
-      FROM bank_feed_transactions WHERE match_status='unmatched'
+      FROM bank_feed_transactions WHERE match_status='unmatched' AND connection_id IN (SELECT id FROM bank_feed_connections WHERE provider='truelayer')
     `);
     for (const transaction of unmatchedRows as Array<BankTransaction & { id: number }>) {
       await applyBankFeedMatch(transaction.id, transaction, rentCandidates, depositCandidates, propertyCandidates);
@@ -7139,7 +7143,7 @@ app.post('/api/bank-feed/sync', authMiddleware, requirePermission('manager'), as
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : 'Bank sync failed';
-    await run("UPDATE bank_feed_connections SET last_error=$1, updated_at=NOW() WHERE id=(SELECT id FROM bank_feed_connections ORDER BY created_at DESC LIMIT 1)", [message]).catch(() => {});
+    await run("UPDATE bank_feed_connections SET last_error=$1, updated_at=NOW() WHERE id=(SELECT id FROM bank_feed_connections WHERE provider='truelayer' ORDER BY created_at DESC LIMIT 1)", [message]).catch(() => {});
     res.status(502).json({ error: message });
   }
 });
