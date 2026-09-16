@@ -95,6 +95,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [hdHoldingDeposit, setHdHoldingDeposit] = useState('');
   const [hdFollowUpDate, setHdFollowUpDate] = useState('');
   const [hdRequestSendEmail, setHdRequestSendEmail] = useState(true);
+  const [smsPreview,setSmsPreview]=useState<string|null>(null);
   const [holdingEmailPreview, setHoldingEmailPreview] = useState<{subject: string; html: string} | null>(null);
   const [hdRequestSendSms, setHdRequestSendSms] = useState(false);
 
@@ -443,7 +444,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   // Actions
   const requestHoldingDeposit = async () => {
     if (!hdMonthlyRent || !hdHoldingDeposit) return;
-    if (!await confirmAction(`Save this holding deposit request${hdRequestSendEmail || hdRequestSendSms ? " and send the selected messages to all applicants" : ""}?`)) return;
+    if (!await confirmAction('Please confirm that you wish to progress with the tenant(s) application and request their holding deposit.')) return;
     setSaving(true);
     setReviewError('');
     try {
@@ -467,7 +468,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   };
 
   const confirmDepositReceived = async () => {
-    if (!await confirmAction("Confirm the deposit has been received and send the selected confirmations to all applicants?")) return;
+    if (!await confirmAction("Please confirm the deposit has been received in full and ensure that all automations have been selected where required.")) return;
     setSaving(true);
     setReviewError('');
     try {
@@ -688,6 +689,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   };
 
   const stepCardProps = { activeStep, setActiveStep };
+  const answerSection=(key:string)=> /^(bank|sort_code|account_)/.test(key)?'Bank Details':/^(nok|next_of_kin)/.test(key)?'Next of Kin':/^(guarantor)/.test(key)?'Guarantor':/^(employ|income|job|student)/.test(key)?'Employment & Income':/^(landlord|agent|current_|previous_)/.test(key)?'Address & Landlord':/^(rent|deposit|preferred|tenancy|forwarding|parking|pet|smok)/.test(key)?'Tenancy Details':/^(declar|sign|consent)/.test(key)?'Declaration':'Personal Details';
   const applicationData = (enquiry.app_form_data || {}) as Record<string, unknown>;
   const requiredReviewDocumentTypes = ['Primary Identification', 'Secondary Identification', 'Bank Statements'];
   if (!['Student', 'Unemployed'].includes(String(applicationData.employment_status || ''))) {
@@ -878,14 +880,15 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   <p>From: contact@tenancies.fleminglettings.co.uk</p>
                   <p>Includes: Holding Deposit Summary + Application Form Link</p>
                 </div>
-                <button onClick={() => previewHoldingEmail()} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview email before sending</button>
+                {hdRequestSendEmail && <button onClick={() => previewHoldingEmail()} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-input)] px-3 py-2 text-xs font-medium text-[var(--accent-orange)]"><Eye size={13} /> Preview Email</button>}
+                {hdRequestSendSms && <Button size="sm" variant="outline" onClick={()=>setSmsPreview(`Hi ${enquiry.first_name_1}, we have just emailed you the details to pay and place your holding deposit on ${propertyAddress}. Please ensure that you contact your lettings manager once the funds have been transferred so we can confirm receipt and continue with your application screening.`)}>Preview SMS</Button>}
                 <div className="flex gap-4 text-xs">
                   <label className="flex gap-2 items-center"><input type="checkbox" checked={hdRequestSendEmail} onChange={event => setHdRequestSendEmail(event.target.checked)} /> Send Email</label>
                   <label className="flex gap-2 items-center"><input type="checkbox" checked={hdRequestSendSms} onChange={event => setHdRequestSendSms(event.target.checked)} /> Send SMS</label>
                 </div>
                 {Boolean(enquiry.joint_partner_id) && <p className="text-xs text-[var(--text-muted)]">Both applicants receive their own application link.</p>}
                 <Button variant="gradient" onClick={requestHoldingDeposit} disabled={saving || !hdMonthlyRent || !hdHoldingDeposit}>
-                  {saving ? 'Sending...' : 'Save & Send Selected Messages'}
+                  {saving ? 'Sending...' : 'Send Automations & Progress'}
                 </Button>
                 {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
               </>
@@ -967,7 +970,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       <input type="checkbox" checked={hdReceiptSendSms} onChange={event => setHdReceiptSendSms(event.target.checked)} className="accent-orange-500" /> Send SMS
                     </label>
                   </div>
-                  <button onClick={() => previewHoldingEmail(true)} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview confirmation email</button>
+                  {hdReceiptSendEmail && <button onClick={() => previewHoldingEmail(true)} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-input)] px-3 py-2 text-xs font-medium text-[var(--accent-orange)]"><Eye size={13} /> Preview Email</button>}
+                  {hdReceiptSendSms && <Button size="sm" variant="outline" onClick={()=>setSmsPreview(`Hi ${enquiry.first_name_1}, we are pleased to confirm receipt of your holding deposit payment of £${Number(hdReceivedAmount || enquiry.holding_deposit_amount).toLocaleString('en-GB',{minimumFractionDigits:2})}. These funds are now held on account and you can now proceed with your tenancy application of which has been issued to you on email.`)}>Preview SMS</Button>}
                   <Button variant="gradient" onClick={confirmDepositReceived} disabled={saving}>
                     {saving ? 'Saving...' : 'Confirm Deposit Received'}
                   </Button>
@@ -1041,6 +1045,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     </div>
                   )}
 
+                  <div className="grid grid-cols-2 gap-3 text-xs"><p>Last Viewed<br/>{enquiry.application_form_last_viewed_at?new Date(enquiry.application_form_last_viewed_at).toLocaleString('en-GB'):'Not Viewed Yet'}</p><p>Last Updated<br/>{enquiry.application_form_last_saved_at?new Date(enquiry.application_form_last_saved_at).toLocaleString('en-GB'):enquiry.application_form_completed?'Application Submitted':'No Draft Saved'}</p></div>
                   {/* Contextual content below the tracker */}
                   {completed ? (
                     <div className="space-y-2">
@@ -1057,7 +1062,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     <div className="space-y-3">
                       {enquiry.application_form_token && (
                         <div className="bg-[var(--bg-subtle)] rounded-lg p-3">
-                          <p className="text-[10px] text-[var(--text-muted)] mb-1">Application Form Link:</p>
+                          <div className="flex justify-between gap-3"><p className="text-[10px] text-[var(--text-muted)] mb-1">Application Form Link:</p><button className="rounded-full border px-3 py-1 text-xs" onClick={async()=>{try{await navigator.clipboard.writeText(`https://apply.fleminglettings.co.uk/${enquiry.application_form_slug || enquiry.application_form_token}`);}catch{setReviewError('Copy failed. Select the application link to copy it.');}}}>Copy</button></div>
                           <p className="text-xs text-[var(--accent-orange)] break-all">
                             https://apply.fleminglettings.co.uk/{enquiry.application_form_slug || enquiry.application_form_token}
                           </p>
@@ -1096,14 +1101,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 <>
                   <div className="bg-[var(--bg-subtle)] rounded-lg p-3 max-h-56 overflow-y-auto">
                     <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Submitted answers</p>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                      {Object.entries(applicationData).map(([key, value]) => (
-                        <div key={key} className={String(value).length > 50 ? 'col-span-2' : ''}>
-                          <p className="text-[10px] text-[var(--text-muted)]">{answerLabel(key)}</p>
-                          <p className="text-xs text-[var(--text-primary)] break-words">{answerValue(value)}</p>
-                        </div>
-                      ))}
-                    </div>
+                    {[...new Set(Object.keys(applicationData).map(answerSection))].map(section=>{const answers=Object.entries(applicationData).filter(([key,value])=>answerSection(key)===section&&value!==null&&value!==undefined&&String(value).trim()!==''&&!Array.isArray(value)&&typeof value!=='object');return answers.length?<section key={section} className="mb-4"><h4 className="text-xs font-semibold mb-2">{section}</h4><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{answers.map(([key,value])=><div key={key}><p className="text-[10px] text-[var(--text-muted)]">{answerLabel(key)}</p><p className="text-xs break-words">{answerValue(value)}</p></div>)}</div></section>:null;})}
                   </div>
 
                   <div className="space-y-2">
@@ -1119,13 +1117,13 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                             </span>
                           </div>
                           {docs.map(doc => (
-                            <div key={doc.id} className="flex items-center gap-2 bg-[var(--bg-subtle)] rounded px-2 py-2">
+                            <div key={doc.id} className="flex flex-wrap items-center gap-2 bg-[var(--bg-subtle)] rounded-lg p-3">
                               <FileText size={12} className="text-[var(--text-muted)] shrink-0" />
                               <select aria-label={`Category for ${doc.original_name}`} value={doc.doc_type} disabled={saving} className="max-w-28 text-xs bg-[var(--bg-input)] rounded" onChange={async event=>{setSaving(true);try{await api.put(`/api/documents/${doc.id}/category`,{doc_type:event.target.value});setReviewStatusOverride(null);await Promise.all([fetchDocs(),onUpdate()]);}catch(error){setReviewError(error instanceof Error?error.message:'Category could not be saved');}finally{setSaving(false);}}}>
                                 {['Primary Identification','Secondary Identification','Bank Statements','Proof of Income or Employment','Credit Check Report','Other'].map(type=><option key={type}>{type}</option>)}
                               </select>
-                              <div className="text-left min-w-0 flex-1">
-                                <p className="text-[11px] text-[var(--text-primary)] truncate">{doc.original_name}</p>
+                              <div className="text-left min-w-0 basis-full order-first">
+                                <p className="text-xs text-[var(--text-primary)] break-words">{doc.original_name}</p>
                                 <p className="text-[10px] text-[var(--text-muted)]">{new Date(doc.uploaded_at).toLocaleDateString('en-GB')}</p>
                               </div>
                               <span className={`text-[10px] font-medium ${doc.review_status === 'approved' ? 'text-emerald-400' : doc.review_status === 'rejected' ? 'text-red-400' : 'text-amber-400'}`}>
@@ -1163,7 +1161,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   {sendReviewSms && (
                     <div>
                       <label className="block text-[10px] text-[var(--text-muted)] mb-1">SMS preview</label>
-                      <SmsEditor value={reviewSmsOverride || reviewSmsPreview} onChange={setReviewSmsOverride} />
+                      <button type="button" className="block rounded-full border border-[var(--border-input)] px-3 py-2 text-xs font-medium mb-2" onClick={()=>setSmsPreview(reviewSmsOverride || reviewSmsPreview)}>Preview SMS</button><SmsEditor value={reviewSmsOverride || reviewSmsPreview} onChange={setReviewSmsOverride} />
                     </div>
                   )}
                   {sendReviewEmail && (
@@ -1346,10 +1344,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       <textarea value={agreementEmailMessage} onChange={event => setAgreementEmailMessage(event.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" />
                     </label>
                   )}
-                  {agreementSendEmail && <button onClick={previewAgreementEmail} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview branded email</button>}
+                  {agreementSendEmail && <button onClick={previewAgreementEmail} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-input)] px-3 py-2 text-xs font-medium text-[var(--accent-orange)]"><Eye size={13} /> Preview Email</button>}
                   {agreementSendSms && (
                     <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview
-                      <SmsEditor value={agreementSmsMessage} onChange={setAgreementSmsMessage} />
+                      <button type="button" className="block rounded-full border border-[var(--border-input)] px-3 py-2 text-xs font-medium mb-2" onClick={()=>setSmsPreview(agreementSmsMessage)}>Preview SMS</button><SmsEditor value={agreementSmsMessage} onChange={setAgreementSmsMessage} />
                     </label>
                   )}
                   <Button variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || agreementCompliance?.ready !== true || !agreementDetailsComplete}>{saving ? 'Generating...' : reissuingAgreement ? 'Reissue New Agreement' : 'Generate & Issue Agreement'}</Button>
@@ -1376,8 +1374,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               </div>}
               {!enquiry.balance_payment_requested && <DatePicker label="Follow-up date *" value={balanceFollowUpDate} onChange={setBalanceFollowUpDate} />}
               {!enquiry.balance_payment_requested && balanceSendEmail && <label className="block text-[10px] text-[var(--text-muted)]">Editable email preview<textarea value={balanceEmailMessage} onChange={e => setBalanceEmailMessage(e.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
-              {!enquiry.balance_payment_requested && balanceSendEmail && <button onClick={previewBalanceEmail} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview branded email</button>}
-              {!enquiry.balance_payment_requested && balanceSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<SmsEditor value={balanceSmsMessage} onChange={setBalanceSmsMessage} /></label>}
+              {!enquiry.balance_payment_requested && balanceSendEmail && <button onClick={previewBalanceEmail} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-input)] px-3 py-2 text-xs font-medium text-[var(--accent-orange)]"><Eye size={13} /> Preview Email</button>}
+              {!enquiry.balance_payment_requested && balanceSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<button type="button" className="block rounded-full border border-[var(--border-input)] px-3 py-2 text-xs font-medium mb-2" onClick={()=>setSmsPreview(balanceSmsMessage)}>Preview SMS</button><SmsEditor value={balanceSmsMessage} onChange={setBalanceSmsMessage} /></label>}
               {!enquiry.balance_payment_requested ? <Button variant="gradient" size="sm" onClick={requestBalance} disabled={saving || !balanceFollowUpDate}>Request Final Balance</Button>
                 : !enquiry.balance_payment_received ? <Button variant="gradient" size="sm" onClick={confirmBalance} disabled={saving}>Confirm Payment Received</Button>
                 : <p className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle size={14} /> Final balance received{enquiry.balance_payment_received_at ? ` on ${new Date(enquiry.balance_payment_received_at).toLocaleDateString('en-GB')}` : ''}</p>}
@@ -1410,8 +1408,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               </div>
               {handoverWithLandlord && <p className="text-[10px] text-[var(--text-muted)]">The landlord is included in the selected email/SMS channels.</p>}
               {handoverSendEmail && <label className="block text-[10px] text-[var(--text-muted)]">Editable email preview<textarea value={handoverEmailMessage} onChange={e => setHandoverEmailMessage(e.target.value)} rows={4} className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)]" /></label>}
-              {handoverSendEmail && <button onClick={previewHandoverEmail} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-orange)] hover:underline"><Eye size={13} /> Preview branded email</button>}
-              {handoverSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<SmsEditor value={handoverSmsMessage} onChange={setHandoverSmsMessage} /></label>}
+              {handoverSendEmail && <button onClick={previewHandoverEmail} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-input)] px-3 py-2 text-xs font-medium text-[var(--accent-orange)]"><Eye size={13} /> Preview Email</button>}
+              {handoverSendSms && <label className="block text-[10px] text-[var(--text-muted)]">Editable SMS preview<button type="button" className="block rounded-full border border-[var(--border-input)] px-3 py-2 text-xs font-medium mb-2" onClick={()=>setSmsPreview(handoverSmsMessage)}>Preview SMS</button><SmsEditor value={handoverSmsMessage} onChange={setHandoverSmsMessage} /></label>}
               <Button variant="gradient" size="sm" onClick={scheduleHandover} disabled={saving || !handoverDate || !handoverTime || !handoverAssignedTo}>{enquiry.handover_date ? 'Update Handover' : 'Book Appointment & Add to Calendar'}</Button>
               {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
             </div> : <p className="text-xs text-[var(--text-muted)]">Confirm the final balance first.</p>}
@@ -1483,6 +1481,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         </div>
       )}
 
+      {smsPreview!==null&&<div role="dialog" aria-modal="true" aria-label="Preview SMS" className="fixed inset-0 z-[120] grid place-items-center bg-black/60 p-4" onClick={()=>setSmsPreview(null)}><div className="w-full max-w-lg rounded-2xl bg-[var(--bg-card)] p-6" onClick={e=>e.stopPropagation()}><h3 className="font-bold mb-4">Preview SMS</h3><p className="text-sm whitespace-pre-wrap">{smsPreview}</p><Button className="mt-4" onClick={()=>setSmsPreview(null)}>Close</Button></div></div>}
       <EmailPreviewModal open={holdingEmailPreview !== null} onClose={() => setHoldingEmailPreview(null)}
         onSend={async () => undefined} to={enquiry.email_1 || ''} from="contact@tenancies.fleminglettings.co.uk"
         initialSubject={holdingEmailPreview?.subject || ''} initialBodyHtml={holdingEmailPreview?.html || ''} previewOnly />

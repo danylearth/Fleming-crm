@@ -1,3 +1,4 @@
+import PropertyInsurance from '../components/PropertyInsurance';
 import DeleteNoteButton from '../components/DeleteNoteButton';
 import TenancyEndModal from '../components/ui/TenancyEndModal';
 import PropertyInventory from '../components/PropertyInventory';
@@ -17,7 +18,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import { activePropertyTenants, type PropertyTenant } from '../utils/propertyTenants';
 import {
-  User, Building2, Briefcase, KeyRound, Landmark, Users, ShieldCheck, ListChecks, FileCheck, History,
+  User, Building2, Briefcase, KeyRound, Landmark, Users, ShieldCheck, ListChecks, History,
   CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
   AlertTriangle, Plus, Wrench, Trash2, StickyNote
 } from 'lucide-react';
@@ -52,10 +53,11 @@ interface PropertyDetail {
   tenancy_type: string | null; has_end_date: number; tenancy_end_date: string | null;
   // Compliance
   eicr_expiry_date: string | null; epc_expiry_date: string | null;
-  gas_safety_expiry_date: string | null; has_gas: number;
+  gas_safety_commissioned_date?:string|null; gas_safety_expiry_date: string | null; has_gas: number;
   notes: string | null;
   amenities: string | null;
   key_colour_code: string | null;
+  compliance?:{items:{docType:string;hasDocument:boolean;ready:boolean;reason:string|null}[]};
   image_url?: string | null;
 }
 
@@ -239,7 +241,7 @@ export default function PropertyDetail() {
     tenancy_type: p.tenancy_type || '', has_end_date: !!p.has_end_date,
     tenancy_end_date: p.tenancy_end_date || '',
     eicr_expiry_date: p.eicr_expiry_date || '', epc_expiry_date: p.epc_expiry_date || '',
-    has_gas: !!p.has_gas, gas_safety_expiry_date: p.gas_safety_expiry_date || '',
+    gas_safety_commissioned_date:p.gas_safety_commissioned_date || '', has_gas: !!p.has_gas, gas_safety_expiry_date: p.gas_safety_expiry_date || '',
     amenities: p.amenities || '',
     key_colour_code: p.key_colour_code || '',
   });
@@ -329,6 +331,7 @@ export default function PropertyDetail() {
         eicr_expiry_date: cleanDate(form.eicr_expiry_date),
         epc_expiry_date: cleanDate(form.epc_expiry_date),
         gas_safety_expiry_date: cleanDate(form.gas_safety_expiry_date),
+        gas_safety_commissioned_date: cleanDate(form.gas_safety_commissioned_date),
         // Strings: send null not empty string for optional fields
         council_tax_band: form.council_tax_band || null,
         epc_grade: form.epc_grade || null,
@@ -394,12 +397,9 @@ export default function PropertyDetail() {
   };
 
   const overallCompliance = () => {
-    const items = [
-      compliancePercent(property?.eicr_expiry_date ?? null),
-      compliancePercent(property?.epc_expiry_date ?? null),
-      ...(property?.has_gas ? [compliancePercent(property.gas_safety_expiry_date)] : []),
-    ];
-    return items.length ? Math.round(items.reduce((a, b) => a + b, 0) / items.length) : 0;
+    const source=editing?form:property;
+    const requirements=[['EPC',source?.epc_expiry_date],['EICR',source?.eicr_expiry_date],...(source?.has_gas?[['Gas Safety Certificate',source.gas_safety_expiry_date]]:[])];
+    return Math.round(requirements.filter(([type,date])=>compliancePercent(date||null)===100&&property?.compliance?.items.some(i=>i.docType===type&&i.hasDocument)).length/requirements.length*100);
   };
 
   const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
@@ -853,8 +853,9 @@ export default function PropertyDetail() {
                           if (data && data.length > 0) {
                             // Try to match by address, or use first result
                             const match = data.find((cert: { address?: string; current_rating?: string; lodgement_date?: string; inspection_date?: string }) =>
-                              cert.address?.toLowerCase().includes(form.address.toLowerCase())
-                            ) || data[0];
+                              cert.address?.toLowerCase().replace(/[^a-z0-9]/g,'').startsWith(form.address.split(',')[0].toLowerCase().replace(/[^a-z0-9]/g,''))
+                            );
+                            if(!match){alert('No unambiguous certificate matches this property address. Check the government service and enter the correct certificate manually.');return;}
 
                             const updates: Record<string, string> = {};
 
@@ -876,8 +877,8 @@ export default function PropertyDetail() {
                           } else {
                             alert('No EPC data found for this postcode. Try entering the data manually.');
                           }
-                        } catch {
-                          alert('Failed to fetch EPC data. Please try again or enter manually.');
+                        } catch (error) {
+                          alert(error instanceof Error ? error.message : 'EPC lookup unavailable. Enter certificate details manually.');
                         }
                       }} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-colors">
                         Sync EPC Data
@@ -1109,17 +1110,6 @@ export default function PropertyDetail() {
               </GlassCard>
             )}
 
-            {/* Compliance Certificates — always visible, not gated by status */}
-            {editing && (
-              <GlassCard className="p-4 sm:p-6">
-                <SectionHeader title="Compliance Certificates" icon={<FileCheck size={16} />} />
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                  <DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={(v: string) => setForm({ ...form, eicr_expiry_date: v })} />
-                  <DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={(v: string) => setForm({ ...form, epc_expiry_date: v })} />
-                  {form.has_gas && <DatePicker label="Gas Safety Expiry Date" value={form.gas_safety_expiry_date} onChange={(v: string) => setForm({ ...form, gas_safety_expiry_date: v })} />}
-                </div>
-              </GlassCard>
-            )}
 
             <PropertyInventory propertyId={property.id} tenants={linkedTenants} onSaved={()=>setInventoryRefresh(n=>n+1)} />
 
@@ -1184,6 +1174,7 @@ export default function PropertyDetail() {
               )}
             </Card>
 
+            {property.landlord_type==='internal'&&<PropertyInsurance propertyId={property.id}/>}
             <PropertyExpenses propertyId={property.id} />
 
             {/* Rent Payments */}
@@ -1196,12 +1187,13 @@ export default function PropertyDetail() {
             <Card className="p-4 sm:p-6">
               <SectionHeader title="Compliance" icon={<ShieldCheck size={16} />} />
               <div className="flex justify-center mb-4">
-                <ProgressRing value={overallCompliance()} size={90} strokeWidth={7} />
+                <ProgressRing value={overallCompliance()} size={90} strokeWidth={7} />{editing&&<p className="text-xs text-[var(--text-muted)]">Preview — save changes to update the record.</p>}{!editing&&property.compliance?.items.filter(i=>!i.ready).map(i=><p key={i.docType} className="text-xs text-red-500">{i.reason}</p>)}
               </div>
               <div className="space-y-3">
+                {editing ? <div className="space-y-4"><DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={v=>setForm(f=>({...f,eicr_expiry_date:v}))}/><DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={v=>setForm(f=>({...f,epc_expiry_date:v}))}/>{form.has_gas&&<><DatePicker label="Gas Safety Commissioned Date" value={form.gas_safety_commissioned_date} onChange={v=>setForm(f=>({...f,gas_safety_commissioned_date:v}))}/><DatePicker label="Gas Safety Expiry Date" value={form.gas_safety_expiry_date} onChange={v=>setForm(f=>({...f,gas_safety_expiry_date:v}))}/></>}</div>:<>
                 <ComplianceRow label="EICR" expiry={property.eicr_expiry_date} />
                 <ComplianceRow label="EPC" expiry={property.epc_expiry_date} grade={property.epc_grade} />
-                {property.has_gas ? <ComplianceRow label="Gas Safety" expiry={property.gas_safety_expiry_date} /> : null}
+                {property.has_gas ? <><ReadField label="Gas Safety Commissioned" value={formatDate(property.gas_safety_commissioned_date || null)}/><ComplianceRow label="Gas Safety" expiry={property.gas_safety_expiry_date} /></> : null}</>}
               </div>
             </Card>
 

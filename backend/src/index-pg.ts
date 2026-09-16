@@ -1,3 +1,5 @@
+import {registerPropertyPolicies} from './property-policies';
+import {searchEpc} from './epc';
 import {registerFreeAgentRoutes} from './freeagent';
 import {storeUniqueDocument} from './document-dedup';
 import {registerRecordNoteRoutes} from './record-notes';
@@ -487,6 +489,7 @@ const PUBLIC_APPLICATION_DOCUMENT_TYPES = [
   'Proof of Income or Employment',
   'Bank Statements',
   'Other Financial Document',
+  'Right to Rent Share Code',
 ] as const;
 
 function isValidDateOnly(value: string): boolean {
@@ -591,7 +594,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     await logAudit(user.id, user.email, 'login', 'user', user.id);
     
     const token = generateToken({ id: user.id, email: user.email, role: user.role, name: user.name });
-    res.json({ user: { id: user.id, email: user.email, role: user.role, name: user.name, avatar_url: user.avatar_url, accent_color: user.accent_color, last_login: new Date().toISOString() }, token });
+    res.json({ user: { id: user.id, email: user.email, role: user.role, name: user.name, avatar_url: user.avatar_url, accent_color: user.accent_color, appearance: user.appearance, last_login: new Date().toISOString() }, token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login failed' });
@@ -646,7 +649,8 @@ app.get('/api/dashboard', authMiddleware, async (req: AuthRequest, res) => {
       SELECT id, address as property_address, 'EPC', epc_expiry_date FROM properties WHERE epc_expiry_date IS NOT NULL AND epc_expiry_date <= CURRENT_DATE + INTERVAL '14 days'
       UNION ALL
       SELECT id, address as property_address, 'Gas Safety', gas_safety_expiry_date FROM properties WHERE has_gas = 1 AND gas_safety_expiry_date IS NOT NULL AND gas_safety_expiry_date <= CURRENT_DATE + INTERVAL '14 days'
-      ORDER BY expiry_date LIMIT 10
+      UNION ALL SELECT p.id,p.address,CASE pol.policy_type WHEN 'buildings' THEN 'Buildings Insurance' ELSE 'Rent Protection' END,pol.expiry_date FROM property_policies pol JOIN property_policy_allocations a ON a.policy_id=pol.id JOIN properties p ON p.id=a.property_id WHERE p.archived_at IS NULL AND pol.expiry_date<=CURRENT_DATE+INTERVAL '14 days' AND NOT EXISTS(SELECT 1 FROM property_policies newer JOIN property_policy_allocations na ON na.policy_id=newer.id WHERE na.property_id=p.id AND newer.policy_type=pol.policy_type AND newer.expiry_date>pol.expiry_date AND newer.commencement_date<=CURRENT_DATE)
+      ORDER BY expiry_date LIMIT 20
     `);
 
     const recentMaintenance = await query(`
@@ -1824,9 +1828,9 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
         html: content.html,
       });
       await insert(`
-        INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, status, sent_by, sent_by_email)
-        VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'enquiry_confirmation', $6, NULL, NULL)
-      `, [result.id || null, id, data.email_1, 'contact@tenancies.fleminglettings.co.uk', content.subject,
+        INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email)
+        VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'enquiry_confirmation', $6, $7, NULL, NULL)
+      `, [result.id || null, id, data.email_1, 'contact@tenancies.fleminglettings.co.uk', content.subject, content.html,
           result.simulated ? 'simulated' : (result.success ? 'sent' : 'failed')]);
     })().catch(err => console.error('Enquiry confirmation email failed:', err));
 
@@ -2633,6 +2637,7 @@ registerCompletionRoutes(app);
 registerTeamActivityRoutes(app);
 registerFeedbackRoutes(app);
 registerProfileRoutes(app);
+registerPropertyPolicies(app);
 registerInventoryReviewRoutes(app);
 registerFlemoRoutes(app);
 
@@ -2966,7 +2971,7 @@ app.get('/api/public/properties', publicReadLimiter, async (req, res) => {
 app.get('/api/public/application-form/:token', publicReadLimiter, async (req, res) => {
   try {
     const enquiry = await queryOne(`
-      SELECT te.*, p.address as property_address, p.postcode as property_postcode, p.rent_amount
+      SELECT te.*, p.address as property_address, p.postcode as property_postcode, p.rent_amount AS property_rent_amount, p.rent_amount
       FROM tenant_enquiries te
       LEFT JOIN properties p ON p.id = te.linked_property_id
       WHERE te.application_form_token = $1 OR te.application_form_slug = $1
@@ -2999,7 +3004,7 @@ app.get('/api/public/application-form/:token', publicReadLimiter, async (req, re
       first_name_2: enquiry.first_name_2, last_name_2: enquiry.last_name_2,
       email_2: enquiry.email_2, phone_2: enquiry.phone_2,
       property_address: enquiry.property_address, property_postcode: enquiry.property_postcode,
-      monthly_rent_agreed: enquiry.monthly_rent_agreed, holding_deposit_amount: enquiry.holding_deposit_amount,
+      monthly_rent_agreed: enquiry.monthly_rent_agreed ?? enquiry.property_rent_amount, holding_deposit_amount: enquiry.holding_deposit_amount,
       security_deposit_amount: enquiry.security_deposit_amount,
       app_form_data: enquiry.app_form_data || {},
       app_signature_name: enquiry.app_signature_name || null,
@@ -3139,13 +3144,15 @@ app.post('/api/public/application-form/:token/draft', publicDraftLimiter, async 
       if (typeof formData[key] === 'string') formData[key] = formData[key].replace(/,/g, '');
     }
     const enquiry = await queryOne(
-      'SELECT id, status FROM tenant_enquiries WHERE application_form_token = $1 OR application_form_slug = $1',
+      'SELECT te.id, te.status, te.monthly_rent_agreed, te.security_deposit_amount, p.rent_amount FROM tenant_enquiries te LEFT JOIN properties p ON p.id=te.linked_property_id WHERE te.application_form_token = $1 OR te.application_form_slug = $1',
       [req.params.token]
     );
     if (!enquiry) return res.status(404).json({ error: 'Form not found' });
     if (enquiry.status === 'converted') return res.status(410).json({ error: 'This application is now closed' });
+    formData.rental_amount=enquiry.monthly_rent_agreed ?? enquiry.rent_amount ?? '';
+    formData.deposit_amount=enquiry.security_deposit_amount ?? '';
     await run(
-      'UPDATE tenant_enquiries SET app_form_data = $1::jsonb, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      'UPDATE tenant_enquiries SET app_form_data = $1::jsonb, application_form_last_saved_at=NOW(), updated_at = CURRENT_TIMESTAMP WHERE id = $2',
       [JSON.stringify(formData), enquiry.id]
     );
     res.json({ success: true });
@@ -3165,7 +3172,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
     sanitizePublicStrings(req.body);
     const enquiry = await queryOne(`
       SELECT te.id, te.status, te.application_form_completed, te.application_review_status,
-        te.app_signature, te.app_signature_name,
+        te.app_signature, te.app_signature_name, te.monthly_rent_agreed, te.security_deposit_amount, p.rent_amount,
         p.address AS property_address, p.postcode AS property_postcode
       FROM tenant_enquiries te
       LEFT JOIN properties p ON p.id = te.linked_property_id
@@ -3189,6 +3196,8 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
     for (const key of ['gross_annual_income', 'current_monthly_rent', 'self_employed_annual_income', 'contractor_annual_income', 'guarantor_annual_income']) {
       if (typeof formData[key] === 'string') formData[key] = formData[key].replace(/,/g, '');
     }
+    formData.rental_amount=enquiry.monthly_rent_agreed ?? enquiry.rent_amount ?? '';
+    formData.deposit_amount=enquiry.security_deposit_amount ?? '';
     const missing = applicationFormIssues(formData);
     if (missing.length) return res.status(400).json({ error: 'Please complete all mandatory fields', missing_fields: missing });
 
@@ -3649,8 +3658,12 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
       client.release();
     }
 
+    let epcNotice='';
+    if(!d.epc_expiry_date){
+      try{const certificates=await searchEpc(d.postcode);const normalize=(s:string)=>s.toLowerCase().replace(/[^a-z0-9]/g,'');const address=normalize(d.address.split(',')[0]);const matches=certificates.filter(c=>normalize(c.address).startsWith(address));const match=matches[0];if(match&&match.lodgement_date){const expiry=new Date(match.lodgement_date);expiry.setUTCFullYear(expiry.getUTCFullYear()+10);if(Number.isFinite(expiry.getTime()))await run('UPDATE properties SET epc_grade=$1,epc_expiry_date=$2 WHERE id=$3',[match.current_rating,expiry.toISOString().slice(0,10),id]);}else epcNotice='Property saved. No matching EPC was found; add the certificate manually.';}catch(error){epcNotice='Property saved. '+(error instanceof Error?error.message:'EPC lookup unavailable. Enter certificate details manually.');}
+    }
     await logAudit(req.user?.id, req.user?.email, 'create', 'property', id);
-    res.json({ id });
+    res.json({ id,epc_notice:epcNotice });
   } catch (err) {
     console.error('Property creation error:', err);
     res.status(500).json({ error: 'Failed to create property' });
@@ -3672,7 +3685,9 @@ app.get('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
     `, [req.params.id as string]);
     if (!property) return res.status(404).json({ error: 'Property not found' });
     await logAudit(req.user?.id, req.user?.email, 'view', 'property', parseInt(req.params.id as string));
-    res.json(redactPropertyPortalPasswords(property));
+    const docs=await query("SELECT doc_type FROM documents WHERE entity_type='property' AND entity_id=$1 AND COALESCE(review_status,'pending')<>'rejected'",[property.id]);
+    const compliance=propertyCompliance({...property,documents:docs});
+    res.json({...redactPropertyPortalPasswords(property),compliance});
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch property' });
   }
@@ -3778,7 +3793,7 @@ app.put('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
       'charge_percentage','total_charge','rent_amount',
       'has_live_tenancy','tenancy_start_date','tenancy_type','has_end_date','tenancy_end_date',
       'rent_review_date','eicr_expiry_date','epc_grade','epc_expiry_date',
-      'has_gas','gas_safety_expiry_date','status','onboarded_date','notes','amenities','key_colour_code','tenant_id','image_url'
+      'has_gas','gas_safety_expiry_date','gas_safety_commissioned_date','status','onboarded_date','notes','amenities','key_colour_code','tenant_id','image_url'
     ];
     for (const key of allowed) {
       if (key in d) {
@@ -4321,9 +4336,9 @@ const DOC_TYPES: Record<string, string[]> = {
     'Tenant Deposit Certificate', 'Tenant Deposit Prescribed Information',
     'Signed Tenancy Agreement', 'Other',
   ],
-  tenant_enquiry: ['Primary Identification', 'Secondary Identification', 'Proof of Income or Employment', 'Bank Statements', 'Other Financial Document', 'Other'],
+  tenant_enquiry: ['Primary Identification', 'Secondary Identification', 'Proof of Income or Employment', 'Bank Statements', 'Other Financial Document', 'Right to Rent Share Code', 'Other'],
   property: [
-    'Property Photo', 'Gas Safety Certificate', 'EPC', 'EICR', 'How to Rent Guide',
+    'Property Photo', 'Gas Safety Certificate', 'EPC', 'EICR', 'Electrical Installation Certificate', 'Property Inspection Report', 'TDS Scheme Information', 'How to Rent Guide',
     'Renters Rights Information', 'Proof of Ownership', 'Insurance', 'Land Registry',
     'Legal Documents', 'Solicitors Correspondence', 'Management Company Correspondence',
     'Freeholder Correspondence', 'Tenant Communications', 'Damage Reports',
@@ -5181,18 +5196,21 @@ app.get('/api/property-expenses/:propertyId', authMiddleware, async (req: AuthRe
   }
 });
 
-app.post('/api/property-expenses', authMiddleware, async (req: AuthRequest, res) => {
+app.post('/api/property-expenses', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
   try {
-    const { property_id, description, amount, category, expense_date, is_recurring, recurrence_frequency } = req.body;
+    const validDate=(v:unknown)=>!v||(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v);
+    if(!['expense_date','coverage_start','coverage_end'].every(k=>validDate(req.body[k]))||(req.body.coverage_start&&req.body.coverage_end&&req.body.coverage_end<req.body.coverage_start))return res.status(400).json({error:'Choose valid expense and coverage dates'});
+    if(req.body.recurrence_frequency&&!['monthly','quarterly','six_monthly','annually'].includes(req.body.recurrence_frequency))return res.status(400).json({error:'Choose monthly, quarterly, six-monthly or annual costs'});
+    const { property_id, description, amount, category, expense_date, is_recurring, recurrence_frequency, coverage_start, coverage_end, payee } = req.body;
     if (!property_id || !String(description || '').trim() || !Number.isFinite(Number(amount)) || Number(amount) < 0) {
       return res.status(400).json({ error: 'Property, description, and amount are required' });
     }
     const id = await insert(
       `INSERT INTO property_expenses
-       (property_id, description, amount, category, expense_date, is_recurring, recurrence_frequency)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+       (property_id, description, amount, category, expense_date, is_recurring, recurrence_frequency,coverage_start,coverage_end,payee)
+       VALUES ($1, $2, $3, $4, $5, $6, $7,$8,$9,$10)`,
       [property_id, String(description).trim(), Number(amount), category || 'other', expense_date || null,
-       is_recurring ? 1 : 0, is_recurring ? recurrence_frequency || 'monthly' : null]
+       is_recurring ? 1 : 0, is_recurring ? recurrence_frequency || 'monthly' : null,coverage_start||null,coverage_end||null,payee||null]
     );
     await logAudit(req.user?.id, req.user?.email, 'create', 'property_expense', id, { property_id, category });
     res.json({ id });
@@ -5201,8 +5219,15 @@ app.post('/api/property-expenses', authMiddleware, async (req: AuthRequest, res)
   }
 });
 
-app.put('/api/property-expenses/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.put('/api/property-expenses/:id', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
   try {
+    const validDate=(v:unknown)=>!v||(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v);
+    if(!['expense_date','coverage_start','coverage_end'].every(k=>validDate(req.body[k]))||(req.body.coverage_start&&req.body.coverage_end&&req.body.coverage_end<req.body.coverage_start))return res.status(400).json({error:'Choose valid expense and coverage dates'});
+    if(req.body.recurrence_frequency&&!['monthly','quarterly','six_monthly','annually'].includes(req.body.recurrence_frequency))return res.status(400).json({error:'Choose monthly, quarterly, six-monthly or annual costs'});
+    const existing=await queryOne('SELECT * FROM property_expenses WHERE id=$1',[req.params.id]);
+    if(!existing)return res.status(404).json({error:'Expense not found'});
+    if(existing.policy_id)return res.status(409).json({error:'This cost belongs to an insurance policy. Add a renewal in Insurance to preserve its portfolio allocation.'});
+    const start=req.body.coverage_start===undefined?existing.coverage_start:req.body.coverage_start;const end=req.body.coverage_end===undefined?existing.coverage_end:req.body.coverage_end;if(start&&end&&new Date(end)<new Date(start))return res.status(400).json({error:'Coverage end must follow its start'});
     const d = req.body;
     if ('description' in d && !String(d.description || '').trim()) {
       return res.status(400).json({ error: 'Expense description is required' });
@@ -5210,7 +5235,7 @@ app.put('/api/property-expenses/:id', authMiddleware, async (req: AuthRequest, r
     if ('amount' in d && (!Number.isFinite(Number(d.amount)) || Number(d.amount) < 0)) {
       return res.status(400).json({ error: 'Expense amount must be zero or greater' });
     }
-    const allowed = ['description', 'amount', 'category', 'expense_date', 'is_recurring', 'recurrence_frequency'];
+    const allowed = ['description', 'amount', 'category', 'expense_date', 'is_recurring', 'recurrence_frequency','coverage_start','coverage_end','payee'];
     const fields: string[] = [];
     const values: unknown[] = [];
     for (const key of allowed) {
@@ -5263,8 +5288,10 @@ app.post('/api/property-expenses/:id/receipt', authMiddleware, requirePermission
   }
 });
 
-app.delete('/api/property-expenses/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.delete('/api/property-expenses/:id', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
   try {
+    const existing=await queryOne('SELECT policy_id FROM property_expenses WHERE id=$1',[req.params.id]);
+    if(existing?.policy_id)return res.status(409).json({error:'Insurance policy costs cannot be deleted individually. Add a renewal in Insurance.'});
     await run('DELETE FROM property_expenses WHERE id = $1', [req.params.id]);
     await logAudit(req.user?.id, req.user?.email, 'delete', 'property_expense', Number(req.params.id));
     res.json({ success: true });
@@ -7280,46 +7307,13 @@ app.get('/api/epc-lookup', authMiddleware, async (req: AuthRequest, res) => {
     const postcode = (req.query.postcode as string || '').trim();
     if (!postcode) return res.status(400).json({ error: 'Postcode required' });
 
-    const apiEmail = process.env.EPC_API_EMAIL;
-    const apiKey = process.env.EPC_API_KEY;
-    if (!apiKey || !apiEmail) {
-      return res.status(501).json({ error: 'EPC API credentials not configured' });
-    }
-
-    const url = `https://epc.opendatacommunities.org/api/v1/domestic/search?postcode=${encodeURIComponent(postcode)}&size=10`;
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${apiEmail}:${apiKey}`).toString('base64')}`,
-        Accept: 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      console.error('EPC API error:', response.status);
-      return res.status(response.status).json({ error: 'EPC API error' });
-    }
-
-    const text = await response.text();
-    if (!text || text.length === 0) return res.json([]);
-
-    const data = JSON.parse(text);
-    const results = (data.rows || []).map((r: any) => ({
-      address: r.address,
-      postcode: r.postcode,
-      current_rating: r['current-energy-rating'],
-      potential_rating: r['potential-energy-rating'],
-      current_efficiency: r['current-energy-efficiency'],
-      property_type: r['property-type'],
-      inspection_date: r['inspection-date'],
-      lodgement_date: r['lodgement-date'],
-      certificate_number: r['lmk-key'],
-    }));
+    const results = await searchEpc(postcode);
 
     await logAudit(req.user?.id, req.user?.email, 'view', 'epc_lookup');
     res.json(results);
   } catch (err) {
     console.error('EPC API error:', err);
-    res.status(500).json({ error: 'Failed to fetch EPC data' });
+    res.status(503).json({ error: err instanceof Error ? err.message : 'EPC lookup unavailable' });
   }
 });
 

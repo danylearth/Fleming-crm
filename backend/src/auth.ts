@@ -17,6 +17,7 @@ export interface AuthRequest extends Request {
     last_login?: string;
     avatar_url?: string;
     accent_color?: string;
+    appearance?: {font?: string;scale?: number;background?: string};
   };
 }
 
@@ -42,7 +43,7 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
     // Revocation: deactivating a user or changing their password invalidates
     // every token issued before that moment
     const user = await queryOne(
-      'SELECT is_active, last_password_change, role, name, email, last_login, avatar_url, accent_color FROM users WHERE id = $1',
+      'SELECT is_active, last_password_change, role, name, email, last_login, avatar_url, accent_color, appearance FROM users WHERE id = $1',
       [decoded.id]
     );
     if (!user || !user.is_active) {
@@ -53,7 +54,7 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
       return res.status(401).json({ error: 'Invalid token' });
     }
     // Role changes take effect on the next request, not the next login
-    req.user = { ...decoded, role: user.role, name: user.name, email: user.email, last_login: user.last_login, avatar_url: user.avatar_url, accent_color: user.accent_color };
+    req.user = { ...decoded, role: user.role, name: user.name, email: user.email, last_login: user.last_login, avatar_url: user.avatar_url, accent_color: user.accent_color, appearance: user.appearance };
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid token' });

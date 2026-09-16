@@ -8,7 +8,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import {
   Building2, Users, Wrench, MessageSquare, AlertTriangle,
-  Clock, CheckCircle2, ArrowRight, CalendarDays, Trash2, X
+  Clock, CheckCircle2, ArrowRight, CalendarDays, Trash2, X, ListChecks, Eye, KeyRound, Handshake
 } from 'lucide-react';
 
 interface MaintenanceItem {
@@ -34,7 +34,7 @@ interface Property {
 
 interface Task {
   dashboard_dismissed_at?: string;
-  id: number; title: string; description: string; status: string;
+  id: number; title: string; description: string; status: string; task_type?:string; entity_type?:string; entity_id?:number;
   priority: string; due_date: string; property_address?: string; assigned_to?: string;
 }
 
@@ -43,7 +43,7 @@ interface Enquiry {
   property_address?: string; property_id?: number; created_at?: string;
   email_1?: string; phone_1?: string;
   application_form_completed?: number | boolean; application_review_status?: string;
-  tenancy_agreement_completed?: boolean;
+  tenancy_agreement_completed?: boolean; updated_at?:string; follow_up_date?:string; holding_deposit_requested?:number; application_form_sent?:number;
 }
 
 export default function Dashboard() {
@@ -58,6 +58,8 @@ export default function Dashboard() {
   const [selectedTask,setSelectedTask]=useState<Task|null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
+  const [landlordEnquiries,setLandlordEnquiries]=useState<{id:number;name?:string;first_name?:string;last_name?:string;status:string;updated_at?:string;created_at?:string;follow_up_date?:string}[]>([]);
+  const [pipelineOldest,setPipelineOldest]=useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -67,12 +69,13 @@ export default function Dashboard() {
       api.get('/api/tasks').catch(() => []),
       api.get('/api/tenant-enquiries').catch(() => []),
       api.get('/api/users/options').catch(()=>[]),
-    ]).then(([dash, props, tks, enqs, members]) => {
-      setTeamMembers(members);
+      api.get('/api/landlords-bdm').catch(()=>[]),
+    ]).then(([dash, props, tks, enqs, members, bdm]) => {
+      setTeamMembers(members);setLandlordEnquiries(bdm);
       setDashboard(dash);
       setProperties(Array.isArray(props) ? props : []);
       setTasks(Array.isArray(tks) ? tks : []);
-      setEnquiries(Array.isArray(enqs) ? enqs.filter((enquiry: Enquiry) => enquiry.status === 'new') : []);
+      setEnquiries(Array.isArray(enqs) ? enqs.filter((enquiry: Enquiry) => !['rejected','converted','closed'].includes(enquiry.status)) : []);
     }).finally(() => setLoading(false));
   }, [api]);
 
@@ -122,6 +125,13 @@ export default function Dashboard() {
   };
 
   const visibleRecentTasks = tasks.filter(task => !task.dashboard_dismissed_at && (taskOwner==='all' || (taskOwner==='me' ? [String(user?.id),user?.name].includes(task.assigned_to) : [taskOwner,teamMembers.find(member=>String(member.id)===taskOwner)?.name].includes(String(task.assigned_to)))));
+
+  const todayKey=new Date(now).toLocaleDateString('en-CA',{timeZone:'Europe/London'});
+  const pipeline=[
+    ...enquiries.map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',type:'Tenant',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.application_form_completed&&e.application_review_status!=='approved'?'Application Ready for Review':e.status.replaceAll('_',' '),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
+    ...landlordEnquiries.filter(e=>!['onboarded','not_interested','rejected','closed'].includes(e.status)).map(e=>({key:`landlord-${e.id}`,name:e.name||[e.first_name,e.last_name].filter(Boolean).join(' ')||'Landlord Enquiry',type:'Landlord',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.status.replaceAll('_',' '),href:`/bdm/${e.id}`,onboarding:false})),
+    ...tasks.filter(t=>t.entity_type==='tenant'&&t.task_type==='follow_up'&&t.status!=='completed'&&t.due_date?.slice(0,10)<=todayKey).map(t=>({key:`followup-${t.id}`,name:t.title,type:'Tenant Follow-up',date:t.due_date,status:'Follow-up Due',href:`/tasks/${t.id}`,onboarding:false})),
+  ].sort((a,b)=>(Date.parse(a.date||'1970-01-01')-Date.parse(b.date||'1970-01-01'))*(pipelineOldest?1:-1));
 
   const deleteTask = async (task: Task) => {
     if (!await confirmAction(`Delete reminder “${task.title}”?`)) return;
@@ -179,7 +189,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Compliance and maintenance alerts */}
           <Card className="p-6">
-            <SectionHeader title="Compliance Alerts & Maintenance Requests" action={() => navigate('/maintenance')} actionLabel="View All" />
+            <SectionHeader title="Compliance Alerts & Maintenance Requests" icon={<AlertTriangle size={16}/>} action={() => navigate('/maintenance')} actionLabel="View All" />
             {dashboard?.complianceAlerts?.length || dashboard?.recentMaintenance?.length ? (
               <div className="space-y-3">
                 {dashboard.complianceAlerts.slice(0, 3).map((alert, i) => (
@@ -215,68 +225,14 @@ export default function Dashboard() {
 
           {/* Pipeline */}
           <Card className="p-6">
-            <SectionHeader title="Enquiry Pipeline" action={() => navigate('/enquiries')} actionLabel="View All" />
-            {enquiries.length ? (
-              <div className="space-y-3">
-                {enquiries.slice(0, 5).map((enq) => {
-                  const name = [enq.first_name_1, enq.last_name_1].filter(Boolean).join(' ') || 'Unknown';
-                  const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-                    new: { label: 'New', color: 'text-blue-400', bg: 'bg-blue-500/20' },
-                    viewing: { label: 'Viewing', color: 'text-purple-400', bg: 'bg-purple-500/20' },
-                    awaiting: { label: 'Awaiting', color: 'text-amber-400', bg: 'bg-amber-500/20' },
-                    in_progress: { label: 'In Progress', color: 'text-amber-400', bg: 'bg-amber-500/20' },
-                    onboarding: { label: 'Onboarding', color: 'text-cyan-400', bg: 'bg-cyan-500/20' },
-                    completed: { label: 'Completed', color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
-                    converted: { label: 'Converted', color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
-                    rejected: { label: 'Rejected', color: 'text-red-400', bg: 'bg-red-500/20' },
-                    closed: { label: 'Closed', color: 'text-gray-400', bg: 'bg-gray-500/20' },
-                  };
-                  const cfg = statusConfig[enq.status] || { label: enq.status, color: 'text-gray-400', bg: 'bg-gray-500/20' };
-                  const readyForReview = !!enq.application_form_completed && enq.application_review_status === 'pending';
-                  const daysAgo = enq.created_at ? Math.floor((now - new Date(enq.created_at).getTime()) / (1000 * 60 * 60 * 24)) : null;
-
-                  return (
-                    <div
-                      key={enq.id}
-                      onClick={() => navigate('/enquiries')}
-                      className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${cfg.bg} ${cfg.color} shrink-0`}>
-                          <MessageSquare size={14} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{name}</p>
-                          <p className="text-xs text-[var(--text-muted)] truncate">
-                            {enq.property_address || 'No property linked'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 ml-3">
-                        {readyForReview && <span className="mb-1 inline-block rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">New</span>}
-                        <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
-                        {daysAgo !== null && (
-                          <p className="text-xs text-[var(--text-muted)]">
-                            {daysAgo === 0 ? 'Today' : `${daysAgo}d ago`}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-                {enquiries.length > 5 && (
-                  <p className="text-xs text-[var(--text-muted)] pt-1">+{enquiries.length - 5} more enquiries</p>
-                )}
-              </div>
-            ) : (
-              <EmptyState message="No enquiries yet" />
-            )}
+            <SectionHeader title="Enquiry Pipeline" icon={<MessageSquare size={16}/>} action={() => navigate('/enquiries')} actionLabel="View All" />
+            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="w-full text-sm text-left"><thead><tr className="text-xs text-[var(--text-muted)]"><th className="py-3">Enquiry / Action</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="rounded-full border px-3 py-2" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="sr-only">Open</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-3 pr-3"><button className="text-left" onClick={()=>navigate(row.href)}><strong className="block">{row.name}</strong><span className="text-xs text-[var(--text-muted)]">{row.type} · {row.status}</span></button></td><td className="text-xs whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="pl-3"><Button size="sm" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue Onboarding':'Open'}</Button></td></tr>)}</tbody></table></div>:<EmptyState message="No enquiries or follow-ups awaiting action"/>}
           </Card>
         </div>
 
         {/* Team Calendar */}
         <Card className="p-6">
-          <SectionHeader title="Team Calendar" action={() => navigate('/tasks')} actionLabel="Open Calendar" />
+          <SectionHeader title="Team Calendar" icon={<CalendarDays size={16}/>} action={() => navigate('/tasks')} actionLabel="Open Calendar" />
           <div className="grid grid-cols-7 gap-2">
             {calendarDays.map(({ key, date, tasks: dayTasks }, index) => (
               <button
@@ -298,11 +254,8 @@ export default function Dashboard() {
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-xs text-[var(--text-muted)]">
-            <CalendarDays size={14} />
             {[...new Set(calendarDays.flatMap(day => day.tasks.map(task => task.assigned_to).filter(Boolean)))].map(name => (
-              <span key={name} className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${colorForMember(name)}`} />{teamMembers.find(member=>String(member.id)===name)?.name || name}
-              </span>
+              <div key={name}><span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${colorForMember(name)}`} />{teamMembers.find(member=>String(member.id)===String(name))?.name || name}</span><div className="flex flex-wrap gap-3 mt-2">{[{label:'Viewings',kind:'viewing',Icon:Eye},{label:'Handovers',kind:'handover',Icon:KeyRound},{label:'Meetings',kind:'meeting',Icon:Handshake},{label:'Tasks Due Today',kind:'today',Icon:ListChecks}].map(({label,kind,Icon})=>{const count=calendarDays.flatMap(day=>day.tasks).filter(t=>String(t.assigned_to)===String(name)&&(kind==='today'?t.due_date?.slice(0,10)===todayKey:t.task_type===kind)).length;return count?<span key={kind} className="flex items-center gap-1 text-[10px]"><Icon size={12}/>{count} {label}</span>:null;})}</div></div>
             ))}
             {calendarDays.some(day => day.tasks.some(task => !task.assigned_to)) && (
               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-400" />Unassigned</span>
@@ -312,7 +265,7 @@ export default function Dashboard() {
 
         {/* Recent Tasks */}
         <Card className="p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4"><div className="flex-1 min-w-48"><SectionHeader title="Recent Tasks" action={() => navigate('/tasks')} actionLabel="View All" /></div><Select className="w-52" label="Assigned To" value={taskOwner} onChange={setTaskOwner} options={[{value:'me',label:'My Tasks'},...teamMembers.map(member=>({value:String(member.id),label:member.name})),{value:'all',label:'View All'}]} />{user?.role === 'admin' && visibleRecentTasks.length > 0 && <button className="self-end rounded-full bg-red-600 px-4 py-2.5 text-xs text-white font-medium whitespace-nowrap" onClick={async () => { if (!await confirmAction('Clear all recent tasks from the dashboard? They will remain available in Team Calendar.', 'Clear Recent Tasks')) return; try { await api.post('/api/tasks/clear-recent', {}); setTasks(current => current.map(t => ({ ...t, dashboard_dismissed_at: new Date().toISOString() }))); } catch (e) { alert(e instanceof Error ? e.message : 'Could not clear tasks'); } }}>Clear All</button>}</div>
+          <div className="flex flex-wrap items-end justify-between gap-4"><div className="flex-1 min-w-48"><SectionHeader title="Tasks" icon={<ListChecks size={16}/>} action={() => navigate('/tasks')} actionLabel="View All" /></div><Select className="w-52" label="Assigned To" value={taskOwner} onChange={setTaskOwner} options={[{value:'me',label:'My Tasks'},...teamMembers.map(member=>({value:String(member.id),label:member.name})),{value:'all',label:'View All'}]} />{user?.role === 'admin' && visibleRecentTasks.length > 0 && <button className="self-end rounded-full bg-red-600 px-4 py-2.5 text-xs text-white font-medium whitespace-nowrap" onClick={async () => { if (!await confirmAction('Clear all recent tasks from the dashboard? They will remain available in Team Calendar.', 'Clear Recent Tasks')) return; try { await api.post('/api/tasks/clear-recent', {}); setTasks(current => current.map(t => ({ ...t, dashboard_dismissed_at: new Date().toISOString() }))); } catch (e) { alert(e instanceof Error ? e.message : 'Could not clear tasks'); } }}>Clear All</button>}</div>
           {visibleRecentTasks.length ? (
             <div className="space-y-2">
               {visibleRecentTasks.slice(0, 5).map(task => (

@@ -58,7 +58,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
   }, [location.pathname, title]);
 
   return (
-    <div className="flex h-screen bg-[var(--bg-page)] font-[Lufga] text-[var(--text-primary)] overflow-hidden">
+    <div className="flex h-screen bg-[var(--bg-page)] font-[family-name:var(--user-font)] text-[var(--text-primary)] overflow-hidden">
       {/* Mobile overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 bg-[var(--overlay-bg)] z-40 md:hidden" onClick={() => setMobileOpen(false)} />
@@ -76,7 +76,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
             <img
               src={theme === 'dark' ? '/logo-light.png' : '/logo-dark.png'}
               alt="Fleming Lettings"
-              className="h-11 w-auto max-w-[180px] object-contain"
+              className="h-14 w-auto max-w-[190px] object-contain"
             />
           ) : (
             <img

@@ -239,7 +239,7 @@ export default function EnquiryDetail() {
   const [smsSending, setSmsSending] = useState(false);
 
   // Onboarding wizard
-  const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
+  const [showOnboardingWizard, setShowOnboardingWizard] = useState(()=>new URLSearchParams(window.location.search).get('onboarding')==='1');
 
   // Email History
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1197,7 +1197,7 @@ export default function EnquiryDetail() {
                   <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <button onClick={() => setWorkflowMode('onboarding')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                <button onClick={() => { if (form.holding_deposit_requested || form.application_form_sent || form.onboarding_step) { setShowWorkflow(false); setShowOnboardingWizard(true); } else setWorkflowMode('onboarding'); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center"><OnboardingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">{form.holding_deposit_requested || form.application_form_sent || form.onboarding_step ? 'Continue Onboarding' : 'Start Onboarding'}</p><p className="text-xs text-[var(--text-muted)]">{form.holding_deposit_requested || form.application_form_sent || form.onboarding_step ? 'Continue the tenant’s onboarding' : 'Begin tenant onboarding'}</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />

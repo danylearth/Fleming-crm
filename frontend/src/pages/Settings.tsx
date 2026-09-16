@@ -2,9 +2,9 @@ import FreeAgentConnection from '../components/FreeAgentConnection';
 import FlemoConnection from '../components/FlemoConnection';
 import PermissionRequests from '../components/ui/PermissionRequests';
 import { useTheme } from '../context/ThemeContext';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Avatar, SectionHeader } from '../components/ui';
+import { GlassCard, Button, Input, Avatar, SectionHeader, Select } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 import { Camera, Lock, Palette } from 'lucide-react';
@@ -33,12 +33,13 @@ export default function Settings() {
     } catch (error) { setProfileMessage(error instanceof Error ? error.message : 'Photo could not be uploaded'); }
     finally { setProfileBusy(false); }
   };
-  const selectColor = async (accent_color: string) => {
-    setProfileBusy(true);
-    try { const data = await api.put('/api/auth/profile', {accent_color}); updateUser(data); setProfileMessage('Appearance saved'); }
-    catch (error) { setProfileMessage(error instanceof Error ? error.message : 'Appearance could not be saved'); }
-    finally { setProfileBusy(false); }
-  };
+  const [accent,setAccent]=useState(user?.accent_color || '#a32372');
+  const [appearance,setAppearance]=useState({font:user?.appearance?.font || 'lufga',scale:user?.appearance?.scale || 100,background:user?.appearance?.background || 'default'});
+  const [appearanceMsg,setAppearanceMsg]=useState('');
+  const [appearanceBusy,setAppearanceBusy]=useState(false);
+  const [loginHistory,setLoginHistory]=useState<{created_at:string}[]>([]);
+  useEffect(()=>{let active=true;api.get('/api/auth/login-history').then(data=>{if(active)setLoginHistory(data);}).catch(()=>{});return()=>{active=false;};},[api]);
+  const saveAppearance=async()=>{setAppearanceBusy(true);setAppearanceMsg('');try{const data=await api.put('/api/auth/profile',{accent_color:accent,appearance});updateUser(data);setAppearanceMsg('Appearance saved');}catch(error){setAppearanceMsg(error instanceof Error?error.message:'Could not save appearance');}finally{setAppearanceBusy(false);}};
 
   const handlePasswordChange = async () => {
     if (!oldPassword || !newPassword || !confirmPassword) {
@@ -90,7 +91,7 @@ export default function Settings() {
               <p className="text-sm text-[var(--text-secondary)]">{user?.email || ''}</p>
             </div>
           </div>
-          <p role="status" className="mt-4 text-sm">{profileMessage || 'Click your photo to upload a JPG, PNG or WebP (up to 5 MB).'}</p>
+          <p role="status" className="mt-4 text-sm">{profileMessage || 'Click your photo to upload a JPG, PNG or WebP (up to 5 MB).'}</p><p className="mt-3 text-sm">Last Login: {user?.last_login ? new Date(user.last_login).toLocaleString('en-GB') : 'Not Recorded'}</p><details className="mt-3 text-sm"><summary>Recent Login History</summary>{loginHistory.map((row,i)=><p key={i} className="mt-2">{new Date(row.created_at).toLocaleString('en-GB')}</p>)}</details>
         </GlassCard>
 
         <PermissionRequests />
@@ -122,7 +123,8 @@ export default function Settings() {
         <GlassCard className="p-6">
           <SectionHeader title="Appearance" />
           <p className="text-sm text-[var(--text-secondary)] mb-3">Choose your colour. This preference follows your account.</p>
-          <div className="flex flex-wrap gap-3 mb-4">{[['Fleming pink','#a32372'],['Purple','#6d28d9'],['Blue','#1d4ed8'],['Teal','#0f766e'],['Forest','#166534']].map(([name,color]) => <button key={color} type="button" disabled={profileBusy} aria-label={name} aria-pressed={(user?.accent_color || '#a32372') === color} onClick={() => void selectColor(color)} className="w-11 h-11 rounded-full border-4 border-white/50 text-white" style={{background:color}}>{(user?.accent_color || '#a32372') === color ? '✓' : ''}</button>)}</div>
+          <div className="flex flex-wrap gap-3 mb-4">{[['Fleming pink','#a32372'],['Purple','#6d28d9'],['Blue','#1d4ed8'],['Teal','#0f766e'],['Forest','#166534']].map(([name,color]) => <button key={color} type="button" disabled={appearanceBusy} aria-label={name} aria-pressed={accent === color} onClick={() => setAccent(color)} className="w-11 h-11 rounded-full border-4 border-white/50 text-white" style={{background:color}}>{accent === color ? '✓' : ''}</button>)}</div>
+          <div className="grid sm:grid-cols-2 gap-4 mb-4"><Select label="Font" value={appearance.font} onChange={font=>setAppearance(a=>({...a,font}))} options={[{value:'lufga',label:'Fleming Lufga'},{value:'system',label:'System Font'},{value:'verdana',label:'Verdana'}]}/><Select label="Text Size" value={String(appearance.scale)} onChange={scale=>setAppearance(a=>({...a,scale:Number(scale)}))} options={[100,112.5,125,150].map(v=>({value:String(v),label:`${v}%`}))}/><Select label="Light Mode Background" value={appearance.background} onChange={background=>setAppearance(a=>({...a,background}))} options={['default','cream','blue','green'].map(v=>({value:v,label:v[0].toUpperCase()+v.slice(1)}))}/></div><Button disabled={appearanceBusy} onClick={()=>void saveAppearance()}>{appearanceBusy?'Saving…':'Save Appearance'}</Button><p role="status" className="mt-3 text-sm">{appearanceMsg}</p>
           <div className="space-y-4 text-sm text-[var(--text-secondary)]">
             <div className="flex items-center justify-between py-2">
               <div className="flex items-center gap-3">

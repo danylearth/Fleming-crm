@@ -421,7 +421,7 @@ export default function Properties() {
           saving={saving}
           onClose={() => { setShowAdd(false); resetForm(); }}
           onSubmit={async () => {
-            if (form.has_gas === null || form.has_management_company === null) return;
+            if (form.has_gas === null || (form.is_leasehold && form.has_management_company === null)) return;
             setSaving(true);
             try {
               const res = await api.post('/api/properties', {
@@ -431,6 +431,7 @@ export default function Properties() {
                 rent_amount: Number(form.rent_amount) || 0,
                 has_gas: form.has_gas,
               });
+              if(res.epc_notice)alert(res.epc_notice);
               setShowAdd(false);
               resetForm();
               navigate(`/properties/${res.id}`);
@@ -596,7 +597,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
         </div>
 
         <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
-          <fieldset><legend className="text-sm font-medium mb-2">Is this a freehold or leasehold property?</legend><div className="flex gap-2">{[false,true].map(value => <button key={String(value)} type="button" aria-pressed={form.is_leasehold === value} onClick={() => setForm(f => ({...f,is_leasehold:value}))} className={`flex-1 rounded-xl border p-3 text-sm ${form.is_leasehold === value ? 'bg-[var(--btn-primary-bg)] text-white' : 'border-[var(--border-input)]'}`}>{value ? 'Leasehold' : 'Freehold'}</button>)}</div></fieldset>
+          <fieldset><legend className="text-sm font-medium mb-2">Is this a freehold or leasehold property?</legend><div className="flex gap-2">{[false,true].map(value => <button key={String(value)} type="button" aria-pressed={form.is_leasehold === value} onClick={() => setForm(f => ({...f,is_leasehold:value,has_management_company:value?null:false}))} className={`flex-1 rounded-xl border p-3 text-sm ${form.is_leasehold === value ? 'bg-[var(--btn-primary-bg)] text-white' : 'border-[var(--border-input)]'}`}>{value ? 'Leasehold' : 'Freehold'}</button>)}</div></fieldset>
                     {form.is_leasehold && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Leasehold Issued By" value={form.leasehold_issued_by} onChange={leasehold_issued_by => setForm((current: PropertyForm) => ({ ...current, leasehold_issued_by }))} />
             <Input label="Email Address" type="email" value={form.leasehold_email} onChange={leasehold_email => setForm((current: PropertyForm) => ({ ...current, leasehold_email }))} />
@@ -608,7 +609,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
           </div>}
         </div>
 
-        <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
+        {form.is_leasehold && <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
           <label className="block text-xs font-medium text-[var(--text-secondary)]">Is there a management company in place? *</label>
           <div className="grid grid-cols-2 gap-2">
             {([{ value: true, label: 'Yes' }, { value: false, label: 'No' }] as const).map(option => (
@@ -627,11 +628,11 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
             <Input label="Portal Username" value={form.management_company_portal_username} onChange={management_company_portal_username => setForm((current: PropertyForm) => ({ ...current, management_company_portal_username }))} />
             <Input label="Portal Notes" value={form.management_company_notes} onChange={management_company_notes => setForm((current: PropertyForm) => ({ ...current, management_company_notes }))} className="sm:col-span-2" />
           </div>}
-        </div>
+        </div>}
 
         <div className="flex gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.landlord_id || !form.address.trim() || !form.city.trim() || !form.postcode.trim() || !form.status || form.has_gas === null || form.has_management_company === null || (!isMyPortfolio && !form.service_type)}>
+          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.landlord_id || !form.address.trim() || !form.city.trim() || !form.postcode.trim() || !form.status || form.has_gas === null || (form.is_leasehold && form.has_management_company === null) || (!isMyPortfolio && !form.service_type)}>
             {saving ? 'Creating...' : 'Create Property'}
           </Button>
         </div>

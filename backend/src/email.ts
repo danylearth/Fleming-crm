@@ -22,7 +22,7 @@ function renderFinalEmailTemplate(filename: string, values: Record<string, strin
   if (unresolved) throw new Error(`Missing values for ${filename}: ${[...new Set(unresolved)].join(', ')}`);
   // Email clients need absolute, publicly reachable image URLs.
   html = html.replace(/src="assets\//g, 'src="https://crm.fleminglettings.co.uk/email-assets/');
-  return html;
+  return html.replace('</head>', '<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><style>:root{color-scheme:light only}body{color-scheme:light only}</style></head>');
 }
 
 function addressParts(address: string): { full: string; short: string; remainder: string } {

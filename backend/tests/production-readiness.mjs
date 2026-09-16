@@ -447,6 +447,64 @@ try {
     assert.deepEqual(first,{status:'active',current_address:'21A New Street, WV1 2AB',previous_address:'26 Old Street',address_before_previous:'Earlier Home'});
     await ok('/api/tenants',{token:auth.admin});assert.deepEqual(await one('SELECT status,current_address,previous_address,address_before_previous FROM tenants WHERE id=$1',[t.id]),first);
   });
+  await test('all three compliance documents and date changes update property readiness',async()=>{
+    let detail=await ok(`/api/properties/${property.id}`,{token:auth.staff});
+    assert(detail.compliance.items.find(i=>i.docType==='EPC').ready);
+    await ok(`/api/properties/${property.id}`,{method:'PUT',token:auth.staff,body:{has_gas:true,gas_safety_commissioned_date:'2026-01-01',gas_safety_expiry_date:'2030-01-01'}});
+    detail=await ok(`/api/properties/${property.id}`,{token:auth.staff});assert.equal(detail.compliance.items.length,3);assert.equal(detail.compliance.ready,false);
+    await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('property',$1,'Gas Safety Certificate','sample.pdf','Gas.pdf','application/pdf','approved')",[property.id]);
+    detail=await ok(`/api/properties/${property.id}`,{token:auth.staff});assert.equal(detail.compliance.ready,true);assert.equal(detail.gas_safety_commissioned_date,'2026-01-01');
+    for(const key of ['epc_expiry_date','eicr_expiry_date','gas_safety_expiry_date']){await ok(`/api/properties/${property.id}`,{method:'PUT',token:auth.staff,body:{[key]:'2020-01-01'}});assert.equal((await ok(`/api/properties/${property.id}`,{token:auth.staff})).compliance.ready,false);await ok(`/api/properties/${property.id}`,{method:'PUT',token:auth.staff,body:{[key]:'2030-01-01'}});}
+  });
+  await test('portfolio insurance allocates once and rejects individual edits, invalid dates and viewer writes',async()=>{
+    const payload={policy_type:'buildings',annual_cost:100,commencement_date:today,expiry_date:'2030-01-01',property_ids:[property.id,reviewProperty.id],policy_number:'TEST-123'};
+    assert.equal((await request(`/api/properties/${property.id}/policies`,{method:'POST',token:auth.viewer,body:payload})).status,403);
+    assert.equal((await request(`/api/properties/${property.id}/policies`,{method:'POST',token:auth.staff,body:{...payload,expiry_date:'2026-02-31'}})).status,400);
+    const saved=await request(`/api/properties/${property.id}/policies`,{method:'POST',token:auth.staff,body:payload});assert.equal(saved.status,201,JSON.stringify(saved));
+    const costs=await sql('SELECT id,amount FROM property_expenses WHERE policy_id=$1',[saved.data.id]);assert.equal(costs.length,2);assert.equal(costs.reduce((sum,c)=>sum+Number(c.amount),0),100);
+    for(const method of ['PUT','DELETE'])assert.equal((await request(`/api/property-expenses/${costs[0].id}`,{method,token:auth.staff,body:method==='PUT'?{amount:400}:undefined})).status,409);
+    const coverage=await request('/api/property-expenses',{method:'POST',token:auth.staff,body:{property_id:property.id,description:'Ground Rent',amount:150,coverage_start:'2026-06-24',coverage_end:'2027-06-23',is_recurring:true,recurrence_frequency:'six_monthly'}});assert.equal(coverage.status,200);
+    assert.equal((await request('/api/property-expenses',{method:'POST',token:auth.staff,body:{property_id:property.id,description:'Invalid',amount:1,coverage_start:'2027-01-01',coverage_end:'2026-01-01'}})).status,400);
+  });
+  await test('appearance persists only for the current user; login history and encoded-page activity work',async()=>{
+    const appearance={font:'verdana',scale:125,background:'cream'};
+    await ok('/api/auth/profile',{method:'PUT',token:auth.staff,body:{accent_color:'#a32372',appearance}});
+    assert.deepEqual((await one("SELECT appearance FROM users WHERE email='staff@example.test'")).appearance,appearance);
+    assert.deepEqual((await one("SELECT appearance FROM users WHERE email='admin@example.test'")).appearance,{});
+    assert.equal((await request('/api/auth/profile',{method:'PUT',token:auth.staff,body:{accent_color:'#a32372',appearance:{...appearance,scale:999}}})).status,400);
+    assert((await ok('/api/auth/login-history',{token:auth.staff})).length>0);
+    await ok('/api/activity/heartbeat',{method:'POST',token:auth.staff,body:{page:'/tenants/12-tara-o%E2%80%99hanlon',navigation:true}});
+  });
+  await test('Flemo email proposals are user-bound, one-use and cannot claim a failed send succeeded',async()=>{
+    const id='de69da40-d21a-45d8-942c-575e5e6bd246';const u=await one("SELECT id FROM users WHERE email='admin@example.test'");
+    await sql('INSERT INTO ai_action_requests(id,user_id,payload) VALUES($1,$2,$3)',[id,u.id,JSON.stringify({to:'recipient@example.test',subject:'Test report',text:'Test content',document_ids:[]})]);
+    const body={payload:{request_id:id,to:'forged@example.test'}};
+    assert.equal((await request('/api/ai/execute',{method:'POST',token:auth.viewer,body})).status,403);
+    assert.equal((await request('/api/ai/execute',{method:'POST',token:auth.staff,body})).status,409);
+    assert.equal((await request('/api/ai/execute',{method:'POST',token:auth.admin,body})).status,502);
+    const saved=await one("SELECT to_email,status FROM email_messages WHERE template='flemo_report' ORDER BY id DESC LIMIT 1");assert.equal(saved.to_email,'recipient@example.test');assert.equal(saved.status,'failed');
+    assert.equal((await request('/api/ai/execute',{method:'POST',token:auth.admin,body})).status,409);
+  });
+  await test('signed PDFs over 25 MB support undated signatures and one shared joint-tenancy inventory',async()=>{
+    const t=await one('SELECT tenancy_start_date FROM tenants WHERE id=$1',[reviewTenant.id]);
+    const partner=await one("INSERT INTO tenants(first_name_1,last_name_1,name,property_id,tenancy_start_date,linked_tenant_id) VALUES('Inventory','Joint Test','Inventory Joint Test',$1,$2,$3) RETURNING id",[reviewProperty.id,t.tenancy_start_date,reviewTenant.id]);
+    await sql('UPDATE tenants SET linked_tenant_id=$1 WHERE id=$2',[partner.id,reviewTenant.id]);
+    const large=Buffer.concat([pdf,Buffer.alloc(26*1024*1024,32)]);
+    writeFileSync(path.join(dir,'legacy-inventory.pdf'),large);
+    const legacy=await one("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,size) VALUES('property',$1,'Inventory','legacy-inventory.pdf','Old Inventory.pdf','application/pdf',$2) RETURNING id",[reviewProperty.id,large.length]);
+    const upload=async(id,file)=>{const f=new FormData();f.append('file',new Blob([file],{type:'application/pdf'}),'Large signed inventory.pdf');f.append('tenant_id',String(id));f.append('inspection_date',today);f.append('signature_date_unknown','true');const r=await fetch(base+`/api/properties/${reviewProperty.id}/inventory-document`,{method:'POST',headers:{Authorization:`Bearer ${auth.staff}`},body:f});return {status:r.status,data:await r.json()};};
+    const saved=await upload(reviewTenant.id,large);assert.equal(saved.status,200,JSON.stringify(saved));
+    assert.equal((await one('SELECT inventory_id FROM documents WHERE id=$1',[legacy.id])).inventory_id,saved.data.id);
+    const row=await one('SELECT signed_document,signed_date FROM inventories WHERE id=$1',[saved.data.id]);assert.equal(row.signed_document,true);assert.equal(row.signed_date,null);
+    assert.equal((await upload(partner.id,pdf)).status,409);
+    const links=await sql("SELECT entity_id FROM documents WHERE inventory_id=$1 AND entity_type='tenant'",[saved.data.id]);assert.deepEqual(links.map(l=>l.entity_id).sort((a,b)=>a-b),[reviewTenant.id,partner.id].sort((a,b)=>a-b));
+    assert.equal((await request(`/api/inventories/${saved.data.id}`,{method:'DELETE',token:auth.staff})).status,403);
+  });
+  await test('public drafts cannot override agreed rent/deposit and record last saved time',async()=>{
+    const row=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,status,linked_property_id,application_form_token,monthly_rent_agreed,security_deposit_amount) VALUES('Draft','Test','draft@example.test','onboarding',$1,'locked-finances-test',1200,1300) RETURNING id",[property.id]);
+    await ok('/api/public/application-form/locked-finances-test/draft',{method:'POST',body:{app_form_data:{rental_amount:'1',deposit_amount:'2',employment_status:'Retired'}}});
+    const saved=await one('SELECT app_form_data,application_form_last_saved_at FROM tenant_enquiries WHERE id=$1',[row.id]);assert.equal(Number(saved.app_form_data.rental_amount),1200);assert.equal(Number(saved.app_form_data.deposit_amount),1300);assert(saved.application_form_last_saved_at);
+  });
   console.log(`\n${passed} integration scenarios passed. Private artifacts: ${dir}`);
 } catch(error) { console.error(error); console.error('Server log:',path.join(dir,'server.log')); process.exitCode=1; }
 finally { server.kill('SIGTERM'); await once(server,'exit').catch(()=>{}); await db.end(); }

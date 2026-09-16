@@ -151,6 +151,7 @@ export default function EmailPreviewModal({
                   title="Email preview"
                   sandbox=""
                   srcDoc={bodyHtml}
+                  style={{colorScheme:'light',backgroundColor:'#ffffff'}}
                   className="w-full h-[60vh] min-h-96 border-0"
                 />
               </div>

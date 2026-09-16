@@ -17,6 +17,7 @@ interface Expense {
   recurrence_frequency: string | null;
   receipt_document_id: number | null;
   receipt_name: string | null;
+  coverage_start?:string|null;coverage_end?:string|null;payee?:string|null;policy_id?:number|null;
 }
 
 interface ExpenseForm {
@@ -26,11 +27,12 @@ interface ExpenseForm {
   expense_date: string;
   is_recurring: boolean;
   recurrence_frequency: string;
+  coverage_start:string;coverage_end:string;payee:string;
 }
 
 const EMPTY_FORM: ExpenseForm = {
   description: '', amount: '', category: 'maintenance', expense_date: '',
-  is_recurring: false, recurrence_frequency: 'monthly',
+  is_recurring: false, recurrence_frequency: 'monthly',coverage_start:'',coverage_end:'',payee:'',
 };
 
 const CATEGORIES = [
@@ -85,6 +87,8 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
   const yearOptions = useMemo(() => {
     const values = new Set(expenses.map(expense => expense.expense_date ? ukFinancialYear(expense.expense_date) : expense.expense_year ? `calendar:${expense.expense_year}` : 'undated'));
     values.add(currentFinancialYear);
+    const starts=[...values].filter(v=>/^\d{4}-\d{4}$/.test(v)).map(v=>Number(v.slice(0,4)));
+    for(let y=Math.min(...starts);y<=Math.max(...starts);y++)values.add(`${y}-${y+1}`);
     return ['all', ...[...values].sort().reverse()];
   }, [currentFinancialYear, expenses]);
 
@@ -130,7 +134,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
       category: expense.category,
       expense_date: expense.expense_date?.slice(0, 10) || '',
       is_recurring: Boolean(expense.is_recurring),
-      recurrence_frequency: expense.recurrence_frequency || 'monthly',
+      recurrence_frequency: expense.recurrence_frequency || 'monthly',coverage_start:expense.coverage_start?.slice(0,10)||'',coverage_end:expense.coverage_end?.slice(0,10)||'',payee:expense.payee||'',
     });
     setEditingId(expense.id);
     setShowForm(true);
@@ -172,7 +176,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
       {items.length === 0 ? <p className="text-xs text-[var(--text-muted)]">No costs in this financial year.</p> : items.map(expense => (
         <div key={expense.id} className="flex items-center gap-3 rounded-xl bg-[var(--bg-subtle)] p-3">
           <div className="flex-1 min-w-0">
-            <p className="text-sm truncate">{expense.description}</p>
+            <p className="text-sm truncate">{expense.description}</p>{(expense.coverage_start||expense.payee)&&<p className="text-xs text-[var(--text-muted)]">{expense.payee}{expense.coverage_start?` · ${expense.coverage_start.slice(0,10)} — ${expense.coverage_end?.slice(0,10)||'Not Set'}`:''}</p>}
             <div className="flex flex-wrap gap-1.5 mt-1 text-[10px] text-[var(--text-muted)]">
               <span>{formatCategory(expense.category)}</span>
               {!expense.expense_date && expense.expense_year && <span>· {expense.expense_year}</span>}
@@ -211,7 +215,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
           <p className="text-xs text-[var(--text-muted)]">Running costs and historic expenditure</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
-          <Plus size={14} className="mr-1.5" /> {showForm ? 'Cancel' : 'Add expense'}
+          <Plus size={14} className="mr-1.5" /> {showForm ? 'Cancel' : 'Add Expense'}
         </Button>
       </div>
 
@@ -223,7 +227,8 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
 
       {showForm && (
         <div className="rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] p-4 space-y-3">
-          <Input label="Description" value={form.description} onChange={description => setForm(current => ({ ...current, description }))} placeholder="e.g. Boiler repair" />
+          <DatePicker label="Coverage From" value={form.coverage_start} onChange={coverage_start=>setForm(f=>({...f,coverage_start}))}/><DatePicker label="Coverage To" value={form.coverage_end} onChange={coverage_end=>setForm(f=>({...f,coverage_end}))}/><Input label="Payee / Freeholder" value={form.payee} onChange={payee=>setForm(f=>({...f,payee}))}/>
+              <Input label="Description" value={form.description} onChange={description => setForm(current => ({ ...current, description }))} placeholder="e.g. Boiler repair" />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input label="Amount (£)" type="number" value={form.amount} onChange={amount => setForm(current => ({ ...current, amount }))} />
             <Select label="Category" value={form.category} onChange={category => setForm(current => ({ ...current, category }))} options={CATEGORIES} />
@@ -235,7 +240,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
               {form.is_recurring ? '✓ Recurring expense' : 'Make recurring'}
             </button>
             {form.is_recurring && <Select label="Repeats" value={form.recurrence_frequency} onChange={recurrence_frequency => setForm(current => ({ ...current, recurrence_frequency }))}
-              options={[{ value: 'monthly', label: 'Monthly' }, { value: 'quarterly', label: 'Quarterly' }, { value: 'annually', label: 'Annually' }]} />}
+              options={[{ value: 'monthly', label: 'Monthly' }, { value: 'quarterly', label: 'Quarterly' },{value:'six_monthly',label:'Six-Monthly'}, { value: 'annually', label: 'Annually' }]} />}
             <Button variant="gradient" size="sm" disabled={!form.description.trim() || !form.amount || Number(form.amount) < 0} onClick={() => save().catch(error => alert(error.message))}>
               {editingId ? 'Update expense' : 'Save expense'}
             </Button>
@@ -258,7 +263,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
         <EmptyState icon={<ReceiptText size={32} />} message="No expenses recorded" />
       ) : (
         <div className="space-y-5">
-          {renderExpenses('Running Costs', runningCosts)}
+          {renderExpenses('Service Charges & Ground Rent', runningCosts)}
           {renderExpenses('Historic Costs', historicCosts)}
         </div>
       )}

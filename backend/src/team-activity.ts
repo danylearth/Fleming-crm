@@ -15,7 +15,7 @@ export function registerTeamActivityRoutes(app: Express) {
 
   app.post('/api/activity/heartbeat', authMiddleware, async (req: AuthRequest, res) => {
     const { page, navigation } = req.body || {};
-    if (typeof page !== 'string' || page.length > 240 || !/^\/[a-zA-Z0-9/_-]*$/.test(page)) return res.status(400).json({ error: 'Invalid page' });
+    if (typeof page !== 'string' || page.length > 240 || !/^\/[a-zA-Z0-9/_.%~-]*$/.test(page)) return res.status(400).json({ error: 'Invalid page' });
     try {
       await query("INSERT INTO user_activity_minutes(user_id,minute,page) VALUES($1,date_trunc('minute',NOW()),$2) ON CONFLICT(user_id,minute) DO UPDATE SET page=EXCLUDED.page", [req.user!.id, page]);
       if (navigation === true) await query("INSERT INTO audit_log(user_id,user_email,action,entity_type,changes) VALUES($1,$2,'view','page',$3)", [req.user!.id, req.user!.email, JSON.stringify({ page })]);

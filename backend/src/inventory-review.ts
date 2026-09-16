@@ -14,7 +14,7 @@ export const inventoryDisclaimer = 'Where no comments are received by the date a
 const filesRoot=path.join(process.env.UPLOADS_PATH || path.join(__dirname,'../uploads'),'inventory');
 const publicLimiter=rateLimit({windowMs:15*60*1000,max:500,standardHeaders:true,legacyHeaders:false});
 const writeLimiter=rateLimit({windowMs:15*60*1000,max:180,standardHeaders:true,legacyHeaders:false});
-const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:25*1024*1024,files:1}}).single('file');
+const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:100*1024*1024,files:1}}).single('file');
 const publicPhoto=multer({storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024,files:1}}).single('file');
 const dateText=(value:any)=>value instanceof Date?value.toISOString().slice(0,10):String(value).slice(0,10);
 export async function inventoryEditable(req:AuthRequest,res:Response,next:NextFunction) {
@@ -24,7 +24,7 @@ export async function inventoryEditable(req:AuthRequest,res:Response,next:NextFu
   else if(req.path.startsWith('/api/inventory-photos/') && !req.params.inventoryId) record=await queryOne('SELECT i.* FROM inventories i JOIN inventory_photos p ON p.inventory_id=i.id WHERE p.id=$1',[id]);
   else record=await queryOne('SELECT * FROM inventories WHERE id=$1',[id]);
   if(!record) return res.status(404).json({error:'Inventory not found'});
-  if(record.signed_date && req.user?.role!=='admin') return res.status(403).json({error:'Only administrators can change a completed, signed inventory'});
+  if((record.signed_date||record.signed_document) && req.user?.role!=='admin') return res.status(403).json({error:'Only administrators can change a completed, signed inventory'});
   if(record.review_issued_at) return res.status(409).json({error:'This inventory has been issued for review and is locked. Create a new inventory for further changes.'});
   next();
 }
@@ -97,26 +97,34 @@ export function registerInventoryReviewRoutes(app:Express) {
     if(!row)return res.sendStatus(404);res.type('jpg').send(row.data);
   });
   app.post('/api/properties/:id/inventory-document',authMiddleware,requirePermission('staff'),(req:AuthRequest,res)=>upload(req,res,async(error)=>{
-    if(error || !req.file)return res.status(400).json({error:'Choose one signed PDF up to 25 MB'});
+    if(error || !req.file)return res.status(400).json({error:'Choose one signed PDF up to 100 MB'});
     if(!req.file.buffer.subarray(0,5).equals(Buffer.from('%PDF-')))return res.status(400).json({error:'Upload a completed inventory as a PDF'});
     const {tenant_id,inspection_date,signed_date,inventory_id}=req.body;
     const valid=(v:string)=>/^\d{4}-\d{2}-\d{2}$/.test(v||'') && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0,10)===v;
-    if(!valid(inspection_date)||!valid(signed_date)||signed_date<inspection_date||signed_date>new Date().toISOString().slice(0,10))return res.status(400).json({error:'Choose valid completion and signature dates; signing must be on or after completion and no later than today'});
+    if((!signed_date&&req.body.signature_date_unknown!=='true')||!valid(inspection_date)||(signed_date&&(!valid(signed_date)||signed_date<inspection_date||signed_date>new Date().toISOString().slice(0,10))))return res.status(400).json({error:'Choose a valid completion date. If recorded, signing must be on or after completion and no later than today'});
     const tenant=await queryOne('SELECT id,linked_tenant_id,tenancy_start_date FROM tenants WHERE id=$1 AND property_id=$2',[Number(tenant_id)||0,req.params.id]);
     if(!tenant)return res.status(400).json({error:'Choose a tenant linked to this property'});
+    const joint=await queryOne('SELECT id FROM tenants WHERE id=$1 AND property_id=$2 AND tenancy_start_date IS NOT DISTINCT FROM $3',[tenant.linked_tenant_id,req.params.id,tenant.tenancy_start_date]);
+    const tenancyIds=joint?[tenant.id,joint.id].sort((a,b)=>a-b):[tenant.id];
     const c=await pool.connect();let filename:string|undefined;
     try {
-      await c.query('BEGIN');await c.query('SELECT pg_advisory_xact_lock(917,$1::int)',[tenant.id]);
-      const existing=(await c.query('SELECT * FROM inventories WHERE property_id=$1 AND tenant_id=$2 AND signed_date IS NOT NULL FOR UPDATE',[req.params.id,tenant.id])).rows[0];
+      await c.query('BEGIN');await c.query('SELECT pg_advisory_xact_lock(917,$1::int)',[tenancyIds[0]]);
+      const existing=(await c.query('SELECT * FROM inventories WHERE property_id=$1 AND tenant_id=ANY($2::int[]) AND (signed_date IS NOT NULL OR signed_document) ORDER BY id FOR UPDATE',[req.params.id,tenancyIds])).rows[0];
       if(existing && (!inventory_id || Number(inventory_id)!==existing.id)){await c.query('ROLLBACK');return res.status(409).json({error:'This tenancy already has a signed inventory. An administrator can edit the existing record'});}
       if(inventory_id && (!existing||req.user.role!=='admin')){await c.query('ROLLBACK');return res.status(403).json({error:'Only administrators can edit a completed inventory'});}
       if(existing?.review_issued_at){await c.query('ROLLBACK');return res.status(409).json({error:'Issued tenant reviews retain their original evidence'});}
-      const row=existing || (await c.query("INSERT INTO inventories(property_id,tenant_id,inventory_type,inspection_date,conducted_by,status,completed_at,signed_date) VALUES($1,$2,'check_in',$3,$4,'completed',NOW(),$5) RETURNING id",[req.params.id,tenant_id,inspection_date,req.user.id,signed_date])).rows[0];
-      if(existing)await c.query('UPDATE inventories SET inspection_date=$1,signed_date=$2 WHERE id=$3',[inspection_date,signed_date,row.id]);
+      const row=existing || (await c.query("INSERT INTO inventories(property_id,tenant_id,inventory_type,inspection_date,conducted_by,status,completed_at,signed_document,signed_date) VALUES($1,$2,'check_in',$3,$4,'completed',NOW(),true,$5) RETURNING id",[req.params.id,tenant_id,inspection_date,req.user.id,signed_date||null])).rows[0];
+      if(existing)await c.query('UPDATE inventories SET inspection_date=$1,signed_date=$2,signed_document=true WHERE id=$3',[inspection_date,signed_date||null,row.id]);
       await c.query('INSERT INTO inventory_documents(inventory_id,filename,data) VALUES($1,$2,$3) ON CONFLICT(inventory_id) DO UPDATE SET filename=EXCLUDED.filename,data=EXCLUDED.data',[row.id,path.basename(req.file.originalname),req.file.buffer]);
       fs.mkdirSync(filesRoot,{recursive:true});filename='inventory/'+crypto.randomUUID()+'.pdf';fs.writeFileSync(path.join(filesRoot,path.basename(filename)),req.file.buffer,{mode:0o600});
       const entities=[{type:'property',id:Number(req.params.id)},{type:'tenant',id:tenant.id}];
       const partner=(await c.query('SELECT id FROM tenants WHERE id=$1 AND property_id=$2 AND tenancy_start_date IS NOT DISTINCT FROM $3',[tenant.linked_tenant_id,req.params.id,tenant.tenancy_start_date])).rows[0];if(partner)entities.push({type:'tenant',id:partner.id});
+      // Adopt an identical legacy Documents upload into the shared inventory instead of listing it twice.
+      const digest=crypto.createHash('sha256').update(req.file.buffer).digest('hex');
+      for(const entity of entities){
+        const candidates=(await c.query("SELECT id,filename FROM documents WHERE entity_type=$1 AND entity_id=$2 AND doc_type='Inventory' AND inventory_id IS NULL AND size=$3 FOR UPDATE",[entity.type,entity.id,req.file.size])).rows;
+        for(const d of candidates){const file=path.resolve(path.dirname(filesRoot),d.filename);if(file.startsWith(path.dirname(filesRoot)+path.sep)&&fs.existsSync(file)&&crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')===digest){await c.query('UPDATE documents SET inventory_id=$1 WHERE id=$2',[row.id,d.id]);break;}}
+      }
       for(const entity of entities)await c.query("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,size,uploaded_by,review_status,inventory_id) VALUES($1,$2,'Inventory',$3,$4,'application/pdf',$5,$6,'approved',$7) ON CONFLICT(inventory_id,entity_type,entity_id) WHERE inventory_id IS NOT NULL DO UPDATE SET filename=EXCLUDED.filename,original_name=EXCLUDED.original_name,size=EXCLUDED.size,uploaded_at=NOW()",[entity.type,entity.id,filename,path.basename(req.file.originalname),req.file.size,req.user.id,row.id]);
       await c.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,$3,'inventory',$4,$5)",[req.user.id,req.user.email,existing?'update':'create',row.id,JSON.stringify({source:'signed_pdf',tenant_id:Number(tenant_id),inspection_date,signed_date,previous:existing||null})]);
       await c.query('COMMIT');res.json(row);

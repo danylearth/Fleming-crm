@@ -5,6 +5,7 @@ interface User {
   last_login?: string;
   avatar_url?: string;
   accent_color?: string;
+  appearance?: {font?: string;scale?: number;background?: string};
   id: number;
   email: string;
   name: string;
@@ -89,6 +90,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(data.token);
     setUser(data.user);
   };
+
+  useEffect(() => {
+    const a=user?.appearance;const root=document.documentElement;
+    const fonts:Record<string,string>={lufga:"'Lufga', sans-serif",system:'system-ui, sans-serif',verdana:'Verdana, sans-serif'};
+    root.style.setProperty('--user-font',fonts[a?.font || 'lufga'] || fonts.lufga);
+    root.style.fontSize=`${a?.scale || 100}%`;
+    root.dataset.appearanceBackground=a?.background || 'default';
+    return ()=>{root.style.removeProperty('--user-font');root.style.removeProperty('font-size');delete root.dataset.appearanceBackground;};
+  },[user?.appearance]);
 
   const logout = useCallback(() => {
     localStorage.removeItem('fleming-last-activity');

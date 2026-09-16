@@ -23,7 +23,7 @@ describe('4 September CRM feedback', () => {
   });
 
   it('supports holding-deposit SMS previews, the supplied wording, and stage progression', () => {
-    expect(wizard).toContain('Preview email before sending');
+    expect(wizard).toContain('Preview Email');
     expect(wizard).toContain('Send SMS');
     expect(wizard).toContain('setActiveStep(2)');
     expect(backend).toContain('we are pleased to confirm receipt of your holding deposit payment');

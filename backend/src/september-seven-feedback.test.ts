@@ -99,7 +99,7 @@ describe('7 September CRM feedback', () => {
   });
 
   it('previews the real branded agreement and final-balance emails', () => {
-    expect(wizard).toContain('Preview branded email');
+    expect(wizard).toContain('Preview Email');
     expect(wizard).toContain('previewOnly');
     expect(backend).toContain("tenancy-agreement/email-preview");
     expect(backend).toContain("request-balance/email-preview");

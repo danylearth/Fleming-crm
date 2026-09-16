@@ -57,7 +57,7 @@ describe('5 September CRM feedback', () => {
     expect(database).toContain('is_recurring INTEGER DEFAULT 0');
     expect(backend).toContain("app.put('/api/property-expenses/:id'");
     expect(backend).toContain("app.post('/api/property-expenses/:id/receipt'");
-    expect(propertyExpenses).toContain('Running Costs');
+    expect(propertyExpenses).toContain('Service Charges & Ground Rent');
     expect(propertyExpenses).toContain('Historic Costs');
     expect(propertyExpenses).toContain('Financial year');
     expect(propertyExpenses).toContain('Year to date');

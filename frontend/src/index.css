@@ -184,3 +184,8 @@ input[type="checkbox"]:focus {
 .pac-container {
   z-index: 10000 !important;
 }
+
+:root[data-theme="light"][data-appearance-background="cream"] { --bg-page:#faf5ea; }
+:root[data-theme="light"][data-appearance-background="blue"] { --bg-page:#edf3fa; }
+:root[data-theme="light"][data-appearance-background="green"] { --bg-page:#edf5ef; }
+body { font-family:var(--user-font,'Lufga'),sans-serif; }

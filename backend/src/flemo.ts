@@ -1,3 +1,4 @@
+import {flemoActions,registerFlemoActions} from './flemo-actions';
 import {flemoAccount,flemoAccountStatus,registerFlemoOAuthRoutes} from './flemo-oauth';
 import {flemoEvidence} from './flemo-records';
 import type { Express } from 'express';
@@ -17,6 +18,7 @@ export function flemoIntent(message: string) {
 const money = (n: unknown) => Number(n || 0).toLocaleString('en-GB',{style:'currency',currency:'GBP'});
 export function registerFlemoRoutes(app: Express) {
   registerFlemoOAuthRoutes(app);
+  registerFlemoActions(app);
   app.post('/api/ai/chat', authMiddleware, async (req: AuthRequest,res) => {
     const { message, context, history } = req.body || {};
     if (typeof message !== 'string' || !message.trim() || message.length > 2000) return res.status(400).json({ error: 'Ask a question up to 2,000 characters' });
@@ -31,7 +33,8 @@ export function registerFlemoRoutes(app: Express) {
       if(accountStatus.connected){
         const evidence=await flemoEvidence([...previous.filter(item=>item.role==='user').slice(-2).map(item=>item.text),message].join(' '),portfolio,context,true);
         const text=await(await flemoAccount(req.user.id)).answer(message,JSON.stringify({...evidence,conversation:previous}));
-        return res.json({text,actions:evidence.records.slice(0,10).map(r=>({id:`${r.entity}-${r.id}`,type:'link',label:r.name,href:`/${r.entity}/${r.id}`})),as_of:new Date().toISOString()});
+        const result=await flemoActions(req.user,message,text,evidence);
+        return res.json({text:text+(result.note?'\n\n'+result.note:''),actions:result.actions,as_of:new Date().toISOString()});
       }
       if (/late|overdue|arrears|payment.*trend/i.test(message)) {
         const evidence=await flemoEvidence(message,portfolio,context);
@@ -70,6 +73,8 @@ if (intent === 'rent') {
         const evidence=await flemoEvidence(message,portfolio,context);
         records=evidence.records;
         text=evidence.summary+'\nConnect ChatGPT in Settings for open-ended chat and document analysis.';
+        const result=await flemoActions(req.user,message,text,evidence);
+        return res.json({text:text+(result.note?'\n\n'+result.note:''),actions:result.actions,as_of:new Date().toISOString()});
       }
       res.json({text,actions:records.slice(0,10).map(r => ({id:`${r.entity}-${r.id}`,type:'link',label:r.name || r.address,href:`/${r.entity}/${r.id}`})),as_of:new Date().toISOString()});
     } catch(error) { console.error('Flemo lookup failed:',error); res.status(500).json({ error:'Could not read the CRM records. Please try again.' }); }

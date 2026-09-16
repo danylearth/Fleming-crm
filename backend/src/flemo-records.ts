@@ -25,7 +25,8 @@ export async function flemoEvidence(message:string,portfolio:string,context?:{en
   const documentEvidence=[];
   let scannedDocuments=0;
   for(const [index,document] of documents.entries()){let extracted='';let limitation='Only document metadata is available';
-    const filename=path.resolve(fileRoot,path.basename(document.filename||''));
+    const resolved=path.resolve(fileRoot,document.filename||'');
+    const filename=resolved.startsWith(fileRoot+path.sep)?resolved:'';
     if(index<5 && document.mime_type==='application/pdf' && Number(document.size||0)<=20*1024*1024 && fs.existsSync(filename)){
       try{const result=await exec(process.env.PDFTOTEXT_PATH||'pdftotext',['-f','1','-l','12','-layout',filename,'-'],{timeout:5000,maxBuffer:256*1024});extracted=result.stdout.slice(0,10000);limitation=extracted.trim().length<30?'Scanned PDF: text could not be read. Office review is needed.':'Text from up to 12 pages; maximum 10,000 characters';}catch{limitation='PDF text could not be extracted. Office review is needed.';}
     }
