@@ -52,8 +52,8 @@ export function registerFreeAgentRoutes(app:Express) {
   app.get('/api/freeagent/callback',async(req,res)=>{
     const c=freeAgentConfig();const state=String(req.query.state || '');const code=String(req.query.code || '');
     if(!c||!state||!code)return res.redirect(303,office('error'));
-    // Atomically consume state so replayed or simultaneous callbacks cannot overwrite tokens.
-    const row=await queryOne("UPDATE bank_feed_connections SET state_hash=NULL,status='authorising' WHERE provider='freeagent' AND status='pending' AND state_hash=$1 AND created_at>NOW()-INTERVAL '30 minutes' RETURNING id",[crypto.createHash('sha256').update(state).digest('hex')]);
+    // Clearing state atomically claims the pending connection without introducing an unsupported status.
+    const row=await queryOne("UPDATE bank_feed_connections SET state_hash=NULL,updated_at=NOW() WHERE provider='freeagent' AND status='pending' AND state_hash=$1 AND created_at>NOW()-INTERVAL '30 minutes' RETURNING id",[crypto.createHash('sha256').update(state).digest('hex')]);
     if(!row)return res.redirect(303,office('error'));
     try {
       const token=await tokenRequest({grant_type:'authorization_code',code,redirect_uri:c.redirectUri});
