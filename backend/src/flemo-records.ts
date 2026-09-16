@@ -21,6 +21,8 @@ export async function flemoEvidence(message:string,portfolio:string,context?:{en
   const entities=records.map(record=>({entity_type:record.entity==='enquiries'?'tenant_enquiry':record.entity==='tenants'?'tenant':record.entity==='landlords'?'landlord':'property',entity_id:record.id}));
   for(const record of records)if(record.property_id)entities.push({entity_type:'property',entity_id:record.property_id});
   const documents=entities.length?await query(`SELECT d.id,d.doc_type,d.original_name,d.filename,d.mime_type,d.size,d.review_status,d.entity_type,d.entity_id FROM documents d WHERE EXISTS(SELECT 1 FROM jsonb_to_recordset($1::jsonb) AS e(entity_type text,entity_id int) WHERE d.entity_type=e.entity_type AND d.entity_id=e.entity_id) ORDER BY d.uploaded_at DESC LIMIT 20`,[JSON.stringify(entities)]):[];
+  const requestedTypes=/electrical|eicr/i.test(message)?/electrical|eicr/i:/inventory/i.test(message)?/inventory/i:/deposit|tds/i.test(message)?/deposit|tds/i:null;
+  if(requestedTypes)documents.sort((a,b)=>Number(requestedTypes.test(b.doc_type))-Number(requestedTypes.test(a.doc_type)));
   const fileRoot=path.resolve(process.env.UPLOADS_PATH||path.join(__dirname,'../uploads'));
   const documentEvidence=[];
   let scannedDocuments=0;

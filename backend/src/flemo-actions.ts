@@ -6,12 +6,16 @@ import {authMiddleware,requirePermission,hasPermission,type AuthRequest} from '.
 import {query,queryOne,run} from './db-pg';
 import {sendEmail,brandedEmailHtml,OUTBOUND_EMAIL_ADDRESS} from './email';
 const escape=(value:string)=>value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+export function wantsEmailAction(message:string){
+ if(/\b(?:do not|don't|never|without|no need to)\s+(?:send|email)\b/i.test(message))return false;
+ return /\b(?:send|email)\s+(?:me|us|the|a|this|these|that|those|all|it|them|report|reports|document|documents|file|files|certificate|certificates|inventory|agreement|summary|to)\b/i.test(message)||/\bemail\s+[^\s]+@[^\s]+/i.test(message);
+}
 export function requestedRecipient(message:string,ownEmail:string){return message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]||ownEmail;}
 export async function flemoActions(user:{id:number;email:string;role:string},message:string,text:string,evidence:{documents:{id:number;name:string}[];records:any[]}){
  const actions:any[]=evidence.records.slice(0,8).map(r=>({id:`${r.entity}-${r.id}`,type:'link',label:r.name,href:`/${r.entity}/${r.id}`}));
  for(const doc of evidence.documents.slice(0,10))actions.push({id:`document-${doc.id}`,type:'download',label:`Download ${doc.name}`,href:`/api/documents/download/${doc.id}`,payload:{filename:doc.name}});
  if(/report|summary|export/i.test(message))actions.push({id:'download-report',type:'report',label:'Download Report',payload:{content:text,filename:'Fleming CRM Report.txt'}});
- if(/\b(send|email)\b/i.test(message)){
+ if(wantsEmailAction(message)){
   if(!hasPermission(user.role,'staff'))return {actions,note:'Your account can read and download records. Sending requires staff access; contact accounts@fleminglettings.co.uk.'};
   const documents=/\b(document|documents|file|files|certificate|certificates|inventory|agreement)\b/i.test(message)?evidence.documents.slice(0,10):[];
   if(/\b(document|documents|file|files|certificate|certificates|inventory|agreement)\b/i.test(message)&&!documents.length)return {actions,note:'No matching document was found. Specify the tenant’s full name or property address.'};
