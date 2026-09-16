@@ -20,6 +20,8 @@ export function approvedDataChanged(enquiry:any, submitted:Record<string,unknown
  const original=enquiry.app_form_data||{};
  const same=(a:unknown,b:unknown):boolean=>{
   if(a===null||a===undefined||a==='')return b===null||b===undefined||b==='';
+  if(typeof a==='boolean'||typeof b==='boolean')return a===b;
+  if(Array.isArray(a)!==Array.isArray(b))return false;
   if(typeof a==='object'||typeof b==='object'){
    if(!a||!b||typeof a!=='object'||typeof b!=='object')return false;
    return [...new Set([...Object.keys(a),...Object.keys(b)])].every(k=>same((a as any)[k],(b as any)[k]));

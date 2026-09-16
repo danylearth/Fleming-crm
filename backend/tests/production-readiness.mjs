@@ -550,13 +550,14 @@ try {
     const holding=await ok(`/api/tenant-enquiries/${e.id}/holding-deposit/email-preview`,{method:'POST',token:auth.staff,body:{monthly_rent:1000,holding_deposit:200}});assert(holding.html.length>1000);assert.match(holding.html,/Holding deposit request/);
   });
   await test('one answer decision locks public drafts and submissions while allowing document review',async()=>{
-    const data={first_name:'Approved',last_name:'Applicant',date_of_birth:'1990-01-01',rental_amount:1000,deposit_amount:1000};
+    const data={first_name:'Approved',last_name:'Applicant',date_of_birth:'1990-01-01',rental_amount:1000,deposit_amount:1000,marketing_consent:false};
     const e=await one(`INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,status,application_form_token,application_form_completed,app_form_data,monthly_rent_agreed,security_deposit_amount) VALUES('Approved','Applicant','approved@example.test','onboarding','approved-answers-test',1,$1,1000,1000) RETURNING id`,[JSON.stringify(data)]);
     const decide=body=>ok(`/api/tenant-enquiries/${e.id}/section-review`,{method:'PUT',token:auth.staff,body:{section:'Application Details',...body}});
     await decide({status:'approved'});
     const publicForm=await ok('/api/public/application-form/approved-answers-test');assert.equal(publicForm.application_data_approved,true);assert(!JSON.stringify(publicForm.application_section_reviews).includes('reviewed_by'));
     await ok('/api/public/application-form/approved-answers-test/draft',{method:'POST',body:{app_form_data:data}});
     for(const route of ['/draft',''])assert.equal((await request('/api/public/application-form/approved-answers-test'+route,{method:'POST',body:{app_form_data:{...data,date_of_birth:'2000-01-01'}}})).status,409);
+    assert.equal((await request('/api/public/application-form/approved-answers-test/draft',{method:'POST',body:{app_form_data:{...data,marketing_consent:'false'}}})).status,409);
     assert.deepEqual((await one('SELECT app_form_data FROM tenant_enquiries WHERE id=$1',[e.id])).app_form_data,data);
     await decide({status:'rejected',reason:'Correct your date of birth'});
     assert.equal((await ok('/api/public/application-form/approved-answers-test')).application_data_approved,false);
