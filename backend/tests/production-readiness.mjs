@@ -464,6 +464,9 @@ try {
     const costs=await sql('SELECT id,amount FROM property_expenses WHERE policy_id=$1',[saved.data.id]);assert.equal(costs.length,2);assert.equal(costs.reduce((sum,c)=>sum+Number(c.amount),0),100);
     for(const method of ['PUT','DELETE'])assert.equal((await request(`/api/property-expenses/${costs[0].id}`,{method,token:auth.staff,body:method==='PUT'?{amount:400}:undefined})).status,409);
     const coverage=await request('/api/property-expenses',{method:'POST',token:auth.staff,body:{property_id:property.id,description:'Ground Rent',amount:150,coverage_start:'2026-06-24',coverage_end:'2027-06-23',is_recurring:true,recurrence_frequency:'six_monthly'}});assert.equal(coverage.status,200);
+    await ok(`/api/property-expenses/${coverage.data.id}`,{method:'PUT',token:auth.staff,body:{is_estimate:true}});
+    assert.equal((await one('SELECT is_estimate FROM property_expenses WHERE id=$1',[coverage.data.id])).is_estimate,true);
+    assert.equal((await request(`/api/property-expenses/${coverage.data.id}`,{method:'PUT',token:auth.staff,body:{is_estimate:'yes'}})).status,400);
     assert.equal((await request('/api/property-expenses',{method:'POST',token:auth.staff,body:{property_id:property.id,description:'Invalid',amount:1,coverage_start:'2027-01-01',coverage_end:'2026-01-01'}})).status,400);
   });
   await test('appearance persists only for the current user; login history and encoded-page activity work',async()=>{
@@ -504,6 +507,54 @@ try {
     const row=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,status,linked_property_id,application_form_token,monthly_rent_agreed,security_deposit_amount) VALUES('Draft','Test','draft@example.test','onboarding',$1,'locked-finances-test',1200,1300) RETURNING id",[property.id]);
     await ok('/api/public/application-form/locked-finances-test/draft',{method:'POST',body:{app_form_data:{rental_amount:'1',deposit_amount:'2',employment_status:'Retired'}}});
     const saved=await one('SELECT app_form_data,application_form_last_saved_at FROM tenant_enquiries WHERE id=$1',[row.id]);assert.equal(Number(saved.app_form_data.rental_amount),1200);assert.equal(Number(saved.app_form_data.deposit_amount),1300);assert(saved.application_form_last_saved_at);
+  });
+  await test('maintenance deep links retain portfolio, assignment, dates and property audit',async()=>{
+    const member=await one("SELECT id FROM users WHERE role='staff'");
+    const created=await ok('/api/maintenance',{method:'POST',token:auth.staff,body:{property_id:property.id,title:'Afternoon leak',description:'Test repair',assigned_to:member.id,follow_up_date:'2026-10-01',due_date:'2026-10-05'}});
+    const item=await ok(`/api/maintenance/${created.id}`,{token:auth.staff});assert.equal(item.landlord_type,'internal');assert.equal(item.assigned_name,'Test staff');assert.match(item.due_date,/2026-10-05/);
+    const timeline=await ok(`/api/activity/property/${property.id}`,{token:auth.staff});assert(timeline.some(a=>a.entity_type==='maintenance'&&a.entity_id===created.id&&a.action==='create'));
+    await ok(`/api/maintenance/${created.id}`,{method:'PUT',token:auth.staff,body:{assigned_to:null,status:'completed'}});
+    const task=await one("SELECT * FROM tasks WHERE entity_type='maintenance' AND entity_id=$1",[created.id]);assert.equal(task.status,'completed');assert.equal(task.assigned_to,null);
+    assert.equal((await request(`/api/maintenance/${created.id}`,{method:'PUT',token:auth.staff,body:{due_date:'2026-02-31'}})).status,400);
+  });
+  await test('received holding deposits reject repeat payment requests before sending',async()=>{
+    const e=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,holding_deposit_received) VALUES('Paid','Test','paid@example.test',1) RETURNING id");
+    const before=await one('SELECT count(*)::int n FROM email_messages');
+    assert.equal((await request(`/api/tenant-enquiries/${e.id}/request-holding-deposit`,{method:'POST',token:auth.staff,body:{monthly_rent:1000,holding_deposit:200}})).status,409);
+    assert.equal((await one('SELECT count(*)::int n FROM email_messages')).n,before.n);
+  });
+  await test('answer reviews require explicit decisions and rejection reasons; email previews render HTML',async()=>{
+    const e=await one(`INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,application_form_completed,app_form_data) VALUES('Review','Test','review@example.test',1,'{"first_name":"Review","bank_name":"Example"}') RETURNING id`);
+    const section=(body,token=auth.staff)=>request(`/api/tenant-enquiries/${e.id}/section-review`,{method:'PUT',token,body});
+    assert.equal((await section({section:'Personal Details',status:'rejected'})).status,400);
+    assert.equal((await section({section:'Personal Details',status:'approved'},auth.viewer)).status,403);
+    assert.equal((await section({section:'Personal Details',status:'rejected',reason:'Please correct the name'})).status,200);
+    let row=await one('SELECT * FROM tenant_enquiries WHERE id=$1',[e.id]);assert.equal(row.application_section_reviews['Personal Details'].status,'rejected');assert.equal(row.application_changes_sent_at,null);
+    const preview=await ok(`/api/tenant-enquiries/${e.id}/application-review/email-preview`,{method:'POST',token:auth.staff,body:{changes_required:'Personal Details: Correct <name>'}});assert(preview.html.length>1000);assert.match(preview.html,/Correct &lt;name&gt;/);
+    for(const type of ['Primary Identification','Secondary Identification','Bank Statements','Proof of Income or Employment'])await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,review_status) VALUES('tenant_enquiry',$1,$2,'sample.pdf','review.pdf','approved')",[e.id,type]);
+    assert.equal((await request(`/api/tenant-enquiries/${e.id}/application-review`,{method:'POST',token:auth.staff,body:{status:'approved'}})).status,409);
+    for(const name of ['Personal Details','Bank Details'])assert.equal((await section({section:name,status:'approved'})).status,200);
+    await ok(`/api/tenant-enquiries/${e.id}/application-review`,{method:'POST',token:auth.staff,body:{status:'approved'}});
+    row=await one('SELECT * FROM tenant_enquiries WHERE id=$1',[e.id]);assert.equal(row.application_review_status,'approved');
+    const holding=await ok(`/api/tenant-enquiries/${e.id}/holding-deposit/email-preview`,{method:'POST',token:auth.staff,body:{monthly_rent:1000,holding_deposit:200}});assert(holding.html.length>1000);assert.match(holding.html,/Holding deposit request/);
+  });
+  await test('marketing enforces channel permission, deduplicates contacts, queues once and honours opt-out',async()=>{
+    const l=await one("INSERT INTO landlords(name,email,phone) VALUES('=Formula Test','marketing@example.test','07700900099') RETURNING id");
+    const e=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1) VALUES('Same inbox','Test','MARKETING@example.test') RETURNING id");
+    assert.equal((await request('/api/marketing/contacts',{token:auth.staff})).status,403);
+    const contacts=await ok('/api/marketing/contacts',{token:auth.admin});assert(contacts.some(c=>c.id===l.id&&c.entity_type==='landlord'));
+    const body={channel:'email',subject:'Test',message:'No real send from tests',recipients:[`landlord:${l.id}`,`tenant_enquiry:${e.id}`]};
+    assert.equal((await request('/api/marketing/campaigns',{method:'POST',token:auth.admin,body})).status,409);
+    await ok('/api/marketing/permission',{method:'PUT',token:auth.admin,body:{channel:'email',destination:'marketing@example.test',allowed:true,evidence:'Explicit email consent in local test'}});
+    const made=await request('/api/marketing/campaigns',{method:'POST',token:auth.admin,body});assert.equal(made.status,201);assert.equal(made.data.count,1);
+    const [s1,s2]=await Promise.all([1,2].map(()=>request(`/api/marketing/campaigns/${made.data.id}/send`,{method:'POST',token:auth.admin,body:{}})));assert.deepEqual([s1.status,s2.status].sort(),[202,409]);
+    for(let i=0;i<40;i++){const rows=await sql('SELECT status FROM marketing_recipients WHERE campaign_id=$1',[made.data.id]);if(rows.every(r=>!['pending','sending'].includes(r.status)))break;await new Promise(r=>setTimeout(r,100));}
+    const recipient=await one('SELECT * FROM marketing_recipients WHERE campaign_id=$1',[made.data.id]);assert.equal(recipient.status,'failed');
+    const permission=await one("SELECT * FROM marketing_permissions WHERE destination='marketing@example.test'");
+    assert.equal((await request(`/api/public/marketing/unsubscribe/${permission.unsubscribe_token}`)).status,200);assert((await one('SELECT allowed FROM marketing_permissions WHERE unsubscribe_token=$1',[permission.unsubscribe_token])).allowed);
+    assert.equal((await request(`/api/public/marketing/unsubscribe/${permission.unsubscribe_token}`,{method:'POST'})).status,200);
+    assert.equal((await request('/api/marketing/campaigns',{method:'POST',token:auth.admin,body})).status,409);
+    const exported=await request('/api/marketing/export',{token:auth.admin});assert.equal(exported.status,200);assert.match(exported.data,/'=Formula Test/);
   });
   console.log(`\n${passed} integration scenarios passed. Private artifacts: ${dir}`);
 } catch(error) { console.error(error); console.error('Server log:',path.join(dir,'server.log')); process.exitCode=1; }

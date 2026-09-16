@@ -34,7 +34,7 @@ const DECLARATION_LABELS: Record<string, string> = {
   marketing_consent: 'I consent to marketing communications.',
 };
 
-const labelFor = (key: string) => key
+const labelFor = (key: string) => key==='ni_number' ? 'National Insurance Number' : key
   .replace(/^declaration_/, '')
   .replace(/_/g, ' ')
   .replace(/\b\w/g, character => character.toUpperCase());
@@ -136,7 +136,7 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
     doc.font('Arial').fontSize(10).fillColor('#555555');
     doc.text(`Property: ${input.propertyAddress || 'Not specified'}`);
     doc.text(`Submitted: ${input.submittedAt.toLocaleString('en-GB', { timeZone: 'Europe/London' })}`);
-    doc.text(`CRM enquiry: ${input.enquiryId}`);
+
 
     for (const applicationSection of buildCompletedApplicationSections(input.formData)) {
       section(applicationSection.title);

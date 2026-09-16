@@ -1,3 +1,4 @@
+import {useAuth} from '../../context/AuthContext';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -7,14 +8,7 @@ import type { AIAction } from '../../hooks/useAIChat';
 
 const now = () => new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' });
 
-// Context-aware suggestions per page
-const pageSuggestions: Record<string, string[]> = {
-  '/': ['What is our monthly rental income?', 'Which tenants are missing ID?', 'Which tenancies end soon?', 'Which rent reviews are due this month?'],
-  '/tenants': ['Which tenants are missing ID?', 'What was the last SMS sent to this tenant?'],
-};
-function getGreeting(): string {
-  return 'Hi, I’m Flemo. I can check rent totals, missing ID, tenancy end dates, rent reviews and SMS history using current CRM records. What would you like to check?';
-}
+function getGreeting(name?:string):string {return `👋 Hi there ${name?.split(' ')[0] || 'there'}! How can I help you today?`;}
 
 // Parse page context from pathname
 function getPageContext(pathname: string): { page: string; entityType?: string; entityId?: number } {
@@ -34,19 +28,20 @@ function getPageContext(pathname: string): { page: string; entityType?: string; 
 }
 
 export default function FloatingAI() {
+  const {user}=useAuth();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const voice = useVoiceInput(setInput);
   const [hasUnread, setHasUnread] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const location = useLocation();
   const prevPath = useRef(location.pathname);
   const { messages, typing, send, executeAction, setMessages } = useAIChat();
 
   // Initial greeting
   useEffect(() => {
-    setMessages([{ role: 'assistant', text: getGreeting(), status: 'done' }]);
+    setMessages([{ role: 'assistant', text: getGreeting(user?.name), status: 'done' }]);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset greeting when page changes
@@ -54,10 +49,10 @@ export default function FloatingAI() {
     if (location.pathname !== prevPath.current) {
       prevPath.current = location.pathname;
       // Only reset if chat has been idle (no user messages in last set)
-      setMessages([{ role: 'assistant', text: getGreeting(), status: 'done' }]);
+      setMessages([{ role: 'assistant', text: getGreeting(user?.name), status: 'done' }]);
       if (!open) queueMicrotask(() => setHasUnread(true));
     }
-  }, [location.pathname, open, setMessages]);
+  }, [location.pathname, open, setMessages,user?.name]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -86,7 +81,7 @@ export default function FloatingAI() {
     executeAction(action.id, action);
   };
 
-  const suggestions = pageSuggestions[location.pathname] || pageSuggestions['/'] || [];
+
 
   return (
     <>
@@ -116,15 +111,15 @@ export default function FloatingAI() {
                 <Sparkles size={16} className="text-white" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-[var(--text-primary)]">Flemo</p>
-                <p className="text-[11px] text-[var(--text-muted)]">Current CRM answers</p>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Flemo! Your AI helper</p>
+
               </div>
             </div>
             <div className="flex items-center gap-1">
               <button aria-label="Collapse Flemo" onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
                 <ChevronDown size={18} />
               </button>
-              <button aria-label="Close Flemo" onClick={() => { setOpen(false); setMessages([{ role: 'assistant', text: getGreeting(), status: 'done' }]); }} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
+              <button aria-label="Close Flemo" onClick={() => { setOpen(false); setMessages([{ role: 'assistant', text: getGreeting(user?.name), status: 'done' }]); }} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
                 <X size={18} />
               </button>
             </div>
@@ -194,29 +189,18 @@ export default function FloatingAI() {
             <div ref={chatEndRef} />
           </div>
 
-          {/* Suggestions */}
-          {messages.length <= 2 && (
-            <div className="px-5 pb-3 flex flex-wrap gap-1.5">
-              {suggestions.slice(0, 3).map((s, i) => (
-                <button key={i} onClick={() => handleSend(s)}
-                  className="px-3 py-1.5 rounded-full text-[11px] font-medium bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] border border-[var(--border-subtle)] transition-colors">
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* Input */}
           <div className="px-4 py-3 border-t border-[var(--border-color)]">
             {voice.error && <p role="status" className="text-xs text-red-400 mb-2">{voice.error}</p>}
             <div className="flex items-center gap-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl px-4 py-2.5">
-              <input
+              <textarea
+                rows={Math.min(5,Math.max(2,input.split("\n").length,Math.ceil(input.length/34)))}
                 ref={inputRef}
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSend()}
+                onKeyDown={e => {if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleSend();}}}
                 placeholder='Ask anything...'
-                className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
+                className="flex-1 min-w-0 resize-none bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
               />
               {voice.supported && <button title="Dictate using your browser’s speech service, then review before sending" aria-label={voice.listening ? 'Stop dictation' : 'Dictate question'} onClick={voice.toggle} className={voice.listening ? 'text-red-500 animate-pulse' : 'text-[var(--text-muted)]'}><Mic size={18} /></button>}
               <button disabled={typing} onClick={() => handleSend()}

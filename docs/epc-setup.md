@@ -1,6 +1,6 @@
 # EPC connection setup for Fleming Lettings
 
-The CRM now uses the replacement government domestic EPC API. Automatic lookup remains unavailable until Fleming creates an account and supplies its access token. Existing certificates can still be uploaded and dates entered manually.
+The CRM now uses the replacement government domestic EPC API. Fleming supplied its replacement-service bearer token on 16 September 2026. The token has been verified against the government API and is stored as a deployment secret. The instructions below are retained for renewal or replacement. Certificate PDFs still need to be uploaded separately.
 
 1. Open [Get energy performance of buildings data](https://get-energy-performance-data.communities.gov.uk/) and choose the sign-in option.
 2. Sign in or create a GOV.UK One Login for the person who will manage Fleming’s access. Complete the service’s registration and terms.

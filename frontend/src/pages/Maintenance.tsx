@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Tag, SearchBar, EmptyState, DataTable, SearchDropdown } from '../components/ui';
+import { GlassCard, Button, Input, Tag, SearchBar, EmptyState, DataTable, SearchDropdown, Select, DatePicker } from '../components/ui';
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Wrench, MapPin, ChevronDown, ChevronUp, Search, Building2, User } from 'lucide-react';
@@ -11,7 +11,7 @@ import { useNotifications } from '../context/NotificationContext';
 interface MaintenanceItem {
   id: number; property_id: number; address: string; title: string; description: string;
   priority: string; status: string; reported_date: string; resolved_date: string | null;
-  reporter_name: string; landlord_type?: string;
+  assigned_to?:number; assigned_name?:string;follow_up_date?:string;due_date?:string; reporter_name: string; landlord_type?: string;
 }
 
 interface TenantOption {
@@ -55,12 +55,15 @@ export default function Maintenance() {
   const { requestId } = useParams();
   const [items, setItems] = useState<MaintenanceItem[]>([]);
   const [properties, setProperties] = useState<{ id: number; address: string }[]>([]);
+  const [error,setError]=useState('');
+  const [members,setMembers]=useState<{id:number;name:string}[]>([]);
+  const [owner,setOwner]=useState('all');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [expanded, setExpanded] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', priority: 'medium', property_id: '' });
+  const [form, setForm] = useState({ title: '', description: '', priority: 'medium', property_id: '', assigned_to:'',follow_up_date:'',due_date:'' });
   const [propDropOpen, setPropDropOpen] = useState(false);
   const [propSearch, setPropSearch] = useState('');
   const [tenants, setTenants] = useState<TenantOption[]>([]);
@@ -85,48 +88,27 @@ export default function Maintenance() {
 
   const load = useCallback(async () => {
     try {
-      const [data, props, tns, lls] = await Promise.all([
-        api.get('/api/maintenance'),
-        api.get('/api/properties'),
-        api.get('/api/tenants'),
-        api.get('/api/landlords'),
+      setError('');
+      const [data, props, tns, lls, team, requested] = await Promise.all([
+        api.get('/api/maintenance'),api.get('/api/properties'),api.get('/api/tenants'),api.get('/api/landlords'),api.get('/api/users/options'),
+        requestId ? api.get(`/api/maintenance/${requestId}`) : Promise.resolve(null),
       ]);
-      setItems(Array.isArray(data) ? data : data.items || []);
-      setProperties(props);
-      setTenants(Array.isArray(tns) ? tns.map((t: { id: number; name: string; property_id: number }) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
-      setLandlords(Array.isArray(lls) ? lls.map((l: { id: number; name: string }) => ({ id: l.id, name: l.name })) : []);
-    } catch { /* Silently ignore */ setItems([]); }
-    setLoading(false);
-  }, [api]);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [data, props, tns, lls] = await Promise.all([
-          api.get('/api/maintenance'),
-          api.get('/api/properties'),
-          api.get('/api/tenants'),
-          api.get('/api/landlords'),
-        ]);
-        if (!cancelled) {
-          setItems(Array.isArray(data) ? data : data.items || []);
-          setProperties(props);
-          setTenants(Array.isArray(tns) ? tns.map((t: { id: number; name: string; property_id: number }) => ({ id: t.id, name: t.name, property_id: t.property_id })) : []);
-          setLandlords(Array.isArray(lls) ? lls.map((l: { id: number; name: string }) => ({ id: l.id, name: l.name })) : []);
-        }
-      } catch { /* Silently ignore */ if (!cancelled) setItems([]); }
-      if (!cancelled) setLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, [api]);
+      const rows:MaintenanceItem[]=Array.isArray(data)?data:[];
+      setItems(requested&&!rows.some(r=>r.id===requested.id)?[requested,...rows]:rows);
+      setProperties(props);setTenants(tns);setLandlords(lls);setMembers(team);
+    } catch(e) {setError(e instanceof Error?e.message:'Maintenance could not be loaded');}
+    finally{setLoading(false);}
+  }, [api,requestId]);
+  useEffect(()=>{void load();},[load]);
 
   const statusCounts = items.reduce((acc, i) => {
     acc[i.status] = (acc[i.status] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  const portfolioFiltered = filterByPortfolio(items, portfolioFilter);
+  const portfolioFiltered = requestId ? items.filter(i=>i.id===Number(requestId)) : filterByPortfolio(items, portfolioFilter);
   const filtered = portfolioFiltered.filter(i => {
+    if(owner!=='all' && String(i.assigned_to||'unassigned')!==owner)return false;
     if (statusFilter !== 'all' && i.status !== statusFilter) return false;
     if (search && !i.title.toLowerCase().includes(search.toLowerCase()) && !i.address?.toLowerCase().includes(search.toLowerCase())) return false;
     if (propertyFilter && i.property_id !== propertyFilter) return false;
@@ -142,7 +124,7 @@ export default function Maintenance() {
   });
 
   const updateStatus = async (id: number, status: string) => {
-    try { await api.put(`/api/maintenance/${id}`, { status }); await load(); } catch { /* Silently ignore */ }
+    try { await api.put(`/api/maintenance/${id}`, { status }); await load(); } catch(e) {setError(e instanceof Error?e.message:'Maintenance could not be saved');}
   };
 
   const addItem = async () => {
@@ -150,9 +132,9 @@ export default function Maintenance() {
       const prop = properties.find(p => p.id === Number(form.property_id));
       await api.post('/api/maintenance', { ...form, property_id: Number(form.property_id), address: prop?.address || '' });
       setShowAdd(false);
-      setForm({ title: '', description: '', priority: 'medium', property_id: '' });
+      setForm({ title: '', description: '', priority: 'medium', property_id: '', assigned_to:'',follow_up_date:'',due_date:'' });
       await load();
-    } catch { /* Silently ignore */ }
+    } catch(e) {setError(e instanceof Error?e.message:'Maintenance could not be saved');}
   };
 
   const selectedProp = properties.find(p => p.id === Number(form.property_id));
@@ -196,6 +178,7 @@ export default function Maintenance() {
   return (
     <Layout title="Maintenance" breadcrumb={[{ label: 'Maintenance' }]}>
       <div className="p-4 md:p-8 space-y-6">
+        {error&&<p role="alert" className="text-red-500">{error}</p>}
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
@@ -232,6 +215,7 @@ export default function Maintenance() {
 
         {/* Dropdown filters + Status filter */}
         <div className="flex flex-wrap items-center gap-3">
+          <Select label="Assigned To" value={owner} onChange={setOwner} options={[{value:'all',label:'All'},{value:'unassigned',label:'Unassigned'},...members.map(m=>({value:String(m.id),label:m.name}))]}/>
           <SearchDropdown
             icon={<Building2 size={14} />}
             placeholder="Property"
@@ -341,8 +325,8 @@ export default function Maintenance() {
                 ),
               },
               {
-                key: 'reporter', header: 'Reported By', hideClass: 'hidden lg:table-cell',
-                render: (item) => <span className="text-xs text-[var(--text-muted)]">{item.reporter_name || '—'}</span>,
+                key: 'reporter', header: 'Assigned To', hideClass: 'hidden lg:table-cell',
+                render: (item) => <span className="text-xs text-[var(--text-muted)]">{item.assigned_name || 'Maintenance'}</span>,
               },
               {
                 key: 'priority', header: 'Priority',
@@ -377,6 +361,11 @@ export default function Maintenance() {
               <div className="px-4 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)] space-y-3">
                 {item.description && <p className="text-sm text-[var(--text-secondary)]">{item.description}</p>}
                 {item.resolved_date && <p className="text-xs text-emerald-400">Resolved: {formatDate(item.resolved_date)}</p>}
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <Select label="Assigned To" value={String(item.assigned_to||'')} onChange={async value=>{try{await api.put(`/api/maintenance/${item.id}`,{assigned_to:value||null});await load();}catch(e){setError(String(e));}}} options={[{value:'',label:'Unassigned'},...members.map(m=>({value:String(m.id),label:m.name}))]}/>
+                  <DatePicker label="Follow-up Date" value={(item.follow_up_date||'').slice(0,10)} onChange={async value=>{try{await api.put(`/api/maintenance/${item.id}`,{follow_up_date:value||null});await load();}catch(e){setError(String(e));}}}/>
+                  <DatePicker label="Due By" value={(item.due_date||'').slice(0,10)} onChange={async value=>{try{await api.put(`/api/maintenance/${item.id}`,{due_date:value||null});await load();}catch(e){setError(String(e));}}}/>
+                </div>
                 <div className="flex gap-2">
                   {item.status !== 'in_progress' && item.status !== 'completed' && item.status !== 'closed' && (
                     <Button variant="outline" size="sm" onClick={(e?: React.MouseEvent) => { e?.stopPropagation(); updateStatus(item.id, 'in_progress'); }}>Mark In Progress</Button>
@@ -431,6 +420,9 @@ export default function Maintenance() {
                     </div>
                   )}
                 </div>
+                <Select label="Assigned To" value={form.assigned_to} onChange={assigned_to=>setForm(f=>({...f,assigned_to}))} options={[{value:'',label:'Unassigned'},...members.map(m=>({value:String(m.id),label:m.name}))]}/>
+                <DatePicker label="Follow-up Date" value={form.follow_up_date} onChange={follow_up_date=>setForm(f=>({...f,follow_up_date}))}/>
+                <DatePicker label="Due By" value={form.due_date} onChange={due_date=>setForm(f=>({...f,due_date}))}/>
                 <Input label="Description" value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} placeholder="Describe the issue..." />
                 <div>
                   <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Priority</label>

@@ -170,7 +170,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
   // Documents for ID verification step
   const [enquiryDocs, setEnquiryDocs] = useState<{ id: number; doc_type: string; original_name: string; mime_type: string; size: number; uploaded_at: string; review_status?: string; review_notes?: string; reviewed_at?: string }[]>([]);
-  const [emailMessages, setEmailMessages] = useState<{ id: number; template: string; status: string; error_message?: string; created_at: string }[]>([]);
+  const [emailMessages, setEmailMessages] = useState<{ id: number; template: string; status: string; error_message?: string; created_at: string;body_html?:string;subject?:string }[]>([]);
 
   const fetchDocs = async () => {
     if (!token) return;
@@ -234,9 +234,17 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     if (documentPreview) URL.revokeObjectURL(documentPreview.url);
   }, [documentPreview]);
 
+  const [documentReasons,setDocumentReasons]=useState<Record<number,string>>({});
+  const [rejectSection,setRejectSection]=useState<string|null>(null);
+  const [sectionReason,setSectionReason]=useState('');
+  const sectionReviews=(enquiry.application_section_reviews||{}) as Record<string,{status:string;reason?:string;reviewed_at?:string}>;
+  const saveSection=async(section:string,status:'approved'|'rejected')=>{setSaving(true);setReviewError('');try{await api.put(`/api/tenant-enquiries/${enquiryId}/section-review`,{section,status,reason:sectionReason});setReviewStatusOverride(null);setRejectSection(null);setSectionReason('');await onUpdate();}catch(e){setReviewError(e instanceof Error?e.message:'Review failed');}finally{setSaving(false);}};
   const [documentDecisions, setDocumentDecisions] = useState<Record<number, 'approved' | 'rejected'>>({});
-  const reviewDocument = async (docId: number, status: 'approved' | 'rejected') => {
-    if (status === 'rejected') {
+  const rejectedReviews = [...Object.values(sectionReviews), ...enquiryDocs.map(doc => ({status: documentDecisions[doc.id] || doc.review_status, reviewed_at: doc.reviewed_at}))].filter(review => review.status === 'rejected');
+  const hasUnsentRejection = rejectedReviews.some(review => !enquiry.application_changes_sent_at || !review.reviewed_at || Date.parse(enquiry.application_changes_sent_at) < Date.parse(review.reviewed_at));
+  const reviewColour=(status:string|undefined,at?:string)=>status==='approved'?'bg-emerald-500/15 border-emerald-500/30':status==='rejected'?(enquiry.application_changes_sent_at&&at&&Date.parse(enquiry.application_changes_sent_at)>=Date.parse(at)?'bg-amber-500/15 border-amber-500/30':'bg-red-500/15 border-red-500/30'):'bg-[var(--bg-subtle)] border-[var(--border-subtle)]';
+  const reviewDocument = async (docId: number, status: 'approved' | 'rejected',saveRejection=false) => {
+    if (status === 'rejected'&&!saveRejection) {
       setDocumentDecisions(current => ({...current,[docId]:status}));
       setReviewError('');
       return;
@@ -246,9 +254,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     try {
       await api.put(`/api/documents/${docId}/review`, {
         status,
-        notes: reviewNotes.trim() || null,
+        notes: status==='rejected'?documentReasons[docId]?.trim():null,
       });
       setDocumentDecisions(current => { const next={...current}; delete next[docId]; return next; });
+      setReviewStatusOverride(null);
       await Promise.all([fetchDocs(), onUpdate()]);
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : 'Document review could not be saved');
@@ -301,7 +310,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         status,
         document_decisions: Object.entries(documentDecisions).map(([id,status]) => ({id:Number(id),status})),
         notes: reviewNotes || null,
-        changes_required: status === 'changes_requested' ? changesRequired : null,
+        changes_required: status === 'changes_requested' ? combinedChanges : null,
         send_sms: status === 'changes_requested' && sendReviewSms,
         ...(reviewSmsOverride ? { sms_message: reviewSmsOverride } : {}),
         send_email: status === 'changes_requested' && sendReviewEmail,
@@ -372,7 +381,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       label: 'Request Holding Deposit',
       icon: Mail,
       getStatus: () => enquiry.holding_deposit_requested ? 'green' : 'red',
-      desc: enquiry.holding_deposit_requested ? `Request recorded for ${enquiry.email_1}` : 'Send email with deposit details & application form',
+      desc: enquiry.holding_deposit_requested ? `Request recorded for ${enquiry.email_1}` : 'Send Email with deposit details & application form',
     },
     {
       label: 'Holding Deposit Received',
@@ -393,11 +402,11 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       icon: Shield,
       getStatus: () => applicationReviewStatus === 'approved'
         ? 'green'
-        : enquiry.application_form_completed ? 'amber' : 'red',
+        : hasUnsentRejection ? 'red' : enquiry.application_form_completed ? 'amber' : 'red',
       desc: applicationReviewStatus === 'approved'
         ? 'Application and evidence approved'
         : applicationReviewStatus === 'changes_requested'
-          ? 'Waiting on tenant review'
+          ? enquiry.application_changes_sent_at && !hasUnsentRejection ? 'Changes sent — waiting for tenant' : 'Changes saved — not yet sent'
           : 'Review the submitted form and evidence',
     },
     {
@@ -661,6 +670,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
   // Values below come from the public enquiry form — escape before interpolating into email HTML
   const previewHoldingEmail = async (receipt = false) => {
+    if(!receipt&&enquiry.holding_deposit_requested){
+      const sent=emailMessages.find(m=>m.template==='holding_deposit_request');
+      if(sent?.body_html){setHoldingEmailPreview({subject:sent.subject||'Holding Deposit Request',html:sent.body_html});return;}
+    }
     setReviewError('');
     try {
       const preview = await api.post(`/api/tenant-enquiries/${enquiryId}/holding-deposit/email-preview`, {
@@ -702,11 +715,14 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     message.template === 'tenancy_application' || message.template === 'holding_deposit_request'
   );
   const latestHoldingEmail = emailMessages.find(message => message.template === 'holding_deposit_request');
-  const answerLabel = (key: string) => key.replace(/^declaration_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const answerLabel = (key: string) => key==='ni_number'?'National Insurance Number':key.replace(/^declaration_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const answerValue = (value: unknown) => typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value || '—');
   const applicationUrl = `https://apply.fleminglettings.co.uk/${enquiry.application_form_slug || enquiry.application_form_token || ''}`;
   const reviewSmsPreview = `Hi there ${enquiry.first_name_1 || 'there'}, thank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you. Please click on this link to jump back in: ${applicationUrl}. If you need any help, then please contact our office on 01902 212 415.`;
-  const reviewEmailPreview = `Subject: More information required for your tenancy application\n\nHi ${enquiry.first_name_1 || 'there'},\n\nThank you for completing your application forms with Fleming Lettings. We have reviewed your application and still require further information or documentation from you.\n\nWhat we need to complete your application:\n${changesRequired || '[Enter the changes or information required above]'}\n\nUpdate your application: ${applicationUrl}\n\nIf you need any help, please contact our office on 01902 212 415.`;
+  const visibleSections=[...new Set(Object.entries(applicationData).filter(([,v])=>v!==null&&v!==undefined&&String(v).trim()!==''&&!Array.isArray(v)&&typeof v!=='object').map(([key])=>answerSection(key)))];
+  const allSectionsApproved=visibleSections.every(section=>sectionReviews[section]?.status==='approved');
+  const combinedChanges=[...new Set([...Object.entries(sectionReviews).filter(([,r])=>r.status==='rejected').map(([section,r])=>`${section}: ${r.reason}`),...enquiryDocs.filter(d=>d.review_status==='rejected').map(d=>`${d.doc_type} — ${d.original_name}: ${d.review_notes}`),changesRequired.trim()].flatMap(part => part.split(/\n\n+/)).map(part => part.trim()).filter(Boolean))].join('\n\n');
+  const previewReviewEmail=async()=>{try{const preview=await api.post(`/api/tenant-enquiries/${enquiryId}/application-review/email-preview`,{changes_required:combinedChanges});setHoldingEmailPreview(preview);}catch(e){setReviewError(String(e));}};
   const landlordBankComplete = agreementCompliance?.paymentRoute !== 'landlord' || Boolean(
     landlordBankSortCode.trim() && landlordBankAccountNumber.trim() && landlordBankAccountName.trim() && landlordBankName.trim()
   );
@@ -830,9 +846,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     onClick={() => previewHoldingEmail()}
                     className="flex items-center gap-1.5 text-[10px] font-medium text-[var(--accent-orange)] hover:underline mt-1"
                   >
-                    <Eye size={12} /> View Email Preview
+                    <Eye size={12} /> View Email
                   </button>
-                  <Button variant="ghost" onClick={requestHoldingDeposit} disabled={saving || !enquiry.email_1} className="flex items-center gap-2">
+                  <Button variant="ghost" onClick={requestHoldingDeposit} disabled={saving || !enquiry.email_1 || !!enquiry.holding_deposit_received} className="flex items-center gap-2">
                     <Send size={14} /> {saving ? 'Sending...' : 'Resend Holding Deposit Email'}
                   </Button>
                 </div>
@@ -1090,18 +1106,12 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 <div className="text-xs text-[var(--text-muted)] flex items-center gap-2">
                   <AlertTriangle size={14} className="text-amber-400" /> Waiting for the applicant to submit the form and documents.
                 </div>
-              ) : applicationReviewStatus === 'changes_requested' ? (
-                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-                  <p className="text-sm font-medium text-amber-400">Waiting on tenant review</p>
-                  <p className="mt-1 text-xs text-[var(--text-secondary)]">The applicant has been asked to update and resubmit their application.</p>
-                  {changesRequired && <p className="mt-3 text-xs text-[var(--text-primary)] whitespace-pre-wrap">{changesRequired}</p>}
-                  {reviewError && <p className="mt-2 text-xs text-red-400">{reviewError}</p>}
-                </div>
               ) : (
                 <>
-                  <div className="bg-[var(--bg-subtle)] rounded-lg p-3 max-h-56 overflow-y-auto">
+                  <div className="bg-[var(--bg-subtle)] rounded-lg p-3 max-h-[32rem] overflow-y-auto">
                     <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Submitted answers</p>
-                    {[...new Set(Object.keys(applicationData).map(answerSection))].map(section=>{const answers=Object.entries(applicationData).filter(([key,value])=>answerSection(key)===section&&value!==null&&value!==undefined&&String(value).trim()!==''&&!Array.isArray(value)&&typeof value!=='object');return answers.length?<section key={section} className="mb-4"><h4 className="text-xs font-semibold mb-2">{section}</h4><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{answers.map(([key,value])=><div key={key}><p className="text-[10px] text-[var(--text-muted)]">{answerLabel(key)}</p><p className="text-xs break-words">{answerValue(value)}</p></div>)}</div></section>:null;})}
+                    {visibleSections.map(section=>{const answers=Object.entries(applicationData).filter(([key,value])=>answerSection(key)===section&&value!==null&&value!==undefined&&String(value).trim()!==''&&!Array.isArray(value)&&typeof value!=='object');const decision=sectionReviews[section];return <section key={section} className={`mb-4 rounded-xl border p-3 ${reviewColour(decision?.status,decision?.reviewed_at)}`}><h4 className="text-xs font-semibold mb-2">{section} · {decision?.status||'Needs Review'}</h4><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{answers.map(([key,value])=><div key={key}><p className="text-[10px] text-[var(--text-muted)]">{answerLabel(key)}</p><p className="text-xs break-words">{answerValue(value)}</p></div>)}</div>{decision?.reason&&<p className="text-xs mt-2 whitespace-pre-wrap">{decision.reason}</p>}<div className="flex gap-2 mt-3"><Button size="sm" variant="outline" disabled={saving} onClick={()=>saveSection(section,'approved')}>Approve</Button><Button size="sm" variant="outline" disabled={saving} onClick={()=>{setRejectSection(section);setSectionReason(decision?.reason||'');}}>Reject</Button></div></section>;})}
+
                   </div>
 
                   <div className="space-y-2">
@@ -1117,22 +1127,22 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                             </span>
                           </div>
                           {docs.map(doc => (
-                            <div key={doc.id} className="flex flex-wrap items-center gap-2 bg-[var(--bg-subtle)] rounded-lg p-3">
+                            <div key={doc.id} className={`flex flex-wrap items-center gap-2 border rounded-lg p-3 ${reviewColour(documentDecisions[doc.id]||doc.review_status,documentDecisions[doc.id]?undefined:doc.reviewed_at)}`}>
                               <FileText size={12} className="text-[var(--text-muted)] shrink-0" />
                               <select aria-label={`Category for ${doc.original_name}`} value={doc.doc_type} disabled={saving} className="max-w-28 text-xs bg-[var(--bg-input)] rounded" onChange={async event=>{setSaving(true);try{await api.put(`/api/documents/${doc.id}/category`,{doc_type:event.target.value});setReviewStatusOverride(null);await Promise.all([fetchDocs(),onUpdate()]);}catch(error){setReviewError(error instanceof Error?error.message:'Category could not be saved');}finally{setSaving(false);}}}>
                                 {['Primary Identification','Secondary Identification','Bank Statements','Proof of Income or Employment','Credit Check Report','Other'].map(type=><option key={type}>{type}</option>)}
                               </select>
-                              <div className="text-left min-w-0 basis-full order-first">
+                              <div className="flex items-start gap-3 text-left min-w-0 basis-full order-first"><div className="flex-1 min-w-0">
                                 <p className="text-xs text-[var(--text-primary)] break-words">{doc.original_name}</p>
-                                <p className="text-[10px] text-[var(--text-muted)]">{new Date(doc.uploaded_at).toLocaleDateString('en-GB')}</p>
+                                <p className="text-[10px] text-[var(--text-muted)]">{new Date(doc.uploaded_at).toLocaleDateString('en-GB')}</p></div><button onClick={() => viewDocument(doc.id, doc.original_name)} className="shrink-0 px-2 py-1 rounded text-xs bg-sky-500/15 text-sky-600">View</button>
                               </div>
-                              <span className={`text-[10px] font-medium ${doc.review_status === 'approved' ? 'text-emerald-400' : doc.review_status === 'rejected' ? 'text-red-400' : 'text-amber-400'}`}>
+                              <span className={`text-[10px] font-medium ${(documentDecisions[doc.id]||doc.review_status) === 'approved' ? 'text-emerald-600' : (documentDecisions[doc.id]||doc.review_status) === 'rejected' ? 'text-red-600' : 'text-amber-600'}`}>
                                 {documentDecisions[doc.id] || doc.review_status || 'pending'}
                               </span>
-                              <button onClick={() => viewDocument(doc.id, doc.original_name)} className="px-2 py-1 rounded text-[10px] bg-sky-500/15 text-sky-400 flex items-center gap-1"><Eye size={10} />View</button>
+
                               <button onClick={() => downloadDocument(doc.id, doc.original_name)} className="px-2 py-1 rounded text-[10px] bg-[var(--bg-hover)] text-[var(--text-secondary)] flex items-center gap-1"><Download size={10} />Download</button>
                               <button onClick={() => reviewDocument(doc.id, 'approved')} disabled={saving} className="px-2 py-1 rounded text-[10px] bg-emerald-500/15 text-emerald-400">Approve</button>
-                              <button onClick={() => reviewDocument(doc.id, 'rejected')} disabled={saving} className="px-2 py-1 rounded text-[10px] bg-red-500/15 text-red-400 disabled:opacity-40">Reject</button>
+                              <button onClick={() => reviewDocument(doc.id, 'rejected')} disabled={saving} className="px-2 py-1 rounded text-[10px] bg-red-500/15 text-red-400 disabled:opacity-40">Reject</button>{documentDecisions[doc.id]==='rejected'?<div className="basis-full space-y-2"><label className="text-xs">Rejection reason<textarea className="block w-full rounded-lg border p-2 bg-[var(--bg-input)]" rows={3} value={documentReasons[doc.id]??doc.review_notes??''} onChange={e=>setDocumentReasons(r=>({...r,[doc.id]:e.target.value}))}/></label><Button size="sm" disabled={saving||!documentReasons[doc.id]?.trim()} onClick={()=>reviewDocument(doc.id,'rejected',true)}>Save Rejection</Button></div>:doc.review_notes&&<p className="basis-full text-xs whitespace-pre-wrap">{doc.review_notes}</p>}
                             </div>
                           ))}
                         </div>
@@ -1151,11 +1161,11 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none" />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <label className="flex items-center gap-2 rounded-lg bg-[var(--bg-subtle)] px-3 py-2 text-xs cursor-pointer">
+                    <label className="order-2 flex items-center gap-2 rounded-lg bg-[var(--bg-subtle)] px-3 py-2 text-xs cursor-pointer">
                       <input type="checkbox" checked={sendReviewSms} onChange={event => setSendReviewSms(event.target.checked)} className="accent-orange-500" /> Send SMS
                     </label>
                     <label className="flex items-center gap-2 rounded-lg bg-[var(--bg-subtle)] px-3 py-2 text-xs cursor-pointer">
-                      <input type="checkbox" checked={sendReviewEmail} onChange={event => setSendReviewEmail(event.target.checked)} className="accent-orange-500" /> Send email
+                      <input type="checkbox" checked={sendReviewEmail} onChange={event => setSendReviewEmail(event.target.checked)} className="accent-orange-500" /> Send Email
                     </label>
                   </div>
                   {sendReviewSms && (
@@ -1167,16 +1177,15 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   {sendReviewEmail && (
                     <div>
                       <label className="block text-[10px] text-[var(--text-muted)] mb-1">Email preview</label>
-                      <textarea readOnly value={reviewEmailPreview} rows={8}
-                        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] resize-none" />
+                      <Button size="sm" variant="outline" onClick={previewReviewEmail}>Preview Email</Button>
                     </div>
                   )}
                   {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={() => updateApplicationReview('changes_requested')} disabled={saving || !changesRequired.trim()}>
-                      Request Changes
+                    <Button variant="outline" size="sm" onClick={() => updateApplicationReview('changes_requested')} disabled={saving || !combinedChanges.trim() || Object.values(documentDecisions).includes('rejected')}>
+                      {sendReviewEmail||sendReviewSms?'Send Change Request':'Save Changes Required'}
                     </Button>
-                    <Button variant="gradient" size="sm" onClick={() => updateApplicationReview('approved')} disabled={saving || !allRequiredDocsApproved}>
+                    <Button variant="gradient" size="sm" onClick={() => updateApplicationReview('approved')} disabled={saving || !allRequiredDocsApproved || !allSectionsApproved || enquiryDocs.some(d=>d.review_status==='rejected') || Object.values(documentDecisions).includes('rejected')}>
                       Approve Application
                     </Button>
                   </div>
@@ -1482,6 +1491,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       )}
 
       {smsPreview!==null&&<div role="dialog" aria-modal="true" aria-label="Preview SMS" className="fixed inset-0 z-[120] grid place-items-center bg-black/60 p-4" onClick={()=>setSmsPreview(null)}><div className="w-full max-w-lg rounded-2xl bg-[var(--bg-card)] p-6" onClick={e=>e.stopPropagation()}><h3 className="font-bold mb-4">Preview SMS</h3><p className="text-sm whitespace-pre-wrap">{smsPreview}</p><Button className="mt-4" onClick={()=>setSmsPreview(null)}>Close</Button></div></div>}
+      {rejectSection&&<div className="fixed inset-0 z-[120] grid place-items-center bg-black/60 p-4"><div role="dialog" aria-modal="true" aria-label="Reject application section" className="w-full max-w-md rounded-2xl bg-[var(--bg-card)] p-6 space-y-4"><h3 className="font-semibold">{rejectSection} — Changes Required</h3><textarea autoFocus aria-label="Section rejection reason" className="w-full border rounded-lg bg-[var(--bg-input)] p-3" rows={5} value={sectionReason} onChange={e=>setSectionReason(e.target.value)}/><div className="flex gap-3"><Button disabled={saving||!sectionReason.trim()} onClick={()=>saveSection(rejectSection,'rejected')}>Save Rejection</Button><Button variant="ghost" onClick={()=>setRejectSection(null)}>Cancel</Button></div></div></div>}
       <EmailPreviewModal open={holdingEmailPreview !== null} onClose={() => setHoldingEmailPreview(null)}
         onSend={async () => undefined} to={enquiry.email_1 || ''} from="contact@tenancies.fleminglettings.co.uk"
         initialSubject={holdingEmailPreview?.subject || ''} initialBodyHtml={holdingEmailPreview?.html || ''} previewOnly />

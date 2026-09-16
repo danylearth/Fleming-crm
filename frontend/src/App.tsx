@@ -17,6 +17,7 @@ const EnquiryDetail = lazy(() => import('./pages/EnquiryDetail'));
 const EnquiriesKanban = lazy(() => import('./pages/EnquiriesKanban'));
 const BDM = lazy(() => import('./pages/BDM'));
 const BDMDetail = lazy(() => import('./pages/BDMDetail'));
+const Marketing = lazy(() => import('./pages/Marketing'));
 const Maintenance = lazy(() => import('./pages/Maintenance'));
 const Tasks = lazy(() => import('./pages/Tasks'));
 const TaskDetail = lazy(() => import('./pages/TaskDetail'));
@@ -96,6 +97,7 @@ function AppRoutes() {
       <Route path="/enquiries/:id" element={<ProtectedRoute><EnquiryDetail /></ProtectedRoute>} />
       <Route path="/bdm" element={<ProtectedRoute><BDM /></ProtectedRoute>} />
       <Route path="/bdm/:id" element={<ProtectedRoute><BDMDetail /></ProtectedRoute>} />
+      <Route path="/marketing" element={<ProtectedRoute><Marketing /></ProtectedRoute>} />
       <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
       <Route path="/maintenance/:requestId" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
       <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />

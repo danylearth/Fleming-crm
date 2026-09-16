@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 interface MaintenanceItem {
-  id: number; property_address: string; description: string; status: string; priority: string;
+  assigned_to?:number;assigned_name?:string; id: number; property_address: string; description: string; status: string; priority: string;
 }
 
 interface OverdueTask {
@@ -39,7 +39,7 @@ interface Task {
 }
 
 interface Enquiry {
-  id: number; status: string; first_name_1?: string; last_name_1?: string;
+  previous_agent?:string; id: number; status: string; first_name_1?: string; last_name_1?: string;
   property_address?: string; property_id?: number; created_at?: string;
   email_1?: string; phone_1?: string;
   application_form_completed?: number | boolean; application_review_status?: string;
@@ -54,11 +54,12 @@ export default function Dashboard() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [teamMembers,setTeamMembers]=useState<{id:number;name:string}[]>([]);
-  const [taskOwner,setTaskOwner]=useState('me');
+  const [maintenanceOwner,setMaintenanceOwner]=useState('all');
+  const [taskOwner,setTaskOwner]=useState('all');
   const [selectedTask,setSelectedTask]=useState<Task|null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
-  const [landlordEnquiries,setLandlordEnquiries]=useState<{id:number;name?:string;first_name?:string;last_name?:string;status:string;updated_at?:string;created_at?:string;follow_up_date?:string}[]>([]);
+  const [landlordEnquiries,setLandlordEnquiries]=useState<{id:number;previous_agent?:string;name?:string;first_name?:string;last_name?:string;status:string;updated_at?:string;created_at?:string;follow_up_date?:string}[]>([]);
   const [pipelineOldest,setPipelineOldest]=useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -124,13 +125,13 @@ export default function Dashboard() {
     return 'text-emerald-400';
   };
 
-  const visibleRecentTasks = tasks.filter(task => !task.dashboard_dismissed_at && (taskOwner==='all' || (taskOwner==='me' ? [String(user?.id),user?.name].includes(task.assigned_to) : [taskOwner,teamMembers.find(member=>String(member.id)===taskOwner)?.name].includes(String(task.assigned_to)))));
+  const visibleRecentTasks = tasks.filter(task => !task.dashboard_dismissed_at && !['tenant_enquiry','landlord_bdm'].includes(task.entity_type||'') && (taskOwner==='all' || (taskOwner==='me' ? [String(user?.id),user?.name].includes(task.assigned_to) : [taskOwner,teamMembers.find(member=>String(member.id)===taskOwner)?.name].includes(String(task.assigned_to)))));
 
   const todayKey=new Date(now).toLocaleDateString('en-CA',{timeZone:'Europe/London'});
   const pipeline=[
-    ...enquiries.map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',type:'Tenant',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.application_form_completed&&e.application_review_status!=='approved'?'Application Ready for Review':e.status.replaceAll('_',' '),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
-    ...landlordEnquiries.filter(e=>!['onboarded','not_interested','rejected','closed'].includes(e.status)).map(e=>({key:`landlord-${e.id}`,name:e.name||[e.first_name,e.last_name].filter(Boolean).join(' ')||'Landlord Enquiry',type:'Landlord',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.status.replaceAll('_',' '),href:`/bdm/${e.id}`,onboarding:false})),
-    ...tasks.filter(t=>t.entity_type==='tenant'&&t.task_type==='follow_up'&&t.status!=='completed'&&t.due_date?.slice(0,10)<=todayKey).map(t=>({key:`followup-${t.id}`,name:t.title,type:'Tenant Follow-up',date:t.due_date,status:'Follow-up Due',href:`/tasks/${t.id}`,onboarding:false})),
+    ...enquiries.map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',previousAgent:e.previous_agent||'—',type:'Tenant Enquiry',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.application_form_completed&&e.application_review_status!=='approved'?'Application Ready for Review':e.status.replaceAll('_',' '),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
+    ...landlordEnquiries.filter(e=>!['onboarded','not_interested','rejected','closed'].includes(e.status)).map(e=>({key:`landlord-${e.id}`,name:e.name||[e.first_name,e.last_name].filter(Boolean).join(' ')||'Landlord Enquiry',previousAgent:e.previous_agent||'—',type:'Landlord Enquiry',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.status.replaceAll('_',' '),href:`/bdm/${e.id}`,onboarding:false})),
+    ...tasks.filter(t=>t.entity_type==='tenant'&&t.task_type==='follow_up'&&t.status!=='completed'&&t.due_date?.slice(0,10)<=todayKey).map(t=>({key:`followup-${t.id}`,name:t.title,previousAgent:teamMembers.find(m=>String(m.id)===t.assigned_to)?.name||'—',type:'Tenant Follow-up',date:t.due_date,status:'Follow-up Due',href:`/tasks/${t.id}`,onboarding:false})),
   ].sort((a,b)=>(Date.parse(a.date||'1970-01-01')-Date.parse(b.date||'1970-01-01'))*(pipelineOldest?1:-1));
 
   const deleteTask = async (task: Task) => {
@@ -155,7 +156,7 @@ export default function Dashboard() {
 
   return (
     <Layout hideTopBar>
-      {selectedTask && <div role="dialog" aria-modal="true" aria-labelledby="task-detail-title" className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4" onClick={()=>setSelectedTask(null)}><div className="w-full max-w-lg rounded-2xl bg-[var(--bg-card)] p-6 space-y-4" onClick={e=>e.stopPropagation()}><div className="flex justify-between gap-4"><h2 id="task-detail-title" className="font-semibold text-lg">{selectedTask.title}</h2><button aria-label="Close task" onClick={()=>setSelectedTask(null)}><X size={20}/></button></div><p className="whitespace-pre-wrap text-sm">{selectedTask.description || 'No description'}</p><p className="text-sm">{selectedTask.property_address}</p><p className="text-sm">Assigned To: {teamMembers.find(m=>String(m.id)===String(selectedTask.assigned_to))?.name || selectedTask.assigned_to || 'Unassigned'}</p><p className="text-sm capitalize">{selectedTask.status} · {selectedTask.priority} Priority</p><p className="text-sm">Due: {selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString('en-GB') : 'Not Set'}</p><Button onClick={()=>navigate(`/tasks/${selectedTask.id}`)}>Open Task</Button></div></div>}
+      {selectedTask && <div role="dialog" aria-modal="true" aria-labelledby="task-detail-title" className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4" onClick={()=>setSelectedTask(null)}><div className="w-full max-w-lg rounded-2xl bg-[var(--bg-card)] p-6 space-y-4" onClick={e=>e.stopPropagation()}><div className="flex justify-between gap-4"><h2 id="task-detail-title" className="font-semibold text-lg">{selectedTask.title}</h2><button aria-label="Close task" onClick={()=>setSelectedTask(null)}><X size={20}/></button></div><p className="whitespace-pre-wrap text-sm">{selectedTask.description || 'No description'}</p><p className="text-sm">{selectedTask.property_address}</p><p className="text-sm">Assigned To: {teamMembers.find(m=>String(m.id)===String(selectedTask.assigned_to))?.name || selectedTask.assigned_to || (selectedTask.entity_type==='maintenance'?'Maintenance':'Unassigned')}</p><p className="text-sm capitalize">{selectedTask.status} · {selectedTask.priority} Priority</p><p className="text-sm">Due: {selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString('en-GB') : 'Not Set'}</p><Button onClick={()=>navigate(`/tasks/${selectedTask.id}`)}>Open Task</Button></div></div>}
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Greeting */}
         <div className="pt-10 md:pt-0">
@@ -190,6 +191,7 @@ export default function Dashboard() {
           {/* Compliance and maintenance alerts */}
           <Card className="p-6">
             <SectionHeader title="Compliance Alerts & Maintenance Requests" icon={<AlertTriangle size={16}/>} action={() => navigate('/maintenance')} actionLabel="View All" />
+            <Select label="Maintenance Assigned To" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'All'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/>
             {dashboard?.complianceAlerts?.length || dashboard?.recentMaintenance?.length ? (
               <div className="space-y-3">
                 {dashboard.complianceAlerts.slice(0, 3).map((alert, i) => (
@@ -211,10 +213,10 @@ export default function Dashboard() {
                     </div>
                   </button>
                 ))}
-                {dashboard.recentMaintenance.slice(0, 3).map(item => (
+                {dashboard.recentMaintenance.filter(m=>maintenanceOwner==='all'||String(m.assigned_to||'unassigned')===maintenanceOwner).slice(0, 5).map(item => (
                   <button key={`maintenance-${item.id}`} onClick={() => navigate(`/maintenance/${item.id}`)} className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                     <div className="flex items-center gap-3 min-w-0"><Wrench size={16} className="text-amber-400 shrink-0" /><div className="min-w-0"><p className="text-sm font-medium truncate">{item.property_address}</p><p className="text-xs text-[var(--text-muted)] truncate">{item.description}</p></div></div>
-                    <span className="text-[10px] font-semibold uppercase text-amber-400">{item.status.replace('_', ' ')}</span>
+                    <span title={item.assigned_name||'Maintenance'} className="rounded-full bg-amber-500/15 px-2 py-1 text-xs mx-2">{item.assigned_name?item.assigned_name.split(' ').map(n=>n[0]).join('').slice(0,2):'Maintenance'}</span><span className="text-[10px] font-semibold uppercase text-amber-400">{item.status.replace('_', ' ')}</span>
                   </button>
                 ))}
               </div>
@@ -226,7 +228,7 @@ export default function Dashboard() {
           {/* Pipeline */}
           <Card className="p-6">
             <SectionHeader title="Enquiry Pipeline" icon={<MessageSquare size={16}/>} action={() => navigate('/enquiries')} actionLabel="View All" />
-            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="w-full text-sm text-left"><thead><tr className="text-xs text-[var(--text-muted)]"><th className="py-3">Enquiry / Action</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="rounded-full border px-3 py-2" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="sr-only">Open</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-3 pr-3"><button className="text-left" onClick={()=>navigate(row.href)}><strong className="block">{row.name}</strong><span className="text-xs text-[var(--text-muted)]">{row.type} · {row.status}</span></button></td><td className="text-xs whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="pl-3"><Button size="sm" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue Onboarding':'Open'}</Button></td></tr>)}</tbody></table></div>:<EmptyState message="No enquiries or follow-ups awaiting action"/>}
+            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="w-full text-sm text-left"><thead><tr className="text-xs text-[var(--text-muted)]"><th className="py-3">Enquiry Name</th><th className="px-3">Enquiry Type</th><th className="px-3">Previous Agent</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="rounded-full border px-3 py-2" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="sr-only">Open</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-3 pr-3"><button className="text-left" onClick={()=>navigate(row.href)}><strong className="block">{row.name}</strong><span className="text-xs text-[var(--text-muted)]">{row.status}</span></button></td><td className="px-3 text-xs">{row.type}</td><td className="px-3 text-xs">{row.previousAgent}</td><td className="text-xs whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="pl-3 text-right"><Button size="sm" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue Onboarding':'View Enquiry'}</Button></td></tr>)}</tbody></table></div>:<EmptyState message="No enquiries or follow-ups awaiting action"/>}
           </Card>
         </div>
 
@@ -265,7 +267,7 @@ export default function Dashboard() {
 
         {/* Recent Tasks */}
         <Card className="p-6">
-          <div className="flex flex-wrap items-end justify-between gap-4"><div className="flex-1 min-w-48"><SectionHeader title="Tasks" icon={<ListChecks size={16}/>} action={() => navigate('/tasks')} actionLabel="View All" /></div><Select className="w-52" label="Assigned To" value={taskOwner} onChange={setTaskOwner} options={[{value:'me',label:'My Tasks'},...teamMembers.map(member=>({value:String(member.id),label:member.name})),{value:'all',label:'View All'}]} />{user?.role === 'admin' && visibleRecentTasks.length > 0 && <button className="self-end rounded-full bg-red-600 px-4 py-2.5 text-xs text-white font-medium whitespace-nowrap" onClick={async () => { if (!await confirmAction('Clear all recent tasks from the dashboard? They will remain available in Team Calendar.', 'Clear Recent Tasks')) return; try { await api.post('/api/tasks/clear-recent', {}); setTasks(current => current.map(t => ({ ...t, dashboard_dismissed_at: new Date().toISOString() }))); } catch (e) { alert(e instanceof Error ? e.message : 'Could not clear tasks'); } }}>Clear All</button>}</div>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex gap-2 items-center"><ListChecks size={16}/> Tasks</h2><div className="flex items-end gap-3"><Select className="w-44" label="Assigned To" value={taskOwner} onChange={setTaskOwner} options={[{value:'all',label:'All'},{value:'me',label:'My Tasks'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" variant="outline" onClick={()=>navigate('/tasks')}>View All</Button></div></div>
           {visibleRecentTasks.length ? (
             <div className="space-y-2">
               {visibleRecentTasks.slice(0, 5).map(task => (
@@ -281,6 +283,7 @@ export default function Dashboard() {
                     <p className="text-sm font-medium truncate">{task.title}</p>
                     <p className="text-xs text-[var(--text-muted)] truncate">{task.property_address || task.description}</p>
                   </button>
+                  <span className="text-xs text-[var(--text-muted)]">{teamMembers.find(m=>String(m.id)===String(task.assigned_to))?.name||task.assigned_to||(task.entity_type==='maintenance'?'Maintenance':'Unassigned')}</span>
                   <div className="text-right shrink-0">
                     <Tag active={task.priority === 'high'}>{task.priority}</Tag>
                     {task.due_date && (
@@ -304,6 +307,7 @@ export default function Dashboard() {
           ) : (
             <EmptyState message="No tasks yet" />
           )}
+          <div className="flex justify-end mt-4">{user?.role === 'admin' && visibleRecentTasks.length > 0 && <button className="self-end rounded-full bg-red-600 px-4 py-2.5 text-xs text-white font-medium whitespace-nowrap" onClick={async () => { if (!await confirmAction('Clear all recent tasks from the dashboard? They will remain available in Team Calendar.', 'Clear Recent Tasks')) return; try { await api.post('/api/tasks/clear-recent', {}); setTasks(current => current.map(t => ({ ...t, dashboard_dismissed_at: new Date().toISOString() }))); } catch (e) { alert(e instanceof Error ? e.message : 'Could not clear tasks'); } }}>Clear All</button>}</div>
         </Card>
 
         {/* My Properties Carousel */}

@@ -4,7 +4,7 @@ import {createInterface} from 'node:readline';
 import fs from 'node:fs';
 import path from 'node:path';
 import {authMiddleware, type AuthRequest} from './auth';
-import {run} from './db-pg';
+import {run,queryOne} from './db-pg';
 
 type Login = {loginId:string;verificationUrl:string;userCode:string};
 const sessions=new Map<number,Promise<FlemoAccount>>();
@@ -41,7 +41,7 @@ export class FlemoAccount {
       let message:any;try{message=JSON.parse(line);}catch{return;}
       if(message.id!==undefined && !message.method){const request=this.requests.get(message.id);if(request){clearTimeout(request.timer);this.requests.delete(message.id);message.error?request.reject(new Error('The AI service could not complete this request. Please reconnect or try again.')):request.resolve(message.result);}return;}
       if(message.id!==undefined && message.method){this.child.stdin.write(JSON.stringify({id:message.id,error:{code:-32601,message:'This CRM connection does not permit tool execution'}})+'\n');return;}
-      if(message.method==='account/login/completed'){this.login=null;this.loginError=message.params.success?null:'Sign-in did not complete. Try connecting again.';}
+      if(message.method==='account/login/completed'){this.login=null;this.loginError=message.params.success?null:'Sign-in did not complete. Try connecting again.';if(message.params.success)void run('UPDATE users SET ai_connected_at=NOW() WHERE id=$1',[this.userId]).catch(()=>{});}
       if(message.method==='item/completed' && this.turn?.threadId===message.params.threadId && message.params.item?.type==='agentMessage')this.turn.text=message.params.item.text || this.turn.text;
       if(message.method==='turn/completed' && this.turn?.threadId===message.params.threadId){const turn=this.turn;this.turn=undefined;clearTimeout(turn.timer);message.params.turn?.status==='completed' && turn.text ? turn.resolve(turn.text) : turn.reject(new Error('Flemo could not finish the answer. Check your AI account limits and try again.'));}
     });
@@ -84,7 +84,7 @@ export async function flemoAccountStatus(userId:number){
   return (await flemoAccount(userId)).status();
 }
 export function registerFlemoOAuthRoutes(app:Express){
-  app.get('/api/ai/account',authMiddleware,async(req:AuthRequest,res)=>{try{res.json(await flemoAccountStatus(req.user.id));}catch(error){res.status(503).json({error:error instanceof Error?error.message:'AI connection unavailable'});}});
+  app.get('/api/ai/account',authMiddleware,async(req:AuthRequest,res)=>{try{const status=await flemoAccountStatus(req.user.id);const record=await queryOne('SELECT ai_connected_at FROM users WHERE id=$1',[req.user.id]);res.json({...status,connected_at:record?.ai_connected_at});}catch(error){res.status(503).json({error:error instanceof Error?error.message:'AI connection unavailable'});}});
   app.post('/api/ai/account/connect',authMiddleware,async(req:AuthRequest,res)=>{try{const login=await(await flemoAccount(req.user.id)).startLogin();await run("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','user',$1,$3)",[req.user.id,req.user.email,JSON.stringify({action:'ai_sign_in_started',provider:'chatgpt'})]);res.json(login);}catch(error){res.status(503).json({error:error instanceof Error?error.message:'AI sign-in unavailable'});}});
-  app.post('/api/ai/account/disconnect',authMiddleware,async(req:AuthRequest,res)=>{try{await(await flemoAccount(req.user.id)).disconnect();await run("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','user',$1,$3)",[req.user.id,req.user.email,JSON.stringify({action:'ai_disconnected'})]);res.json({success:true});}catch(error){res.status(503).json({error:'Could not disconnect. Please try again.'});}});
+  app.post('/api/ai/account/disconnect',authMiddleware,async(req:AuthRequest,res)=>{try{await(await flemoAccount(req.user.id)).disconnect();await run('UPDATE users SET ai_connected_at=NULL WHERE id=$1',[req.user.id]);await run("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','user',$1,$3)",[req.user.id,req.user.email,JSON.stringify({action:'ai_disconnected'})]);res.json({success:true});}catch(error){res.status(503).json({error:'Could not disconnect. Please try again.'});}});
 }

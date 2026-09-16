@@ -1,3 +1,5 @@
+import {registerMarketing} from './marketing';
+import {registerApplicationReview,answerSections} from './application-review';
 import {registerPropertyPolicies} from './property-policies';
 import {searchEpc} from './epc';
 import {registerFreeAgentRoutes} from './freeagent';
@@ -654,7 +656,7 @@ app.get('/api/dashboard', authMiddleware, async (req: AuthRequest, res) => {
     `);
 
     const recentMaintenance = await query(`
-      SELECT m.id, m.description, m.status, m.priority, COALESCE(p.address, 'Unknown property') as property_address
+      SELECT m.id, m.description, m.status, m.priority, m.assigned_to, (SELECT name FROM users WHERE id=m.assigned_to) AS assigned_name, COALESCE(p.address, 'Unknown property') as property_address
       FROM maintenance m
       LEFT JOIN properties p ON p.id = m.property_id
       WHERE m.status IN ('open', 'in_progress')
@@ -1214,7 +1216,7 @@ app.delete('/api/property-landlords/:linkId', authMiddleware, async (req: AuthRe
 
 app.get('/api/landlords-bdm', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const prospects = await query(`SELECT * FROM landlords_bdm ORDER BY created_at DESC`);
+    const prospects = await query(`SELECT b.*, (SELECT COALESCE(u.name,a.user_email) FROM audit_log a LEFT JOIN users u ON u.id=a.user_id WHERE a.entity_type='landlord_bdm' AND a.entity_id=b.id AND a.user_id IS NOT NULL AND a.action NOT IN ('view','page_view','navigate') ORDER BY a.created_at DESC LIMIT 1) AS previous_agent FROM landlords_bdm b ORDER BY created_at DESC`);
     res.json(prospects);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch landlords BDM' });
@@ -1342,6 +1344,7 @@ app.get('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) =
     const { limit, offset } = pageParams(req);
     const enquiries = await query(`
       SELECT te.*, p.address as property_address,
+        (SELECT COALESCE(u.name,a.user_email) FROM audit_log a LEFT JOIN users u ON u.id=a.user_id WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id AND a.user_id IS NOT NULL AND a.action NOT IN ('view','page_view','navigate') ORDER BY a.created_at DESC LIMIT 1) AS previous_agent,
         EXISTS (
           SELECT 1 FROM tenancy_agreements ta
           WHERE ta.enquiry_id = te.id AND ta.status = 'completed'
@@ -2637,7 +2640,9 @@ registerCompletionRoutes(app);
 registerTeamActivityRoutes(app);
 registerFeedbackRoutes(app);
 registerProfileRoutes(app);
+registerApplicationReview(app);
 registerPropertyPolicies(app);
+registerMarketing(app);
 registerInventoryReviewRoutes(app);
 registerFlemoRoutes(app);
 
@@ -3296,7 +3301,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
         app_decl_gdpr=$45, app_decl_enquiries=$46, app_decl_documents=$47,
         app_decl_credit_check=$48, app_decl_terms=$49, app_decl_marketing=$50,
         app_declaration_agreed=1, application_form_completed=1,
-        application_review_status='pending', application_review_notes=NULL,
+        application_review_status='pending', application_review_notes=NULL, application_section_reviews='{}'::jsonb,application_changes_sent_at=NULL,
         application_reviewed_at=NULL, application_reviewed_by=NULL
       WHERE id=$51
     `, [
@@ -3660,7 +3665,7 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
 
     let epcNotice='';
     if(!d.epc_expiry_date){
-      try{const certificates=await searchEpc(d.postcode);const normalize=(s:string)=>s.toLowerCase().replace(/[^a-z0-9]/g,'');const address=normalize(d.address.split(',')[0]);const matches=certificates.filter(c=>normalize(c.address).startsWith(address));const match=matches[0];if(match&&match.lodgement_date){const expiry=new Date(match.lodgement_date);expiry.setUTCFullYear(expiry.getUTCFullYear()+10);if(Number.isFinite(expiry.getTime()))await run('UPDATE properties SET epc_grade=$1,epc_expiry_date=$2 WHERE id=$3',[match.current_rating,expiry.toISOString().slice(0,10),id]);}else epcNotice='Property saved. No matching EPC was found; add the certificate manually.';}catch(error){epcNotice='Property saved. '+(error instanceof Error?error.message:'EPC lookup unavailable. Enter certificate details manually.');}
+      try{const certificates=await searchEpc(d.postcode);const normalize=(s:string)=>s.toLowerCase().replace(/[^a-z0-9]/g,'');const address=normalize(d.address.split(',')[0]);const matches=certificates.filter(c=>normalize(c.address).startsWith(address));const match=matches[0];if(match&&match.lodgement_date){const expiry=new Date(match.lodgement_date);expiry.setUTCFullYear(expiry.getUTCFullYear()+10);expiry.setUTCDate(expiry.getUTCDate()-1);if(Number.isFinite(expiry.getTime()))await run('UPDATE properties SET epc_grade=$1,epc_expiry_date=$2 WHERE id=$3',[match.current_rating,expiry.toISOString().slice(0,10),id]);}else epcNotice='Property saved. No matching EPC was found; add the certificate manually.';}catch(error){epcNotice='Property saved. '+(error instanceof Error?error.message:'EPC lookup unavailable. Enter certificate details manually.');}
     }
     await logAudit(req.user?.id, req.user?.email, 'create', 'property', id);
     res.json({ id,epc_notice:epcNotice });
@@ -4163,7 +4168,7 @@ app.get('/api/maintenance', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { limit, offset } = pageParams(req);
     const requests = await query(`
-      SELECT m.*, COALESCE(p.address, 'Unknown property') as address, l.name as landlord_name FROM maintenance m
+      SELECT m.*, COALESCE(p.address, 'Unknown property') as address, l.name as landlord_name, l.landlord_type, (SELECT name FROM users WHERE id=m.assigned_to) AS assigned_name FROM maintenance m
       LEFT JOIN properties p ON p.id = m.property_id LEFT JOIN landlords l ON l.id = p.landlord_id
       ORDER BY CASE m.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, m.created_at DESC
       LIMIT $1 OFFSET $2
@@ -4174,20 +4179,27 @@ app.get('/api/maintenance', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-app.post('/api/maintenance', authMiddleware, async (req: AuthRequest, res) => {
+app.post('/api/maintenance', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
   try {
     const d = req.body;
+    for (const key of ['follow_up_date','due_date']) {
+      if (d[key] && (!/^\d{4}-\d{2}-\d{2}$/.test(d[key]) || !Number.isFinite(Date.parse(d[key])) || new Date(d[key]).toISOString().slice(0,10)!==d[key])) return res.status(400).json({error:'Choose valid follow-up and due dates'});
+      if(key in d && !d[key])d[key]=null;
+    }
+    if('assigned_to' in d){d.assigned_to=d.assigned_to?Number(d.assigned_to):null;if(d.assigned_to && (!Number.isSafeInteger(d.assigned_to)||!await queryOne('SELECT id FROM users WHERE id=$1',[d.assigned_to])))return res.status(400).json({error:'Choose an existing team member'});}
+
+    if(!String(d.title||'').trim() || !await queryOne('SELECT id FROM properties WHERE id=$1',[Number(d.property_id)||0]))return res.status(400).json({error:'Enter a title and choose an existing property'});
     const id = await insert(
-      `INSERT INTO maintenance (property_id, title, description, category, priority, tenant_id, landlord_id, reporter_name, reporter_email, reporter_phone, reporter_type, contractor, contractor_phone, cost, notes, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+      `INSERT INTO maintenance (property_id, title, description, category, priority, tenant_id, landlord_id, reporter_name, reporter_email, reporter_phone, reporter_type, contractor, contractor_phone, cost, notes, status, assigned_to, follow_up_date, due_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
       [d.property_id, d.title, d.description, d.category || null, d.priority || 'medium',
        d.tenant_id || null, d.landlord_id || null, d.reporter_name || null, d.reporter_email || null, d.reporter_phone || null, d.reporter_type || null,
-       d.contractor || null, d.contractor_phone || null, d.cost || null, d.notes || null, d.status || 'open']
+       d.contractor || null, d.contractor_phone || null, d.cost || null, d.notes || null, d.status || 'open', d.assigned_to || null, d.follow_up_date || null, d.due_date || null]
     );
-    await insert(`INSERT INTO tasks (title, description, priority, status, entity_type, entity_id, due_date, task_type)
-      VALUES ($1,$2,$3,'pending','maintenance',$4,CURRENT_DATE,'maintenance')`,
-    [`Maintenance: ${d.title}`, d.description || null, d.priority === 'urgent' ? 'high' : d.priority || 'medium', id]);
-    await logAudit(req.user?.id, req.user?.email, 'create', 'maintenance', id, { property_id: d.property_id, tenant_id: d.tenant_id || null });
+    await insert(`INSERT INTO tasks (title, description, priority, status, entity_type, entity_id, due_date, task_type, assigned_to)
+      VALUES ($1,$2,$3,'pending','maintenance',$4,COALESCE($5::date,CURRENT_DATE),'maintenance',$6)`,
+    [`Maintenance: ${d.title}`, d.description || null, d.priority === 'urgent' ? 'high' : d.priority || 'medium', id, d.follow_up_date || d.due_date || null, d.assigned_to ? String(d.assigned_to) : null]);
+    await logAudit(req.user?.id, req.user?.email, 'create', 'maintenance', id, { property_id: d.property_id, tenant_id: d.tenant_id || null, title:d.title, assigned_to:d.assigned_to, follow_up_date:d.follow_up_date, due_date:d.due_date });
     res.json({ id });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create maintenance' });
@@ -4197,7 +4209,7 @@ app.post('/api/maintenance', authMiddleware, async (req: AuthRequest, res) => {
 app.get('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const result = await query(`
-      SELECT m.*, COALESCE(p.address, 'Unknown property') as address, l.name as landlord_name FROM maintenance m
+      SELECT m.*, COALESCE(p.address, 'Unknown property') as address, l.name as landlord_name, l.landlord_type, (SELECT name FROM users WHERE id=m.assigned_to) AS assigned_name FROM maintenance m
       LEFT JOIN properties p ON p.id = m.property_id LEFT JOIN landlords l ON l.id = p.landlord_id
       WHERE m.id = $1
     `, [req.params.id]);
@@ -4212,18 +4224,24 @@ app.get('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) =>
   }
 });
 
-app.put('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.put('/api/maintenance/:id', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
   try {
     const d = req.body;
+    for (const key of ['follow_up_date','due_date']) {
+      if (d[key] && (!/^\d{4}-\d{2}-\d{2}$/.test(d[key]) || !Number.isFinite(Date.parse(d[key])) || new Date(d[key]).toISOString().slice(0,10)!==d[key])) return res.status(400).json({error:'Choose valid follow-up and due dates'});
+      if(key in d && !d[key])d[key]=null;
+    }
+    if('assigned_to' in d){d.assigned_to=d.assigned_to?Number(d.assigned_to):null;if(d.assigned_to && (!Number.isSafeInteger(d.assigned_to)||!await queryOne('SELECT id FROM users WHERE id=$1',[d.assigned_to])))return res.status(400).json({error:'Choose an existing team member'});}
+
     const current = await queryOne('SELECT * FROM maintenance WHERE id=$1', [req.params.id]);
     if (!current) return res.status(404).json({error:'Maintenance report not found'});
     const propertyId = 'property_id' in d ? Number(d.property_id) : current.property_id;
     const status = d.status || current.status;
     if (!propertyId && status !== 'open') return res.status(400).json({error:'Link this report to a property before progressing or closing it'});
     if (propertyId && !await queryOne('SELECT id FROM properties WHERE id=$1', [propertyId])) return res.status(400).json({error:'Choose an existing property'});
-    if (d.status && !['open','in_progress','completed','cancelled'].includes(d.status)) return res.status(400).json({error:'Invalid maintenance status'});
+    if (d.status && !['open','in_progress','awaiting_parts','completed','closed','cancelled'].includes(d.status)) return res.status(400).json({error:'Invalid maintenance status'});
     const allowed = ['status', 'contractor', 'contractor_phone', 'cost', 'resolution_notes', 'title', 'description', 'property_id', 'priority', 'category',
-      'tenant_id', 'landlord_id', 'reporter_name', 'reporter_email', 'reporter_phone', 'reporter_type', 'completed_date', 'notes'];
+      'tenant_id', 'landlord_id', 'reporter_name', 'reporter_email', 'reporter_phone', 'reporter_type', 'completed_date', 'notes', 'assigned_to', 'follow_up_date', 'due_date'];
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -4239,10 +4257,11 @@ app.put('/api/maintenance/:id', authMiddleware, async (req: AuthRequest, res) =>
     await run(`UPDATE maintenance SET ${fields.join(', ')} WHERE id=$${idx}`, values);
     await logAudit(req.user?.id, req.user?.email, 'update', 'maintenance', parseInt(req.params.id as string), d);
     const updated = await queryOne(`
-      SELECT m.*, COALESCE(p.address, 'Unknown property') as address, l.name as landlord_name FROM maintenance m
+      SELECT m.*, COALESCE(p.address, 'Unknown property') as address, l.name as landlord_name, l.landlord_type, (SELECT name FROM users WHERE id=m.assigned_to) AS assigned_name FROM maintenance m
       LEFT JOIN properties p ON p.id = m.property_id LEFT JOIN landlords l ON l.id = p.landlord_id
       WHERE m.id = $1
     `, [req.params.id]);
+    await run(`UPDATE tasks SET assigned_to=$1,due_date=COALESCE($2::date,$3::date,due_date),status=$4,updated_at=NOW() WHERE entity_type='maintenance' AND entity_id=$5`,[updated.assigned_to?String(updated.assigned_to):null,updated.follow_up_date,updated.due_date,['completed','closed','cancelled'].includes(updated.status)?'completed':updated.status==='in_progress'?'in_progress':'pending',updated.id]);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Failed to update maintenance' });
@@ -4465,7 +4484,7 @@ app.put('/api/documents/:id/review', authMiddleware, requirePermission('staff'),
     if (document.entity_type === 'tenant_enquiry') {
       await run(`
         UPDATE tenant_enquiries SET application_review_status = 'pending',
-          application_review_notes = NULL, application_reviewed_at = NULL, application_reviewed_by = NULL
+          application_review_notes = NULL, application_changes_sent_at=NULL, application_reviewed_at = NULL, application_reviewed_by = NULL
         WHERE id = $1
       `, [document.entity_id]);
     }
@@ -5235,7 +5254,8 @@ app.put('/api/property-expenses/:id', authMiddleware, requirePermission('staff')
     if ('amount' in d && (!Number.isFinite(Number(d.amount)) || Number(d.amount) < 0)) {
       return res.status(400).json({ error: 'Expense amount must be zero or greater' });
     }
-    const allowed = ['description', 'amount', 'category', 'expense_date', 'is_recurring', 'recurrence_frequency','coverage_start','coverage_end','payee'];
+    if (d.is_estimate !== undefined && typeof d.is_estimate !== 'boolean') return res.status(400).json({error:'Budget estimate must be true or false'});
+    const allowed = ['description', 'amount', 'category', 'expense_date', 'is_recurring', 'recurrence_frequency','coverage_start','coverage_end','payee','is_estimate'];
     const fields: string[] = [];
     const values: unknown[] = [];
     for (const key of allowed) {
@@ -6351,6 +6371,10 @@ app.post('/api/tenant-enquiries/:id/application-review', authMiddleware, require
         if(!updated.rowCount){await client.query('ROLLBACK');return res.status(400).json({error:'A selected document does not belong to this applicant'});}
       }
       if(status==='approved'){
+        const sections=answerSections(locked.app_form_data);
+        if(sections.some(section=>locked.application_section_reviews?.[section]?.status!=='approved')){await client.query('ROLLBACK');return res.status(409).json({error:'Approve every submitted answer section before approving the application'});}
+        const rejected=(await client.query("SELECT id FROM documents WHERE entity_type='tenant_enquiry' AND entity_id=$1 AND review_status='rejected'",[enquiryId])).rowCount;
+        if(rejected){await client.query('ROLLBACK');return res.status(409).json({error:'Resolve rejected documents before approving the application'});}
         if(!locked.application_form_completed){await client.query('ROLLBACK');return res.status(409).json({error:'The applicant must submit the application before it can be approved'});}
         const requiredTypes=['Primary Identification','Secondary Identification','Bank Statements'];
         if(!['Student','Unemployed'].includes(locked.app_form_data?.employment_status))requiredTypes.push('Proof of Income or Employment');
@@ -6383,7 +6407,7 @@ app.post('/api/tenant-enquiries/:id/application-review', authMiddleware, require
             smsResult.simulated ? 'simulated' : (smsResult.success ? 'sent' : 'failed'), smsResult.sid || null,
             smsResult.error || null, req.user?.id || null, req.user?.email || null,
           ]);
-          delivery.sms = { success: smsResult.success, error: smsResult.error };
+          delivery.sms = { success: smsResult.success, simulated:smsResult.simulated, error: smsResult.error };
         }
       }
       if (sendEmailRequested) {
@@ -6399,10 +6423,11 @@ app.post('/api/tenant-enquiries/:id/application-review', authMiddleware, require
             emailResult.simulated ? 'simulated' : (emailResult.success ? 'sent' : 'failed'), req.user?.id || null,
             req.user?.email || null, emailResult.error || null,
           ]);
-          delivery.email = { success: emailResult.success, error: emailResult.error };
+          delivery.email = { success: emailResult.success, simulated:emailResult.simulated, error: emailResult.error };
         }
       }
     }
+    if(status==='changes_requested'&&Object.values(delivery).some((d:any)=>d.success&&!d.simulated))await run('UPDATE tenant_enquiries SET application_changes_sent_at=NOW() WHERE id=$1',[enquiryId]);
     res.json({ success: true, status, delivery });
   } catch (err) {
     console.error('Application review failed:', err);
@@ -6560,6 +6585,7 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit',authMiddleware,asyn
     if(!Number.isFinite(Number(monthly_rent)) || Number(monthly_rent)<=0 || !Number.isFinite(Number(holding_deposit)) || Number(holding_deposit)<=0 || !Number.isFinite(Number(security_deposit||0)) || Number(security_deposit||0)<0) return res.status(400).json({error:'Enter valid rent and deposit amounts'});
     if(follow_up_date && (!/^\d{4}-\d{2}-\d{2}$/.test(follow_up_date)||!Number.isFinite(Date.parse(follow_up_date))))return res.status(400).json({error:'Choose a valid follow-up date'});
     const records=await applicationRecipients(Number(req.params.id));
+    if(records.some(r=>r.holding_deposit_received))return res.status(409).json({error:'The holding deposit has already been received. Send an application reminder instead.'});
     if(records.some(r=>r.status==='converted'))return res.status(409).json({error:'This application has already converted to a tenancy'});
     const ids=records.map(r=>r.id);
     await run(`UPDATE tenant_enquiries SET monthly_rent_agreed=$1,security_deposit_amount=$2,holding_deposit_amount=$3,holding_deposit_requested=1,status=CASE WHEN application_form_completed=1 THEN 'onboarding' ELSE 'awaiting_response' END,follow_up_date=$4,follow_up_return_status='onboarding',updated_at=NOW() WHERE id=ANY($5::int[])`,[monthly_rent,security_deposit||0,holding_deposit,follow_up_date||null,ids]);
@@ -6928,7 +6954,11 @@ app.get('/api/activity/:entityType/:entityId', authMiddleware, async (req: AuthR
     const limit = Number(req.query.limit) || 50;
     const ids = await linkedEntityIds(entityType, entityId);
     const logs = await query(
-      'SELECT * FROM audit_log WHERE entity_type = $1 AND entity_id = ANY($2::int[]) ORDER BY created_at DESC LIMIT $3',
+      `SELECT * FROM audit_log a WHERE (entity_type = $1 AND entity_id = ANY($2::int[])) OR ($1='property' AND (
+ (a.entity_type='maintenance' AND a.entity_id IN (SELECT id FROM maintenance WHERE property_id=ANY($2::int[]))) OR
+ (a.entity_type='task' AND a.entity_id IN (SELECT id FROM tasks WHERE entity_type='property' AND entity_id=ANY($2::int[]))) OR
+ (a.entity_type='property_policy' AND a.entity_id IN (SELECT policy_id FROM property_policy_allocations WHERE property_id=ANY($2::int[])))
+ )) ORDER BY created_at DESC LIMIT $3`,
       [entityType, ids, limit]
     );
     res.json(logs);

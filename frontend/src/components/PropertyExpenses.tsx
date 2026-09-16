@@ -15,6 +15,7 @@ interface Expense {
   expense_year?: number | null;
   is_recurring: number;
   recurrence_frequency: string | null;
+  is_estimate?:boolean;
   receipt_document_id: number | null;
   receipt_name: string | null;
   coverage_start?:string|null;coverage_end?:string|null;payee?:string|null;policy_id?:number|null;
@@ -95,7 +96,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
   const visibleExpenses = year === 'all' ? expenses : expenses.filter(expense => (expense.expense_date ? ukFinancialYear(expense.expense_date) : expense.expense_year ? `calendar:${expense.expense_year}` : 'undated') === year);
   const runningCosts = visibleExpenses.filter(expense => RUNNING_COSTS.has(expense.category));
   const historicCosts = visibleExpenses.filter(expense => !RUNNING_COSTS.has(expense.category));
-  const total = (items: Expense[]) => items.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const total = (items: Expense[]) => items.filter(e=>!e.is_estimate).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   const allTimeTotal = total(expenses);
   const yearToDateTotal = total(expenses.filter(expense => isUkFinancialYearToDate(expense.expense_date)));
   const monthlyTotals = Array.from({ length: 12 }, (_, index) => {
@@ -176,7 +177,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
       {items.length === 0 ? <p className="text-xs text-[var(--text-muted)]">No costs in this financial year.</p> : items.map(expense => (
         <div key={expense.id} className="flex items-center gap-3 rounded-xl bg-[var(--bg-subtle)] p-3">
           <div className="flex-1 min-w-0">
-            <p className="text-sm truncate">{expense.description}</p>{(expense.coverage_start||expense.payee)&&<p className="text-xs text-[var(--text-muted)]">{expense.payee}{expense.coverage_start?` · ${expense.coverage_start.slice(0,10)} — ${expense.coverage_end?.slice(0,10)||'Not Set'}`:''}</p>}
+            <p className="text-sm truncate">{expense.description}{expense.is_estimate&&<span className="ml-2 text-xs text-amber-600">Budget estimate — excluded from totals</span>}</p>{(expense.coverage_start||expense.payee)&&<p className="text-xs text-[var(--text-muted)]">{expense.payee}{expense.coverage_start?` · ${expense.coverage_start.slice(0,10)} — ${expense.coverage_end?.slice(0,10)||'Not Set'}`:''}</p>}
             <div className="flex flex-wrap gap-1.5 mt-1 text-[10px] text-[var(--text-muted)]">
               <span>{formatCategory(expense.category)}</span>
               {!expense.expense_date && expense.expense_year && <span>· {expense.expense_year}</span>}

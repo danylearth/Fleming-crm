@@ -174,7 +174,7 @@ export default function PropertyDetail() {
   // Maintenance creation state
   const [showAddMaintenance, setShowAddMaintenance] = useState(false);
   const [maintenanceForm, setMaintenanceForm] = useState({
-    title: '', description: '', category: 'other', priority: 'medium'
+    title: '', description: '', category: 'other', priority: 'medium',assigned_to:'',follow_up_date:'',due_date:''
   });
 
   // Landlords state
@@ -474,7 +474,7 @@ export default function PropertyDetail() {
         reporter_name: user?.name || user?.email,
       });
       await loadDetail();
-      setMaintenanceForm({ title: '', description: '', category: 'other', priority: 'medium' });
+      setMaintenanceForm({ title: '', description: '', category: 'other', priority: 'medium',assigned_to:'',follow_up_date:'',due_date:'' });
       setShowAddMaintenance(false);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } }; message?: string };
@@ -833,6 +833,7 @@ export default function PropertyDetail() {
             {/* Management */}
             <GlassCard className="p-4 sm:p-6">
               <SectionHeader title="Management" icon={<Briefcase size={16} />} />
+              {(editing?form.has_gas:property.has_gas)?<div className="mb-4">{editing?<DatePicker label="Gas Safety Commissioned Date" value={form.gas_safety_commissioned_date} onChange={v=>setForm(f=>({...f,gas_safety_commissioned_date:v}))}/>:<ReadField label="Gas Safety Commissioned" value={formatDate(property.gas_safety_commissioned_date || null)}/>}</div>:null}
               {editing ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {property.landlord_type !== 'internal' && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v })}
@@ -869,7 +870,8 @@ export default function PropertyDetail() {
                             if (dateField) {
                               const lodgementDate = new Date(dateField);
                               const expiryDate = new Date(lodgementDate);
-                              expiryDate.setFullYear(expiryDate.getFullYear() + 10);
+                              expiryDate.setUTCFullYear(expiryDate.getUTCFullYear() + 10);
+                              expiryDate.setUTCDate(expiryDate.getUTCDate()-1);
                               updates.epc_expiry_date = expiryDate.toISOString().split('T')[0];
                             }
 
@@ -1187,13 +1189,13 @@ export default function PropertyDetail() {
             <Card className="p-4 sm:p-6">
               <SectionHeader title="Compliance" icon={<ShieldCheck size={16} />} />
               <div className="flex justify-center mb-4">
-                <ProgressRing value={overallCompliance()} size={90} strokeWidth={7} />{editing&&<p className="text-xs text-[var(--text-muted)]">Preview — save changes to update the record.</p>}{!editing&&property.compliance?.items.filter(i=>!i.ready).map(i=><p key={i.docType} className="text-xs text-red-500">{i.reason}</p>)}
+                <ProgressRing value={overallCompliance()} size={90} strokeWidth={7} />{editing&&<p className="text-xs text-[var(--text-muted)]">Preview — save changes to update the record.</p>}
               </div>
               <div className="space-y-3">
-                {editing ? <div className="space-y-4"><DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={v=>setForm(f=>({...f,eicr_expiry_date:v}))}/><DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={v=>setForm(f=>({...f,epc_expiry_date:v}))}/>{form.has_gas&&<><DatePicker label="Gas Safety Commissioned Date" value={form.gas_safety_commissioned_date} onChange={v=>setForm(f=>({...f,gas_safety_commissioned_date:v}))}/><DatePicker label="Gas Safety Expiry Date" value={form.gas_safety_expiry_date} onChange={v=>setForm(f=>({...f,gas_safety_expiry_date:v}))}/></>}</div>:<>
-                <ComplianceRow label="EICR" expiry={property.eicr_expiry_date} />
-                <ComplianceRow label="EPC" expiry={property.epc_expiry_date} grade={property.epc_grade} />
-                {property.has_gas ? <><ReadField label="Gas Safety Commissioned" value={formatDate(property.gas_safety_commissioned_date || null)}/><ComplianceRow label="Gas Safety" expiry={property.gas_safety_expiry_date} /></> : null}</>}
+                {editing ? <div className="space-y-4"><DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={v=>setForm(f=>({...f,eicr_expiry_date:v}))}/><DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={v=>setForm(f=>({...f,epc_expiry_date:v}))}/>{form.has_gas&&<><DatePicker label="Gas Safety Expiry Date" value={form.gas_safety_expiry_date} onChange={v=>setForm(f=>({...f,gas_safety_expiry_date:v}))}/></>}</div>:<>
+                <ComplianceRow label="EICR" expiry={property.eicr_expiry_date} />{property.compliance?.items.filter(i=>i.docType==='EICR'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}
+                <ComplianceRow label="EPC" expiry={property.epc_expiry_date} grade={property.epc_grade} />{property.compliance?.items.filter(i=>i.docType==='EPC'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}
+                {property.has_gas ? <><ComplianceRow label="Gas Safety" expiry={property.gas_safety_expiry_date} />{property.compliance?.items.filter(i=>i.docType==='Gas Safety Certificate'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}</> : null}</>}
               </div>
             </Card>
 
@@ -1462,6 +1464,9 @@ export default function PropertyDetail() {
                 <button onClick={() => setShowAddMaintenance(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0"><X size={18} /></button>
               </div>
               <div className="space-y-3 sm:space-y-4">
+                <Select label="Assigned To" value={maintenanceForm.assigned_to} onChange={assigned_to=>setMaintenanceForm(f=>({...f,assigned_to}))} options={[{value:'',label:'Unassigned'},...users.map(u=>({value:String(u.id),label:u.name}))]}/>
+                <DatePicker label="Follow-up Date" value={maintenanceForm.follow_up_date} onChange={follow_up_date=>setMaintenanceForm(f=>({...f,follow_up_date}))}/>
+                <DatePicker label="Due By" value={maintenanceForm.due_date} onChange={due_date=>setMaintenanceForm(f=>({...f,due_date}))}/>
                 <Input label="Title" value={maintenanceForm.title} onChange={v => setMaintenanceForm(p => ({...p, title: v}))} placeholder="Brief description of the issue" />
                 <div>
                   <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Description</label>
