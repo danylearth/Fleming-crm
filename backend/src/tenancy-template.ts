@@ -33,11 +33,13 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         TENANT_EMAILS: input.tenants.map(t => t.email).filter(Boolean).join('; '),
         TENANT_PHONES: input.tenants.map(t => t.phone).filter(Boolean).join('; '),
         TENANT_ADDRESSES: input.tenants.map(t => `${t.name}: ${t.address || 'Not supplied'}`).join('\n'),
-        TENANT_SIGNING_SECTIONS: input.tenants.map((t, i) => `Tenant ${i + 1}: ${t.name}\nSignature and date: recorded in the electronic signature certificate.`).join('\n\n'),
+        TENANT_SIGNING_SECTIONS: input.tenants.map((t, i) => `Tenant ${i + 1}: ${t.name}\nSignature and date:\n\n`).join('\n'),
         DEPOSIT_CONTRIBUTOR: input.depositContributorDetails ? `Deposit contribution disclosed by the tenant(s): ${input.depositContributorDetails}` : '',
         GAS_ACKNOWLEDGEMENT: input.hasGas ? 'Gas Safety Certificate' : 'Gas Safety Certificate: not applicable (no gas connection)',
       };
       let xml = zip.file('word/document.xml')!.asText();
+      if(!input.hasGas)xml=xml.replace(/<w:tr\b[\s\S]*?<\/w:tr>/g,row=>row.includes('{{GAS_ACKNOWLEDGEMENT}}')?'':row);
+      xml=xml.replace(/<w:p\b[\s\S]*?<\/w:p>/g,paragraph=>paragraph.replace(/<[^>]+>/g,'').includes('The electronic signature certificate records each named tenant')?'':paragraph);
       xml = xml.replace(/\{\{([A-Z_]+)\}\}/g, (_match, key) => {
         if (!(key in values)) throw new Error(`Unfilled agreement field: ${key}`);
         return xmlText(values[key]);

@@ -114,7 +114,7 @@ describe('5 September CRM feedback', () => {
 
   it('uses the current readonly holding-deposit preview and message options', () => {
     expect(onboardingWizard).not.toContain('Editable email message');
-    expect(onboardingWizard).toContain('Editable SMS preview');
+    expect(onboardingWizard).not.toContain('Editable SMS preview');
     expect(onboardingWizard).toContain('previewHoldingEmail');
     expect(onboardingWizard).toContain('Send Email');
     expect(onboardingWizard).toContain('Send SMS');

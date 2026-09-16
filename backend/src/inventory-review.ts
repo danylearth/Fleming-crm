@@ -101,7 +101,7 @@ export function registerInventoryReviewRoutes(app:Express) {
     if(!req.file.buffer.subarray(0,5).equals(Buffer.from('%PDF-')))return res.status(400).json({error:'Upload a completed inventory as a PDF'});
     const {tenant_id,inspection_date,signed_date,inventory_id}=req.body;
     const valid=(v:string)=>/^\d{4}-\d{2}-\d{2}$/.test(v||'') && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0,10)===v;
-    if((!signed_date&&req.body.signature_date_unknown!=='true')||!valid(inspection_date)||(signed_date&&(!valid(signed_date)||signed_date<inspection_date||signed_date>new Date().toISOString().slice(0,10))))return res.status(400).json({error:'Choose a valid completion date. If recorded, signing must be on or after completion and no later than today'});
+    if((!signed_date&&req.body.signature_date_unknown!=='true')||!valid(inspection_date)||(signed_date&&(!valid(signed_date)||signed_date<inspection_date||signed_date>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date()))))return res.status(400).json({error:'Choose a valid completion date. If recorded, signing must be on or after completion and no later than today'});
     const tenant=await queryOne('SELECT id,linked_tenant_id,tenancy_start_date FROM tenants WHERE id=$1 AND property_id=$2',[Number(tenant_id)||0,req.params.id]);
     if(!tenant)return res.status(400).json({error:'Choose a tenant linked to this property'});
     const joint=await queryOne('SELECT id FROM tenants WHERE id=$1 AND property_id=$2 AND tenancy_start_date IS NOT DISTINCT FROM $3',[tenant.linked_tenant_id,req.params.id,tenant.tenancy_start_date]);

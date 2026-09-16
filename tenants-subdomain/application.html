@@ -744,6 +744,7 @@
         .back-button { font-weight:700; }
         .uploaded-list li { flex-wrap:wrap; gap:8px; overflow-wrap:anywhere; }
         @media(max-width:480px){.header,.top-inner{justify-content:space-between;flex-wrap:nowrap}.header img{max-width:140px}.help{margin-left:auto;flex-shrink:0}.header a{font-family:Helvetica,Arial,'Apple Color Emoji','Segoe UI Emoji',sans-serif}}
+    dialog.review-changes::backdrop{background:#25073b88}dialog.review-changes button:focus-visible{outline:2px solid #dc006d;outline-offset:2px}
     </style>
 <link rel="stylesheet" href="/form-typography.css">
 </head>
@@ -1127,6 +1128,7 @@
         let dpYear, dpMonth, dpTargetInput, dpSelectedDate;
 
         function openDatePicker(inputId) {
+            if(formData?.application_data_approved)return;
             dpTargetInput = document.getElementById(inputId);
             const existing = parseDDMMYYYY(dpTargetInput.value);
             const now = new Date();
@@ -1460,6 +1462,8 @@
                 document.getElementById('loading-state').style.display = 'none';
                 document.getElementById('application-form').style.display = 'block';
                 updateProgress(1);
+                showReviewActions();
+                lockApprovedAnswers();
             } catch (err) {
                 document.getElementById('loading-state').style.display = 'none';
                 document.getElementById('error-state').style.display = 'block';
@@ -1565,12 +1569,38 @@
         }
 
         function toggleEdit(btn) {
+            if(formData?.application_data_approved)return;
             const input = btn.parentElement.querySelector('input');
             if (input.hasAttribute('readonly')) {
                 input.removeAttribute('readonly'); input.classList.remove('pre-filled'); btn.classList.add('editing'); input.focus();
             } else {
                 input.setAttribute('readonly', ''); input.classList.add('pre-filled'); btn.classList.remove('editing');
             }
+        }
+
+        function lockApprovedAnswers() {
+            if(!formData.application_data_approved)return;
+            Object.values(FIELD_MAP).forEach(id=>{const el=document.getElementById(id);if(el){el.disabled=true;el.setAttribute('aria-disabled','true');}});
+            document.querySelectorAll('.choice-button,.edit-toggle-btn,#step-6 input').forEach(el=>el.disabled=true);
+            const notice=document.getElementById('revision-banner');notice.textContent='Your application answers have been approved and are locked. You can still supply the documents requested below. Contact the office if an answer needs correcting.';notice.style.display='block';
+        }
+        function showReviewActions() {
+            const sections=Object.entries(formData.application_section_reviews||{}).filter(([,r])=>r.status==='rejected');
+            const docs=applicationDocuments.filter(d=>d.review_status==='rejected');
+            const required=['Primary Identification','Secondary Identification','Bank Statements',...(['Student','Unemployed'].includes(formData.app_form_data?.employment_status)?[]:['Proof of Income or Employment'])];
+            const missing=required.filter(type=>!applicationDocuments.some(d=>d.doc_type===type));
+            if(!isRevision||(!sections.length&&!docs.length&&!missing.length&&!formData.application_review_notes))return;
+            const banner=document.getElementById('changes-request-banner');banner.style.display='block';
+            const button=document.createElement('button');button.type='button';button.className='btn btn-secondary';button.textContent='Review requested changes';button.style.marginTop='12px';button.onclick=()=>dialog.showModal();banner.appendChild(button);
+            const dialog=document.createElement('dialog');dialog.className='review-changes';dialog.style.cssText='margin:auto;background:#fff;color:#27083d;border:1px solid #e5d7e2;border-radius:16px;padding:24px;max-width:560px;width:calc(100% - 32px);max-height:85vh;overflow:auto';dialog.setAttribute('aria-label','Changes requested');
+            const title=document.createElement('h2');title.textContent='Changes requested';dialog.appendChild(title);
+            const stepFor=section=>section==='Employment & Income'?3:['Tenancy Details','Bank Details','Next of Kin'].includes(section)?4:section==='Declaration'?6:2;
+            function item(label,reason,step,type){const box=document.createElement('div');box.style.cssText='padding:12px 0;border-bottom:1px solid #eee';const text=document.createElement('p');text.textContent=label+': '+reason;box.appendChild(text);const link=document.createElement('button');link.type='button';link.className='btn btn-secondary';link.textContent=type?'Click here to update this document':'Click here to review application details';link.onclick=()=>{dialog.close();goToStep(step,true);if(type){const list=Array.from(document.querySelectorAll('[data-doc-list]')).find(el=>el.dataset.docList===type);const card=list?.closest('.document-card');card?.scrollIntoView({behavior:'smooth',block:'center'});card?.querySelector('input[type=file]')?.focus();}};box.appendChild(link);dialog.appendChild(box);}
+            sections.forEach(([section,r])=>item(section,r.reason||'Please check this information.',stepFor(section)));
+            docs.forEach(d=>item(d.doc_type+' — '+d.original_name,d.review_notes||'Please provide a replacement.',5,d.doc_type));
+            missing.forEach(type=>item(type,'Please upload this required document.',5,type));
+            if(!sections.length&&!docs.length&&!missing.length)item('Application',formData.application_review_notes,2);
+            const close=document.createElement('button');close.type='button';close.className='btn btn-secondary';close.textContent='Close';close.style.marginTop='16px';close.onclick=()=>dialog.close();dialog.appendChild(close);dialog.onclick=e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}};document.body.appendChild(dialog);dialog.showModal();
         }
 
         function populateForm() {
@@ -1594,7 +1624,7 @@
             document.getElementById('f_phone').value = stored.phone || formData.phone_1 || '';
             document.getElementById('f_dob').value = stored.date_of_birth ? isoToDDMMYYYY(String(stored.date_of_birth)) : isoToDDMMYYYY(formData.date_of_birth_1);
             document.getElementById('f_typed_name').value = formData.app_signature_name || '';
-            isRevision = formData.application_review_status === 'changes_requested' && !!formData.application_form_completed;
+            isRevision = !!formData.application_form_completed && (formData.application_review_status === 'changes_requested' || formData.application_data_approved);
             if (isRevision) {
                 const requested = document.getElementById('changes-request-banner');
                 requested.textContent = `Changes requested by Fleming Lettings: ${formData.application_review_notes || 'Please update the highlighted items below.'}`;
@@ -1612,8 +1642,8 @@
             document.getElementById('property-display').textContent = address || 'Property details pending';
             document.getElementById('property-badge').style.display = address ? 'inline-flex' : 'none';
             document.getElementById('f_property_address').value = stored.property_address || address;
-            document.getElementById('f_rental_amount').value = formData.monthly_rent_agreed ?? '';
-            document.getElementById('f_deposit_amount').value = formData.security_deposit_amount ?? '';
+            document.getElementById('f_rental_amount').value = (formData.application_data_approved ? stored.rental_amount : formData.monthly_rent_agreed) ?? '';
+            document.getElementById('f_deposit_amount').value = (formData.application_data_approved ? stored.deposit_amount : formData.security_deposit_amount) ?? '';
             ['f_rental_amount','f_deposit_amount'].forEach(id => formatMoney(document.getElementById(id)));
             document.getElementById('rent-display').textContent = formData.monthly_rent_agreed ? `\u00A3${Number(formData.monthly_rent_agreed).toLocaleString()}` : '-';
             document.getElementById('holding-display').textContent = formData.holding_deposit_amount ? `\u00A3${Number(formData.holding_deposit_amount).toLocaleString()}` : '-';
@@ -1681,8 +1711,8 @@
             error.textContent = `Please upload: ${missing.join(', ')}.`; error.style.display = 'block'; return false;
         }
 
-        function goToStep(n) {
-            if (n > currentStep) {
+        function goToStep(n, reviewLink=false) {
+            if (n > currentStep && !(reviewLink && isRevision)) {
                 if ((currentStep === 2 || currentStep === 3 || currentStep === 4) && !validateStep(currentStep)) return;
                 if (currentStep === 5 && !validateDocuments()) return;
             }
@@ -1797,6 +1827,7 @@
         }
 
         function collectApplicationData() {
+            if(formData.application_data_approved)return structuredClone(formData.app_form_data || {});
             const data = {};
             const moneyIds = new Set(['f_gross_income', 'f_current_rent', 'f_self_employed_income', 'f_contractor_income', 'f_guarantor_income', 'f_rental_amount', 'f_deposit_amount']);
             Object.entries(FIELD_MAP).forEach(([key, id]) => {

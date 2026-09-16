@@ -1,5 +1,5 @@
 import {registerMarketing} from './marketing';
-import {registerApplicationReview,answerSections} from './application-review';
+import {registerApplicationReview,applicationDataApproved,approvedDataChanged,retainApprovedAnswersSql} from './application-review';
 import {registerPropertyPolicies} from './property-policies';
 import {searchEpc} from './epc';
 import {registerFreeAgentRoutes} from './freeagent';
@@ -309,26 +309,20 @@ async function finaliseTenancyAgreement(agreementId: number): Promise<void> {
   page.drawText('Electronic Signature Certificate', { x: 52, y: 700, size: 20, font: bold, color: rgb(0.15, 0.03, 0.23) });
   page.drawText('Signatures apply to the tenancy agreement and its addendum.', { x: 52, y: 675, size: 11, font, color: rgb(0.35, 0.35, 0.35) });
   let y = 625;
-  const drawSignature = async (role: string, name: string, signedAt: string, signature: string) => {
+  const drawSignature = async (role: string, name: string, signedAt: string, signature: string, ip: string | null) => {
     const label = `${role}: ${name}`;
     const nameSize = Math.min(13, 490 / Math.max(1, bold.widthOfTextAtSize(label, 1)));
     page.drawText(label, { x: 52, y, size: nameSize, font: bold, color: rgb(0.15, 0.03, 0.23) });
     page.drawText(`Signed: ${new Date(signedAt).toLocaleString('en-GB', { timeZone: 'Europe/London' })}`, { x: 52, y: y - 22, size: 10, font });
+    page.drawText(`IP address: ${ip || 'Not recorded'}`, {x:52,y:y-40,size:10,font});
     const image = await pdf.embedPng(signatureDataBytes(signature));
     const scaled = image.scaleToFit(220, 90);
     page.drawImage(image, { x: 52, y: y - 125, width: scaled.width, height: scaled.height });
     y -= 180;
   };
-  await drawSignature('Tenant', agreement.tenant_signature_name, agreement.tenant_signed_at, agreement.tenant_signature);
+  await drawSignature('Tenant', agreement.tenant_signature_name, agreement.tenant_signed_at, agreement.tenant_signature, agreement.tenant_signature_ip);
   if (agreement.requires_joint_tenant_signature) {
-    await drawSignature('Joint tenant', agreement.joint_tenant_signature_name, agreement.joint_tenant_signed_at, agreement.joint_tenant_signature);
-  }
-  if (agreement.requires_landlord_signature) {
-    await drawSignature('Landlord', agreement.landlord_signature_name, agreement.landlord_signed_at, agreement.landlord_signature);
-  }
-  if (!agreement.requires_landlord_signature) {
-    const image=fs.readFileSync(path.join(agreementAssets,'robert-fleming-signature.png'));
-    await drawSignature('Landlord', 'Robert Fleming', agreement.issued_at, `data:image/png;base64,${image.toString('base64')}`);
+    await drawSignature('Joint tenant', agreement.joint_tenant_signature_name, agreement.joint_tenant_signed_at, agreement.joint_tenant_signature, agreement.joint_tenant_signature_ip);
   }
   page.drawText(`Agreement reference: FL-TA-${agreement.id}`, { x: 52, y: 80, size: 9, font, color: rgb(0.45, 0.45, 0.45) });
   const tenantSigners=[{name:agreement.tenant_signature_name,date:agreement.tenant_signed_at,image:signatureDataBytes(agreement.tenant_signature)},...(agreement.requires_joint_tenant_signature?[{name:agreement.joint_tenant_signature_name,date:agreement.joint_tenant_signed_at,image:signatureDataBytes(agreement.joint_tenant_signature)}]:[])];
@@ -1345,9 +1339,10 @@ app.get('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) =
     const enquiries = await query(`
       SELECT te.*, p.address as property_address,
         (SELECT COALESCE(u.name,a.user_email) FROM audit_log a LEFT JOIN users u ON u.id=a.user_id WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id AND a.user_id IS NOT NULL AND a.action NOT IN ('view','page_view','navigate') ORDER BY a.created_at DESC LIMIT 1) AS previous_agent,
+        (SELECT ta.status FROM tenancy_agreements ta WHERE ta.enquiry_id IN (te.id,te.joint_partner_id) AND ta.status<>'void' ORDER BY ta.id DESC LIMIT 1) AS tenancy_agreement_status,
         EXISTS (
           SELECT 1 FROM tenancy_agreements ta
-          WHERE ta.enquiry_id = te.id AND ta.status = 'completed'
+          WHERE ta.enquiry_id IN (te.id,te.joint_partner_id) AND ta.status = 'completed'
         ) AS tenancy_agreement_completed
       FROM tenant_enquiries te
       LEFT JOIN properties p ON p.id = te.linked_property_id
@@ -2701,7 +2696,7 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
     const current = await queryOne('SELECT * FROM tenants WHERE id=$1', [req.params.id]);
     if (!current) return res.status(404).json({ error: 'Tenant not found' });
     if (d.status === 'inactive' && current.status !== 'inactive' && req.user?.role !== 'admin') return res.status(403).json({ error: 'Only administrators can archive tenants' });
-    if (d.rent_last_reviewed && (!isValidDateOnly(d.rent_last_reviewed) || d.rent_last_reviewed > new Date().toISOString().slice(0,10))) return res.status(400).json({ error: 'Last rent reviewed must be a valid date on or before today' });
+    if (d.rent_last_reviewed && (!isValidDateOnly(d.rent_last_reviewed) || d.rent_last_reviewed > new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date()))) return res.status(400).json({ error: 'Last rent reviewed must be a valid date on or before today' });
     if (d.first_name_1 && d.last_name_1 && !d.name) {
       d.name = `${d.first_name_1} ${d.last_name_1}`;
     }
@@ -3017,6 +3012,8 @@ app.get('/api/public/application-form/:token', publicReadLimiter, async (req, re
       application_form_completed: !!enquiry.application_form_completed,
       application_review_status: enquiry.application_review_status || 'pending',
       application_review_notes: enquiry.application_review_notes || null,
+      application_data_approved: applicationDataApproved(enquiry),
+      application_section_reviews: Object.fromEntries(Object.entries(enquiry.application_section_reviews||{}).map(([key,value]:[string,any])=>[key,{status:value.status,reason:value.reason}])),
       documents,
     });
   } catch (err) {
@@ -3078,7 +3075,7 @@ app.post('/api/public/application-form/:token/documents', publicDocumentLimiter,
       VALUES ('tenant_enquiry', $1, $2, $3, $4, $5, $6, 1, 'pending')
     `, [enquiry.id, docType, req.file.filename, req.file.originalname, req.file.mimetype, req.file.size]);
     await run(`
-      UPDATE tenant_enquiries SET application_review_status = CASE
+      UPDATE tenant_enquiries SET application_section_reviews=${retainApprovedAnswersSql}, application_review_status = CASE
         WHEN application_review_status = 'changes_requested' THEN application_review_status ELSE 'pending' END,
         application_review_notes = CASE
           WHEN application_review_status = 'changes_requested' THEN application_review_notes ELSE NULL END
@@ -3116,7 +3113,7 @@ app.delete('/api/public/application-form/:token/documents/:documentId', publicDo
     const filePath = path.join(uploadsDir, document.filename);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     await run(`
-      UPDATE tenant_enquiries SET application_review_status = CASE
+      UPDATE tenant_enquiries SET application_section_reviews=${retainApprovedAnswersSql}, application_review_status = CASE
         WHEN application_review_status = 'changes_requested' THEN application_review_status ELSE 'pending' END,
         application_review_notes = CASE
           WHEN application_review_status = 'changes_requested' THEN application_review_notes ELSE NULL END
@@ -3149,17 +3146,26 @@ app.post('/api/public/application-form/:token/draft', publicDraftLimiter, async 
       if (typeof formData[key] === 'string') formData[key] = formData[key].replace(/,/g, '');
     }
     const enquiry = await queryOne(
-      'SELECT te.id, te.status, te.monthly_rent_agreed, te.security_deposit_amount, p.rent_amount FROM tenant_enquiries te LEFT JOIN properties p ON p.id=te.linked_property_id WHERE te.application_form_token = $1 OR te.application_form_slug = $1',
+      'SELECT te.id, te.status, te.app_form_data, te.application_section_reviews, te.application_review_status, te.monthly_rent_agreed, te.security_deposit_amount, p.rent_amount FROM tenant_enquiries te LEFT JOIN properties p ON p.id=te.linked_property_id WHERE te.application_form_token = $1 OR te.application_form_slug = $1',
       [req.params.token]
     );
     if (!enquiry) return res.status(404).json({ error: 'Form not found' });
     if (enquiry.status === 'converted') return res.status(410).json({ error: 'This application is now closed' });
-    formData.rental_amount=enquiry.monthly_rent_agreed ?? enquiry.rent_amount ?? '';
-    formData.deposit_amount=enquiry.security_deposit_amount ?? '';
-    await run(
-      'UPDATE tenant_enquiries SET app_form_data = $1::jsonb, application_form_last_saved_at=NOW(), updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      [JSON.stringify(formData), enquiry.id]
-    );
+    const answersApproved=applicationDataApproved(enquiry);
+    if(!answersApproved){
+      formData.rental_amount=enquiry.monthly_rent_agreed ?? enquiry.rent_amount ?? '';
+      formData.deposit_amount=enquiry.security_deposit_amount ?? '';
+    }
+    if(approvedDataChanged(enquiry,formData))return res.status(409).json({error:'Your application answers have been approved and are locked. Contact the office if a correction is needed.'});
+    if(answersApproved)return res.json({success:true});
+    // Compare the reviewed snapshot atomically so an in-flight autosave cannot undo approval.
+    const saved=await queryOne(`UPDATE tenant_enquiries SET app_form_data=$1::jsonb,
+      application_form_last_saved_at=NOW(), updated_at=CURRENT_TIMESTAMP
+      WHERE id=$2 AND app_form_data IS NOT DISTINCT FROM $3::jsonb
+        AND application_section_reviews IS NOT DISTINCT FROM $4::jsonb
+        AND application_review_status IS NOT DISTINCT FROM $5 AND status<>'converted'
+      RETURNING id`,[JSON.stringify(formData),enquiry.id,JSON.stringify(enquiry.app_form_data),JSON.stringify(enquiry.application_section_reviews),enquiry.application_review_status]);
+    if(!saved)return res.status(409).json({error:'The office updated this application. Refresh the form before continuing.'});
     res.json({ success: true });
   } catch (err) {
     console.error('Error saving application draft:', err);
@@ -3176,7 +3182,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
     if (req.body) delete req.body.app_signature;
     sanitizePublicStrings(req.body);
     const enquiry = await queryOne(`
-      SELECT te.id, te.status, te.application_form_completed, te.application_review_status,
+      SELECT te.id, te.status, te.app_form_data, te.application_section_reviews, te.application_form_completed, te.application_review_status,
         te.app_signature, te.app_signature_name, te.monthly_rent_agreed, te.security_deposit_amount, p.rent_amount,
         p.address AS property_address, p.postcode AS property_postcode
       FROM tenant_enquiries te
@@ -3201,8 +3207,12 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
     for (const key of ['gross_annual_income', 'current_monthly_rent', 'self_employed_annual_income', 'contractor_annual_income', 'guarantor_annual_income']) {
       if (typeof formData[key] === 'string') formData[key] = formData[key].replace(/,/g, '');
     }
-    formData.rental_amount=enquiry.monthly_rent_agreed ?? enquiry.rent_amount ?? '';
-    formData.deposit_amount=enquiry.security_deposit_amount ?? '';
+    const answersApproved=applicationDataApproved(enquiry);
+    if(!answersApproved){
+      formData.rental_amount=enquiry.monthly_rent_agreed ?? enquiry.rent_amount ?? '';
+      formData.deposit_amount=enquiry.security_deposit_amount ?? '';
+    }
+    if(approvedDataChanged(enquiry,formData))return res.status(409).json({error:'Your application answers have been approved and are locked. Contact the office if a correction is needed.'});
     const missing = applicationFormIssues(formData);
     if (missing.length) return res.status(400).json({ error: 'Please complete all mandatory fields', missing_fields: missing });
 
@@ -3214,9 +3224,9 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
     if (missingDeclarations.length) {
       return res.status(400).json({ error: 'Please agree to all mandatory declarations', missing_fields: missingDeclarations });
     }
-    const isRevision = enquiry.application_form_completed && enquiry.application_review_status === 'changes_requested';
-    const signatureName = String(req.body?.app_signature_name || enquiry.app_signature_name || '').trim();
-    const effectiveSignature = rawSignature || (isRevision ? enquiry.app_signature : null);
+    const isRevision = enquiry.application_form_completed && (enquiry.application_review_status === 'changes_requested'||applicationDataApproved(enquiry));
+    const signatureName = String(answersApproved ? enquiry.app_signature_name : (req.body?.app_signature_name || enquiry.app_signature_name || '')).trim();
+    const effectiveSignature = answersApproved ? enquiry.app_signature : (rawSignature || (isRevision ? enquiry.app_signature : null));
     if (!signatureName) return res.status(400).json({ error: 'Please type your full legal name' });
     if (!effectiveSignature) return res.status(400).json({ error: 'Please add or generate your signature' });
 
@@ -3280,6 +3290,12 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
     let previousCompletedDocuments: Array<{ filename: string }> = [];
     try {
       await client.query('BEGIN');
+      const current=(await client.query('SELECT * FROM tenant_enquiries WHERE id=$1 FOR UPDATE',[enquiry.id])).rows[0];
+      if(!current||current.status==='converted'||JSON.stringify(current.application_section_reviews)!==JSON.stringify(enquiry.application_section_reviews)||current.application_review_status!==enquiry.application_review_status||JSON.stringify(current.app_form_data)!==JSON.stringify(enquiry.app_form_data)){
+        await client.query('ROLLBACK');
+        fs.unlinkSync(completedPdfPath);
+        return res.status(409).json({error:'The office updated this application. Refresh the form before continuing.'});
+      }
       await client.query(`
       UPDATE tenant_enquiries SET
         app_form_data=$1::jsonb, app_signature_name=$2,
@@ -3301,7 +3317,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
         app_decl_gdpr=$45, app_decl_enquiries=$46, app_decl_documents=$47,
         app_decl_credit_check=$48, app_decl_terms=$49, app_decl_marketing=$50,
         app_declaration_agreed=1, application_form_completed=1,
-        application_review_status='pending', application_review_notes=NULL, application_section_reviews='{}'::jsonb,application_changes_sent_at=NULL,
+        application_review_status='pending', application_review_notes=NULL, application_section_reviews=CASE WHEN $53 THEN CASE WHEN application_section_reviews ? 'Application Details' THEN application_section_reviews ELSE COALESCE(application_section_reviews,'{}'::jsonb) || '{"Application Details":{"status":"approved"}}'::jsonb END ELSE '{}'::jsonb END,application_changes_sent_at=NULL,
         application_reviewed_at=NULL, application_reviewed_by=NULL
       WHERE id=$51
     `, [
@@ -3321,7 +3337,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       formData.guarantor_name || null, formData.guarantor_phone || null,
       formData.guarantor_email || null, formData.guarantor_address || null,
       formData.supporting_information || null, 1, 1, 1, 1, 1, 1, 1,
-      formData.marketing_consent ? 1 : 0, enquiry.id, isRevision,
+      formData.marketing_consent ? 1 : 0, enquiry.id, isRevision, applicationDataApproved(enquiry),
     ]);
 
       const previousDocumentsResult = await client.query(`
@@ -3439,7 +3455,7 @@ app.get('/api/public/tenancy-agreements/:token', publicReadLimiter, async (req, 
       signer_signed: Boolean(agreement[`${role}_signed_at`]),
       outstanding_signers: outstanding.filter(Boolean),
       property_address: normalizePropertyAddress(agreement.address, agreement.postcode),
-      today: new Date().toISOString().slice(0, 10),
+      today: new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date()),
     });
   } catch (err) {
     console.error('Agreement lookup failed:', err);
@@ -4457,7 +4473,7 @@ app.put('/api/documents/:id/category', authMiddleware, requirePermission('staff'
     if(!doc || doc.entity_type!=='tenant_enquiry'){await client.query('ROLLBACK');return res.status(404).json({error:'Application document not found'});}
     if(['Completed Tenancy Application','Tenancy Agreement','Signed Tenancy Agreement'].includes(doc.doc_type)){await client.query('ROLLBACK');return res.status(409).json({error:'Issued documents retain their original category'});}
     await client.query("UPDATE documents SET doc_type=$1,review_status='pending',reviewed_at=NULL,reviewed_by=NULL WHERE id=$2",[req.body.doc_type,doc.id]);
-    await client.query("UPDATE tenant_enquiries SET application_review_status='pending',application_reviewed_at=NULL,application_reviewed_by=NULL WHERE id=$1",[doc.entity_id]);
+    await client.query(`UPDATE tenant_enquiries SET application_section_reviews=${retainApprovedAnswersSql},application_review_status='pending',application_reviewed_at=NULL,application_reviewed_by=NULL WHERE id=$1`,[doc.entity_id]);
     await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','tenant_enquiry',$3,$4)",[req.user.id,req.user.email,doc.entity_id,JSON.stringify({document_id:doc.id,doc_type:{from:doc.doc_type,to:req.body.doc_type}})]);
     await client.query('COMMIT');res.json({success:true});
   }catch{await client.query('ROLLBACK');res.status(500).json({error:'Could not change the category'});}finally{client.release();}
@@ -4483,7 +4499,7 @@ app.put('/api/documents/:id/review', authMiddleware, requirePermission('staff'),
     `, [status, notes || null, req.user?.id || null, document.id]);
     if (document.entity_type === 'tenant_enquiry') {
       await run(`
-        UPDATE tenant_enquiries SET application_review_status = 'pending',
+        UPDATE tenant_enquiries SET application_section_reviews=${retainApprovedAnswersSql}, application_review_status = 'pending',
           application_review_notes = NULL, application_changes_sent_at=NULL, application_reviewed_at = NULL, application_reviewed_by = NULL
         WHERE id = $1
       `, [document.entity_id]);
@@ -5723,21 +5739,22 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement/email-preview', authMiddle
       FROM tenant_enquiries te
       LEFT JOIN properties p ON p.id = te.linked_property_id
       LEFT JOIN landlords l ON l.id = p.landlord_id
-      WHERE te.id = ANY($1::int[]) ORDER BY te.id LIMIT 1
-    `, [enquiryIds]);
+      WHERE te.id = $1
+    `, [Number(req.params.id)]);
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
     const rent = Number(req.body.rent || enquiry.monthly_rent_agreed || enquiry.rent_amount || 0);
     const deposit = Number(req.body.deposit || enquiry.security_deposit_amount || 0);
     const holdingDeposit = Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
     const propertyAddress = normalizePropertyAddress(enquiry.address, enquiry.postcode);
-    const signingUrl = `https://apply.fleminglettings.co.uk/${createAgreementSlug(enquiry.last_name_1, enquiry.first_name_1)}`;
+    const issued=await queryOne("SELECT CASE WHEN enquiry_id=$2 THEN COALESCE(tenant_slug,tenant_token) ELSE COALESCE(joint_tenant_slug,joint_tenant_token) END AS signing_slug,agreement_details FROM tenancy_agreements WHERE enquiry_id=ANY($1::int[]) AND status<>'void' ORDER BY issued_at DESC LIMIT 1",[enquiryIds,Number(req.params.id)]);
+    const signingUrl = issued ? `https://apply.fleminglettings.co.uk/${issued.signing_slug}` : 'https://apply.fleminglettings.co.uk/[signing-link-created-on-issue]';
     const customMessage = renderAgreementMessage(req.body.email_message || 'Your tenancy agreement for {{property_address}} is ready to review and sign.', {
       first_name: enquiry.first_name_1 || 'there', property_address: propertyAddress, signing_link: signingUrl,
     });
     const content = tenancyAgreementEmail({
       firstName: enquiry.first_name_1 || 'there',
       propertyAddress,
-      tenancyStartDate: req.body.tenancy_start_date || new Date(),
+      tenancyStartDate: req.body.tenancy_start_date || (issued && parseAgreementDetails(issued.agreement_details).tenancyStartDate) || new Date(),
       landlordName: resolveAgreementType(enquiry.landlord_type) === 'internal' ? 'Fleming Lettings & Developments UK Limited' : enquiry.landlord_name,
       landlordAddress: resolveAgreementType(enquiry.landlord_type) === 'internal' ? 'Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG' : enquiry.landlord_address,
       monthlyRent: rent,
@@ -6371,8 +6388,7 @@ app.post('/api/tenant-enquiries/:id/application-review', authMiddleware, require
         if(!updated.rowCount){await client.query('ROLLBACK');return res.status(400).json({error:'A selected document does not belong to this applicant'});}
       }
       if(status==='approved'){
-        const sections=answerSections(locked.app_form_data);
-        if(sections.some(section=>locked.application_section_reviews?.[section]?.status!=='approved')){await client.query('ROLLBACK');return res.status(409).json({error:'Approve every submitted answer section before approving the application'});}
+        if(!applicationDataApproved(locked)){await client.query('ROLLBACK');return res.status(409).json({error:'Approve the application answers before approving the application'});}
         const rejected=(await client.query("SELECT id FROM documents WHERE entity_type='tenant_enquiry' AND entity_id=$1 AND review_status='rejected'",[enquiryId])).rowCount;
         if(rejected){await client.query('ROLLBACK');return res.status(409).json({error:'Resolve rejected documents before approving the application'});}
         if(!locked.application_form_completed){await client.query('ROLLBACK');return res.status(409).json({error:'The applicant must submit the application before it can be approved'});}

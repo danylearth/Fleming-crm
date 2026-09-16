@@ -28,11 +28,11 @@ export async function stampAgreementSignatures(pdf:PDFDocument,source:string,fon
     if(text.includes('Tenant(s):')&&slots.length===tenants.length){
       slots.forEach((slot,index)=>{
         const page=pdf.getPage(i);
-        page.drawRectangle({x:28,y:page.getHeight()-slot.top-14,width:535,height:17,color:rgb(1,1,1)});
-        // Compact signatures fit within the source document's existing line spacing.
-        const image=images[index],scaled=image.scaleToFit(130,18);
-        page.drawImage(image,{x:30,y:page.getHeight()-slot.top-17,width:scaled.width,height:scaled.height});
-        page.drawText(`Signed on: ${new Date(tenants[index].date).toLocaleDateString('en-GB',{timeZone:'Europe/London'})}`,{x:185,y:page.getHeight()-slot.top-10,size:8,font});
+        page.drawRectangle({x:20,y:page.getHeight()-slot.top-14,width:550,height:17,color:rgb(1,1,1)});
+        // The source template reserves space below each signing label.
+        const image=images[index],scaled=image.scaleToFit(160,32);
+        page.drawImage(image,{x:30,y:page.getHeight()-slot.top-32,width:scaled.width,height:scaled.height});
+        page.drawText(`Signed on: ${new Date(tenants[index].date).toLocaleDateString('en-GB',{timeZone:'Europe/London'})}`,{x:215,y:page.getHeight()-slot.top-22,size:8,font});
       });
     }
   }

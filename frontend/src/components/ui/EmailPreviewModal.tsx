@@ -55,7 +55,7 @@ export default function EmailPreviewModal({
   return createPortal(
     <div
       className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-[110] p-4"
-      onClick={onClose}
+      onClick={event => {event.stopPropagation();onClose();}}
     >
       <div
         className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
@@ -148,6 +148,7 @@ export default function EmailPreviewModal({
             ) : (
               <div className="bg-white rounded-xl border border-[var(--border-subtle)] overflow-hidden">
                 <iframe
+                  key={bodyHtml}
                   title="Email preview"
                   sandbox=""
                   srcDoc={bodyHtml}

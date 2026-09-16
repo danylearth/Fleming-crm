@@ -45,7 +45,7 @@ describe('7 September CRM feedback', () => {
     expect(signingForm).toContain('Your agreement has already been signed');
     expect(signingForm).toContain('outstanding_signers');
     expect(signingForm).toContain("value=d.signer_name||''");
-    expect(signingForm).toContain("value=d.today||new Date().toISOString().slice(0,10)");
+    expect(signingForm).toContain("value=d.today||new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date())");
     expect(signingForm).toContain('@media(max-width:820px)');
     expect(signingForm).toContain('Privacy Policy');
     expect(signingForm).toContain('#toolbar=0&navpanes=0');

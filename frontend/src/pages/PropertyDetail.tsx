@@ -1189,13 +1189,13 @@ export default function PropertyDetail() {
             <Card className="p-4 sm:p-6">
               <SectionHeader title="Compliance" icon={<ShieldCheck size={16} />} />
               <div className="flex justify-center mb-4">
-                <ProgressRing value={overallCompliance()} size={90} strokeWidth={7} />{editing&&<p className="text-xs text-[var(--text-muted)]">Preview — save changes to update the record.</p>}
+                <ProgressRing value={overallCompliance()} size={90} strokeWidth={7} />
               </div>
               <div className="space-y-3">
                 {editing ? <div className="space-y-4"><DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={v=>setForm(f=>({...f,eicr_expiry_date:v}))}/><DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={v=>setForm(f=>({...f,epc_expiry_date:v}))}/>{form.has_gas&&<><DatePicker label="Gas Safety Expiry Date" value={form.gas_safety_expiry_date} onChange={v=>setForm(f=>({...f,gas_safety_expiry_date:v}))}/></>}</div>:<>
-                <ComplianceRow label="EICR" expiry={property.eicr_expiry_date} />{property.compliance?.items.filter(i=>i.docType==='EICR'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}
-                <ComplianceRow label="EPC" expiry={property.epc_expiry_date} grade={property.epc_grade} />{property.compliance?.items.filter(i=>i.docType==='EPC'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}
-                {property.has_gas ? <><ComplianceRow label="Gas Safety" expiry={property.gas_safety_expiry_date} />{property.compliance?.items.filter(i=>i.docType==='Gas Safety Certificate'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}</> : null}</>}
+                <ComplianceRow label="EICR" expiry={property.compliance?.items.some(i=>i.docType==='EICR'&&i.hasDocument)?property.eicr_expiry_date:null} />{property.compliance?.items.filter(i=>i.docType==='EICR'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}
+                <ComplianceRow label="EPC" expiry={property.compliance?.items.some(i=>i.docType==='EPC'&&i.hasDocument)?property.epc_expiry_date:null} grade={property.epc_grade} />{property.compliance?.items.filter(i=>i.docType==='EPC'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}
+                {property.has_gas ? <><ComplianceRow label="Gas Safety" expiry={property.compliance?.items.some(i=>i.docType==='Gas Safety Certificate'&&i.hasDocument)?property.gas_safety_expiry_date:null} />{property.compliance?.items.filter(i=>i.docType==='Gas Safety Certificate'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}</> : null}</>}
               </div>
             </Card>
 
@@ -1858,7 +1858,7 @@ function ComplianceRow({ label, expiry, grade }: { label: string; expiry: string
   // eslint-disable-next-line react-hooks/purity
   const days = useMemo(() => expiry ? Math.ceil((new Date(expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null, [expiry]);
   const color = days === null ? 'text-red-400' : days < 0 ? 'text-red-400' : days < 30 ? 'text-amber-400' : 'text-emerald-400';
-  const formatD = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not set';
+  const formatD = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 
   return (
     <div className="flex items-center justify-between py-2 border-b border-[var(--border-subtle)] last:border-0">
@@ -1872,7 +1872,7 @@ function ComplianceRow({ label, expiry, grade }: { label: string; expiry: string
       </div>
       <div className="text-right">
         <p className={`text-xs font-medium ${color}`}>
-          {days === null ? 'Not set' : days < 0 ? 'Expired' : `${days}d remaining`}
+          {days === null ? '' : days < 0 ? 'Expired' : `${days}d remaining`}
         </p>
         <p className="text-[10px] text-[var(--text-muted)]">{formatD(expiry)}</p>
       </div>

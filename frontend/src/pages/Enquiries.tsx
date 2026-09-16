@@ -67,7 +67,7 @@ function mapEnquiry(raw: EnquiryRaw): Enquiry {
     joint_partner_id: raw.joint_partner_id || null,
     onboarding_started: !!(raw.holding_deposit_requested || raw.application_form_sent || raw.onboarding_step),
     application_ready_for_review: !!raw.application_form_completed && raw.application_review_status === 'pending',
-    agreement_ready_for_review: false,
+    agreement_ready_for_review: !!raw.tenancy_agreement_completed && !raw.balance_payment_received,
   };
 }
 
@@ -754,7 +754,7 @@ export default function Enquiries() {
                                           <p className="text-sm font-medium truncate flex-1">{e.name}</p>
                                           {e.is_joint_application && <span className="text-[10px] font-bold text-purple-400 shrink-0">Joint App</span>}
                                         </div>
-                                        {e.application_ready_for_review && <span className="inline-flex mt-1 text-[10px] font-semibold text-amber-400">Application ready for review</span>}
+                                        {e.agreement_ready_for_review&&<button className="block mt-2 text-xs font-semibold text-emerald-600 underline" onClick={event=>{event.stopPropagation();navigate(`/enquiries/${e.id}?onboarding=1`);}}>Agreement completed — Final Balance</button>}{e.application_ready_for_review && <span className="inline-flex mt-1 text-[10px] font-semibold text-amber-400">Application ready for review</span>}
                                         {e.email && <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5"><Mail size={10} />{e.email}</p>}
                                         {e.phone && <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5"><Phone size={10} />{e.phone}</p>}
                                         {e.address && <p className="text-xs text-[var(--text-muted)] flex items-start gap-1 mt-0.5"><Home size={10} className="mt-0.5 shrink-0" /><span className="line-clamp-2">{e.address}</span></p>}
@@ -834,7 +834,7 @@ export default function Enquiries() {
                       <div className="flex items-center gap-2">
                         <p className="font-medium truncate">{e.name}</p>
                         {e.is_joint_application && <span className="text-[10px] font-bold text-purple-400 shrink-0">Joint App</span>}
-                        {e.application_ready_for_review && <span className="text-[10px] font-semibold text-amber-400 shrink-0">Review application</span>}
+                        {e.agreement_ready_for_review&&<button className="block mt-2 text-xs font-semibold text-emerald-600 underline" onClick={event=>{event.stopPropagation();navigate(`/enquiries/${e.id}?onboarding=1`);}}>Agreement completed — Final Balance</button>}{e.application_ready_for_review && <span className="text-[10px] font-semibold text-amber-400 shrink-0">Review application</span>}
                       </div>
                       <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{e.email || e.phone}</p>
                     </div>

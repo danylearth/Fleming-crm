@@ -77,7 +77,7 @@ describe('31 August CRM feedback regressions', () => {
     expect(wizardSource).not.toMatch(/\bAST\b/);
     expect(wizardSource).toContain('Click to add document');
     expect(wizardSource).toContain('Upload Credit Report *');
-    expect(wizardSource).toContain('Editable tenant email preview');
+    expect(wizardSource).not.toContain('Editable tenant email preview');
     expect(wizardSource).toContain('<DatePicker label="Tenancy start *"');
   });
 
@@ -96,7 +96,7 @@ describe('31 August CRM feedback regressions', () => {
     expect(apiSource).toContain("'maintenance',$4,CURRENT_DATE,'maintenance'");
     expect(apiSource).toContain('handover_with_landlord');
     expect(wizardSource).toContain('With Landlord');
-    expect(wizardSource).toContain('Editable SMS preview');
+    expect(wizardSource).not.toContain('Editable SMS preview');
   });
 
   it('shows completed payment and credit report evidence without another upload prompt', () => {

@@ -80,6 +80,12 @@ try {
     const row = await one('SELECT filename FROM tenancy_agreements WHERE id=$1',[agreement.agreement_id]);
     const pack = await PDFDocument.load(readFileSync(path.join(dir,row.filename))); assert(pack.getPageCount() > 3);
   });
+  await test('issued agreement previews reuse each applicant’s actual signing link',async()=>{
+    for(const [id,url] of [[a,agreement.tenant_url],[b,agreement.joint_tenant_url]]){
+      const preview=await ok(`/api/tenant-enquiries/${id}/tenancy-agreement/email-preview`,{method:'POST',token:auth.staff,body:{}});
+      assert(preview.body_html.includes(url));assert(!preview.body_html.includes('[signing-link-created-on-issue]'));
+    }
+  });
   await test('bulk removal cannot bypass property contract retention or administrator access',async()=>{
     assert.equal((await request('/api/properties/bulk-delete',{method:'POST',token:auth.staff,body:{ids:[property.id]}})).status,403);
     assert.equal((await request('/api/properties/bulk-delete',{method:'POST',token:auth.admin,body:{ids:[property.id]}})).status,409);
@@ -103,7 +109,12 @@ try {
     const docs=await sql("SELECT * FROM documents WHERE doc_type='Signed Tenancy Agreement'"); assert.equal(docs.length,3); assert.equal(new Set(docs.map(x=>x.filename)).size,1);
     for(const x of await sql('SELECT onboarding_step FROM tenant_enquiries WHERE id=ANY($1::int[])',[[a,b]])) assert(x.onboarding_step>=7);
     const signedPdf=await PDFDocument.load(readFileSync(path.join(dir,row.signed_filename))); assert(signedPdf.getPageCount()>4);
-    const signedText=spawnSync('pdftotext',[path.join(dir,row.signed_filename),'-'],{encoding:'utf8'});assert.equal(signedText.status,0);assert((signedText.stdout.match(/Signed on:/g)||[]).length>=13,'Document receipt acknowledgements, both tenants and landlord must sign inside the addendum; tenant signatures also appear in the main agreement');
+    const signedText=spawnSync('pdftotext',[path.join(dir,row.signed_filename),'-'],{encoding:'utf8'});assert.equal(signedText.status,0);assert((signedText.stdout.match(/Signed on:/g)||[]).length>=11,'Applicable receipt acknowledgements, both tenants and landlord sign in the addendum; tenants also sign the main agreement');
+    assert(!signedText.stdout.includes('The electronic signature certificate records'));
+    const certificate=signedText.stdout.slice(signedText.stdout.lastIndexOf('Electronic Signature Certificate'));
+    assert.match(certificate,/IP address:/);assert.match(certificate,/192\.0\.2\./);assert(!certificate.includes('Robert'));assert(!certificate.includes('Landlord'));
+    assert(!signedText.stdout.includes('Gas Safety Certificate ('));
+    const pipeline=await ok('/api/tenant-enquiries',{token:auth.staff});for(const id of [a,b])assert.equal(pipeline.find(e=>e.id===id).tenancy_agreement_status,'completed');
   });
   await test('reopening a signed link reports its immutable completed state',async()=>{
     const r=await ok(`/api/public/tenancy-agreements/${ta}`);assert.equal(r.signer_signed,true);assert.deepEqual(r.outstanding_signers,[]);
@@ -537,6 +548,38 @@ try {
     await ok(`/api/tenant-enquiries/${e.id}/application-review`,{method:'POST',token:auth.staff,body:{status:'approved'}});
     row=await one('SELECT * FROM tenant_enquiries WHERE id=$1',[e.id]);assert.equal(row.application_review_status,'approved');
     const holding=await ok(`/api/tenant-enquiries/${e.id}/holding-deposit/email-preview`,{method:'POST',token:auth.staff,body:{monthly_rent:1000,holding_deposit:200}});assert(holding.html.length>1000);assert.match(holding.html,/Holding deposit request/);
+  });
+  await test('one answer decision locks public drafts and submissions while allowing document review',async()=>{
+    const data={first_name:'Approved',last_name:'Applicant',date_of_birth:'1990-01-01',rental_amount:1000,deposit_amount:1000};
+    const e=await one(`INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,status,application_form_token,application_form_completed,app_form_data,monthly_rent_agreed,security_deposit_amount) VALUES('Approved','Applicant','approved@example.test','onboarding','approved-answers-test',1,$1,1000,1000) RETURNING id`,[JSON.stringify(data)]);
+    const decide=body=>ok(`/api/tenant-enquiries/${e.id}/section-review`,{method:'PUT',token:auth.staff,body:{section:'Application Details',...body}});
+    await decide({status:'approved'});
+    const publicForm=await ok('/api/public/application-form/approved-answers-test');assert.equal(publicForm.application_data_approved,true);assert(!JSON.stringify(publicForm.application_section_reviews).includes('reviewed_by'));
+    await ok('/api/public/application-form/approved-answers-test/draft',{method:'POST',body:{app_form_data:data}});
+    for(const route of ['/draft',''])assert.equal((await request('/api/public/application-form/approved-answers-test'+route,{method:'POST',body:{app_form_data:{...data,date_of_birth:'2000-01-01'}}})).status,409);
+    assert.deepEqual((await one('SELECT app_form_data FROM tenant_enquiries WHERE id=$1',[e.id])).app_form_data,data);
+    await decide({status:'rejected',reason:'Correct your date of birth'});
+    assert.equal((await ok('/api/public/application-form/approved-answers-test')).application_data_approved,false);
+    await ok('/api/public/application-form/approved-answers-test/draft',{method:'POST',body:{app_form_data:{...data,date_of_birth:'1991-01-01'}}});
+    assert.equal((await one('SELECT app_form_data FROM tenant_enquiries WHERE id=$1',[e.id])).app_form_data.date_of_birth,'1991-01-01');
+  });
+  await test('document-only revisions preserve approved answers, review attribution and the original signature',async()=>{
+    const data={"first_name": "Browser", "last_name": "Review", "email": "alex@example.test", "phone": "07700900123", "date_of_birth": "1990-08-20", "ni_number": "QQ 12 34 56 C", "current_address_line_1": "1 High Street", "current_address_city": "Wolverhampton", "current_address_postcode": "WV1 1AA", "years_at_current_address": "0", "residency_status": "Lodger", "marital_status": "Single", "gross_annual_income": "30000", "employment_status": "Unemployed", "bank_account_name": "Alex Smith", "bank_sort_code": "11-12-14", "bank_account_number": "01234567", "property_address": "2 High Street", "preferred_start_date": "2026-09-21", "rental_period": "Monthly", "tenancy_duration": "12 months", "rental_amount": 1000, "deposit_amount": 1200, "next_of_kin_name": "Sam Smith", "next_of_kin_address": "3 High Street", "next_of_kin_postcode": "WV1 1AA", "next_of_kin_phone": "07700900124", "next_of_kin_email": "kin@example.com", "next_of_kin_relationship": "Sibling", "legal_proceedings": "No", "has_joint_applicants": false, "has_employer_reference": false, "has_landlord_reference": false, "has_personal_reference": false, "has_additional_income": false, "has_loans": false, "has_credit_cards": false, "has_other_occupants": false, "has_pets": false, "deposit_contributor": false, "has_guarantor": false, "declaration_holding_deposit": true, "declaration_info_accurate": true, "declaration_privacy": true, "declaration_enquiries": true, "declaration_documents": true, "declaration_credit_check": true, "declaration_terms": true};
+    const e=await one(`INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,status,application_form_token,application_form_completed,application_review_status,app_form_data,app_signature,app_signature_name,app_signature_ip,app_signed_at,monthly_rent_agreed,security_deposit_amount) VALUES('Browser','Review','revision@example.test','onboarding','document-only-revision',1,'approved',$1,$2,'Original Signer','192.0.2.55',NOW(),1000,1200) RETURNING id`,[JSON.stringify(data),png]);
+    let primary;
+    for(const type of ['Primary Identification','Secondary Identification','Bank Statements']){
+      const d=await one("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('tenant_enquiry',$1,$2,'sample.pdf',$3,'application/pdf','approved') RETURNING id",[e.id,type,type+'.pdf']);if(type==='Primary Identification')primary=d.id;
+    }
+    await ok(`/api/documents/${primary}/review`,{method:'PUT',token:auth.staff,body:{status:'rejected',notes:'Provide a clearer copy'}});
+    assert.equal((await ok('/api/public/application-form/document-only-revision')).application_data_approved,true);
+    const before=await one('SELECT app_signature,app_signature_name,app_signature_ip,app_signed_at,application_section_reviews FROM tenant_enquiries WHERE id=$1',[e.id]);
+    const body=new FormData();body.append('file',new Blob([pdf],{type:'application/pdf'}),'Clear passport.pdf');body.append('doc_type','Primary Identification');
+    const uploaded=await fetch(base+'/api/public/application-form/document-only-revision/documents',{method:'POST',body});assert.equal(uploaded.status,200,await uploaded.text());
+    assert.equal((await ok('/api/public/application-form/document-only-revision')).application_data_approved,true);
+    await ok('/api/public/application-form/document-only-revision',{method:'POST',body:{app_form_data:data,app_signature_name:'Attempted change'}});
+    const after=await one('SELECT app_form_data,app_signature,app_signature_name,app_signature_ip,app_signed_at,application_section_reviews FROM tenant_enquiries WHERE id=$1',[e.id]);
+    assert.deepEqual(after.app_form_data,data);delete after.app_form_data;assert.deepEqual(after,before);
+    assert.equal((await ok('/api/public/application-form/document-only-revision')).application_data_approved,true);
   });
   await test('marketing enforces channel permission, deduplicates contacts, queues once and honours opt-out',async()=>{
     const l=await one("INSERT INTO landlords(name,email,phone) VALUES('=Formula Test','marketing@example.test','07700900099') RETURNING id");
