@@ -1,3 +1,5 @@
+import ContextualDocSlot from '../components/ui/ContextualDocSlot';
+import {formatPropertyAddress} from '../utils/propertyAddress';
 import DeleteNoteButton from '../components/DeleteNoteButton';
 import { useRecordAddress } from '../hooks/useRecordAddress';
 import CommunicationsHistory from '../components/ui/CommunicationsHistory';
@@ -24,7 +26,7 @@ interface Landlord {
 }
 interface Property {
   id: number; address: string; landlord_id: number; type?: string; status?: string; notes?: string;
-  link_id?: number; is_primary?: number;
+  link_id?: number; is_primary?: number; postcode?:string; city?:string; service_type?:string; tenant_names?:string;
 }
 interface Director {
   id: number; landlord_id: number; name: string; email: string; phone: string;
@@ -105,7 +107,7 @@ export default function LandlordDetail() {
   const [allProperties, setAllProperties] = useState<Property[]>([]);
   const [propSaving, setPropSaving] = useState(false);
   const [propForm, setPropForm] = useState({
-    landlord_id: '', address: '', postcode: '', property_type: 'house', bedrooms: '1',
+    landlord_id: '', address: '', address_line_2: '', city: '', postcode: '', property_type: 'house', bedrooms: '1', status: 'to_let', has_gas: '',
     rent_amount: '', service_type: '',
   });
   const [showAddDirector, setShowAddDirector] = useState(false);
@@ -151,7 +153,7 @@ export default function LandlordDetail() {
 
   const populateForm = (l: Landlord) => setForm({
     name: l.name || '', email: l.email || '', phone: l.phone || '',
-    notes: '', alt_email: l.alt_email || '', date_of_birth: l.date_of_birth || '', home_address: l.home_address || '',
+    notes: '', alt_email: l.alt_email || '', date_of_birth: l.date_of_birth || '', home_address: l.home_address || l.address || '',
     company_number: l.company_number || '', referral_source: l.referral_source || '',
     entity_type: l.entity_type || 'individual', landlord_type: l.landlord_type || 'external',
     marketing_post: !!l.marketing_post, marketing_email: !!l.marketing_email,
@@ -363,7 +365,7 @@ export default function LandlordDetail() {
           <div className="lg:col-span-2 space-y-6">
             {/* Contact Information */}
             <GlassCard className={`p-6 ${editing ? 'relative z-10 overflow-visible' : ''}`}>
-              <SectionHeader title="Contact Information" />
+              <SectionHeader title="Contact Information" icon={<UserCircle size={16}/>} />
               {(() => {
                 const isCompany = form.entity_type === 'company' || landlord.entity_type === 'company';
                 return editing ? (
@@ -398,7 +400,7 @@ export default function LandlordDetail() {
                     <ReadField icon={Mail} label={isCompany ? "Company Email" : "Email"} value={landlord.email} />
                     <ReadField icon={Mail} label="Alternative Email" value={landlord.alt_email} />
                     <ReadField icon={Phone} label={isCompany ? "Office Phone" : "Phone"} value={landlord.phone} />
-                    <ReadField icon={MapPin} label={isCompany ? "Registered Address" : "Home Address"} value={landlord.home_address} />
+                    <ReadField icon={MapPin} label={isCompany ? "Registered Address" : "Home Address"} value={landlord.home_address || landlord.address} />
                     <ReadField icon={Megaphone} label="Referral Source" value={landlord.referral_source} />
                     <ReadField icon={Building2} label="Portfolio Type" value={landlord.landlord_type === 'internal' ? 'Internal' : 'External'} />
                   </div>
@@ -409,7 +411,7 @@ export default function LandlordDetail() {
             {/* Properties */}
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <SectionHeader title="Properties" />
+                <SectionHeader title="Properties" icon={<Building2 size={16}/>} />
                 <Button variant="outline" size="sm" onClick={async () => {
                   setPropForm(f => ({ ...f, landlord_id: String(id) }));
                   setPropMode('create');
@@ -433,15 +435,16 @@ export default function LandlordDetail() {
                   {properties.map(p => (
                     <div key={p.id} className="flex items-center gap-3 px-4 py-3 bg-[var(--bg-subtle)]/40 hover:bg-[var(--bg-hover)] transition-colors">
                       <button onClick={() => navigate(`/properties/${p.id}`)} className="min-w-0 flex-1 text-left">
-                        <p className="text-sm font-medium truncate">{p.address}</p>
+                        <p className="text-sm font-medium">{formatPropertyAddress(p.city && !p.address.toLowerCase().includes(p.city.toLowerCase()) ? `${p.address}, ${p.city}` : p.address,p.postcode)}</p>{p.tenant_names && <p className="text-xs mt-1 text-[var(--text-secondary)]">Tenants: {p.tenant_names}</p>}
                         <div className="flex items-center gap-2 mt-1">
                           {p.type && <span className="text-xs text-[var(--text-muted)]">{p.type}</span>}
                           {!!p.is_primary && <span className="text-[10px] text-[var(--accent-orange)]">Primary</span>}
                           {p.status && (
-                            <span className="text-[10px] text-[var(--text-muted)]">{p.status.replaceAll('_', ' ')}</span>
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs capitalize ${p.status==='let'?'bg-emerald-500/15 text-emerald-600':'bg-amber-500/15 text-amber-600'}`}><Building2 size={12}/>{p.status.replaceAll('_', ' ')}</span>
                           )}
                         </div>
                       </button>
+                      {p.service_type && <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs capitalize bg-blue-500/15 text-blue-600"><Briefcase size={12}/>{p.service_type.replaceAll('_',' ')}</span>}
                       {p.link_id && (
                         <button
                           type="button"
@@ -650,7 +653,7 @@ export default function LandlordDetail() {
 
             {/* Marketing Preferences */}
             <GlassCard className="p-6">
-              <SectionHeader title="Marketing Preferences" />
+              <SectionHeader title="Marketing Preferences" icon={<Megaphone size={16}/>} />
               <div className="flex flex-wrap gap-3">
                 <Toggle label="Post" checked={editing ? form.marketing_post : !!landlord.marketing_post} onChange={v => setForm({ ...form, marketing_post: v })} disabled={!editing} />
                 <Toggle label="Email" checked={editing ? form.marketing_email : !!landlord.marketing_email} onChange={v => setForm({ ...form, marketing_email: v })} disabled={!editing} />
@@ -661,7 +664,7 @@ export default function LandlordDetail() {
 
             {/* KYC */}
             <GlassCard className="p-6">
-              <SectionHeader title="KYC Compliance" />
+              <SectionHeader title="KYC Compliance" icon={<ShieldCheck size={16}/>} />
               <div className="space-y-4">
                 {/* Company KYC Status */}
                 {directors.length > 0 ? (
@@ -713,6 +716,9 @@ export default function LandlordDetail() {
                   </div>
                 )}
 
+                <ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Primary Identification" label="Primary ID Document" />
+                <ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Address Identification" label="Secondary ID Document (Optional)" />
+                <p className="text-xs text-[var(--text-muted)]">One primary identity document is required. Secondary ID is optional.</p>
                 {/* Admin approval button */}
                 {user?.role === 'admin' && !landlord.kyc_completed && (
                   <Button
@@ -747,7 +753,7 @@ export default function LandlordDetail() {
           <div className="lg:col-span-1 space-y-6">
             {/* Notes */}
             <GlassCard className="p-6">
-              <SectionHeader title="Notes" />
+              <SectionHeader title="Notes" icon={<StickyNote size={16}/>} />
 
               {/* Filter Tabs */}
               <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -942,9 +948,11 @@ export default function LandlordDetail() {
               ) : (
                 /* Create New Property Form */
                 <div className="space-y-4">
-                  <AddressAutocomplete label="Address *" value={propForm.address} onChange={(v: string) => setPropForm(f => ({ ...f, address: v }))}
+                  <AddressAutocomplete label="Address Line 1 *" value={propForm.address} onChange={(v: string) => setPropForm(f => ({ ...f, address: v }))}
                     onSelect={p => { if (p.postcode) setPropForm(f => ({ ...f, postcode: p.postcode || f.postcode })); }}
                     placeholder="Property address" />
+                  <Input label="Address Line 2" value={propForm.address_line_2} onChange={address_line_2=>setPropForm(f=>({...f,address_line_2}))}/>
+                  <Input label="Town/City *" value={propForm.city} onChange={city=>setPropForm(f=>({...f,city}))}/>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input label="Postcode *" value={propForm.postcode} onChange={(v: string) => setPropForm(f => ({ ...f, postcode: v }))} placeholder="e.g. SW1A 1AA" />
                     <Input label="Rent (£/month)" value={propForm.rent_amount} onChange={(v: string) => setPropForm(f => ({ ...f, rent_amount: v }))} placeholder="0" />
@@ -954,6 +962,8 @@ export default function LandlordDetail() {
                       options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
                     <Input label="Bedrooms" value={propForm.bedrooms} onChange={(v: string) => setPropForm(f => ({ ...f, bedrooms: v }))} placeholder="1" />
                   </div>
+                  <Select label="Status *" value={propForm.status} onChange={status=>setPropForm(f=>({...f,status}))} options={[{value:"to_let",label:"To Let"},{value:"let_agreed",label:"Let Agreed"}]}/>
+                  <Select label="Has Gas? *" value={propForm.has_gas} onChange={has_gas=>setPropForm(f=>({...f,has_gas}))} options={[{value:"",label:"Choose Yes or No"},{value:"yes",label:"Yes"},{value:"no",label:"No"}]}/>
                   <Select label="Service Type" value={propForm.service_type} onChange={(v: string) => setPropForm(f => ({ ...f, service_type: v }))}
                     options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
                 </div>
@@ -985,11 +995,14 @@ export default function LandlordDetail() {
                     {propSaving ? 'Linking...' : 'Link Property'}
                   </Button>
                 ) : (
-                  <Button variant="gradient" disabled={propSaving || !propForm.address || !propForm.postcode} onClick={async () => {
+                  <Button variant="gradient" disabled={propSaving || !propForm.address || !propForm.city || !propForm.postcode || !propForm.has_gas || (landlord.landlord_type!=='internal'&&!propForm.service_type)} onClick={async () => {
                     setPropSaving(true);
                     try {
                       const res = await api.post('/api/properties', {
                         ...propForm,
+                        address_line_1: propForm.address,
+                        has_gas: propForm.has_gas === "yes",
+                        has_management_company: false,
                         landlord_id: Number(id),
                         bedrooms: Number(propForm.bedrooms),
                         rent_amount: Number(propForm.rent_amount) || 0,

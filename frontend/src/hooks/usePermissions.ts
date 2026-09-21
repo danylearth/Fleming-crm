@@ -58,6 +58,7 @@ export function usePermissions() {
   };
 
   return {
+    canAccessFinance: () => user?.role === 'admin' || user?.finance_access === true || ['accounts','administration'].includes((user?.department || '').trim().toLowerCase()),
     userRole,
     hasMinimumRole,
     isAdmin,

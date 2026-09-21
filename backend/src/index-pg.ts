@@ -1,3 +1,4 @@
+import {registerBankReconciliation} from './bank-reconciliation';
 import {registerMarketing} from './marketing';
 import {registerApplicationReview,applicationDataApproved,approvedDataChanged,retainApprovedAnswersSql} from './application-review';
 import {registerPropertyPolicies} from './property-policies';
@@ -26,7 +27,7 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import pool, { initDb, query, queryOne, insert, run } from './db-pg';
-import { generateToken, authMiddleware, AuthRequest, requireRole, requirePermission } from './auth';
+import { generateToken, authMiddleware, AuthRequest, requireRole, requirePermission, requireFinance } from './auth';
 import { registerInventoryRoutes } from './inventory-routes';
 import { SMS_FROM, validateTwilioWebhook, normalizeUkPhone as normalizePhone } from './sms';
 import crypto from 'crypto';
@@ -420,6 +421,13 @@ app.use('/api', (req: AuthRequest, res, next) => {
   return authMiddleware(req, res, () => requirePermission('staff')(req, res, next));
 });
 
+// Finance access is checked against the current user record on every request.
+app.use('/api', (req:AuthRequest,res,next)=>{
+  if (/^\/(financial-summary|rent-payments|transactions|property-expenses|bank-feed)(\/|$)/.test(req.path) && req.path!=='/bank-feed/callback')
+    return authMiddleware(req,res,()=>requireFinance(req,res,next));
+  next();
+});
+
 // Capability URLs and personal API responses must not be retained in shared caches.
 app.use('/api', (_req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -548,6 +556,7 @@ app.get('/', (req, res) => {
 // Serve static files (disabled in production - frontend deployed separately)
 registerRecordNoteRoutes(app);
 registerFreeAgentRoutes(app);
+registerBankReconciliation(app);
 
 // app.use(express.static(path.join(__dirname, '../../frontend/dist')));
 
@@ -590,7 +599,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     await logAudit(user.id, user.email, 'login', 'user', user.id);
     
     const token = generateToken({ id: user.id, email: user.email, role: user.role, name: user.name });
-    res.json({ user: { id: user.id, email: user.email, role: user.role, name: user.name, avatar_url: user.avatar_url, accent_color: user.accent_color, appearance: user.appearance, last_login: new Date().toISOString() }, token });
+    res.json({ user: { id: user.id, email: user.email, role: user.role, name: user.name, avatar_url: user.avatar_url, accent_color: user.accent_color, appearance: user.appearance, department:user.department, finance_access:user.finance_access, last_login: new Date().toISOString() }, token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login failed' });
@@ -708,6 +717,8 @@ app.get('/api/landlords', authMiddleware, async (req: AuthRequest, res) => {
 app.post('/api/landlords', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
+    if (d.address && !d.home_address) d.home_address = d.address;
+    if (d.kyc_completed) return res.status(400).json({error:"Upload a primary ID document after creating the landlord, then approve KYC"});
     if (!d.name) return res.status(400).json({ error: 'Name is required' });
     const cols = ['name','email','phone','alt_email','date_of_birth','home_address','address',
       'company_number','entity_type','marketing_post','marketing_email','marketing_phone',
@@ -836,6 +847,14 @@ app.put('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = req.params.id as string;
     const d = req.body;
+    if (d.kyc_completed) {
+      const current = await queryOne('SELECT kyc_completed FROM landlords WHERE id=$1',[id]);
+      if (!current?.kyc_completed) {
+        if(req.user?.role!=='admin') return res.status(403).json({error:'Only administrators can approve KYC'});
+        const proof=await queryOne("SELECT id FROM documents WHERE entity_type='landlord' AND entity_id=$1 AND doc_type='Primary Identification' LIMIT 1",[id]);
+        if(!proof) return res.status(409).json({error:'Upload a primary ID document before approving KYC'});
+      }
+    }
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -4563,7 +4582,7 @@ app.get('/api/financial-summary', authMiddleware, async (_req, res) => {
         WHERE COALESCE(t.status, 'active') = 'active'
         GROUP BY t.property_id
       ), month_payments AS (
-        SELECT amount_due, COALESCE(amount_paid, 0) AS paid
+        SELECT amount_due, opening_balance_amount, COALESCE(amount_paid, 0) AS paid
         FROM rent_payments
         WHERE due_date >= date_trunc('month', NOW() AT TIME ZONE 'Europe/London')::date
           AND due_date < (date_trunc('month', NOW() AT TIME ZONE 'Europe/London') + INTERVAL '1 month')::date
@@ -4571,6 +4590,7 @@ app.get('/api/financial-summary', authMiddleware, async (_req, res) => {
       SELECT COALESCE((SELECT SUM(rent) FROM active_rents), 0) AS monthly_rent,
         (SELECT COUNT(*)::int FROM active_rents) AS active_tenancies,
         COALESCE((SELECT SUM(paid) FROM month_payments), 0) AS collected,
+        COALESCE((SELECT SUM(opening_balance_amount) FROM month_payments), 0) AS assumed,
         COALESCE((SELECT SUM(GREATEST(0, amount_due - paid)) FROM month_payments), 0) AS outstanding
     `);
     res.json(summary);
@@ -4615,7 +4635,7 @@ app.post('/api/tenancies', authMiddleware, async (req: AuthRequest, res) => {
 app.get('/api/rent-payments', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const payments = await query(`
-      SELECT rp.*, COALESCE(p.address, 'Unknown property') as address, t.name as tenant_name FROM rent_payments rp
+      SELECT rp.*, t.linked_tenant_id, COALESCE(p.address, 'Unknown property') as address, t.name as tenant_name FROM rent_payments rp
       LEFT JOIN properties p ON p.id = rp.property_id LEFT JOIN tenants t ON t.id = rp.tenant_id
       ORDER BY rp.due_date DESC
     `);
@@ -4659,78 +4679,57 @@ app.post('/api/rent-payments', authMiddleware, async (req: AuthRequest, res) => 
   }
 });
 
-app.put('/api/rent-payments/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.put('/api/rent-payments/:id', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
+  const client=await pool.connect();
   try {
-    const d = req.body;
-    const allowed = ['property_id', 'tenant_id', 'due_date', 'amount_due', 'amount_paid', 'payment_date', 'status', 'notes'];
-    const fields: string[] = [];
-    const values: any[] = [];
-    let idx = 1;
-    for (const key of allowed) {
-      if (key in d) {
-        fields.push(`${key}=$${idx++}`);
-        values.push(d[key]);
-      }
-    }
-    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
-    values.push(req.params.id);
-    await run(`UPDATE rent_payments SET ${fields.join(', ')} WHERE id=$${idx}`, values);
-    await logAudit(req.user?.id, req.user?.email, 'update', 'rent_payment', parseInt(req.params.id as string), d);
-    const updated = await queryOne(`
-      SELECT rp.*, p.address, t.name as tenant_name FROM rent_payments rp
-      LEFT JOIN properties p ON p.id = rp.property_id LEFT JOIN tenants t ON t.id = rp.tenant_id
-      WHERE rp.id = $1
-    `, [req.params.id]);
-    res.json(updated);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update rent payment' });
-  }
+    await client.query('BEGIN');
+    const payment=(await client.query('SELECT * FROM rent_payments WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];
+    if(!payment){await client.query('ROLLBACK');return res.status(404).json({error:'Rent payment not found'});}
+    const d=req.body;
+    const allowed=['property_id','tenant_id','due_date','amount_due','amount_paid','payment_date','status','notes'];
+    const keys=allowed.filter(k=>k in d);
+    if(!keys.length){await client.query('ROLLBACK');return res.status(400).json({error:'No fields to update'});}
+    const allocated=(await client.query('SELECT 1 FROM bank_feed_allocations WHERE rent_payment_id=$1 LIMIT 1',[req.params.id])).rowCount;
+    if(allocated&&keys.some(k=>k!=='notes')){await client.query('ROLLBACK');return res.status(409).json({error:'This charge has bank allocations. Only its notes can be edited.'});}
+    const due=Number(d.amount_due??payment.amount_due),paid=Number(d.amount_paid??payment.amount_paid??0);
+    if(!Number.isFinite(due)||!Number.isFinite(paid)||due<=0||paid<0||paid>due||[due,paid].some(n=>Math.abs(n*100-Math.round(n*100))>0.00001)){await client.query('ROLLBACK');return res.status(400).json({error:'Enter valid rent amounts with at most two decimal places'});}
+    const fields=keys.map((k,i)=>`${k}=$${i+1}`);
+    if('amount_paid' in d)fields.push('opening_balance_amount=0');
+    await client.query(`UPDATE rent_payments SET ${fields.join(',')} WHERE id=$${keys.length+1}`,[...keys.map(k=>d[k]),req.params.id]);
+    await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','rent_payment',$3,$4)",[req.user.id,req.user.email,req.params.id,JSON.stringify(d)]);
+    const updated=(await client.query('SELECT * FROM rent_payments WHERE id=$1',[req.params.id])).rows[0];
+    await client.query('COMMIT');res.json(updated);
+  }catch{await client.query('ROLLBACK');res.status(500).json({error:'Failed to update rent payment'});}finally{client.release();}
 });
 
 app.delete('/api/rent-payments/:id', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
+  const client=await pool.connect();
   try {
-    const existing = await queryOne('SELECT * FROM rent_payments WHERE id = $1', [req.params.id]);
-    if (!existing) return res.status(404).json({ error: 'Rent payment not found' });
-    await run('DELETE FROM rent_payments WHERE id = $1', [req.params.id]);
-    await logAudit(req.user?.id, req.user?.email, 'delete', 'rent_payment', parseInt(req.params.id as string));
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to delete rent payment' });
-  }
+    await client.query('BEGIN');
+    const row=(await client.query('SELECT id FROM rent_payments WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];
+    if(!row){await client.query('ROLLBACK');return res.status(404).json({error:'Rent payment not found'});}
+    if((await client.query('SELECT 1 FROM bank_feed_allocations WHERE rent_payment_id=$1 UNION ALL SELECT 1 FROM rent_chaser_deliveries WHERE rent_payment_id=$1',[row.id])).rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'This charge has bank allocations or delivery history and must be retained'});}
+    await client.query('DELETE FROM rent_payments WHERE id=$1',[row.id]);
+    await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id) VALUES($1,$2,'delete','rent_payment',$3)",[req.user.id,req.user.email,row.id]);
+    await client.query('COMMIT');res.json({success:true});
+  }catch{await client.query('ROLLBACK');res.status(500).json({error:'Failed to delete rent payment'});}finally{client.release();}
 });
 
-app.put('/api/rent-payments/:id/pay', authMiddleware, async (req: AuthRequest, res) => {
+app.put('/api/rent-payments/:id/pay', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
+  const client=await pool.connect();
   try {
-    const d = req.body;
-    const payment = await queryOne('SELECT * FROM rent_payments WHERE id = $1', [req.params.id as string]);
-    if (!payment) return res.status(404).json({ error: 'Payment not found' });
-
-    const amountPaid = d.amount_paid != null ? Number(d.amount_paid) : Number(payment.amount_due);
-    const paymentDate = d.payment_date || new Date().toISOString().split('T')[0];
-    const newStatus = amountPaid < Number(payment.amount_due) ? 'partial' : 'paid';
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(
-        'UPDATE rent_payments SET amount_paid=$1, payment_date=$2, status=$3, notes=COALESCE($4, notes) WHERE id=$5',
-        [amountPaid, paymentDate, newStatus, d.notes || null, req.params.id]
-      );
-      await client.query('COMMIT');
-    } catch (txErr) {
-      await client.query('ROLLBACK');
-      throw txErr;
-    } finally {
-      client.release();
-    }
-    await logAudit(req.user?.id, req.user?.email, 'update', 'rent_payment', parseInt(req.params.id as string), { status: newStatus, amount_paid: amountPaid });
-    res.json({ success: true, status: newStatus, amount_paid: amountPaid, payment_date: paymentDate });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to mark payment as paid' });
-  }
+    await client.query('BEGIN');
+    const payment=(await client.query('SELECT * FROM rent_payments WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];
+    if(!payment){await client.query('ROLLBACK');return res.status(404).json({error:'Payment not found'});}
+    if((await client.query('SELECT 1 FROM bank_feed_allocations WHERE rent_payment_id=$1',[payment.id])).rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'This charge has bank allocations. Assign further receipts from the bank feed.'});}
+    const amountPaid=Number(req.body.amount_paid??payment.amount_due);
+    if(!Number.isFinite(amountPaid)||amountPaid<0||amountPaid>Number(payment.amount_due)||Math.abs(amountPaid*100-Math.round(amountPaid*100))>0.00001){await client.query('ROLLBACK');return res.status(400).json({error:'Enter a valid payment within the rent due'});}
+    const paymentDate=req.body.payment_date||new Date().toISOString().slice(0,10);
+    const status=amountPaid<Number(payment.amount_due)?'partial':'paid';
+    await client.query('UPDATE rent_payments SET amount_paid=$1,opening_balance_amount=0,payment_date=$2,status=$3,notes=COALESCE($4,notes) WHERE id=$5',[amountPaid,paymentDate,status,req.body.notes||null,payment.id]);
+    await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','rent_payment',$3,$4)",[req.user.id,req.user.email,payment.id,JSON.stringify({amount_paid:amountPaid,payment_date:paymentDate,status})]);
+    await client.query('COMMIT');res.json({success:true,status,amount_paid:amountPaid,payment_date:paymentDate});
+  }catch{await client.query('ROLLBACK');res.status(500).json({error:'Failed to mark payment as paid'});}finally{client.release();}
 });
 
 // ============ USERS ============
@@ -4746,7 +4745,7 @@ app.get('/api/users/options', authMiddleware, async (_req: AuthRequest, res) => 
 
 app.get('/api/users', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
-    const users = await query('SELECT id, email, name, role, department, is_active, created_at, last_login FROM users ORDER BY created_at DESC');
+    const users = await query('SELECT id, email, name, role, department, finance_access, is_active, created_at, last_login FROM users ORDER BY created_at DESC');
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -4755,15 +4754,15 @@ app.get('/api/users', authMiddleware, requireRole('admin'), async (req: AuthRequ
 
 app.post('/api/users', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
-    const { email, name, role, department } = req.body;
+    const { email, name, role, department, finance_access } = req.body;
     if (!email || !name || !['admin','manager','staff','viewer'].includes(role)) {
       return res.status(400).json({ error: 'Email, name, and role are required' });
     }
     const tempPassword = crypto.randomBytes(12).toString('base64url');
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
     const id = await insert(
-      'INSERT INTO users (email, password, name, role, department, last_password_change) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)',
-      [email, hashedPassword, name, role, department || null]
+      'INSERT INTO users (email, password, name, role, department, finance_access, last_password_change) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)',
+      [email, hashedPassword, name, role, department || null, finance_access === true]
     );
     await logAudit(req.user?.id, req.user?.email, 'create', 'user', id, { email, name, role, department });
     res.json({ id, email, name, role, department, tempPassword });
@@ -4811,7 +4810,8 @@ app.post('/api/users/setup-fleming-team', authMiddleware, requireRole('admin'), 
 app.put('/api/users/:id', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
     const userId = parseInt(req.params.id as string);
-    const { name, email, role, department, is_active } = req.body;
+    const { name, email, role, department, is_active, finance_access } = req.body;
+    if(finance_access!==undefined && typeof finance_access!=='boolean')return res.status(400).json({error:'Invalid finance access'});
     if (role !== undefined && !['admin','manager','staff','viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
     if (is_active !== undefined && ![0,1].includes(is_active)) return res.status(400).json({ error: 'Invalid active status' });
     const isSelf = req.user?.id === userId;
@@ -4832,6 +4832,7 @@ app.put('/api/users/:id', authMiddleware, requireRole('admin'), async (req: Auth
     if (name) { updates.push(`name = $${paramIdx++}`); params.push(name); }
     if (email && isAdmin) { updates.push(`email = $${paramIdx++}`); params.push(email); }
     if (role && isAdmin) { updates.push(`role = $${paramIdx++}`); params.push(role); }
+    if (finance_access !== undefined) { updates.push(`finance_access = $${paramIdx++}`); params.push(finance_access); }
     if (department !== undefined) { updates.push(`department = $${paramIdx++}`); params.push(department); }
     if (is_active !== undefined && isAdmin) { updates.push(`is_active = $${paramIdx++}`); params.push(is_active); }
 
@@ -4842,8 +4843,8 @@ app.put('/api/users/:id', authMiddleware, requireRole('admin'), async (req: Auth
     params.push(userId);
     await run(`UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIdx}`, params);
 
-    await logAudit(req.user?.id, req.user?.email, 'update', 'user', userId, { name, email, role, department, is_active });
-    const updated = await queryOne('SELECT id, email, name, role, department, is_active, created_at, last_login FROM users WHERE id = $1', [userId]);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'user', userId, { name, email, role, department, is_active, finance_access });
+    const updated = await queryOne('SELECT id, email, name, role, department, finance_access, is_active, created_at, last_login FROM users WHERE id = $1', [userId]);
     res.json(updated);
   } catch (err: any) {
     if (err.message?.includes('unique') || err.message?.includes('duplicate')) {
@@ -5179,7 +5180,8 @@ app.post('/api/import/:entity', requirePermission('staff'), async (req: AuthRequ
 app.get('/api/landlords/:landlordId/properties', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const properties = await query(`
-      SELECT p.*, pl.id as link_id, pl.is_primary, pl.ownership_percentage, pl.ownership_entity_type
+      SELECT p.*, pl.id as link_id, pl.is_primary, pl.ownership_percentage, pl.ownership_entity_type,
+        (SELECT string_agg(t.name, ' & ' ORDER BY t.id) FROM tenants t WHERE t.property_id=p.id AND t.status='active') AS tenant_names
       FROM properties p
       INNER JOIN property_landlords pl ON p.id = pl.property_id
       WHERE pl.landlord_id = $1
@@ -5259,6 +5261,7 @@ app.put('/api/property-expenses/:id', authMiddleware, requirePermission('staff')
     const validDate=(v:unknown)=>!v||(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v);
     if(!['expense_date','coverage_start','coverage_end'].every(k=>validDate(req.body[k]))||(req.body.coverage_start&&req.body.coverage_end&&req.body.coverage_end<req.body.coverage_start))return res.status(400).json({error:'Choose valid expense and coverage dates'});
     if(req.body.recurrence_frequency&&!['monthly','quarterly','six_monthly','annually'].includes(req.body.recurrence_frequency))return res.status(400).json({error:'Choose monthly, quarterly, six-monthly or annual costs'});
+    if(await queryOne('SELECT id FROM bank_feed_allocations WHERE expense_id=$1 LIMIT 1',[req.params.id]))return res.status(409).json({error:'This expense is linked to a bank payment and must be retained unchanged.'});
     const existing=await queryOne('SELECT * FROM property_expenses WHERE id=$1',[req.params.id]);
     if(!existing)return res.status(404).json({error:'Expense not found'});
     if(existing.policy_id)return res.status(409).json({error:'This cost belongs to an insurance policy. Add a renewal in Insurance to preserve its portfolio allocation.'});
@@ -5326,6 +5329,7 @@ app.post('/api/property-expenses/:id/receipt', authMiddleware, requirePermission
 
 app.delete('/api/property-expenses/:id', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
   try {
+    if(await queryOne('SELECT id FROM bank_feed_allocations WHERE expense_id=$1 LIMIT 1',[req.params.id]))return res.status(409).json({error:'This expense is linked to a bank payment and must be retained unchanged.'});
     const existing=await queryOne('SELECT policy_id FROM property_expenses WHERE id=$1',[req.params.id]);
     if(existing?.policy_id)return res.status(409).json({error:'Insurance policy costs cannot be deleted individually. Add a renewal in Insurance.'});
     await run('DELETE FROM property_expenses WHERE id = $1', [req.params.id]);
@@ -5784,6 +5788,7 @@ app.post('/api/tenant-enquiries/:id/request-balance/email-preview', authMiddlewa
     const details = parseAgreementDetails(agreement.agreement_details);
     let bankDetails = details.bankDetails;
     if (!bankDetails) bankDetails = bankDetailsForRoute(resolvePaymentRoute(resolveAgreementType(enquiry.landlord_type), enquiry.service_type));
+    if(enquiry.balance_payment_received) return res.status(409).json({error:"The final balance has already been received"});
     const securityDeposit = Number(enquiry.security_deposit_amount || 0);
     const monthlyRent = Number(enquiry.monthly_rent_agreed || 0);
     const holdingDeposit = Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
@@ -6089,6 +6094,7 @@ app.post('/api/tenant-enquiries/:id/request-balance', authMiddleware, requirePer
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
     const agreement = await queryOne(`SELECT id, agreement_details FROM tenancy_agreements WHERE enquiry_id = ANY($1::int[]) AND status = 'completed' ORDER BY completed_at DESC LIMIT 1`, [enquiryIds]);
     if (!agreement) return res.status(409).json({ error: 'Complete the tenancy agreement before requesting the balance' });
+    if(enquiry.balance_payment_received) return res.status(409).json({error:"The final balance has already been received"});
     const securityDeposit = Number(enquiry.security_deposit_amount || 0);
     const monthlyRent = Number(enquiry.monthly_rent_agreed || 0);
     const holdingDeposit = Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
@@ -6107,7 +6113,9 @@ app.post('/api/tenant-enquiries/:id/request-balance', authMiddleware, requirePer
       || `${String(enquiry.address || '').match(/^\s*\d+[A-Za-z]?/)?.[0]?.trim() || 'PROPERTY'} ${String(enquiry.postcode || '').replace(/\s/g, '').toUpperCase()} - ${String(enquiry.last_name_1 || 'TENANT').toUpperCase()}`;
     await run(`UPDATE tenant_enquiries SET balance_due_amount = $1, balance_payment_requested = 1,
       balance_follow_up_date = $2, updated_at = NOW() WHERE id = ANY($3::int[])`, [balance, followUpDate, enquiryIds]);
-    await insert(`INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, due_date, task_type, assigned_to)
+    const existingFollowUp = await queryOne("SELECT id FROM tasks WHERE entity_type='tenant_enquiry' AND entity_id=$1 AND task_type='follow_up' AND title LIKE 'Chase final tenancy balance%' AND status<>'completed' LIMIT 1",[enquiryId]);
+    if(existingFollowUp) await run('UPDATE tasks SET due_date=$1,updated_at=NOW() WHERE id=$2',[followUpDate,existingFollowUp.id]);
+    else await insert(`INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, due_date, task_type, assigned_to)
       VALUES ($1,$2,'pending','high','tenant_enquiry',$3,$4,'follow_up',$5)`, [
       `Chase final tenancy balance for ${enquiry.first_name_1} ${enquiry.last_name_1}`,
       `Follow up the outstanding final balance of £${balance.toLocaleString('en-GB', { minimumFractionDigits: 2 })} for ${normalizePropertyAddress(enquiry.address, enquiry.postcode)}.`,
@@ -7000,93 +7008,11 @@ function bankFeedFrontendUrl(result: 'connected' | 'error'): string {
   return `${base}/financials?bank_feed=${result}`;
 }
 
-async function applyBankFeedMatch(feedId: number, transaction: BankTransaction, rentCandidates: RentCandidate[], depositCandidates: DepositCandidate[], propertyCandidates: PropertyCandidate[]) {
-  const rent = matchRent(transaction, rentCandidates);
-  const deposit = rent ? null : matchDeposit(transaction, depositCandidates);
-  const expense = rent || deposit ? null : matchExpense(transaction, propertyCandidates);
-  if (!rent && !deposit && !expense) return;
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    if (rent) {
-      const dueDate = dueDateForPayment(rent.tenancyStartDate, transaction.timestamp);
-      const existing = await client.query(
-        'SELECT id, amount_due, COALESCE(amount_paid, 0) AS amount_paid FROM rent_payments WHERE tenant_id = $1 AND due_date = $2 LIMIT 1',
-        [rent.tenantId, dueDate],
-      );
-      let rentPaymentId: number;
-      if (existing.rows[0]) {
-        rentPaymentId = existing.rows[0].id;
-        const amountPaid = Number(existing.rows[0].amount_paid) + Number(transaction.amount);
-        const status = amountPaid >= Number(existing.rows[0].amount_due) ? 'paid' : 'partial';
-        await client.query(
-          "UPDATE rent_payments SET amount_paid=$1, payment_date=$2, status=$3, notes=COALESCE(notes || E'\\n', '') || $4 WHERE id=$5",
-          [amountPaid, transaction.timestamp.slice(0, 10), status, 'Imported from Barclays bank feed', rentPaymentId],
-        );
-      } else {
-        const inserted = await client.query(
-          'INSERT INTO rent_payments (property_id, tenant_id, due_date, amount_due, amount_paid, payment_date, status, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
-          [rent.propertyId, rent.tenantId, dueDate, rent.rentAmount, transaction.amount, transaction.timestamp.slice(0, 10), transaction.amount >= rent.rentAmount ? 'paid' : 'partial', 'Imported from Barclays bank feed'],
-        );
-        rentPaymentId = inserted.rows[0].id;
-      }
-      if (rent.tenancyId) {
-        await client.query(
-          'INSERT INTO transactions (tenancy_id, type, amount, description, date) VALUES ($1,$2,$3,$4,$5)',
-          [rent.tenancyId, 'payment', transaction.amount, transaction.description || 'Barclays rent payment', transaction.timestamp.slice(0, 10)],
-        );
-      }
-      await client.query(
-        "UPDATE bank_feed_transactions SET property_id=$1, tenant_id=$2, rent_payment_id=$3, match_status='matched_rent' WHERE id=$4",
-        [rent.propertyId, rent.tenantId, rentPaymentId, feedId],
-      );
-    } else if (deposit) {
-      if (deposit.enquiryId) {
-        await client.query(
-          'UPDATE tenant_enquiries SET holding_deposit_received=1, holding_deposit_received_date=$1, holding_deposit_received_amount=$2, updated_at=NOW() WHERE id=$3',
-          [transaction.timestamp.slice(0, 10), transaction.amount, deposit.enquiryId],
-        );
-      } else if (deposit.tenantId) {
-        await client.query(
-          'UPDATE tenants SET holding_deposit_received=1, holding_deposit_date=$1, updated_at=NOW() WHERE id=$2',
-          [transaction.timestamp.slice(0, 10), deposit.tenantId],
-        );
-      }
-      if (deposit.tenancyId) {
-        await client.query(
-          'INSERT INTO transactions (tenancy_id, type, amount, description, date) VALUES ($1,$2,$3,$4,$5)',
-          [deposit.tenancyId, 'deposit', transaction.amount, transaction.description || 'Barclays holding deposit', transaction.timestamp.slice(0, 10)],
-        );
-      }
-      await client.query(
-        "UPDATE bank_feed_transactions SET property_id=$1, tenant_id=$2, enquiry_id=$3, match_status='matched_deposit' WHERE id=$4",
-        [deposit.propertyId || null, deposit.tenantId || null, deposit.enquiryId || null, feedId],
-      );
-    } else if (expense) {
-      const inserted = await client.query(
-        'INSERT INTO property_expenses (property_id, description, amount, category, expense_date) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-        [expense.propertyId, transaction.description || transaction.merchant_name || 'Barclays bank transaction', Math.abs(Number(transaction.amount)), 'bank_feed', transaction.timestamp.slice(0, 10)],
-      );
-      await client.query(
-        "UPDATE bank_feed_transactions SET property_id=$1, expense_id=$2, match_status='matched_expense' WHERE id=$3",
-        [expense.propertyId, inserted.rows[0].id, feedId],
-      );
-    }
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 app.get('/api/bank-feed/status', authMiddleware, async (_req, res) => {
   try {
     const connection = await queryOne(`
       SELECT id, provider, status, provider_name, last_synced_at, last_error, created_at
-      FROM bank_feed_connections WHERE provider='truelayer' ORDER BY created_at DESC LIMIT 1
+      FROM bank_feed_connections WHERE status='connected' ORDER BY created_at DESC LIMIT 1
     `);
     const totals = await queryOne(`
       SELECT COUNT(*)::INTEGER AS total,
@@ -7094,7 +7020,7 @@ app.get('/api/bank-feed/status', authMiddleware, async (_req, res) => {
         COUNT(*) FILTER (WHERE match_status = 'matched_deposit')::INTEGER AS deposit_matches,
         COUNT(*) FILTER (WHERE match_status = 'matched_expense')::INTEGER AS expense_matches,
         COUNT(*) FILTER (WHERE match_status = 'unmatched')::INTEGER AS unmatched
-      FROM bank_feed_transactions
+      FROM bank_feed_transactions WHERE booked_at >= CURRENT_DATE - 29
     `);
     res.json({ configured: Boolean(bankFeedConfig()), connection, totals });
   } catch (error) {
@@ -7158,30 +7084,8 @@ app.post('/api/bank-feed/sync', authMiddleware, requirePermission('manager'), as
       await run('UPDATE bank_feed_connections SET refresh_token_encrypted=$1, token_expires_at=NOW() + ($2 || \' seconds\')::INTERVAL, updated_at=NOW() WHERE id=$3', [encryptToken(refreshed.refresh_token), refreshed.expires_in || 3600, connection.id]);
     }
     const accounts = await fetchAccounts(config, refreshed.access_token);
-    const rentCandidates = await query(`
-      SELECT t.id AS "tenantId", p.id AS "propertyId", tn.id AS "tenancyId", t.name AS "tenantName",
-        p.address AS "propertyAddress", p.postcode, COALESCE(t.monthly_rent, tn.rent_amount, p.rent_amount) AS "rentAmount",
-        COALESCE(tn.start_date, t.tenancy_start_date) AS "tenancyStartDate"
-      FROM tenants t JOIN properties p ON p.id=t.property_id
-      LEFT JOIN LATERAL (SELECT * FROM tenancies x WHERE x.tenant_id=t.id AND x.status='active' ORDER BY x.start_date DESC LIMIT 1) tn ON TRUE
-      WHERE COALESCE(t.status, 'active') <> 'inactive'
-    `) as RentCandidate[];
-    const propertyCandidates = await query('SELECT id AS "propertyId", address, postcode FROM properties') as PropertyCandidate[];
-    const depositCandidates = await query(`
-      SELECT t.id AS "tenantId", NULL::INTEGER AS "enquiryId", t.property_id AS "propertyId", tn.id AS "tenancyId",
-        t.name, COALESCE(t.holding_deposit_amount, 0)::FLOAT AS amount
-      FROM tenants t
-      LEFT JOIN LATERAL (SELECT * FROM tenancies x WHERE x.tenant_id=t.id AND x.status='active' ORDER BY x.start_date DESC LIMIT 1) tn ON TRUE
-      WHERE COALESCE(t.status, 'active') <> 'inactive' AND COALESCE(t.holding_deposit_received, 0)=0 AND COALESCE(t.holding_deposit_amount, 0)>0
-      UNION ALL
-      SELECT NULL::INTEGER AS "tenantId", te.id AS "enquiryId", te.linked_property_id AS "propertyId", NULL::INTEGER AS "tenancyId",
-        TRIM(te.first_name_1 || ' ' || te.last_name_1) AS name, COALESCE(te.holding_deposit_amount, 0)::FLOAT AS amount
-      FROM tenant_enquiries te
-      WHERE COALESCE(te.holding_deposit_received, 0)=0 AND COALESCE(te.holding_deposit_amount, 0)>0
-    `) as DepositCandidate[];
     const to = new Date().toISOString().slice(0, 10);
-    const fromDate = connection.last_synced_at ? new Date(connection.last_synced_at) : new Date(Date.now() - 90 * 86400000);
-    fromDate.setUTCDate(fromDate.getUTCDate() - 7);
+    const fromDate = new Date(Date.now() - 29 * 86400000);
     const from = fromDate.toISOString().slice(0, 10);
     let imported = 0;
     let matched = 0;
@@ -7198,16 +7102,6 @@ app.post('/api/bank-feed/sync', authMiddleware, requirePermission('manager'), as
         if (!inserted) continue;
         imported++;
       }
-    }
-    const unmatchedRows = await query(`
-      SELECT id, external_id AS transaction_id, booked_at AS timestamp, description, amount::FLOAT,
-        currency, transaction_type, transaction_category, merchant_name
-      FROM bank_feed_transactions WHERE match_status='unmatched' AND connection_id IN (SELECT id FROM bank_feed_connections WHERE provider='truelayer')
-    `);
-    for (const transaction of unmatchedRows as Array<BankTransaction & { id: number }>) {
-      await applyBankFeedMatch(transaction.id, transaction, rentCandidates, depositCandidates, propertyCandidates);
-      const matchedRow = await queryOne('SELECT match_status FROM bank_feed_transactions WHERE id=$1', [transaction.id]);
-      if (matchedRow?.match_status !== 'unmatched') matched++;
     }
     await run("UPDATE bank_feed_connections SET provider_name=$1, last_synced_at=NOW(), last_error=NULL, updated_at=NOW() WHERE id=$2", [accounts.results?.[0]?.provider?.display_name || 'Barclays', connection.id]);
     await logAudit(req.user?.id, req.user?.email, 'update', 'bank_feed_connection', connection.id, { imported, matched });
@@ -7227,10 +7121,12 @@ app.get('/api/bank-feed/transactions', authMiddleware, async (req, res) => {
     const rows = await query(`
       SELECT b.id, b.booked_at, b.description, b.amount, b.currency, b.transaction_type,
         b.transaction_category, b.merchant_name, b.match_status, p.address AS property_address,
+        (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount)) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id) AS allocations,
         COALESCE(t.name, TRIM(te.first_name_1 || ' ' || te.last_name_1)) AS tenant_name
       FROM bank_feed_transactions b
       LEFT JOIN properties p ON p.id=b.property_id LEFT JOIN tenants t ON t.id=b.tenant_id
       LEFT JOIN tenant_enquiries te ON te.id=b.enquiry_id
+      WHERE b.booked_at >= (NOW() AT TIME ZONE 'Europe/London')::date - 29
       ORDER BY b.booked_at DESC, b.id DESC LIMIT $1 OFFSET $2
     `, [limit, offset]);
     res.json(rows);

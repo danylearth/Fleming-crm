@@ -1,3 +1,4 @@
+import {runFinanceSchedule} from './finance-scheduler';
 import { syncTenantLifecycle } from './tenant-lifecycle-db';
 import { query, queryOne, run, insert } from './db-pg';
 
@@ -287,6 +288,9 @@ async function runAllChecks() {
 }
 
 export function startScheduler() {
+  const financeCheck=()=>runFinanceSchedule().catch(error=>console.error('[Finance scheduler]',error));
+  void financeCheck();
+  setInterval(financeCheck,60_000);
   // Run immediately on startup
   console.log('[Scheduler] Running initial compliance checks...');
   runAllChecks().catch(err => {

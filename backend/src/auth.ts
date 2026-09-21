@@ -14,6 +14,8 @@ export interface AuthRequest extends Request {
     email: string;
     role: string;
     name: string;
+    department?: string;
+    finance_access?: boolean;
     last_login?: string;
     avatar_url?: string;
     accent_color?: string;
@@ -43,7 +45,7 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
     // Revocation: deactivating a user or changing their password invalidates
     // every token issued before that moment
     const user = await queryOne(
-      'SELECT is_active, last_password_change, role, name, email, last_login, avatar_url, accent_color, appearance FROM users WHERE id = $1',
+      'SELECT is_active, last_password_change, role, name, email, department, finance_access, last_login, avatar_url, accent_color, appearance FROM users WHERE id = $1',
       [decoded.id]
     );
     if (!user || !user.is_active) {
@@ -54,7 +56,7 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
       return res.status(401).json({ error: 'Invalid token' });
     }
     // Role changes take effect on the next request, not the next login
-    req.user = { ...decoded, role: user.role, name: user.name, email: user.email, last_login: user.last_login, avatar_url: user.avatar_url, accent_color: user.accent_color, appearance: user.appearance };
+    req.user = { ...decoded, department: user.department, finance_access:user.finance_access, role: user.role, name: user.name, email: user.email, last_login: user.last_login, avatar_url: user.avatar_url, accent_color: user.accent_color, appearance: user.appearance };
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid token' });
@@ -90,4 +92,13 @@ export function requirePermission(minRole: 'viewer' | 'staff' | 'manager' | 'adm
     }
     next();
   };
+}
+
+export function canAccessFinance(user?: {role?:string;department?:string;finance_access?:boolean}): boolean {
+  return Boolean(user && (user.role==='admin' || user.finance_access===true || ['accounts','administration'].includes(String(user.department || '').trim().toLowerCase())));
+}
+export function requireFinance(req:AuthRequest,res:Response,next:NextFunction) {
+  if(!req.user)return res.status(401).json({error:'Not authenticated'});
+  if(!canAccessFinance(req.user))return res.status(403).json({error:'Financial access is restricted to authorised accounts staff'});
+  next();
 }

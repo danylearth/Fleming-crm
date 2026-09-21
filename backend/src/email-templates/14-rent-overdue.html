@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta http-equiv="X-UA-Compatible" content="IE=edge" />
 <meta name="x-apple-disable-message-reformatting" />
-<title>Your scheduled tenancy end date</title>
+<title>Your rent payment is now overdue</title>
 <!--[if mso]>
 <xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>
 <![endif]-->
@@ -21,7 +21,7 @@ a:hover { color:#27083D; }
 </head>
 <body>
 <div style="margin:0; padding:0; background:#EEEEEE;">
-<span style="display:none; font-size:1px; color:#EEEEEE; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden;">Your tenancy end date is scheduled. Please confirm it is correct so we can arrange your check out.</span>
+<span style="display:none; font-size:1px; color:#EEEEEE; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden;">Your rent payment is now overdue. Please contact our office urgently if you are having any difficulty paying.</span>
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#EEEEEE; width:100%;">
 <tr><td align="center" style="padding:24px 12px 40px 12px;">
 
@@ -31,7 +31,7 @@ a:hover { color:#27083D; }
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
 <tr>
 <td align="left" valign="middle" width="180" style="width:180px;"><img src="assets/fleming-logo-white.png" width="160" height="57" alt="Fleming Lettings" style="display:block; border:0; outline:none; text-decoration:none; width:160px; height:57px;" /></td>
-<td align="right" valign="middle" style="font-family:Helvetica,Arial,sans-serif; font-size:20px; line-height:26px; mso-line-height-rule:exactly; font-weight:bold; color:#DC006D;">Schedule tenancy end</td>
+<td align="right" valign="middle" style="font-family:Helvetica,Arial,sans-serif; font-size:20px; line-height:26px; mso-line-height-rule:exactly; font-weight:bold; color:#DC006D;">Rent overdue</td>
 </tr>
 </table>
 </td></tr>
@@ -43,32 +43,46 @@ a:hover { color:#27083D; }
 </td></tr>
 
 <tr><td style="padding:16px 40px 0 40px; font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; mso-line-height-rule:exactly; color:#1E1E1E;" class="sp">
-Thank you for letting us know that you will be leaving {{PROPERTY_ADDRESS}}. We have scheduled your tenancy end date below.
+Our records show that your rent payment has not been received and is now overdue. The details are below.
 </td></tr>
 
 <tr><td style="padding:28px 40px 0 40px;" class="sp">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%; background:#563F6E;" bgcolor="#563F6E">
 <tr><td style="padding:22px 26px 24px 26px;">
-<div style="font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height:20px; mso-line-height-rule:exactly; color:#EEC9DF;">Your scheduled tenancy end date</div>
-<div style="font-family:Helvetica,Arial,sans-serif; font-size:32px; line-height:40px; mso-line-height-rule:exactly; font-weight:bold; color:#ffffff; padding-top:8px;">{{END_DATE}}</div>
+<div style="font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height:20px; mso-line-height-rule:exactly; color:#EEC9DF;">Amount outstanding</div>
+<div style="font-family:Helvetica,Arial,sans-serif; font-size:32px; line-height:40px; mso-line-height-rule:exactly; font-weight:bold; color:#FF0000; padding-top:8px;">&pound;{{AMOUNT}}</div>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;">
+<tr><td style="padding-top:20px; border-top:1px solid #6E5686;">
+<div style="font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height:20px; mso-line-height-rule:exactly; color:#EEC9DF; padding-top:20px;">Property</div>
+<div style="font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:24px; mso-line-height-rule:exactly; font-weight:bold; color:#ffffff; padding-top:4px;">{{PROPERTY_ADDRESS}}</div>
+<div style="font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height:20px; mso-line-height-rule:exactly; color:#EEC9DF; padding-top:16px;">Date due</div>
+<div style="font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:24px; mso-line-height-rule:exactly; font-weight:bold; color:#ffffff; padding-top:4px;">{{DUE_DATE}}</div>
+</td></tr>
+</table>
 </td></tr>
 </table>
 </td></tr>
 
 <tr><td style="padding:28px 40px 0 40px; font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; mso-line-height-rule:exactly; color:#1E1E1E;" class="sp">
-Please check this date carefully and confirm it is correct. Your rent is payable up to and including this date, and the property will need to be fully cleared, cleaned and ready for us to collect the keys.
+Please arrange payment of the outstanding balance as soon as possible. If payment has already been made, please let us know so we can update our records.
 </td></tr>
 
 <tr><td style="padding:16px 40px 0 40px; font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; mso-line-height-rule:exactly; color:#1E1E1E;" class="sp">
-Once confirmed, we will arrange your check out appointment and conduct our final inspection and handover.
+If you are having any difficulty making this payment, please contact our office urgently. The sooner we know, the more we can do to help, and we can talk through the options available to you.
 </td></tr>
 
-<tr><td style="padding:16px 40px 40px 40px; font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; mso-line-height-rule:exactly; color:#1E1E1E;" class="sp">
-If this date is not correct, or you need to discuss it, please contact our office on <a href="tel:01902212415" style="color:#DC006D; text-decoration:underline; white-space:nowrap;">01902 212 415</a>.
+<tr><td style="padding:24px 40px 0 40px;" class="sp">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr><td bgcolor="#DC006D" style="background:#DC006D; border-radius:2px;">
+<a href="mailto:enquiries@fleminglettings.co.uk?subject=Overdue%20rent%20-%20{{PROPERTY_SUBJECT}}" style="display:block; font-family:Helvetica,Arial,sans-serif; font-size:15px; line-height:20px; font-weight:bold; color:#ffffff; text-decoration:none; padding:15px 32px;">Contact our office</a>
 </td></tr>
+</table>
+</td></tr>
+
+<tr><td style="padding:0 40px 40px 40px; font-size:0; line-height:0;" class="sp">&nbsp;</td></tr>
 
 <tr><td style="padding:0; font-size:0; line-height:0;">
-<img src="assets/moving-day.png" width="600" height="210" alt="Tenants in the hallway of their home on moving day" style="display:block; border:0; outline:none; text-decoration:none; width:100%; max-width:600px; height:auto;" />
+<img src="assets/support-hands.png" width="600" height="210" alt="Two people holding hands" style="display:block; border:0; outline:none; text-decoration:none; width:100%; max-width:600px; height:auto;" />
 </td></tr>
 
 <tr><td bgcolor="#DC006D" style="background:#DC006D; padding:26px 40px 28px 40px;" class="sp">

@@ -2,12 +2,12 @@ import FreeAgentConnection from '../components/FreeAgentConnection';
 import FlemoConnection from '../components/FlemoConnection';
 import PermissionRequests from '../components/ui/PermissionRequests';
 import { useTheme } from '../context/ThemeContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Avatar, SectionHeader, Select } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
-import { Camera, Lock, Palette } from 'lucide-react';
+import { Camera, Lock } from 'lucide-react';
 
 export default function Settings() {
   const { user, token, updateUser } = useAuth();
@@ -36,6 +36,17 @@ export default function Settings() {
   const [accent,setAccent]=useState(user?.accent_color || '#a32372');
   const [appearance,setAppearance]=useState({font:user?.appearance?.font || 'lufga',scale:user?.appearance?.scale || 100,background:user?.appearance?.background || 'default'});
   const [appearanceMsg,setAppearanceMsg]=useState('');
+  const savedAppearance=useRef({appearance:user?.appearance,accent:user?.accent_color});
+  useEffect(()=>{savedAppearance.current={appearance:user?.appearance,accent:user?.accent_color};},[user?.appearance,user?.accent_color]);
+  useEffect(()=>{
+    const root=document.documentElement;
+    const previous={font:root.style.getPropertyValue('--user-font'),scale:root.style.fontSize,accent:root.style.getPropertyValue('--accent-orange'),button:root.style.getPropertyValue('--btn-primary-bg')};
+    const fonts:Record<string,string>={lufga:"'Lufga', sans-serif",system:'system-ui, sans-serif',verdana:'Verdana, sans-serif',arial:'Arial, sans-serif',aptos:'Aptos, Calibri, sans-serif',times:'"Times New Roman", serif',comic:'"Comic Sans MS", cursive',georgia:'Georgia, serif',tahoma:'Tahoma, sans-serif',trebuchet:'"Trebuchet MS", sans-serif',courier:'"Courier New", monospace'};
+    root.style.setProperty('--user-font',fonts[appearance.font] || fonts.lufga);root.style.fontSize=`${appearance.scale}%`;
+    root.style.setProperty('--accent-orange',accent);root.style.setProperty('--btn-primary-bg',accent);
+    return ()=>{const saved=savedAppearance.current;root.style.setProperty('--user-font',fonts[saved.appearance?.font || 'lufga']);root.style.fontSize=`${saved.appearance?.scale || 100}%`;root.style.setProperty('--accent-orange',saved.accent || previous.accent);root.style.setProperty('--btn-primary-bg',saved.accent || previous.button);};
+  },[appearance,accent,user?.appearance,user?.accent_color]);
+
   const [appearanceBusy,setAppearanceBusy]=useState(false);
   const [loginHistory,setLoginHistory]=useState<{created_at:string}[]>([]);
   useEffect(()=>{let active=true;api.get('/api/auth/login-history').then(data=>{if(active)setLoginHistory(data);}).catch(()=>{});return()=>{active=false;};},[api]);
@@ -121,19 +132,10 @@ export default function Settings() {
 
         {/* Preferences */}
         <GlassCard className="p-6">
-          <SectionHeader title="Appearance" />
+          <div className="flex items-center justify-between gap-3 mb-4"><h2 className="text-lg font-semibold">Appearance</h2><div className="flex items-center gap-3 text-sm"><span>Dark Mode</span><button role="switch" aria-label="Dark Mode" aria-checked={theme==='dark'} onClick={toggleTheme} className={`w-12 h-7 rounded-full relative ${theme==='dark'?'bg-emerald-600':'bg-slate-400'}`}><span className={`w-5 h-5 bg-white rounded-full absolute top-1 ${theme==='dark'?'right-1':'left-1'}`} /></button></div></div>
           <p className="text-sm text-[var(--text-secondary)] mb-3">Choose your colour. This preference follows your account.</p>
           <div className="flex flex-wrap gap-3 mb-4">{[['Fleming pink','#a32372'],['Purple','#6d28d9'],['Blue','#1d4ed8'],['Teal','#0f766e'],['Forest','#166534']].map(([name,color]) => <button key={color} type="button" disabled={appearanceBusy} aria-label={name} aria-pressed={accent === color} onClick={() => setAccent(color)} className="w-11 h-11 rounded-full border-4 border-white/50 text-white" style={{background:color}}>{accent === color ? '✓' : ''}</button>)}</div>
-          <div className="grid sm:grid-cols-2 gap-4 mb-4"><Select label="Font" value={appearance.font} onChange={font=>setAppearance(a=>({...a,font}))} options={[{value:'lufga',label:'Fleming Lufga'},{value:'system',label:'System Font'},{value:'verdana',label:'Verdana'},{value:'arial',label:'Arial'},{value:'aptos',label:'Aptos'},{value:'times',label:'Times New Roman'},{value:'comic',label:'Comic Sans MS'}]}/><Select label="Text Size" value={String(appearance.scale)} onChange={scale=>setAppearance(a=>({...a,scale:Number(scale)}))} options={[100,112.5,125,150].map(v=>({value:String(v),label:`${v}%`}))}/><Select label="Light Mode Background" value={appearance.background} onChange={background=>setAppearance(a=>({...a,background}))} options={['default','cream','blue','green'].map(v=>({value:v,label:v[0].toUpperCase()+v.slice(1)}))}/></div><Button disabled={appearanceBusy} onClick={()=>void saveAppearance()}>{appearanceBusy?'Saving…':'Save Appearance'}</Button><p role="status" className="mt-3 text-sm">{appearanceMsg}</p>
-          <div className="space-y-4 text-sm text-[var(--text-secondary)]">
-            <div className="flex items-center justify-between py-2">
-              <div className="flex items-center gap-3">
-                <Palette size={16} className="text-[var(--text-muted)]" />
-                <span>Dark Mode</span>
-              </div>
-              <button role="switch" aria-label="Dark Mode" aria-checked={theme==='dark'} onClick={toggleTheme} className={`w-12 h-7 rounded-full relative ${theme==='dark'?'bg-emerald-600':'bg-slate-400'}`}><span className={`w-5 h-5 bg-white rounded-full absolute top-1 ${theme==='dark'?'right-1':'left-1'}`} /></button>
-            </div>
-          </div>
+          <div className="grid sm:grid-cols-2 gap-4 mb-4"><Select label="Font" value={appearance.font} onChange={font=>setAppearance(a=>({...a,font}))} options={[{value:'lufga',label:'Fleming Lufga'},{value:'system',label:'System Font'},{value:'verdana',label:'Verdana'},{value:'arial',label:'Arial'},{value:'aptos',label:'Aptos'},{value:'times',label:'Times New Roman'},{value:'comic',label:'Comic Sans MS'},{value:'georgia',label:'Georgia'},{value:'tahoma',label:'Tahoma'},{value:'trebuchet',label:'Trebuchet MS'},{value:'courier',label:'Courier New'}]}/><Select label="Text Size" value={String(appearance.scale)} onChange={scale=>setAppearance(a=>({...a,scale:Number(scale)}))} options={[100,112.5,125,150].map(v=>({value:String(v),label:`${v}%`}))}/></div><Button disabled={appearanceBusy} onClick={()=>void saveAppearance()}>{appearanceBusy?'Saving…':'Save Appearance'}</Button><p role="status" className="mt-3 text-sm">{appearanceMsg}</p>
         </GlassCard>
         </div>
       </div>

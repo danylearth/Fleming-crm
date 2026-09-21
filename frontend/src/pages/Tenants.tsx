@@ -172,7 +172,6 @@ export default function Tenants() {
     return days > 0 && days <= 60;
   }).length;
 
-  const missingNok = tenants.filter(t => !t.nok_name && (t.status || 'active') === 'active').length;
 
   const handleSave = async () => {
     if (!form.name.trim()) return;
@@ -232,12 +231,11 @@ export default function Tenants() {
     <Layout title="Tenants" breadcrumb={[{ label: 'Tenants' }]}>
       <div className="p-4 md:p-8 space-y-6">
         {/* Stats row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           {[
             { label: 'Total Tenants', value: tenants.length, accent: true },
             { label: 'Active', value: statusCounts['active'] || 0 },
             { label: 'Ending Soon', value: endingSoon, warn: endingSoon > 0 },
-            { label: 'Missing NOK', value: missingNok, warn: missingNok > 0 },
           ].map(s => (
             <GlassCard key={s.label} className="p-4">
               <p className="text-xs text-[var(--text-muted)]">{s.label}</p>

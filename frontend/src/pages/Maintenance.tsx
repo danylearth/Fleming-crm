@@ -60,7 +60,7 @@ export default function Maintenance() {
   const [owner,setOwner]=useState('all');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [expanded, setExpanded] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', priority: 'medium', property_id: '', assigned_to:'',follow_up_date:'',due_date:'' });
@@ -109,7 +109,7 @@ export default function Maintenance() {
   const portfolioFiltered = requestId ? items.filter(i=>i.id===Number(requestId)) : filterByPortfolio(items, portfolioFilter);
   const filtered = portfolioFiltered.filter(i => {
     if(owner!=='all' && String(i.assigned_to||'unassigned')!==owner)return false;
-    if (statusFilter !== 'all' && i.status !== statusFilter) return false;
+    if (statusFilter === 'active' ? ['completed','closed','cancelled'].includes(i.status) : statusFilter !== 'all' && i.status !== statusFilter) return false;
     if (search && !i.title.toLowerCase().includes(search.toLowerCase()) && !i.address?.toLowerCase().includes(search.toLowerCase())) return false;
     if (propertyFilter && i.property_id !== propertyFilter) return false;
     if (tenantFilter) {
@@ -215,7 +215,7 @@ export default function Maintenance() {
 
         {/* Dropdown filters + Status filter */}
         <div className="flex flex-wrap items-center gap-3">
-          <Select label="Assigned To" value={owner} onChange={setOwner} options={[{value:'all',label:'All'},{value:'unassigned',label:'Unassigned'},...members.map(m=>({value:String(m.id),label:m.name}))]}/>
+          <Select inlineLabel className="w-64" label="Assigned To" value={owner} onChange={setOwner} options={[{value:'all',label:'All'},{value:'unassigned',label:'Unassigned'},...members.map(m=>({value:String(m.id),label:m.name}))]}/>
           <SearchDropdown
             icon={<Building2 size={14} />}
             placeholder="Property"
@@ -244,6 +244,7 @@ export default function Maintenance() {
           <div className="h-5 w-px bg-[var(--border-subtle)] hidden sm:block" />
 
           {[
+            { key: 'active', label: 'Open / In Progress' },
             { key: 'all', label: `All (${items.length})` },
             ...STATUS_MAP.map(s => ({ key: s.key, label: `${s.label} (${statusCounts[s.key] || 0})` })),
           ].map(f => (

@@ -14,7 +14,7 @@ interface User {
   name: string;
   email: string;
   role: string;
-  department?: string;
+  department?: string; finance_access?:boolean;
   is_active: number;
   created_at: string;
   last_login?: string;
@@ -30,7 +30,7 @@ export default function Users() {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [form, setForm] = useState({ name: '', email: '', role: 'staff', department: '' });
+  const [form, setForm] = useState({ name: '', email: '', role: 'staff', department: '', finance_access:false });
   const [saving, setSaving] = useState(false);
   const [tempPassword, setTempPassword] = useState('');
   const [error, setError] = useState('');
@@ -68,7 +68,7 @@ export default function Users() {
 
   const handleOpenCreate = () => {
     setEditUser(null);
-    setForm({ name: '', email: '', role: 'staff', department: '' });
+    setForm({ name: '', email: '', role: 'staff', department: '', finance_access:false });
     setError('');
     setTempPassword('');
     setShowModal(true);
@@ -76,7 +76,7 @@ export default function Users() {
 
   const handleOpenEdit = (user: User) => {
     setEditUser(user);
-    setForm({ name: user.name, email: user.email, role: user.role, department: user.department || '' });
+    setForm({ name: user.name, email: user.email, role: user.role, department: user.department || '', finance_access: user.finance_access===true });
     setError('');
     setTempPassword('');
     setShowModal(true);
@@ -397,6 +397,7 @@ export default function Users() {
                     { value: 'viewer', label: 'Viewer - Read-only access' }
                   ]}
                 />
+                <label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.finance_access} onChange={e=>setForm({...form,finance_access:e.target.checked})}/>Allow access to Financials</label>
                 <Input label="Department (optional)" value={form.department} onChange={(v) => setForm({ ...form, department: v })} placeholder="Operations" />
 
                 {error && (

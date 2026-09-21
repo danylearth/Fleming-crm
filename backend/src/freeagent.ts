@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import type {Express} from 'express';
 import pool, {queryOne} from './db-pg';
-import {authMiddleware, requirePermission, type AuthRequest} from './auth';
+import {authMiddleware, requirePermission, requireFinance, type AuthRequest} from './auth';
 import {encryptToken, decryptToken} from './bank-feed';
 
 const base = 'https://api.freeagent.com/v2';
@@ -64,18 +64,22 @@ export function registerFreeAgentRoutes(app:Express) {
       await queryOne("UPDATE bank_feed_connections SET status='error',last_error='Authorisation failed. Reconnect FreeAgent.' WHERE id=$1 RETURNING id",[row.id]);res.redirect(303,office('error'));
     }
   });
-  app.post('/api/freeagent/sync',authMiddleware,requirePermission('admin'),async(req:AuthRequest,res)=>{
+  app.post('/api/freeagent/sync',authMiddleware,requireFinance,requirePermission('staff'),async(req:AuthRequest,res)=>{
+    try{res.json(await syncFreeAgent(req.user));}catch(error){res.status(502).json({error:error instanceof Error?error.message:'FreeAgent sync failed'});}
+  });
+}
+export async function syncFreeAgent(actor?:{id:number;email:string}) {
     const client=await pool.connect();let locked=false;let connection:any;
     try {
       locked=(await client.query("SELECT pg_try_advisory_lock(hashtext('freeagent-sync')) AS locked")).rows[0].locked;
-      if(!locked)return res.status(409).json({error:'FreeAgent is already syncing'});
+      if(!locked)throw new Error('FreeAgent is already syncing');
       connection=(await client.query("SELECT * FROM bank_feed_connections WHERE provider='freeagent' AND status='connected' ORDER BY id DESC LIMIT 1")).rows[0];
-      if(!connection)return res.status(409).json({error:'Connect FreeAgent first'});
+      if(!connection)throw new Error('Connect FreeAgent first');
       const token=await tokenRequest({grant_type:'refresh_token',refresh_token:decryptToken(connection.refresh_token_encrypted)});
       // Persist rotated token immediately, even if a later data request fails.
       if(token.refresh_token)await client.query('UPDATE bank_feed_connections SET refresh_token_encrypted=$1,updated_at=NOW() WHERE id=$2',[encryptToken(token.refresh_token),connection.id]);
       const accounts=await freeAgentPages<{url:string;currency:string}>(`${base}/bank_accounts?per_page=100`,'bank_accounts',token.access_token);
-      const from=new Date(connection.last_synced_at || Date.now()-90*86400000);from.setUTCDate(from.getUTCDate()-7);
+      const from=new Date(Date.now()-29*86400000);
       let imported=0;await client.query('BEGIN');
       for(const account of accounts) {
         const params=new URLSearchParams({bank_account:account.url,from_date:from.toISOString().slice(0,10),to_date:new Date().toISOString().slice(0,10),per_page:'100'});
@@ -87,12 +91,11 @@ export function registerFreeAgentRoutes(app:Express) {
         }
       }
       await client.query('UPDATE bank_feed_connections SET last_synced_at=NOW(),last_error=NULL,updated_at=NOW() WHERE id=$1',[connection.id]);
-      await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'sync','bank_feed_connection',$3,$4)",[req.user.id,req.user.email,connection.id,JSON.stringify({provider:'freeagent',imported})]);
-      await client.query('COMMIT');res.json({imported,message:'Transactions imported into Bank Feed for review. Rent and expenses have not been posted automatically.'});
+      await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'sync','bank_feed_connection',$3,$4)",[actor?.id || null,actor?.email || 'system@scheduler',connection.id,JSON.stringify({provider:'freeagent',imported})]);
+      await client.query('COMMIT');return {imported,message:'Transactions imported into Bank Feed for review.'};
     }catch(error){
       await client.query('ROLLBACK');const message=error instanceof Error?error.message:'FreeAgent sync failed';
       if(connection)await client.query('UPDATE bank_feed_connections SET last_error=$1 WHERE id=$2',[message,connection.id]);
-      res.status(502).json({error:message});
+      throw new Error(message);
     }finally{if(locked)await client.query("SELECT pg_advisory_unlock(hashtext('freeagent-sync'))");client.release();}
-  });
 }

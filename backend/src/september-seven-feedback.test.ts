@@ -93,7 +93,7 @@ describe('7 September CRM feedback', () => {
   it('sends exact agreement and final-balance SMS copy with a mandatory follow-up task', () => {
     expect(wizard).toContain('Hi there {{first_name}}, your tenancy agreement is ready to view and for your digital signature.');
     expect(wizard).toContain('Hi {{first_name}}, thank you for signing your tenancy agreement and completing our application and screening process.');
-    expect(wizard).toContain('Follow-up date *');
+    expect(wizard).toContain('Follow-up Date *');
     expect(backend).toContain('Chase final tenancy balance for');
     expect(backend).toContain('balance_follow_up_date = $2');
   });

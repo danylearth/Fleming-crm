@@ -1,3 +1,4 @@
+import {usePermissions} from '../hooks/usePermissions';
 import FeedbackPanel from './FeedbackPanel';
 import { useActivityTracking } from '../hooks/useActivityTracking';
 import { useEffect, useState } from 'react';
@@ -42,6 +43,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, title, hideTopBar }: LayoutProps) {
+  const {canAccessFinance}=usePermissions();
   useActivityTracking();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -103,7 +105,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
         {/* Nav */}
         <nav className="flex-1 py-3 px-2 space-y-1.5 overflow-y-auto">
           {navItems
-            .filter(item => !item.roles || (user?.role && item.roles.includes(user.role)))
+            .filter(item => (item.to!=='/financials'||canAccessFinance()) && (!item.roles || (user?.role && item.roles.includes(user.role))))
             .map((item, index) => (
               <NavLink
                 key={item.to}

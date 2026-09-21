@@ -13,6 +13,54 @@ let queue: Promise<unknown> = Promise.resolve();
 let pending = 0;
 const xmlText = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;').replace(/\n/g, '</w:t><w:br/><w:t xml:space="preserve">');
 
+export function formalAgreementDate(d:Date):string {
+  const day=Number(new Intl.DateTimeFormat('en-GB',{day:'numeric',timeZone:'Europe/London'}).format(d));
+  const suffix=day%100>=11&&day%100<=13?'th':({1:'st',2:'nd',3:'rd'} as Record<number,string>)[day%10]||'th';
+  return `${day}${suffix} ${d.toLocaleDateString('en-GB',{month:'long',year:'numeric',timeZone:'Europe/London'})}`;
+}
+
+// Layout-only changes: the contract's wording and document evidence remain intact.
+export function formatContractLayout(xml:string):string {
+  xml=xml.replace(/w:top="2160"/g,'w:top="2280"');
+  const tables:{start:number;end:number}[]=[];let depth=0;let start=0;
+  for(const tag of xml.matchAll(/<w:tbl(?=[\s>])[^>]*>|<\/w:tbl>/g)){
+    if(tag[0].startsWith('</')){if(--depth===0)tables.push({start,end:tag.index!+tag[0].length});}
+    else {if(depth++===0)start=tag.index!;}
+  }
+  let cursor=0;
+  const pieces=tables.map((range,index)=>{
+    let gap=xml.slice(cursor,range.start);cursor=range.end;
+    if(index===1||index===2)gap=gap.replace(/<w:br w:type="page"\s*\/>/g,'');
+    if(index===7)gap='';
+    let table=xml.slice(range.start,range.end);
+    if(index<5) {
+      table=table.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{
+        const text=p.replace(/<[^>]+>/g,'').trim();
+        if(!text)return '';
+        p=p.replace(/<w:pPr>/,'<w:pPr><w:keepLines/>');
+        if(/^(Tenancy Start Date|Tenancy Type|Rent|Permitted Occupiers|Shared Facilities|Utilities and Council Tax|Security Deposit|Right to Rent|Contact Details|Ending the Tenancy|Unfitness and Disrepair|Gas and Electrical Safety|Pets|Section [ABC])/.test(text)&&text.length<80)p=p.replace(/<w:spacing[^>]*\/>/g,'').replace(/<w:pPr>/,'<w:pPr><w:keepNext/><w:spacing w:before="120" w:after="60"/>');
+        return p;
+      });
+      // Word requires a paragraph in every cell, including spacer cells.
+      table=table.replace(/(<w:tc(?:\s[^>]*)?>)([\s\S]*?)(<\/w:tc>)/g,(_all,start,content,end)=>start+content+(content.includes('<w:p')?'':'<w:p/>')+end);
+    }
+    if(index===4)return gap+(table.match(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g)||[]).join('');
+    if(index<4)table=table.replace(/<w:trPr>/g,'<w:trPr><w:cantSplit/>');
+    if(index===0) {
+      // The date row has two cells; narrow its first cell to bring the date alongside its label.
+      const end=table.indexOf('</w:tr>');
+      const first=table.slice(0,end).replace(/<w:tcW[^>]*\/>/,'<w:tcW w:w="2500" w:type="dxa"/>');
+      table=first+table.slice(end);
+    }
+    if(index===7) {
+      table=table.replace(/<w:trPr>/g,'<w:trPr><w:cantSplit/>').replace(/<w:trHeight[^>]*\/>/g,'<w:trHeight w:val="950" w:hRule="atLeast"/>');
+    }
+    if(index===7)return gap+'<w:p><w:pPr><w:pageBreakBefore/><w:spacing w:before="0" w:after="0"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr></w:p>'+table;
+    return gap+table;
+  });
+  return pieces.join('')+xml.slice(cursor);
+}
+
 /** Preserve the supplied contract's clauses, tables, headers and page settings. */
 export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput): Promise<Buffer> {
   if (pending >= 1) throw new Error('Other agreements are being prepared. Please try again shortly.');
@@ -22,7 +70,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
     try {
       const template = await fs.readFile(path.join(__dirname, 'agreement-assets/assured-periodic-tenancy-template.docx'));
       const zip = new PizZip(template);
-      const date = (d: Date) => d.toLocaleDateString('en-GB', { timeZone: 'Europe/London' });
+      const date = formalAgreementDate;
       const names = input.tenants.map(t => t.name).join(' and ');
       const values: Record<string, string> = {
         AGREEMENT_DATE: date(input.agreementDate), START_DATE: date(input.tenancyStartDate),
@@ -37,9 +85,9 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         DEPOSIT_CONTRIBUTOR: input.depositContributorDetails ? `Deposit contribution disclosed by the tenant(s): ${input.depositContributorDetails}` : '',
         GAS_ACKNOWLEDGEMENT: input.hasGas ? 'Gas Safety Certificate' : 'Gas Safety Certificate: not applicable (no gas connection)',
       };
-      let xml = zip.file('word/document.xml')!.asText();
+      let xml = formatContractLayout(zip.file('word/document.xml')!.asText());
       if(!input.hasGas)xml=xml.replace(/<w:tr\b[\s\S]*?<\/w:tr>/g,row=>row.includes('{{GAS_ACKNOWLEDGEMENT}}')?'':row);
-      xml=xml.replace(/<w:p\b[\s\S]*?<\/w:p>/g,paragraph=>paragraph.replace(/<[^>]+>/g,'').includes('The electronic signature certificate records each named tenant')?'':paragraph);
+      xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,paragraph=>paragraph.replace(/<[^>]+>/g,'').includes('The electronic signature certificate records each named tenant')?'':paragraph);
       xml = xml.replace(/\{\{([A-Z_]+)\}\}/g, (_match, key) => {
         if (!(key in values)) throw new Error(`Unfilled agreement field: ${key}`);
         return xmlText(values[key]);

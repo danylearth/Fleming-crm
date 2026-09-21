@@ -1367,12 +1367,12 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 <div className="rounded-lg bg-[var(--bg-subtle)] p-3"><span className="block text-[10px] text-[var(--text-muted)]">Holding deposit received</span><strong>−£{Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
                 <div className="rounded-lg bg-[#563F6E] p-3 text-white"><span className="block text-[10px] text-white/70">Remaining balance</span><strong>£{Number(enquiry.balance_due_amount || (Number(enquiry.security_deposit_amount || 0) + Number(enquiry.monthly_rent_agreed || 0) - Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0))).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
               </div>
-              {!enquiry.balance_payment_requested && <DatePicker label="Follow-up date *" value={balanceFollowUpDate} onChange={setBalanceFollowUpDate} />}
-              {!enquiry.balance_payment_requested && <DeliveryChoices email={balanceSendEmail} sms={balanceSendSms} onEmail={setBalanceSendEmail} onSms={setBalanceSendSms} previewEmail={()=>void previewBalanceEmail()} previewSms={()=>setSmsPreview(renderSmsPreview(balanceSmsMessage))}/>}
+              {!enquiry.balance_payment_received && <DatePicker label="Follow-up Date *" value={balanceFollowUpDate} onChange={setBalanceFollowUpDate} />}
+              {!enquiry.balance_payment_received && <DeliveryChoices email={balanceSendEmail} sms={balanceSendSms} onEmail={setBalanceSendEmail} onSms={setBalanceSendSms} previewEmail={()=>void previewBalanceEmail()} previewSms={()=>setSmsPreview(renderSmsPreview(balanceSmsMessage))}/>}
               {!enquiry.balance_payment_requested ? <Button variant="gradient" size="sm" onClick={requestBalance} disabled={saving || !balanceFollowUpDate}>Request Final Balance</Button>
-                : !enquiry.balance_payment_received ? <Button variant="gradient" size="sm" onClick={confirmBalance} disabled={saving}>Confirm Payment Received</Button>
+                : !enquiry.balance_payment_received ? <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={requestBalance} disabled={saving || !balanceFollowUpDate}>Follow Up</Button><Button variant="gradient" size="sm" onClick={confirmBalance} disabled={saving}>Confirm Payment Received</Button></div>
                 : <p className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle size={14} /> Final balance received{enquiry.balance_payment_received_at ? ` on ${new Date(enquiry.balance_payment_received_at).toLocaleDateString('en-GB')}` : ''}</p>}
-              {enquiry.balance_payment_requested && !enquiry.balance_payment_received && enquiry.balance_follow_up_date && <p className="text-xs text-amber-300">Follow-up scheduled for {new Date(`${enquiry.balance_follow_up_date}T00:00:00`).toLocaleDateString('en-GB')}.</p>}
+              {Boolean(enquiry.balance_payment_requested) && !enquiry.balance_payment_received && enquiry.balance_follow_up_date && <p className="text-xs text-amber-300">Follow-up scheduled for {new Date(`${enquiry.balance_follow_up_date}T00:00:00`).toLocaleDateString('en-GB')}.</p>}
               {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
             </div> : <p className="text-xs text-[var(--text-muted)]">Complete the signed agreement first.</p>}
           </StepCard>
@@ -1380,15 +1380,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           {/* Step 8: Handover */}
           <StepCard idx={7} step={steps[7]} {...stepCardProps}>
             {allPreviousComplete(7) ? <div className="space-y-3">
-              <div className="rounded-lg p-3 border border-[var(--border-input)]">
-                {enquiry.handover_not_required ? <p className="text-sm text-emerald-500">No handover required — confirmed by office.</p> : <Button size="sm" variant="outline" disabled={saving} onClick={async()=>{
-                  if(!await confirmAction('Confirm no handover is required? Any existing handover calendar task will be completed.'))return;
-                  setSaving(true);try{await api.post(`/api/tenant-enquiries/${enquiryId}/no-handover`,{confirmed:true});await onUpdate();setActiveStep(8);}catch(error){setReviewError(error instanceof Error?error.message:'Could not save');}finally{setSaving(false);}
-                }}>No Handover Required</Button>}
-              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <DatePicker label="Handover date *" value={handoverDate} onChange={setHandoverDate} />
-                <TimePicker label="Handover time *" value={handoverTime} onChange={setHandoverTime} />
+                <DatePicker label="Handover Date *" value={handoverDate} onChange={setHandoverDate} />
+                <TimePicker label="Handover Time *" value={handoverTime} onChange={setHandoverTime} />
               </div>
               <select value={handoverWithLandlord ? '__landlord__' : handoverAssignedTo} onChange={e => { const landlord = e.target.value === '__landlord__'; setHandoverWithLandlord(landlord); setHandoverAssignedTo(landlord ? (agreementCompliance?.landlordName || 'With Landlord') : e.target.value); }} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs">
                 <option value="">Assign team member…</option>
@@ -1397,7 +1391,13 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
               </select>
               <DeliveryChoices email={handoverSendEmail} sms={handoverSendSms} onEmail={setHandoverSendEmail} onSms={setHandoverSendSms} previewEmail={()=>void previewHandoverEmail()} previewSms={()=>setSmsPreview(renderSmsPreview(handoverSmsMessage))}/>
 
-              <Button variant="gradient" size="sm" onClick={scheduleHandover} disabled={saving || !handoverDate || !handoverTime || !handoverAssignedTo}>{enquiry.handover_date ? 'Update Handover' : 'Book Appointment & Add to Calendar'}</Button>
+              <div className="flex flex-col sm:flex-row gap-3">              <div className="flex-1 [&_button]:w-full [&_button]:h-full">
+                {enquiry.handover_not_required ? <p className="text-sm text-emerald-500">No handover required — confirmed by office.</p> : <Button size="sm" variant="outline" disabled={saving} onClick={async()=>{
+                  if(!await confirmAction('Confirm no handover is required? Any existing handover calendar task will be completed.'))return;
+                  setSaving(true);try{await api.post(`/api/tenant-enquiries/${enquiryId}/no-handover`,{confirmed:true});await onUpdate();setActiveStep(8);}catch(error){setReviewError(error instanceof Error?error.message:'Could not save');}finally{setSaving(false);}
+                }}>No Handover Required</Button>}
+              </div>
+<Button className="flex-1" variant="gradient" size="sm" onClick={scheduleHandover} disabled={saving || !handoverDate || !handoverTime || !handoverAssignedTo}>{enquiry.handover_date ? 'Update Handover' : 'Book Appointment & Add to Calendar'}</Button></div>
               {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
             </div> : <p className="text-xs text-[var(--text-muted)]">Confirm the final balance first.</p>}
           </StepCard>

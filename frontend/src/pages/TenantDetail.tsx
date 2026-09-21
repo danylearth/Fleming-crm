@@ -1,3 +1,4 @@
+import { usePermissions } from '../hooks/usePermissions';
 import DeleteNoteButton from '../components/DeleteNoteButton';
 import AdditionalGuarantors, {type AdditionalGuarantor} from '../components/AdditionalGuarantors';
 import {formatPropertyAddress} from '../utils/propertyAddress';
@@ -168,6 +169,7 @@ function SectionEditButton({ editing, onEdit, onSave, onCancel, saving }: {
 
 // ==================== COMPONENT ====================
 export default function TenantDetail() {
+  const {canAccessFinance}=usePermissions();
 
   const navigate = useNavigate();
   const api = useApi();
@@ -637,7 +639,7 @@ export default function TenantDetail() {
             </GlassCard>
 
             {/* Rent Payments */}
-            <RentPayments tenantId={tenant.id} compact />
+            {canAccessFinance() && <RentPayments tenantId={tenant.id} compact />}
 
             {/* Maintenance linked to this tenant */}
             <GlassCard className="p-6">
@@ -733,7 +735,7 @@ export default function TenantDetail() {
                     options={[{ value: '', label: 'No property linked' }, ...allProperties.map((p) => ({ value: String(p.id), label: `${p.address}, ${p.postcode}` }))]} />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <DatePicker label="Last Rent Reviewed" value={form.rent_last_reviewed} onChange={v => setForm({ ...form, rent_last_reviewed: v })} />
-                    <label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={form.guarantor_required} onChange={e => setForm({ ...form, guarantor_required: e.target.checked })} />Guarantor Required</label>
+                    <Select label="Guarantor Required" value={form.guarantor_required ? "yes" : "no"} onChange={v => setForm({ ...form, guarantor_required: v === "yes" })} options={[{value:"no",label:"No guarantor required"},{value:"yes",label:"Yes — guarantor required"}]} />
                     <DatePicker label="Tenancy Start Date" value={form.tenancy_start_date} onChange={v => setForm({ ...form, tenancy_start_date: v })} />
                     <Select label="Tenancy Type" value={form.tenancy_type} onChange={v => setForm({
                       ...form,
@@ -968,8 +970,8 @@ export default function TenantDetail() {
                 ))}
               </div>
               <div className="flex gap-2 mt-3">
-                <input value={newNote} onChange={e => setNewNote(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addNote()}
+                <textarea rows={2} value={newNote} onChange={e => { setNewNote(e.target.value); e.currentTarget.style.height="auto"; e.currentTarget.style.height=`${e.currentTarget.scrollHeight}px`; }}
+                  aria-label="Add a note"
                   placeholder={`Add a note to ${notesFilter}...`}
                   className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
                 <Button variant="gradient" onClick={addNote} disabled={addingNote || !newNote.trim()}>

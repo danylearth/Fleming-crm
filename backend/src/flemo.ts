@@ -2,7 +2,7 @@ import {flemoActions,registerFlemoActions} from './flemo-actions';
 import {flemoAccount,flemoAccountStatus,registerFlemoOAuthRoutes} from './flemo-oauth';
 import {flemoEvidence} from './flemo-records';
 import type { Express } from 'express';
-import { authMiddleware, AuthRequest } from './auth';
+import { authMiddleware, canAccessFinance, AuthRequest } from './auth';
 import { query } from './db-pg';
 import { syncTenantLifecycle } from './tenant-lifecycle-db';
 
@@ -28,16 +28,18 @@ export function registerFlemoRoutes(app: Express) {
       await syncTenantLifecycle();
       let text = ''; let records: any[] = [];
       const intent = flemoIntent(message);
+      const financeAllowed=canAccessFinance(req.user);
+      if(!financeAllowed&&(intent==='rent'||/late|overdue|arrears|payment.*trend/i.test(message)))return res.status(403).json({error:'Financial information is restricted to authorised accounts staff'});
       const previous = Array.isArray(history) ? history.slice(-8).filter(item=>item && ['user','assistant'].includes(item.role)&&typeof item.text==='string').map(item=>({role:item.role,text:item.text.slice(0,3000)})) : [];
       const accountStatus=await flemoAccountStatus(req.user.id).catch(()=>({connected:false}));
       if(accountStatus.connected){
-        const evidence=await flemoEvidence([...previous.filter(item=>item.role==='user').slice(-2).map(item=>item.text),message].join(' '),portfolio,context,true);
+        const evidence=await flemoEvidence([...previous.filter(item=>item.role==='user').slice(-2).map(item=>item.text),message].join(' '),portfolio,context,true,financeAllowed);
         const text=await(await flemoAccount(req.user.id)).answer(message,JSON.stringify({...evidence,conversation:previous}));
         const result=await flemoActions(req.user,message,text,evidence);
         return res.json({text:text+(result.note?'\n\n'+result.note:''),actions:result.actions,as_of:new Date().toISOString()});
       }
       if (/late|overdue|arrears|payment.*trend/i.test(message)) {
-        const evidence=await flemoEvidence(message,portfolio,context);
+        const evidence=await flemoEvidence(message,portfolio,context,false,financeAllowed);
         const namedIds=new Set(evidence.records.filter(r=>r.entity==='tenants').map(r=>r.id));
         const history=namedIds.size?evidence.paymentHistory.filter(r=>namedIds.has(r.tenant_id)):evidence.paymentHistory;
         text=history.length?history.map(r=>`${r.name}: ${r.paid_late} recorded late payments${r.average_days_late ? ` (average ${r.average_days_late} days late)` : ''}; ${r.overdue_charges} overdue charges (${money(r.overdue_amount)}).`).join('\n')+'\nBased on recorded charges and payments, not a live bank balance.': 'No recorded payment history is available for this selection. Payment timing and late-payment trends cannot be established yet.';
@@ -70,7 +72,7 @@ if (intent === 'rent') {
           records=[{...tenant,entity:'tenants'}];
         }
       } else {
-        const evidence=await flemoEvidence(message,portfolio,context);
+        const evidence=await flemoEvidence(message,portfolio,context,false,financeAllowed);
         records=evidence.records;
         text=evidence.summary+'\nConnect ChatGPT in Settings for open-ended chat and document analysis.';
         const result=await flemoActions(req.user,message,text,evidence);

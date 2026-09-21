@@ -1,3 +1,4 @@
+import {formalAgreementDate} from './tenancy-template';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {PDFDocument,PDFFont,rgb} from 'pdf-lib';
@@ -9,9 +10,9 @@ export async function stampAgreementSignatures(pdf:PDFDocument,source:string,fon
   const pages=[...stdout.matchAll(/<page\b[^>]*>([\s\S]*?)<\/page>/g)];
   const images=await Promise.all([...tenants,landlord].map(s=>pdf.embedPng(s.image)));
   const stamp=(pageIndex:number,top:number,signer:Signer,imageIndex:number,x:number,width:number,compact=false)=>{
-    const page=pdf.getPage(pageIndex),image=images[imageIndex],scaled=image.scaleToFit(width,compact?14:20);
-    page.drawImage(image,{x,y:page.getHeight()-top-(compact?14:20),width:scaled.width,height:scaled.height});
-    page.drawText(`Signed on: ${new Date(signer.date).toLocaleDateString('en-GB',{timeZone:'Europe/London'})}`,{x,y:page.getHeight()-top-(compact?20:28),size:8,font});
+    const page=pdf.getPage(pageIndex),image=images[imageIndex],scaled=image.scaleToFit(compact?70:width,compact?26:20);
+    page.drawImage(image,{x,y:page.getHeight()-top-(compact?26:20),width:scaled.width,height:scaled.height});
+    page.drawText(`Signed on: ${formalAgreementDate(new Date(signer.date))}`,{x:compact?x+76:x,y:page.getHeight()-top-(compact?17:28),size:compact?6.5:8,font});
   };
   for(const [i,match] of pages.entries()){
     const words=[...match[1].matchAll(/<word\b[^>]*yMin="([\d.]+)"[^>]*>([\s\S]*?)<\/word>/g)].map(w=>({top:Number(w[1]),text:w[2]}));
@@ -21,6 +22,8 @@ export async function stampAgreementSignatures(pdf:PDFDocument,source:string,fon
       if(slots.length!==2)throw new Error('The addendum signing spaces could not be located');
       stamp(i,slots[0].top+1,landlord,tenants.length,85,160);
       tenants.forEach((signer,index)=>stamp(i,slots[1].top+1,signer,index,85+index*245,200));
+    }
+    if(text.includes('Written Statement') && text.includes('EPC')) {
       const receipts=words.filter((word,index)=>(word.text==='Written'&&words[index+1]?.text==='Statement') || (word.text==='The'&&words[index+1]?.text.startsWith('Renters')) || word.text==='EPC' || word.text==='EICR' || (word.text==='Gas'&&!text.includes('not applicable')));
       for(const receipt of receipts)tenants.forEach((signer,index)=>stamp(i,receipt.top,signer,index,190+index*195,145,true));
     }
@@ -32,7 +35,7 @@ export async function stampAgreementSignatures(pdf:PDFDocument,source:string,fon
         // The source template reserves space below each signing label.
         const image=images[index],scaled=image.scaleToFit(160,32);
         page.drawImage(image,{x:30,y:page.getHeight()-slot.top-32,width:scaled.width,height:scaled.height});
-        page.drawText(`Signed on: ${new Date(tenants[index].date).toLocaleDateString('en-GB',{timeZone:'Europe/London'})}`,{x:215,y:page.getHeight()-slot.top-22,size:8,font});
+        page.drawText(`Signed on: ${formalAgreementDate(new Date(tenants[index].date))}`,{x:215,y:page.getHeight()-slot.top-22,size:8,font});
       });
     }
   }

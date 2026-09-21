@@ -1,8 +1,8 @@
 import { rentServiceGroups } from '../utils/rentServices';
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { Button, Card, GlassCard, EmptyState } from '../components/ui';
-import { useApi } from '../hooks/useApi';
+import { Button, Card, GlassCard, EmptyState, Select, Input } from '../components/ui';
+import { useApi, invalidateCache } from '../hooks/useApi';
 import { PoundSterling, TrendingUp, TrendingDown, Home, Landmark, RefreshCw, Clock3 } from 'lucide-react';
 
 interface RentPayment {
@@ -13,12 +13,12 @@ interface RentPayment {
   amount_paid?: number | string;
   due_date?: string;
   payment_date?: string;
-  status?: string;
+  status?: string; opening_balance_amount?: number;
 }
 
 interface BankFeedStatus {
   configured: boolean;
-  connection?: { status: string; provider_name?: string; last_synced_at?: string; last_error?: string } | null;
+  connection?: { provider?:string; status: string; provider_name?: string; last_synced_at?: string; last_error?: string } | null;
   totals?: { total: number; rent_matches: number; deposit_matches: number; expense_matches: number; unmatched: number };
 }
 
@@ -30,6 +30,7 @@ interface BankFeedTransaction {
   amount: number;
   currency: string;
   match_status: 'unmatched' | 'matched_rent' | 'matched_deposit' | 'matched_expense' | 'ignored';
+  allocations?: {kind:string;amount:number}[];
   property_address?: string;
   tenant_name?: string;
 }
@@ -48,13 +49,33 @@ export default function Transactions() {
   const api = useApi();
   const [payments, setPayments] = useState<RentPayment[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
-  const [summary, setSummary] = useState({ monthly_rent: 0, collected: 0, outstanding: 0, active_tenancies: 0 });
+  const [summary, setSummary] = useState({ monthly_rent: 0, collected: 0, outstanding: 0, active_tenancies: 0, assumed:0 });
   const [bankStatus, setBankStatus] = useState<BankFeedStatus | null>(null);
   const [bankTransactions, setBankTransactions] = useState<BankFeedTransaction[]>([]);
   const [bankBusy, setBankBusy] = useState(false);
   const [bankMessage, setBankMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [selectedBank,setSelectedBank]=useState<BankFeedTransaction|null>(null);
+  const [bankFilter,setBankFilter]=useState('unmatched');
+  type Allocation={kind:string;amount:string;rent_payment_id:string;tenant_id:string;property_id:string;maintenance_id:string};
+  const [allocations,setAllocations]=useState<Allocation[]>([]);
+  const [tenants,setTenants]=useState<{id:number;name:string}[]>([]);
+  const [jobs,setJobs]=useState<{id:number;title:string;property_id:number}[]>([]);
+  const freshAllocation=(amount=''):Allocation=>({kind:selectedBank&&Number(selectedBank.amount)<0?'expense':'rent',amount,rent_payment_id:'',tenant_id:'',property_id:'',maintenance_id:''});
+  const beginAssign=async(transaction:BankFeedTransaction)=>{
+    setBankMessage('');
+    try{const [tenantRows,jobRows]=await Promise.all([api.get('/api/tenants'),api.get('/api/maintenance')]);setTenants(tenantRows);setJobs(jobRows);setSelectedBank(transaction);setAllocations([{...freshAllocation(String(Math.abs(Number(transaction.amount)))),kind:Number(transaction.amount)>0?'rent':'expense'}]);}
+    catch(error){setBankMessage(error instanceof Error?error.message:'Could not load allocation options');}
+  };
+  const reconcile=async(transaction:BankFeedTransaction,action:string)=>{
+    setBankBusy(true);setBankMessage('');
+    try{await api.post(`/api/bank-feed/transactions/${transaction.id}/reconcile`,{action,allocations});setSelectedBank(null);invalidateCache('/api/rent-payments');invalidateCache('/api/financial-summary');await refreshBankData();const [pay,totals]=await Promise.all([api.get('/api/rent-payments'),api.get('/api/financial-summary')]);setPayments(pay);setSummary(totals);setBankMessage(action==='assign'?'Payment assigned.':action==='ignore'?'Transaction ignored.':'Transaction restored.');}
+    catch(error){setBankMessage(error instanceof Error?error.message:'Could not save transaction');}
+    finally{setBankBusy(false);}
+  };
+  const setAllocation=(index:number,changes:Partial<Allocation>)=>setAllocations(current=>current.map((a,i)=>i===index?{...a,...changes}:a));
+
 
   useEffect(() => {
     const load = async () => {
@@ -64,7 +85,7 @@ export default function Transactions() {
           api.get('/api/properties'),
           api.get('/api/financial-summary'),
           api.get('/api/bank-feed/status').catch(() => null),
-          api.get('/api/bank-feed/transactions?limit=25').catch(() => []),
+          api.get('/api/bank-feed/transactions?limit=500').catch(() => []),
         ]);
         setPayments(Array.isArray(pay) ? pay : pay?.payments || []);
         setProperties(Array.isArray(prop) ? prop : prop?.properties || []);
@@ -82,7 +103,7 @@ export default function Transactions() {
   const refreshBankData = async () => {
     const [status, transactions] = await Promise.all([
       api.get(`/api/bank-feed/status?at=${Date.now()}`),
-      api.get(`/api/bank-feed/transactions?limit=25&at=${Date.now()}`),
+      api.get(`/api/bank-feed/transactions?limit=500&at=${Date.now()}`),
     ]);
     setBankStatus(status);
     setBankTransactions(Array.isArray(transactions) ? transactions : []);
@@ -104,8 +125,8 @@ export default function Transactions() {
     setBankBusy(true);
     setBankMessage('');
     try {
-      const result = await api.post('/api/bank-feed/sync', {});
-      setBankMessage(`${result.imported} new transaction${result.imported === 1 ? '' : 's'} imported; ${result.matched} matched.`);
+      const result = await api.post(bankStatus?.connection?.provider==='freeagent'?'/api/freeagent/sync':'/api/bank-feed/sync', {});
+      setBankMessage(`${result.imported} new transaction${result.imported === 1 ? '' : 's'} imported; ready for review.`);
       await refreshBankData();
     } catch (error) {
       setBankMessage(error instanceof Error ? error.message : 'Bank sync failed');
@@ -127,12 +148,13 @@ export default function Transactions() {
     .map(payment => Math.max(0, Math.round((new Date(payment.payment_date!).getTime() - new Date(payment.due_date!).getTime()) / 86400000)));
   const averageDaysLate = paymentDelays.length ? paymentDelays.reduce((sum, days) => sum + days, 0) / paymentDelays.length : 0;
 
-  const fmt = (n: number) => `£${n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const fmt = (n: number) => `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const statusGroups = rentServiceGroups(properties);
 
   return (
     <Layout title="Financials" breadcrumb={[{ label: 'Financials' }]}>
+      {selectedBank&&<div role="dialog" aria-modal="true" aria-label="Assign bank transaction" className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4"><div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--bg-card)] p-6 space-y-4"><h2 className="text-lg font-semibold">Assign £{Math.abs(Number(selectedBank.amount)).toFixed(2)}</h2><p className="text-sm">{selectedBank.description}</p>{allocations.map((a,index)=><div key={index} className="grid sm:grid-cols-2 gap-3 p-4 rounded-xl border border-[var(--border-input)]"><Select label="Payment Type" value={a.kind} onChange={kind=>setAllocation(index,{kind})} options={Number(selectedBank.amount)>0?[{value:'rent',label:'Rent Payment'},{value:'deposit',label:'Security Deposit'}]:[{value:'expense',label:'Property Expense'},{value:'maintenance',label:'Contractor / Maintenance'}]}/><Input label="Amount (£)" value={a.amount} onChange={amount=>setAllocation(index,{amount})}/>{a.kind==='rent'?<Select className="sm:col-span-2" label="Rent Charge" value={a.rent_payment_id} onChange={rent_payment_id=>setAllocation(index,{rent_payment_id})} options={[{value:'',label:'Choose rent due'},...payments.filter(p=>Number(p.amount_paid||0)-Number(p.opening_balance_amount||0)<Number(p.amount_due)).map(p=>({value:String(p.id),label:`${p.tenant_name} · ${p.due_date?.slice(0,10)} · £${(Number(p.amount_due)-Number(p.amount_paid||0)+Number(p.opening_balance_amount||0)).toFixed(2)}${Number(p.opening_balance_amount)>0?' (replaces assumed payment)':''}`}))]}/>:a.kind==='deposit'?<Select label="Tenant" value={a.tenant_id} onChange={tenant_id=>setAllocation(index,{tenant_id})} options={[{value:'',label:'Choose tenant'},...tenants.map(t=>({value:String(t.id),label:t.name}))]}/>:<Select label="Property" value={a.property_id} onChange={property_id=>setAllocation(index,{property_id,maintenance_id:''})} options={[{value:'',label:'Choose property'},...properties.map(p=>({value:String(p.id),label:p.address}))]}/>} {a.kind==='maintenance'&&<Select label="Maintenance Job" value={a.maintenance_id} onChange={maintenance_id=>setAllocation(index,{maintenance_id})} options={[{value:'',label:'Choose job'},...jobs.filter(j=>String(j.property_id)===a.property_id).map(j=>({value:String(j.id),label:j.title}))]}/>} {allocations.length>1&&<button className="text-sm underline" onClick={()=>setAllocations(current=>current.filter((_,i)=>i!==index))}>Remove Allocation</button>}</div>)}<div className="flex justify-between"><Button size="sm" variant="outline" onClick={()=>setAllocations(current=>[...current,freshAllocation()])}>Split Payment</Button><p className="text-sm">Remaining: £{(Math.abs(Number(selectedBank.amount))-allocations.reduce((sum,a)=>sum+Number(a.amount||0),0)).toFixed(2)}</p></div>{bankMessage&&<p role="alert" className="text-red-500">{bankMessage}</p>}<div className="flex justify-end gap-3"><Button disabled={bankBusy} variant="ghost" onClick={()=>setSelectedBank(null)}>Cancel</Button><Button disabled={bankBusy} onClick={()=>void reconcile(selectedBank,'assign')}>Save Assignment</Button></div></div></div>}
       <div className="p-4 md:p-8">
         {loadError ? <p role="alert" className="text-red-400 py-8">{loadError}</p> : loading ? (
           <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
@@ -145,7 +167,7 @@ export default function Transactions() {
                   <div>
                     <h3 className="font-semibold">Barclays bank feed</h3>
                     <p className="text-xs text-[var(--text-muted)] mt-1">
-                      {!bankStatus?.configured
+                      {!bankStatus?.configured && bankStatus?.connection?.status!=='connected'
                         ? 'Waiting for Open Banking provider credentials.'
                         : bankStatus.connection?.status === 'connected'
                           ? `Connected${bankStatus.connection.provider_name ? ` via ${bankStatus.connection.provider_name}` : ''}${bankStatus.connection.last_synced_at ? ` · last synced ${new Date(bankStatus.connection.last_synced_at).toLocaleString('en-GB')}` : ''}`
@@ -194,6 +216,7 @@ export default function Transactions() {
               ))}
             </div>
 
+            {Number(summary.assumed)>0&&<p className="mb-5 text-sm text-[var(--text-muted)]">Collected includes {fmt(Number(summary.assumed))} recorded as paid on the office’s opening-balance instruction. These are assumptions, not verified bank receipts.</p>}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Rent Payments Table */}
               <Card className="p-5">
@@ -208,7 +231,7 @@ export default function Transactions() {
                     </div>
                     {payments.slice(0, 15).map(p => (
                       <div key={p.id} className="grid grid-cols-4 gap-2 py-2.5 border-b border-[var(--border-subtle)] text-sm">
-                        <span className="truncate">{p.tenant_name || '—'}</span>
+                        <span>{p.tenant_name || '—'}{Number(p.opening_balance_amount)>0&&<small className="block text-amber-600">Includes assumed paid: {fmt(Number(p.opening_balance_amount))}</small>}</span>
                         <span className="truncate text-[var(--text-secondary)]">{p.address || '—'}</span>
                         <span className="text-right font-medium text-emerald-400">{fmt(Number(p.amount_paid || 0))}</span>
                         <span className="text-right text-[var(--text-muted)]">{p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : Number(p.amount_paid || 0) > 0 ? 'Not recorded' : 'Unpaid'}</span>
@@ -247,18 +270,18 @@ export default function Transactions() {
 
             {bankTransactions.length > 0 && (
               <Card className="p-5 mt-6">
-                <h3 className="text-lg font-semibold mb-4">Latest bank transactions</h3>
+                <h3 className="text-lg font-semibold mb-4">Bank transactions · Last 30 Days</h3><p className="text-sm text-[var(--text-muted)] mb-3">Imported daily from 2am. Assign incoming rent and security deposits, or outgoing property and maintenance costs. Review incoming payments to allow overdue reminders.</p><Select className="max-w-xs mb-4" label="Show Transactions" value={bankFilter} onChange={setBankFilter} options={[{value:"unmatched",label:"Needs Review"},{value:"all",label:"All Transactions"},{value:"ignored",label:"Ignored"}]}/>
                 <div className="overflow-x-auto">
                   <div className="min-w-[620px]">
-                    <div className="grid grid-cols-[100px_1fr_120px_150px] gap-3 text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider pb-2 border-b border-[var(--border-subtle)]">
+                    <div className="grid grid-cols-[100px_1fr_120px_200px] gap-3 text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider pb-2 border-b border-[var(--border-subtle)]">
                       <span>Date</span><span>Description</span><span className="text-right">Amount</span><span>CRM match</span>
                     </div>
-                    {bankTransactions.map(transaction => (
-                      <div key={transaction.id} className="grid grid-cols-[100px_1fr_120px_150px] gap-3 py-2.5 border-b border-[var(--border-subtle)] text-sm items-center">
+                    {bankTransactions.filter(t=>bankFilter==='all'||t.match_status===bankFilter).map(transaction => (
+                      <div key={transaction.id} className="grid grid-cols-[100px_1fr_120px_200px] gap-3 py-2.5 border-b border-[var(--border-subtle)] text-sm items-center">
                         <span className="text-[var(--text-muted)]">{new Date(transaction.booked_at).toLocaleDateString('en-GB')}</span>
                         <span className="truncate">{transaction.description || transaction.merchant_name || 'Bank transaction'}</span>
                         <span className={`text-right font-medium ${Number(transaction.amount) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{Number(transaction.amount) >= 0 ? '+' : '-'}{fmt(Math.abs(Number(transaction.amount)))}</span>
-                        <span className="text-xs text-[var(--text-secondary)]">{transaction.match_status === 'matched_rent' ? `Rent · ${transaction.tenant_name || 'tenant'}` : transaction.match_status === 'matched_deposit' ? `Deposit · ${transaction.tenant_name || 'applicant'}` : transaction.match_status === 'matched_expense' ? `Expense · ${transaction.property_address || 'property'}` : 'Needs review'}</span>
+                        <div className="text-xs">{transaction.match_status==='unmatched'?<div className="flex gap-2"><Button size="sm" disabled={bankBusy} onClick={()=>void beginAssign(transaction)}>Assign</Button><Button size="sm" variant="ghost" disabled={bankBusy} onClick={()=>void reconcile(transaction,'ignore')}>Ignore</Button></div>:transaction.match_status==='ignored'?<div>Ignored <button className="underline ml-2" disabled={bankBusy} onClick={()=>void reconcile(transaction,'restore')}>Undo</button></div>:<span>{transaction.allocations?.map(a=>`${a.kind} £${Number(a.amount).toFixed(2)}`).join(' + ') || transaction.match_status.replace('matched_','')} · {transaction.tenant_name || transaction.property_address}</span>}</div>
                       </div>
                     ))}
                   </div>

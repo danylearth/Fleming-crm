@@ -38,7 +38,7 @@ export default function Landlords() {
   const [showModal, setShowModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', address: '', postcode: '', notes: '',
+    name: '', email: '', phone: '', address: '', city: '', postcode: '', notes: '',
     landlord_type: 'external', entity_type: 'individual', company_number: ''
   });
   const [duplicateWarning, setDuplicateWarning] = useState<string>('');
@@ -173,7 +173,8 @@ export default function Landlords() {
         name: form.name,
         email: form.email,
         phone: form.phone,
-        address: form.postcode ? `${form.address}, ${form.postcode}` : form.address,
+        address: [form.address,form.city,form.postcode].filter(Boolean).join(', '),
+        home_address: [form.address,form.city,form.postcode].filter(Boolean).join(', '),
         entity_type: form.entity_type,
         landlord_type: form.landlord_type,
         company_number: form.entity_type === 'company' ? form.company_number : null,
@@ -196,7 +197,7 @@ export default function Landlords() {
 
       setShowModal(false);
       setForm({
-        name: '', email: '', phone: '', address: '', postcode: '', notes: '',
+        name: '', email: '', phone: '', address: '', city: '', postcode: '', notes: '',
         landlord_type: 'external', entity_type: 'individual', company_number: ''
       });
       setSelectedPropertyIds([]);
@@ -563,7 +564,7 @@ export default function Landlords() {
                   label="Phone *"
                   value={form.phone}
                   onChange={v => setForm({ ...form, phone: v })}
-                  placeholder="+44..."
+                  placeholder="07..."
                 />
                 {validationErrors.phone && (
                   <p className="text-xs text-red-500 mt-1">{validationErrors.phone}</p>
@@ -589,6 +590,7 @@ export default function Landlords() {
                 />
               </div>
 
+              <Input label="Town/City" value={form.city} onChange={city => setForm({...form,city})} />
               <div>
                 <Input
                   label="Postcode"
@@ -619,9 +621,6 @@ export default function Landlords() {
                 {saving ? 'Saving...' : 'Save'}
               </Button>
             </div>
-            {selectedPropertyIds.length === 0 && (
-              <p className="text-xs text-[var(--text-muted)] text-center">Optional: You can link properties later</p>
-            )}
           </div>
         </div>
       )}

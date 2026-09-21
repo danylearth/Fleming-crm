@@ -145,6 +145,14 @@ try {
     assert.equal(tenants[0].linked_tenant_id,tenants[1].id);assert.equal(tenants[1].linked_tenant_id,tenants[0].id);
     for(const t of tenants){const docs=await sql("SELECT original_name FROM documents WHERE entity_type='tenant' AND entity_id=$1 AND doc_type='Credit Check Report'",[t.id]);assert.equal(docs.length,1);assert.equal(docs[0].original_name,`Credit for ${t.source_enquiry_id}.pdf`);}
   });
+  await test('financial grants take effect immediately and staff cannot grant themselves access',async()=>{
+    assert.equal((await request('/api/financial-summary',{token:auth.staff})).status,403);
+    const staff=await one("SELECT id FROM users WHERE email='staff@example.test'");
+    assert.equal((await request(`/api/users/${staff.id}`,{method:'PUT',token:auth.staff,body:{finance_access:true}})).status,403);
+    await ok(`/api/users/${staff.id}`,{method:'PUT',token:auth.admin,body:{finance_access:true}});
+    assert.equal((await request('/api/financial-summary',{token:auth.staff})).status,200);
+    assert.equal((await request('/api/bank-feed/transactions',{token:auth.viewer})).status,403);
+  });
   await test('financial totals count joint rent once and exclude historic collections',async()=>{
     await sql("INSERT INTO rent_payments(property_id,tenant_id,due_date,amount_due,amount_paid,status) VALUES($1,$2,$3,1000,400,'partial'),($1,$2,'2020-01-01',1000,1000,'paid')",[property.id,tenantId,today]);
     const summary=await ok('/api/financial-summary',{token:auth.staff});assert.equal(Number(summary.monthly_rent),1000);assert.equal(Number(summary.collected),400);assert.equal(Number(summary.outstanding),600);assert.equal(summary.active_tenancies,1);
@@ -162,7 +170,7 @@ try {
   });
   await test('tenancy end preview is personalised, read-only and excludes internal notes', async()=>{
     const preview=await ok(`/api/tenants/${tenantId}/tenancy-end`,{method:'POST',token:auth.staff,body:{end_date:today,notes:'Private-only test note',send_email:true,preview_only:true}});
-    assert.equal(preview.previews.length,2);for(const p of preview.previews){assert.match(p.html,/tenancy-end.png/);assert(!p.html.includes('Private-only'));assert(!p.html.includes('{{'));assert.match(p.sms,/Further details/);}
+    assert.equal(preview.previews.length,2);for(const p of preview.previews){assert.match(p.html,/moving-day.png/);assert(!p.html.includes('Private-only'));assert(!p.html.includes('{{'));assert.match(p.sms,/we can confirm that your tenancy agreement is set to end/);}
     assert.equal((await one('SELECT tenancy_end_date FROM tenants WHERE id=$1',[tenantId])).tenancy_end_date,null);
     assert.equal((await request(`/api/tenants/${tenantId}/tenancy-end`,{method:'POST',token:auth.staff,body:{end_date:'2026-02-31'}})).status,400);
     assert.equal((await request(`/api/tenants/${tenantId}/tenancy-end`,{method:'POST',token:auth.viewer,body:{end_date:today}})).status,403);
@@ -277,8 +285,9 @@ try {
     const messages=await ok(`/api/tenants/${reviewTenant.id}/communications`,{token:auth.staff});assert(messages.some(m=>m.direction==='inbound'&&m.body===body.Body));
   });
   await test('Flemo reads live scoped records and does not fabricate unsupported actions',async()=>{
-    const chat=message=>ok('/api/ai/chat',{method:'POST',token:auth.viewer,body:{message}});
-    assert.match((await chat('What is our monthly rental income?')).text,/Joint tenants count once/);
+    const chat=(message,token=auth.viewer)=>ok('/api/ai/chat',{method:'POST',token,body:{message}});
+    assert.equal((await request('/api/ai/chat',{method:'POST',token:auth.viewer,body:{message:'What is our monthly rental income?'}})).status,403);
+    assert.match((await chat('What is our monthly rental income?',auth.staff)).text,/Joint tenants count once/);
     assert.match((await chat('Which tenants are missing ID?')).text,/Review A/);
     assert.match((await chat('Which tenancies end soon?')).text,/60 days/);
     assert.match((await chat('Which rent reviews are due this month?')).text,/calendar month/);
@@ -293,7 +302,7 @@ try {
     await sql("UPDATE tenants SET name='Review A' WHERE id=$1",[reviewTenant.id]);
     assert.match((await chat('Delete everything')).text,/No matching record/);
     assert.match((await chat('Tell me about Review A')).text,/Review A/);
-    assert.match((await chat('Who pays late?')).text,/recorded.*payments/);
+    assert.match((await chat('Who pays late?',auth.staff)).text,/recorded.*payments/);
     assert.equal((await ok('/api/ai/account',{token:auth.viewer})).connected,false);
   });
   await test('clear recent tasks preserves calendar records and is restricted to administrators',async()=>{
@@ -599,6 +608,51 @@ try {
     assert.equal((await request(`/api/public/marketing/unsubscribe/${permission.unsubscribe_token}`,{method:'POST'})).status,200);
     assert.equal((await request('/api/marketing/campaigns',{method:'POST',token:auth.admin,body})).status,409);
     const exported=await request('/api/marketing/export',{token:auth.admin});assert.equal(exported.status,200);assert.match(exported.data,/'=Formula Test/);
+  });
+  await test('bank allocations replace assumptions, split deposits, reject duplicate posting and roll back invalid splits',async()=>{
+    const connection=await one("INSERT INTO bank_feed_connections(provider,status) VALUES('freeagent','connected') RETURNING id");
+    const charge=await one("INSERT INTO rent_payments(property_id,tenant_id,due_date,amount_due,amount_paid,opening_balance_amount,status) VALUES($1,$2,'2026-09-21',800,800,800,'paid') RETURNING id",[property.id,tenantId]);
+    const bank=await one("INSERT INTO bank_feed_transactions(connection_id,external_id,account_id,booked_at,amount) VALUES($1,'split-test','test',NOW(),1600) RETURNING id",[connection.id]);
+    const body={action:'assign',allocations:[{kind:'rent',rent_payment_id:charge.id,amount:800},{kind:'deposit',tenant_id:tenantId,amount:800}]};
+    const [first,second]=await Promise.all([1,2].map(()=>request(`/api/bank-feed/transactions/${bank.id}/reconcile`,{method:'POST',token:auth.staff,body})));
+    assert.deepEqual([first.status,second.status].sort(),[200,400]);
+    const paid=await one('SELECT * FROM rent_payments WHERE id=$1',[charge.id]);assert.equal(Number(paid.amount_paid),800);assert.equal(Number(paid.opening_balance_amount),0);
+    assert.equal((await sql('SELECT * FROM bank_feed_allocations WHERE bank_transaction_id=$1',[bank.id])).length,2);
+    assert.equal((await request(`/api/rent-payments/${charge.id}/pay`,{method:'PUT',token:auth.staff,body:{amount_paid:0}})).status,409);
+    assert.equal((await request(`/api/rent-payments/${charge.id}`,{method:'PUT',token:auth.staff,body:{amount_due:1}})).status,409);
+    assert.equal((await request(`/api/rent-payments/${charge.id}`,{method:'DELETE',token:auth.admin})).status,409);
+    const extra=await one("INSERT INTO bank_feed_transactions(connection_id,external_id,account_id,booked_at,amount) VALUES($1,'bad-split-test','test',NOW(),100) RETURNING id",[connection.id]);
+    const failed=await request(`/api/bank-feed/transactions/${extra.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'assign',allocations:[{kind:'deposit',tenant_id:tenantId,amount:50},{kind:'rent',rent_payment_id:charge.id,amount:50}]}});assert.equal(failed.status,400);
+    assert.equal((await sql('SELECT * FROM bank_feed_allocations WHERE bank_transaction_id=$1',[extra.id])).length,0);
+    await ok(`/api/bank-feed/transactions/${extra.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'ignore'}});
+    await ok(`/api/bank-feed/transactions/${extra.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'restore'}});
+    assert.equal((await one('SELECT match_status FROM bank_feed_transactions WHERE id=$1',[extra.id])).match_status,'unmatched');
+  });
+  await test('landlord property creation accepts the card form and KYC needs only primary ID',async()=>{
+    const owner=await one("INSERT INTO landlords(name,landlord_type,address,home_address) VALUES('Card Owner','external','1 Home Road, Test Town, WV1 1AA','1 Home Road, Test Town, WV1 1AA') RETURNING id");
+    const created=await request('/api/properties',{method:'POST',token:auth.staff,body:{address:'2 Card Road, Test Town, WV1 1AB',city:'Test Town',postcode:'WV1 1AB',landlord_id:owner.id,type:'flat',status:'to_let',service_type:'rent_collection',has_gas:false,has_management_company:false,is_leasehold:false}});
+    assert.equal(created.status,200,JSON.stringify(created.data));
+    const records=await ok(`/api/landlords/${owner.id}/properties`,{token:auth.staff});assert(records.some(p=>p.city==='Test Town'&&p.postcode==='WV1 1AB'));
+    assert.equal((await request(`/api/landlords/${owner.id}`,{method:'PUT',token:auth.admin,body:{kyc_completed:1}})).status,409);
+    await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,review_status) VALUES('landlord',$1,'Primary Identification','sample.pdf','ID.pdf','approved')",[owner.id]);
+    await ok(`/api/landlords/${owner.id}`,{method:'PUT',token:auth.admin,body:{kyc_completed:1}});
+  });
+  await test('daily rent charging deduplicates joint tenants and waits for bank review before chasing',async()=>{
+    await sql("UPDATE bank_feed_connections SET status='error'");
+    await sql("UPDATE rent_tracking_settings SET cutover_date='2026-09-21',chasers_enabled=TRUE WHERE id=1");
+    const first=await one("INSERT INTO tenants(name,first_name_1,last_name_1,status,property_id,monthly_rent,tenancy_start_date,email) VALUES('Scheduler A','Scheduler','A','active',$1,800,'2026-09-21','schedule@example.test') RETURNING id",[property.id]);
+    const second=await one("INSERT INTO tenants(name,first_name_1,last_name_1,status,property_id,monthly_rent,tenancy_start_date,linked_tenant_id) VALUES('Scheduler B','Scheduler','B','active',$1,800,'2026-09-21',$2) RETURNING id",[property.id,first.id]);
+    await sql('UPDATE tenants SET linked_tenant_id=$1 WHERE id=$2',[second.id,first.id]);
+    const script="const s=require('./dist/finance-scheduler'),db=require('./dist/db-pg');(async()=>{await s.runFinanceSchedule(new Date('2026-10-22T10:00:00Z'));await s.runFinanceSchedule(new Date('2026-10-22T10:00:00Z'));await db.default.end()})().catch(e=>{console.error(e);process.exit(1)})";
+    const run=spawnSync(process.execPath,['-e',script],{env,encoding:'utf8'});assert.equal(run.status,0,run.stderr);
+    const charges=await sql('SELECT id,due_date::text,amount_paid FROM rent_payments WHERE tenant_id=ANY($1::int[])',[[first.id,second.id]]);assert.equal(charges.length,1);assert.equal(new Date(charges[0].due_date).toISOString().slice(0,10),'2026-10-21');assert.equal(Number(charges[0].amount_paid),0);
+    assert.equal((await one('SELECT count(*)::int n FROM rent_chaser_deliveries')).n,0);
+    await sql("UPDATE bank_feed_connections SET status='connected',last_synced_at='2026-10-22T09:00:00Z'");
+    const waiting=spawnSync(process.execPath,['-e',script],{env,encoding:'utf8'});assert.equal(waiting.status,0,waiting.stderr);
+    assert.equal((await one('SELECT count(*)::int n FROM rent_chaser_deliveries')).n,0);
+    await sql("UPDATE bank_feed_transactions SET match_status='ignored' WHERE match_status='unmatched'");
+    const sending=spawnSync(process.execPath,['-e',script],{env,encoding:'utf8'});assert.equal(sending.status,0,sending.stderr);
+    const deliveries=await sql('SELECT * FROM rent_chaser_deliveries WHERE rent_payment_id=$1',[charges[0].id]);assert.equal(deliveries.length,1);assert.equal(deliveries[0].status,'failed');assert.match(deliveries[0].error,/not configured/);
   });
   console.log(`\n${passed} integration scenarios passed. Private artifacts: ${dir}`);
 } catch(error) { console.error(error); console.error('Server log:',path.join(dir,'server.log')); process.exitCode=1; }

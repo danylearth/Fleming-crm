@@ -59,7 +59,7 @@ describe('5 September CRM feedback', () => {
     expect(backend).toContain("app.post('/api/property-expenses/:id/receipt'");
     expect(propertyExpenses).toContain('Service Charges & Ground Rent');
     expect(propertyExpenses).toContain('Historic Costs');
-    expect(propertyExpenses).toContain('Financial year');
+    expect(propertyExpenses).toContain('Financial Year');
     expect(propertyExpenses).toContain('Year to date');
     expect(propertyExpenses).toContain('All-time total');
     expect(propertyExpenses).toContain('Refurbishment');

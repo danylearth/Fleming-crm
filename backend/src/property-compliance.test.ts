@@ -38,6 +38,6 @@ describe('property compliance before issuing a tenancy agreement', () => {
     }, today);
 
     expect(result.ready).toBe(false);
-    expect(result.items[0].reason).toBe('EPC has expired');
+    expect(result.items[0].reason).toBe('EPC Expired');
   });
 });

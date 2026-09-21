@@ -1,3 +1,4 @@
+import {usePermissions} from './hooks/usePermissions';
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -42,6 +43,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
+
+function FinanceRoute({children}:{children:React.ReactNode}) {const {canAccessFinance}=usePermissions();return canAccessFinance()?<>{children}</>:<Navigate to="/" replace/>;}
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -102,7 +105,7 @@ function AppRoutes() {
       <Route path="/maintenance/:requestId" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
       <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
       <Route path="/tasks/:id" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
-      <Route path="/financials" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
+      <Route path="/financials" element={<ProtectedRoute><FinanceRoute><Transactions /></FinanceRoute></ProtectedRoute>} />
       <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
       <Route path="/inventories" element={<ProtectedRoute><Navigate to="/properties" replace /></ProtectedRoute>} />
       <Route path="/inventories/:id" element={<ProtectedRoute><Navigate to="/properties" replace /></ProtectedRoute>} />

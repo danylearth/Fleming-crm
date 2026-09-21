@@ -64,7 +64,7 @@ export function propertyCompliance(
     let reason: string | null = null;
     if (!hasDocument) reason = `${requirement.label} document is missing`;
     else if (!expiryDate) reason = `${requirement.label} expiry date is missing`;
-    else if (!inDate) reason = `${requirement.label} has expired`;
+    else if (!inDate) reason = requirement.docType === 'EPC' ? 'EPC Expired' : `${requirement.label} has expired`;
     return {
       docType: requirement.docType,
       label: requirement.label,

@@ -123,7 +123,7 @@ export function tenancyAgreementEmail(input: TenancyAgreementEmailInput): { subj
       INTRO_MESSAGE: escapeHtml(input.customMessage || `Your tenancy agreement for ${address.full} is ready to review and sign.`).replace(/\r?\n/g, '<br>'),
       TENANCY_START_DATE: emailDate(input.tenancyStartDate),
       LANDLORD_NAME: escapeHtml(input.landlordName),
-      LANDLORD_ADDRESS: escapeHtml(input.landlordAddress || ''),
+      LANDLORD_ADDRESS: escapeHtml((input.landlordAddress || '').replace(/,?\s*West Midlands,?/gi, /fleming/i.test(input.landlordName)?',':'$&')).replace(/([A-Z]{1,2}\d[A-Z\d]?)\s+(\d[A-Z]{2})/gi,'<span style="white-space:nowrap">$1 $2</span>'),
       MONTHLY_RENT: emailMoneyCompact(input.monthlyRent),
       SECURITY_DEPOSIT: emailMoneyCompact(input.securityDeposit),
       FUNDS_ON_ACCOUNT: emailMoneyCompact(input.fundsOnAccount),
@@ -329,17 +329,7 @@ export function referenceChaseEmail(landlordName: string, tenantName: string, pr
 export function rentReminderEmail(tenantName: string, amount: number, address: string, dueDate: string): { subject: string; html: string } {
   return {
     subject: `Rent Payment Reminder - ${address}`,
-    html: brandedEmailHtml('Rent Payment Reminder', `
-        <p>Dear ${tenantName},</p>
-        <p>This is a friendly reminder that your rent payment is outstanding:</p>
-        <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 16px 0;">
-          <strong>Property:</strong> ${address}<br/>
-          <strong>Amount Due:</strong> &pound;${amount.toLocaleString()}<br/>
-          <strong>Due Date:</strong> ${dueDate}
-        </div>
-        <p>If you have already made this payment, please disregard this message. Otherwise, please arrange payment as soon as possible.</p>
-        <p>If you are experiencing difficulties, please contact us to discuss your options.</p>
-    `),
+    html: renderFinalEmailTemplate('14-rent-overdue.html', { FIRST_NAME:escapeHtml(tenantName), AMOUNT:escapeHtml(amount.toFixed(2)), PROPERTY_ADDRESS:escapeHtml(address), DUE_DATE:escapeHtml(new Date(dueDate.slice(0,10)+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})), PROPERTY_SUBJECT:encodeURIComponent(address) }),
   };
 }
 
@@ -530,7 +520,7 @@ export function tenancyEndEmail(firstName: string, propertyAddress: string, endD
   return {
     subject: `Your tenancy end date – ${address}`,
     html: renderFinalEmailTemplate('11-tenancy-end.html', { FIRST_NAME: escapeHtml(firstName || 'there'), END_DATE: escapeHtml(date), PROPERTY_ADDRESS: escapeHtml(address), PROPERTY_SUBJECT: encodeURIComponent(address) }),
-    sms: `Hi ${firstName || 'there'}, this message confirms that your tenancy is scheduled to end on ${date} at ${address}. Further details have been sent you via email. If you have not requested this or wish to postpone your scheduled end date, then please get in touch immediately on 01902 212 415.`,
+    sms: `Hi ${firstName || 'there'}, we can confirm that your tenancy agreement is set to end on ${date}. If you wish to change or discuss this further, then please contact our office on 01902 212 415.`,
   };
 }
 

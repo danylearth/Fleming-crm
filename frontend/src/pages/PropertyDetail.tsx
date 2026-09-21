@@ -1,3 +1,4 @@
+import { usePermissions } from '../hooks/usePermissions';
 import PropertyInsurance from '../components/PropertyInsurance';
 import DeleteNoteButton from '../components/DeleteNoteButton';
 import TenancyEndModal from '../components/ui/TenancyEndModal';
@@ -140,6 +141,7 @@ function Toggle({ label, checked, onChange, disabled }: { label: string; checked
 }
 
 export default function PropertyDetail() {
+  const {canAccessFinance}=usePermissions();
 
   const api = useApi();
   const navigate = useNavigate();
@@ -1177,10 +1179,10 @@ export default function PropertyDetail() {
             </Card>
 
             {property.landlord_type==='internal'&&<PropertyInsurance propertyId={property.id}/>}
-            <PropertyExpenses propertyId={property.id} />
+            {canAccessFinance() && <PropertyExpenses propertyId={property.id} />}
 
             {/* Rent Payments */}
-            <RentPayments propertyId={property.id} compact />
+            {canAccessFinance() && <RentPayments propertyId={property.id} compact />}
           </div>
 
           {/* RIGHT COLUMN — 1/3 */}

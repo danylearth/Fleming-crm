@@ -43,7 +43,7 @@ interface Enquiry {
   property_address?: string; property_id?: number; created_at?: string;
   email_1?: string; phone_1?: string;
   application_form_completed?: number | boolean; application_review_status?: string;
-  balance_payment_received?:number; tenancy_agreement_completed?: boolean; tenancy_agreement_status?: string; updated_at?:string; follow_up_date?:string; holding_deposit_requested?:number; application_form_sent?:number;
+  balance_payment_received?:number; balance_payment_requested?:number; balance_follow_up_date?:string; tenancy_agreement_completed?: boolean; tenancy_agreement_status?: string; updated_at?:string; follow_up_date?:string; holding_deposit_requested?:number; application_form_sent?:number;
 }
 
 export default function Dashboard() {
@@ -129,7 +129,7 @@ export default function Dashboard() {
 
   const todayKey=new Date(now).toLocaleDateString('en-CA',{timeZone:'Europe/London'});
   const pipeline=[
-    ...enquiries.filter(e=>!e.tenancy_agreement_status||e.tenancy_agreement_status==='completed'||!!(e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey)).map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',previousAgent:e.previous_agent||'—',type:'Tenant Enquiry',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.tenancy_agreement_status==='completed'&&!e.balance_payment_received?'Agreement Completed — Final Balance':e.application_form_completed&&e.application_review_status!=='approved'?'Application Ready for Review':e.status.replaceAll('_',' '),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
+    ...enquiries.filter(e=>e.balance_payment_requested&&!e.balance_payment_received ? !!(e.balance_follow_up_date&&e.balance_follow_up_date.slice(0,10)<=todayKey) : !e.tenancy_agreement_status||e.tenancy_agreement_status==='completed'||!!(e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey)).map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',previousAgent:e.previous_agent||'—',type:'Tenant Enquiry',date:e.balance_follow_up_date&&e.balance_follow_up_date.slice(0,10)<=todayKey?e.balance_follow_up_date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.balance_payment_requested&&!e.balance_payment_received?'Final Balance Follow-up':e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.tenancy_agreement_status==='completed'&&!e.balance_payment_received?'Agreement Completed — Final Balance':e.application_form_completed&&e.application_review_status!=='approved'?'Application Ready for Review':e.status.replaceAll('_',' '),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
     ...landlordEnquiries.filter(e=>!['onboarded','not_interested','rejected','closed'].includes(e.status)).map(e=>({key:`landlord-${e.id}`,name:e.name||[e.first_name,e.last_name].filter(Boolean).join(' ')||'Landlord Enquiry',previousAgent:e.previous_agent||'—',type:'Landlord Enquiry',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.status.replaceAll('_',' '),href:`/bdm/${e.id}`,onboarding:false})),
     ...tasks.filter(t=>t.entity_type==='tenant'&&t.task_type==='follow_up'&&t.status!=='completed'&&t.due_date?.slice(0,10)<=todayKey).map(t=>({key:`followup-${t.id}`,name:t.title,previousAgent:teamMembers.find(m=>String(m.id)===t.assigned_to)?.name||'—',type:'Tenant Follow-up',date:t.due_date,status:'Follow-up Due',href:`/tasks/${t.id}`,onboarding:false})),
   ].sort((a,b)=>(Date.parse(a.date||'1970-01-01')-Date.parse(b.date||'1970-01-01'))*(pipelineOldest?1:-1));
@@ -161,7 +161,7 @@ export default function Dashboard() {
         {/* Greeting */}
         <div className="pt-10 md:pt-0">
           <h1 className="text-2xl md:text-4xl font-bold">Hi there {firstName} 👋</h1>
-          <p className="text-[var(--text-secondary)] mt-1 text-sm">Here's what's happening with your properties today.</p>
+          <p className="text-[var(--text-secondary)] mt-1 text-sm">Lets go to work!</p>
         </div>
 
         {/* Stats Row */}
@@ -191,7 +191,7 @@ export default function Dashboard() {
           {/* Compliance and maintenance alerts */}
           <Card className="p-6">
             <SectionHeader title="Compliance Alerts & Maintenance Requests" icon={<AlertTriangle size={16}/>} action={() => navigate('/maintenance')} actionLabel="View All" />
-            <Select label="Maintenance Assigned To" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'All'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/>
+            <Select inlineLabel className="max-w-sm mb-5" label="Assigned To" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'All'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/>
             {dashboard?.complianceAlerts?.length || dashboard?.recentMaintenance?.length ? (
               <div className="space-y-3">
                 {dashboard.complianceAlerts.slice(0, 3).map((alert, i) => (
@@ -216,7 +216,7 @@ export default function Dashboard() {
                 {dashboard.recentMaintenance.filter(m=>maintenanceOwner==='all'||String(m.assigned_to||'unassigned')===maintenanceOwner).slice(0, 5).map(item => (
                   <button key={`maintenance-${item.id}`} onClick={() => navigate(`/maintenance/${item.id}`)} className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                     <div className="flex items-center gap-3 min-w-0"><Wrench size={16} className="text-amber-400 shrink-0" /><div className="min-w-0"><p className="text-sm font-medium truncate">{item.property_address}</p><p className="text-xs text-[var(--text-muted)] truncate">{item.description}</p></div></div>
-                    <span title={item.assigned_name||'Maintenance'} className="rounded-full bg-amber-500/15 px-2 py-1 text-xs mx-2">{item.assigned_name?item.assigned_name.split(' ').map(n=>n[0]).join('').slice(0,2):'Maintenance'}</span><span className="text-[10px] font-semibold uppercase text-amber-400">{item.status.replace('_', ' ')}</span>
+                    {item.assigned_name && <span title={item.assigned_name} className="rounded-full bg-amber-500/15 px-2 py-1 text-xs mx-2">{item.assigned_name?item.assigned_name.split(' ').map(n=>n[0]).join('').slice(0,2):''}</span>}<span className="text-[10px] font-semibold uppercase text-amber-400">{item.status.replace('_', ' ')}</span>
                   </button>
                 ))}
               </div>
@@ -228,7 +228,7 @@ export default function Dashboard() {
           {/* Pipeline */}
           <Card className="p-6">
             <SectionHeader title="Enquiry Pipeline" icon={<MessageSquare size={16}/>} action={() => navigate('/enquiries')} actionLabel="View All" />
-            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="w-full text-sm text-left [&_th+th]:border-l [&_td+td]:border-l [&_th]:border-[var(--border-subtle)] [&_td]:border-[var(--border-subtle)]"><thead><tr className="text-xs text-[var(--text-muted)]"><th className="py-3">Enquiry Name</th><th className="px-3">Enquiry Type</th><th className="px-3">Previous Agent</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="rounded-full border px-3 py-2" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="pl-3 text-right">Action</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-3 pr-3"><button className="text-left" onClick={()=>navigate(row.href)}><strong className="block">{row.name}</strong><span className="text-xs text-[var(--text-muted)]">{row.status}</span></button></td><td className="px-3 text-xs">{row.type}</td><td className="px-3 text-xs">{row.previousAgent}</td><td className="text-xs whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="pl-3 text-right"><Button size="sm" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue Onboarding':'View Enquiry'}</Button></td></tr>)}</tbody></table></div>:<EmptyState message="No enquiries or follow-ups awaiting action"/>}
+            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="w-full text-sm text-left [&_th+th]:border-l [&_td+td]:border-l [&_th]:border-[var(--border-subtle)] [&_td]:border-[var(--border-subtle)]"><thead><tr className="text-xs text-[var(--text-muted)]"><th className="py-3">Enquiry Name</th><th className="px-3">Enquiry Type</th><th className="px-3">Previous Agent</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="px-3 py-2 min-w-28 text-left whitespace-nowrap" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="px-3 text-center">Action</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-3 pr-3"><button className="text-left" onClick={()=>navigate(row.href)}><strong className="block">{row.name}</strong><span className="text-xs text-[var(--text-muted)]">{row.status}</span></button></td><td className="px-3 text-xs">{row.type}</td><td className="px-3 text-xs">{row.previousAgent}</td><td className="px-3 text-xs whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="px-3 text-center"><Button size="sm" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue Onboarding':'View Enquiry'}</Button></td></tr>)}</tbody></table></div>:<EmptyState message="No enquiries or follow-ups awaiting action"/>}
           </Card>
         </div>
 
@@ -267,7 +267,7 @@ export default function Dashboard() {
 
         {/* Recent Tasks */}
         <Card className="p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex gap-2 items-center"><ListChecks size={16}/> Tasks</h2><div className="flex items-end gap-3"><Select className="w-44" label="Assigned To" value={taskOwner} onChange={setTaskOwner} options={[{value:'all',label:'All'},{value:'me',label:'My Tasks'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" variant="outline" onClick={()=>navigate('/tasks')}>View All</Button></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex gap-2 items-center"><ListChecks size={16}/> Tasks</h2><div className="flex flex-wrap items-center gap-3"><Select inlineLabel className="w-64" label="Assigned To" value={taskOwner} onChange={setTaskOwner} options={[{value:'all',label:'All'},{value:'me',label:'My Tasks'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" className="h-11 min-w-24" variant="outline" onClick={()=>navigate('/tasks')}>View All</Button></div></div>
           {visibleRecentTasks.length ? (
             <div className="space-y-2">
               {visibleRecentTasks.slice(0, 5).map(task => (

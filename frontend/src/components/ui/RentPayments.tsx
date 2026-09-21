@@ -6,7 +6,7 @@ import { PoundSterling, BadgePoundSterling, CheckCircle2, Clock, AlertCircle, Pl
 interface Payment {
   id: number;
   property_id: number;
-  tenant_id: number;
+  tenant_id: number; linked_tenant_id?:number; opening_balance_amount?:number;
   due_date: string;
   amount_due: number;
   amount_paid: number | null;
@@ -34,7 +34,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
       .then(data => {
         let filtered = Array.isArray(data) ? data : [];
         if (propertyId) filtered = filtered.filter((p: Payment) => p.property_id === propertyId);
-        if (tenantId) filtered = filtered.filter((p: Payment) => p.tenant_id === tenantId);
+        if (tenantId) filtered = filtered.filter((p: Payment) => p.tenant_id === tenantId || p.linked_tenant_id === tenantId);
         setPayments(filtered);
       })
       .catch(() => { })
@@ -187,7 +187,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
                 </p>
               </div>
               <span className={`text-xs font-medium capitalize ${statusColor(payment.status)}`}>
-                {payment.status}
+                {Number(payment.opening_balance_amount)>0 ? "Assumed Paid" : payment.status}
               </span>
               {payment.status !== 'paid' && (
                 <Button variant="ghost" size="sm" onClick={() => handlePay(payment)}>
