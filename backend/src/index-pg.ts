@@ -7016,11 +7016,11 @@ app.get('/api/bank-feed/status', authMiddleware, async (_req, res) => {
     `);
     const totals = await queryOne(`
       SELECT COUNT(*)::INTEGER AS total,
-        COUNT(*) FILTER (WHERE match_status = 'matched_rent')::INTEGER AS rent_matches,
-        COUNT(*) FILTER (WHERE match_status = 'matched_deposit')::INTEGER AS deposit_matches,
-        COUNT(*) FILTER (WHERE match_status = 'matched_expense')::INTEGER AS expense_matches,
+        COUNT(*) FILTER (WHERE match_status = 'matched_rent' OR EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.kind='rent'))::INTEGER AS rent_matches,
+        COUNT(*) FILTER (WHERE match_status = 'matched_deposit' OR EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.kind='deposit'))::INTEGER AS deposit_matches,
+        COUNT(*) FILTER (WHERE match_status = 'matched_expense' OR EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.kind IN ('expense','maintenance')))::INTEGER AS expense_matches,
         COUNT(*) FILTER (WHERE match_status = 'unmatched')::INTEGER AS unmatched
-      FROM bank_feed_transactions WHERE booked_at >= CURRENT_DATE - 29
+      FROM bank_feed_transactions b WHERE booked_at >= (NOW() AT TIME ZONE 'Europe/London')::date - 29
     `);
     res.json({ configured: Boolean(bankFeedConfig()), connection, totals });
   } catch (error) {
@@ -7121,7 +7121,7 @@ app.get('/api/bank-feed/transactions', authMiddleware, async (req, res) => {
     const rows = await query(`
       SELECT b.id, b.booked_at, b.description, b.amount, b.currency, b.transaction_type,
         b.transaction_category, b.merchant_name, b.match_status, p.address AS property_address,
-        (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount)) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id) AS allocations,
+        (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount,'tenant_id',a.tenant_id,'property_id',a.property_id,'rent_payment_id',a.rent_payment_id,'expense_id',a.expense_id)) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id) AS allocations,
         COALESCE(t.name, TRIM(te.first_name_1 || ' ' || te.last_name_1)) AS tenant_name
       FROM bank_feed_transactions b
       LEFT JOIN properties p ON p.id=b.property_id LEFT JOIN tenants t ON t.id=b.tenant_id

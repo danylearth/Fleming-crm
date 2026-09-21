@@ -621,6 +621,7 @@ try {
     assert.equal((await request(`/api/rent-payments/${charge.id}/pay`,{method:'PUT',token:auth.staff,body:{amount_paid:0}})).status,409);
     assert.equal((await request(`/api/rent-payments/${charge.id}`,{method:'PUT',token:auth.staff,body:{amount_due:1}})).status,409);
     assert.equal((await request(`/api/rent-payments/${charge.id}`,{method:'DELETE',token:auth.admin})).status,409);
+    const totals=(await ok('/api/bank-feed/status',{token:auth.staff})).totals;assert.equal(totals.rent_matches,1);assert.equal(totals.deposit_matches,1);
     const extra=await one("INSERT INTO bank_feed_transactions(connection_id,external_id,account_id,booked_at,amount) VALUES($1,'bad-split-test','test',NOW(),100) RETURNING id",[connection.id]);
     const failed=await request(`/api/bank-feed/transactions/${extra.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'assign',allocations:[{kind:'deposit',tenant_id:tenantId,amount:50},{kind:'rent',rent_payment_id:charge.id,amount:50}]}});assert.equal(failed.status,400);
     assert.equal((await sql('SELECT * FROM bank_feed_allocations WHERE bank_transaction_id=$1',[extra.id])).length,0);
