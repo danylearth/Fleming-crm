@@ -1,4 +1,5 @@
 import { type ReactNode, useState, useRef, useEffect, useCallback } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 // ─── Card ───
@@ -60,6 +61,7 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
   label?: string; value: string; onChange: (v: string) => void; placeholder?: string;
   type?: string; className?: string;
 }) {
+  const [showPassword,setShowPassword]=useState(false);
   const currency = type === 'currency';
   const shown = currency ? value.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : value;
   const shouldCap = !currency && !['email', 'number', 'password', 'time', 'tel'].includes(type);
@@ -74,8 +76,8 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
   return (
     <div className={className}>
       {label && <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">{label}</label>}
-      <div className="relative">{currency && <span className="absolute left-3 top-2.5 text-sm" aria-hidden="true">£</span>}<input aria-label={label} type={currency ? 'text' : type} inputMode={currency ? 'decimal' : undefined} style={currency ? {paddingLeft:28} : undefined} value={shown} onChange={e => handleChange(e.target.value)} placeholder={placeholder}
-        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors" /></div>
+      <div className="relative">{currency && <span className="absolute left-3 top-2.5 text-sm" aria-hidden="true">£</span>}<input aria-label={label} type={currency || (type==='password'&&showPassword) ? 'text' : type} inputMode={currency ? 'decimal' : undefined} style={currency ? {paddingLeft:28} : undefined} value={shown} onChange={e => handleChange(e.target.value)} placeholder={placeholder}
+        className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors" />{type==='password'&&<button type="button" className="mt-2 flex items-center gap-2 text-xs" onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={14}/>:<Eye size={14}/>} {showPassword?'Hide Password':'Show Password'}</button>}</div>
     </div>
   );
 }

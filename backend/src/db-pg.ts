@@ -1103,7 +1103,7 @@ export async function initDb() {
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE documents ADD CONSTRAINT documents_entity_type_check
-          CHECK(entity_type IN ('landlord', 'landlord_bdm', 'tenant', 'tenant_enquiry', 'property', 'maintenance', 'task'));
+          CHECK(entity_type IN ('landlord', 'landlord_bdm', 'tenant', 'tenant_enquiry', 'property', 'maintenance', 'task', 'bank_transaction'));
       EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);

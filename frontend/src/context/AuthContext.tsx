@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const a=user?.appearance;const root=document.documentElement;
-    const fonts:Record<string,string>={lufga:"'Lufga', sans-serif",system:'system-ui, sans-serif',verdana:'Verdana, sans-serif',arial:'Arial, sans-serif',aptos:'Aptos, Calibri, sans-serif',times:'"Times New Roman", serif',comic:'"Comic Sans MS", cursive',georgia:'Georgia, serif',tahoma:'Tahoma, sans-serif',trebuchet:'"Trebuchet MS", sans-serif',courier:'"Courier New", monospace'};
+    const fonts:Record<string,string>={lufga:"'Lufga', sans-serif",system:'system-ui, sans-serif',verdana:'Verdana, sans-serif',arial:'Arial, sans-serif',aptos:'Aptos, Calibri, sans-serif',times:'"Times New Roman", serif',comic:'"Comic Sans MS", cursive',georgia:'Georgia, serif',tahoma:'Tahoma, sans-serif',trebuchet:'"Trebuchet MS", sans-serif',courier:'"Courier New", monospace',calibri:'Calibri, sans-serif',cambria:'Cambria, serif',helvetica:'Helvetica, Arial, sans-serif',palatino:'Palatino, serif'};
     root.style.setProperty('--user-font',fonts[a?.font || 'lufga'] || fonts.lufga);
     root.style.fontSize=`${a?.scale || 100}%`;
     root.dataset.appearanceBackground=a?.background || 'default';

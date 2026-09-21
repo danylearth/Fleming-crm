@@ -136,6 +136,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [landlordBankSortCode, setLandlordBankSortCode] = useState('');
   const [landlordBankAccountNumber, setLandlordBankAccountNumber] = useState('');
   const [landlordBankAccountName, setLandlordBankAccountName] = useState('');
+  const [paymentReference,setPaymentReference]=useState('');
   const [landlordBankName, setLandlordBankName] = useState('');
   const [agreementSendEmail, setAgreementSendEmail] = useState(true);
   const [agreementSendSms, setAgreementSendSms] = useState(false);
@@ -238,6 +239,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         setAgreementOccupiers(current => current || String(data.defaults.permittedOccupiers || ''));
         setAgreementFacilities(current => current || String(data.defaults.sharedFacilities || ''));
         setAgreementParking(current => current || String(data.defaults.parking || ''));
+        setPaymentReference(current=>current||String(data.defaults.paymentReference||''));
       }
     } catch { setAgreementCompliance(null); }
   };
@@ -578,6 +580,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         landlord_bank_account_number: landlordBankAccountNumber,
         landlord_bank_account_name: landlordBankAccountName,
         landlord_bank_name: landlordBankName,
+        payment_reference:paymentReference,
         send_email: agreementSendEmail,
         send_sms: agreementSendSms,
         email_message: agreementEmailMessage,
@@ -1344,7 +1347,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                         <input type="text" inputMode="numeric" value={landlordBankSortCode} onChange={event => setLandlordBankSortCode(event.target.value)} placeholder="Sort code *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
                         <input type="text" inputMode="numeric" value={landlordBankAccountNumber} onChange={event => setLandlordBankAccountNumber(event.target.value)} placeholder="8-digit account number *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
                         <input type="text" value={landlordBankAccountName} onChange={event => setLandlordBankAccountName(event.target.value)} placeholder="Account name *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
-                        <input type="text" value={landlordBankName} onChange={event => setLandlordBankName(event.target.value)} placeholder="Bank name *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
+                        <input aria-label="Payment Reference" type="text" value={paymentReference} onChange={event=>setPaymentReference(event.target.value)} placeholder="Payment reference" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs"/><input type="text" value={landlordBankName} onChange={event => setLandlordBankName(event.target.value)} placeholder="Bank name *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
                       </div>
                     </div>
                   )}

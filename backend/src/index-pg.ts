@@ -1,3 +1,4 @@
+import {registerTenantMessageTemplates} from './tenant-message-templates';
 import {registerBankReconciliation} from './bank-reconciliation';
 import {registerMarketing} from './marketing';
 import {registerApplicationReview,applicationDataApproved,approvedDataChanged,retainApprovedAnswersSql} from './application-review';
@@ -27,7 +28,7 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import pool, { initDb, query, queryOne, insert, run } from './db-pg';
-import { generateToken, authMiddleware, AuthRequest, requireRole, requirePermission, requireFinance } from './auth';
+import { generateToken, authMiddleware, AuthRequest, requireRole, requirePermission, requireFinance, canAccessFinance } from './auth';
 import { registerInventoryRoutes } from './inventory-routes';
 import { SMS_FROM, validateTwilioWebhook, normalizeUkPhone as normalizePhone } from './sms';
 import crypto from 'crypto';
@@ -150,6 +151,7 @@ const upload = multer({
     cb(null, allowed.includes(file.mimetype));
   }
 });
+const documentUpload = multer({storage,limits:{fileSize:100*1024*1024},fileFilter:(_req,file,cb)=>cb(null,['application/pdf','image/jpeg','image/png','image/gif','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.mimetype))});
 const maintenanceUpload = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024, files: 6 },
@@ -648,14 +650,15 @@ app.get('/api/dashboard', authMiddleware, async (req: AuthRequest, res) => {
     const tasksDueToday = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tasks WHERE status IN ('pending', 'in_progress') AND due_date = CURRENT_DATE"));
 
     const complianceAlerts = await query(`
-      SELECT id, address as property_address, 'EICR' as type, eicr_expiry_date as expiry_date
+      SELECT alerts.*,task.id AS task_id,task.assigned_to FROM (SELECT id, address as property_address, 'EICR' as type, eicr_expiry_date as expiry_date
       FROM properties WHERE eicr_expiry_date IS NOT NULL AND eicr_expiry_date <= CURRENT_DATE + INTERVAL '14 days'
       UNION ALL
       SELECT id, address as property_address, 'EPC', epc_expiry_date FROM properties WHERE epc_expiry_date IS NOT NULL AND epc_expiry_date <= CURRENT_DATE + INTERVAL '14 days'
       UNION ALL
       SELECT id, address as property_address, 'Gas Safety', gas_safety_expiry_date FROM properties WHERE has_gas = 1 AND gas_safety_expiry_date IS NOT NULL AND gas_safety_expiry_date <= CURRENT_DATE + INTERVAL '14 days'
-      UNION ALL SELECT p.id,p.address,CASE pol.policy_type WHEN 'buildings' THEN 'Buildings Insurance' ELSE 'Rent Protection' END,pol.expiry_date FROM property_policies pol JOIN property_policy_allocations a ON a.policy_id=pol.id JOIN properties p ON p.id=a.property_id WHERE p.archived_at IS NULL AND pol.expiry_date<=CURRENT_DATE+INTERVAL '14 days' AND NOT EXISTS(SELECT 1 FROM property_policies newer JOIN property_policy_allocations na ON na.policy_id=newer.id WHERE na.property_id=p.id AND newer.policy_type=pol.policy_type AND newer.expiry_date>pol.expiry_date AND newer.commencement_date<=CURRENT_DATE)
-      ORDER BY expiry_date LIMIT 20
+      UNION ALL SELECT p.id,p.address,CASE pol.policy_type WHEN 'buildings' THEN 'Buildings Insurance' ELSE 'Rent Protection' END,pol.expiry_date FROM property_policies pol JOIN property_policy_allocations a ON a.policy_id=pol.id JOIN properties p ON p.id=a.property_id WHERE p.archived_at IS NULL AND pol.expiry_date<=CURRENT_DATE+INTERVAL '14 days' AND NOT EXISTS(SELECT 1 FROM property_policies newer JOIN property_policy_allocations na ON na.policy_id=newer.id WHERE na.property_id=p.id AND newer.policy_type=pol.policy_type AND newer.expiry_date>pol.expiry_date AND newer.commencement_date<=pol.expiry_date+1)
+      ) alerts LEFT JOIN LATERAL (SELECT id,assigned_to FROM tasks WHERE entity_type='property' AND entity_id=alerts.id AND status IN ('pending','in_progress') AND (due_date=alerts.expiry_date OR task_type='insurance_renewal') AND task_type=CASE alerts.type WHEN 'EICR' THEN 'eicr_reminder' WHEN 'EPC' THEN 'epc_reminder' WHEN 'Gas Safety' THEN 'gas_reminder' ELSE 'insurance_renewal' END ORDER BY id DESC LIMIT 1) task ON TRUE
+      ORDER BY expiry_date LIMIT 100
     `);
 
     const recentMaintenance = await query(`
@@ -1241,8 +1244,8 @@ app.post('/api/landlords-bdm', authMiddleware, async (req: AuthRequest, res) => 
     const { name, email, phone, address, status, follow_up_date, source, notes } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
     const id = await insert(
-      'INSERT INTO landlords_bdm (name, email, phone, address, status, follow_up_date, source, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-      [name, email || null, phone || null, address || null, status || 'new', follow_up_date || null, source || null, notes || null]
+      'INSERT INTO landlords_bdm (name, email, phone, address, status, follow_up_date, source, notes,entity_type,company_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9,$10)',
+      [name, email || null, phone || null, address || null, status || 'new', follow_up_date || null, source || null, notes || null,req.body.entity_type==='company'?'company':'individual',req.body.entity_type==='company'?req.body.company_number||null:null]
     );
     await logAudit(req.user?.id, req.user?.email, 'create', 'landlord_bdm', id, req.body);
     res.json({ id });
@@ -1265,7 +1268,7 @@ app.get('/api/landlords-bdm/:id', authMiddleware, async (req: AuthRequest, res) 
 app.put('/api/landlords-bdm/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
-    const allowed = ['name', 'email', 'phone', 'address', 'status', 'follow_up_date', 'source', 'notes'];
+    const allowed = ['name', 'email', 'phone', 'address', 'status', 'follow_up_date', 'source', 'notes','entity_type','company_number'];
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -1307,8 +1310,8 @@ app.post('/api/landlords-bdm/:id/convert', authMiddleware, async (req: AuthReque
     try {
       await client.query('BEGIN');
       const insertResult = await client.query(
-        'INSERT INTO landlords (name, email, phone, address, notes, landlord_type, referral_source) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [prospect.name, prospect.email, prospect.phone, prospect.address, prospect.notes, landlord_type || 'external', prospect.source]
+        'INSERT INTO landlords (name, email, phone, address, notes, landlord_type, referral_source,entity_type,company_number) VALUES ($1, $2, $3, $4, $5, $6, $7,$8,$9) RETURNING id',
+        [prospect.name, prospect.email, prospect.phone, prospect.address, prospect.notes, landlord_type || 'external', prospect.source,prospect.entity_type||'individual',prospect.company_number||null]
       );
       landlordId = insertResult.rows[0].id;
       await client.query("UPDATE landlords_bdm SET status = 'onboarded', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id as string]);
@@ -1566,17 +1569,17 @@ app.post('/api/public/landlord-enquiries', publicSubmitLimiter, async (req, res)
     // Insert into landlords_bdm table
     const result = await query(`
       INSERT INTO landlords_bdm (
-        name, email, phone, address, status, source, notes, created_at,intake_data,upload_token_hash,upload_expires_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(),$8,$9,NOW()+INTERVAL '24 hours')
+        name, email, phone, address, status, source, notes, created_at,intake_data,upload_token_hash,upload_expires_at,entity_type,company_number
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(),$8,$9,NOW()+INTERVAL '24 hours',$10,$11)
       RETURNING id
     `, [
-      `${firstName} ${surname}`,
+      registration_type==='Limited Company'?company_name:`${firstName} ${surname}`,
       email,
       phone,
-      `${[address,req.body.address_line_2,req.body.city,postcode].filter(Boolean).join(", ")}`,
+      (registration_type==='Limited Company'?[company_address,req.body.companyCity,req.body.companyPostcode]:[address,req.body.address_line_2,req.body.city,postcode]).filter(Boolean).join(', '),
       'new',
       'Website Enquiry Form',
-      notes,JSON.stringify(req.body),crypto.createHash('sha256').update(uploadToken).digest('hex')
+      notes,JSON.stringify(req.body),crypto.createHash('sha256').update(uploadToken).digest('hex'),registration_type==='Limited Company'?'company':'individual',company_number||null
     ]);
 
     console.log(`[LANDLORD ENQUIRY] New submission from ${firstName} ${surname} (${email})`);
@@ -2658,6 +2661,7 @@ registerApplicationReview(app);
 registerPropertyPolicies(app);
 registerMarketing(app);
 registerInventoryReviewRoutes(app);
+registerTenantMessageTemplates(app);
 registerFlemoRoutes(app);
 
 app.get('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
@@ -4401,6 +4405,7 @@ const DOC_TYPES: Record<string, string[]> = {
     'Tenant Deposit Certificate', 'Tenant Deposit Prescribed Information',
     'Signed Tenancy Agreement', 'Other',
   ],
+  bank_transaction: ['Invoice','Schedule of Works','Contract','Receipt','Other'],
   maintenance: ['Quote', 'Invoice', 'Photo', 'Report', 'Other'],
   task: ['Supporting Document', 'Other'],
 };
@@ -4437,6 +4442,7 @@ app.get('/api/documents/download/:id', authMiddleware, async (req: AuthRequest, 
     await logAudit(req.user?.id,req.user?.email,'view','document',doc.id,{ name: doc.original_name, entity_type: doc.entity_type, entity_id: doc.entity_id });
     const disposition = req.query.disposition === 'inline' ? 'inline' : 'attachment';
     res.setHeader('Content-Disposition', `${disposition}; filename="${doc.original_name}"`);
+    if(doc.entity_type==='bank_transaction'&&!canAccessFinance(req.user))return res.status(403).json({error:'Finance access required'});
     if (doc.mime_type) res.type(doc.mime_type);
     res.sendFile(filePath);
   } catch (err) {
@@ -4446,6 +4452,7 @@ app.get('/api/documents/download/:id', authMiddleware, async (req: AuthRequest, 
 
 app.get('/api/documents/:entityType/:entityId', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    if(req.params.entityType==='bank_transaction'&&!canAccessFinance(req.user))return res.status(403).json({error:'Finance access required'});
     const applicantNumber = req.query.applicant_number ? parseInt(req.query.applicant_number as string) : undefined;
     let sql = `SELECT id, doc_type, original_name, mime_type, size, uploaded_at,
       COALESCE(review_status, 'pending') AS review_status, review_notes, reviewed_at
@@ -4463,9 +4470,10 @@ app.get('/api/documents/:entityType/:entityId', authMiddleware, async (req: Auth
   }
 });
 
-app.post('/api/documents/:entityType/:entityId', authMiddleware, requirePermission('staff'), upload.single('file'), async (req: AuthRequest, res) => {
+app.post('/api/documents/:entityType/:entityId', authMiddleware, requirePermission('staff'), documentUpload.single('file'), async (req: AuthRequest, res) => {
   try {
     const { entityType, entityId } = req.params;
+    if(entityType==='bank_transaction'&&(!canAccessFinance(req.user)||!await queryOne('SELECT id FROM bank_feed_transactions WHERE id=$1',[entityId])))return res.status(403).json({error:'Finance access and a valid transaction are required'});
     const { doc_type, applicant_number } = req.body;
     const appNum = applicant_number ? parseInt(applicant_number) : 1;
     const file = req.file;
@@ -4538,6 +4546,7 @@ app.delete('/api/documents/:id', authMiddleware, requirePermission('staff'), asy
     const doc = await queryOne('SELECT * FROM documents WHERE id = $1', [req.params.id as string]);
     if (!doc) return res.status(404).json({ error: 'Document not found' });
 
+    if(doc.entity_type==='bank_transaction'&&!canAccessFinance(req.user))return res.status(403).json({error:'Finance access required'});
     if(doc.inventory_id)return res.status(409).json({error:'Use the Inventory section to change or delete a completed inventory; administrator access is required'});
     if (await queryOne('SELECT id FROM rent_reviews WHERE notice_document_id=$1 LIMIT 1', [doc.id])) return res.status(409).json({ error: 'This notice is retained in the rent review audit trail and cannot be deleted' });
     const filePath = path.join(uploadsDir, doc.filename);
@@ -4635,7 +4644,7 @@ app.post('/api/tenancies', authMiddleware, async (req: AuthRequest, res) => {
 app.get('/api/rent-payments', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const payments = await query(`
-      SELECT rp.*, t.linked_tenant_id, COALESCE(p.address, 'Unknown property') as address, t.name as tenant_name FROM rent_payments rp
+      SELECT rp.*, (SELECT id FROM tenants jt WHERE jt.id=t.linked_tenant_id AND jt.property_id=t.property_id AND jt.tenancy_start_date=t.tenancy_start_date) AS linked_tenant_id, COALESCE(p.address, 'Unknown property') as address, CONCAT_WS(' & ',t.name,(SELECT name FROM tenants jt WHERE jt.id=t.linked_tenant_id AND jt.property_id=t.property_id AND jt.tenancy_start_date=t.tenancy_start_date)) as tenant_name, (SELECT SUM(a.amount) FROM bank_feed_allocations a WHERE a.rent_payment_id=rp.id AND a.reversed_at IS NULL) AS bank_received, (SELECT MAX(b.booked_at) FROM bank_feed_allocations a JOIN bank_feed_transactions b ON b.id=a.bank_transaction_id WHERE a.rent_payment_id=rp.id AND a.reversed_at IS NULL) AS bank_payment_date FROM rent_payments rp
       LEFT JOIN properties p ON p.id = rp.property_id LEFT JOIN tenants t ON t.id = rp.tenant_id
       ORDER BY rp.due_date DESC
     `);
@@ -5699,6 +5708,7 @@ app.get('/api/tenant-enquiries/:id/tenancy-agreement-compliance', authMiddleware
         permittedOccupiers: '',
         sharedFacilities: '',
         parking: '',
+        paymentReference:`${String(enquiry.address || '').match(/^\s*\d+[A-Za-z]?/)?.[0]?.trim() || 'PROPERTY'} ${String(enquiry.postcode || '').replace(/\s/g, '').toUpperCase()} - ${String(enquiry.last_name_1 || 'TENANT').toUpperCase()}`,
       },
     });
   } catch (err) {
@@ -5943,7 +5953,8 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
         address: enquiry.current_address_2,
       });
     }
-    const paymentReference = `${String(enquiry.address || '').match(/^\s*\d+[A-Za-z]?/)?.[0]?.trim() || 'PROPERTY'} ${String(enquiry.postcode || '').replace(/\s/g, '').toUpperCase()} - ${String(enquiry.last_name_1 || 'TENANT').toUpperCase()}`;
+    const defaultPaymentReference = `${String(enquiry.address || '').match(/^\s*\d+[A-Za-z]?/)?.[0]?.trim() || 'PROPERTY'} ${String(enquiry.postcode || '').replace(/\s/g, '').toUpperCase()} - ${String(enquiry.last_name_1 || 'TENANT').toUpperCase()}`;
+    const paymentReference = paymentRoute==='landlord'&&typeof req.body.payment_reference==='string'&&req.body.payment_reference.trim()?req.body.payment_reference.trim().slice(0,100):defaultPaymentReference;
     const holdingDeposit = Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
     const balanceDue = Number(Math.max(0, deposit + rent - holdingDeposit).toFixed(2));
     const agreementDetails = {
@@ -7016,9 +7027,9 @@ app.get('/api/bank-feed/status', authMiddleware, async (_req, res) => {
     `);
     const totals = await queryOne(`
       SELECT COUNT(*)::INTEGER AS total,
-        COUNT(*) FILTER (WHERE match_status = 'matched_rent' OR EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.kind='rent'))::INTEGER AS rent_matches,
-        COUNT(*) FILTER (WHERE match_status = 'matched_deposit' OR EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.kind='deposit'))::INTEGER AS deposit_matches,
-        COUNT(*) FILTER (WHERE match_status = 'matched_expense' OR EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.kind IN ('expense','maintenance')))::INTEGER AS expense_matches,
+        COUNT(*) FILTER (WHERE match_status = 'matched_rent' OR EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL AND a.kind='rent'))::INTEGER AS rent_matches,
+        COUNT(*) FILTER (WHERE match_status = 'matched_deposit' OR EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL AND a.kind='deposit'))::INTEGER AS deposit_matches,
+        COUNT(*) FILTER (WHERE match_status = 'matched_expense' OR EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL AND a.kind IN ('expense','maintenance')))::INTEGER AS expense_matches,
         COUNT(*) FILTER (WHERE match_status = 'unmatched')::INTEGER AS unmatched
       FROM bank_feed_transactions b WHERE booked_at >= (NOW() AT TIME ZONE 'Europe/London')::date - 29
     `);
@@ -7121,8 +7132,8 @@ app.get('/api/bank-feed/transactions', authMiddleware, async (req, res) => {
     const rows = await query(`
       SELECT b.id, b.booked_at, b.description, b.amount, b.currency, b.transaction_type,
         b.transaction_category, b.merchant_name, b.match_status, p.address AS property_address,
-        (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount,'tenant_id',a.tenant_id,'property_id',a.property_id,'rent_payment_id',a.rent_payment_id,'expense_id',a.expense_id)) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id) AS allocations,
-        COALESCE(t.name, TRIM(te.first_name_1 || ' ' || te.last_name_1)) AS tenant_name
+        (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount,'tenant_id',a.tenant_id,'property_id',a.property_id,'rent_payment_id',a.rent_payment_id,'expense_id',a.expense_id,'category',a.category,'notes',a.notes)) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL) AS allocations,
+        COALESCE(NULLIF(CONCAT_WS(' & ',t.name,(SELECT name FROM tenants jt WHERE jt.id=t.linked_tenant_id AND jt.property_id=t.property_id AND jt.tenancy_start_date=t.tenancy_start_date)),''), TRIM(te.first_name_1 || ' ' || te.last_name_1)) AS tenant_name
       FROM bank_feed_transactions b
       LEFT JOIN properties p ON p.id=b.property_id LEFT JOIN tenants t ON t.id=b.tenant_id
       LEFT JOIN tenant_enquiries te ON te.id=b.enquiry_id

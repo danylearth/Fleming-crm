@@ -21,7 +21,7 @@ import { activePropertyTenants, type PropertyTenant } from '../utils/propertyTen
 import {
   User, Building2, Briefcase, KeyRound, Landmark, Users, ShieldCheck, ListChecks, History,
   CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
-  AlertTriangle, Plus, Wrench, Trash2, StickyNote
+  AlertTriangle, Plus, Wrench, Trash2, StickyNote, Eye
 } from 'lucide-react';
 
 interface PropertyDetail {
@@ -959,13 +959,13 @@ export default function PropertyDetail() {
                     <ReadField label="Email Address" value={property.leasehold_email} />
                     <ReadField label="Contact Number" value={property.leasehold_phone} />
                     <ReadField label="Reference" value={property.leasehold_reference} />
-                    <ReadField label="Portal Website" value={property.leasehold_portal_url ? <a href={property.leasehold_portal_url} target="_blank" rel="noreferrer" className="text-[var(--accent-orange)] hover:underline">Open portal</a> : ''} />
+                    <ReadField label="Portal Website" value={property.leasehold_portal_url ? <a href={property.leasehold_portal_url} target="_blank" rel="noreferrer" className="text-[var(--accent-orange)] hover:underline">Click to Open</a> : ''} />
                     <ReadField label="Portal Username" value={property.leasehold_portal_username} />
                     <div>
                       <p className="text-xs text-[var(--text-muted)]">Portal Password</p>
                       {property.leasehold_portal_password_set ? user?.role === 'admin' ? (
                         <button type="button" onClick={() => revealPortalPassword('leasehold')} className="mt-0.5 text-sm font-medium text-[var(--accent-orange)] hover:underline">
-                          {revealedPortalPasswords.leasehold || (revealingPortalPassword === 'leasehold' ? 'Revealing…' : 'Reveal password')}
+                          <Eye size={14} className="inline mr-1" />{revealedPortalPasswords.leasehold || (revealingPortalPassword === 'leasehold' ? 'Revealing…' : 'Show Password')}
                         </button>
                       ) : <p className="mt-0.5 text-sm font-medium">Stored securely · Admin access required</p> : <p className="mt-0.5 text-sm font-medium">—</p>}
                     </div>
@@ -1002,13 +1002,13 @@ export default function PropertyDetail() {
                     <ReadField label="Email Address" value={property.management_company_email} />
                     <ReadField label="Contact Number" value={property.management_company_phone} />
                     <ReadField label="Reference" value={property.management_company_reference} />
-                    <ReadField label="Portal Website" value={property.management_company_portal_url ? <a href={property.management_company_portal_url} target="_blank" rel="noreferrer" className="text-[var(--accent-orange)] hover:underline">Open portal</a> : ''} />
+                    <ReadField label="Portal Website" value={property.management_company_portal_url ? <a href={property.management_company_portal_url} target="_blank" rel="noreferrer" className="text-[var(--accent-orange)] hover:underline">Click to Open</a> : ''} />
                     <ReadField label="Portal Username" value={property.management_company_portal_username} />
                     <div>
                       <p className="text-xs text-[var(--text-muted)]">Portal Password</p>
                       {property.management_company_portal_password_set ? user?.role === 'admin' ? (
                         <button type="button" onClick={() => revealPortalPassword('management-company')} className="mt-0.5 text-sm font-medium text-[var(--accent-orange)] hover:underline">
-                          {revealedPortalPasswords['management-company'] || (revealingPortalPassword === 'management-company' ? 'Revealing…' : 'Reveal password')}
+                          <Eye size={14} className="inline mr-1" />{revealedPortalPasswords['management-company'] || (revealingPortalPassword === 'management-company' ? 'Revealing…' : 'Show Password')}
                         </button>
                       ) : <p className="mt-0.5 text-sm font-medium">Stored securely · Admin access required</p> : <p className="mt-0.5 text-sm font-medium">—</p>}
                     </div>
@@ -1025,7 +1025,7 @@ export default function PropertyDetail() {
                   <SectionHeader title="Tenancy Information" icon={<Users size={16} />} />
                   <div className="flex flex-wrap gap-2 sm:ml-auto">
                   {!editing && previousTenants.length > 0 && (
-                    <Button variant="outline" className="!bg-red-600 !text-white !border-red-600" size="sm" onClick={() => setShowPreviousTenancies(value => !value)}>
+                    <Button variant="outline" className="!bg-amber-100 !text-amber-900 !border-amber-300" size="sm" onClick={() => setShowPreviousTenancies(value => !value)}>
                       Previous Tenancies ({previousTenants.length})
                     </Button>
                   )}
@@ -1384,10 +1384,10 @@ export default function PropertyDetail() {
                   </div>
                 ))}
                 <div className="flex gap-2 mt-2">
-                  <input
+                  <textarea rows={2}
                     value={notesInput}
-                    onChange={e => setNotesInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addNote()}
+                    onChange={e => {setNotesInput(e.target.value);e.currentTarget.style.height="auto";e.currentTarget.style.height=`${e.currentTarget.scrollHeight}px`;}}
+
                     placeholder={`Add a note to ${notesFilter}...`}
                     className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/40 transition-colors"
                   />

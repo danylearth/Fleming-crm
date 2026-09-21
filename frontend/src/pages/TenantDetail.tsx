@@ -980,7 +980,7 @@ export default function TenantDetail() {
               </div>
             </GlassCard>
 
-            <CommunicationsHistory messages={communications} />
+            <CommunicationsHistory messages={communications} tenantId={Number(id)} onSent={()=>window.location.reload()} />
 
             {/* Activity Timeline */}
             <GlassCard className="p-6">

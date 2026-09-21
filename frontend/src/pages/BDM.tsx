@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState, DatePicker } from '../components/ui';
+import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState, DatePicker, Select } from '../components/ui';
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Mail, Phone, Calendar, ArrowRight, UserPlus, XCircle, LayoutGrid, List } from 'lucide-react';
@@ -49,10 +49,10 @@ export default function BDM() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('active'); // active = not onboarded/not_interested
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', source: '', follow_up_date: '', notes: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', source: '', follow_up_date: '', notes: '', entity_type:'individual', company_number:'', city:'', postcode:'' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   const [workflowProspect, setWorkflowProspect] = useState<Prospect | null>(null);
   const [workflowMode, setWorkflowMode] = useState<'choose' | 'follow_up' | 'reject' | 'confirm_drag'>('choose');
   const [workflowDate, setWorkflowDate] = useState('');
@@ -97,9 +97,9 @@ export default function BDM() {
     setSaving(true);
     setError('');
     try {
-      await api.post('/api/landlords-bdm', { ...form, status: 'new' });
+      await api.post('/api/landlords-bdm', { ...form,address:[form.address,form.city,form.postcode].filter(Boolean).join(', '), status: 'new' });
       setShowModal(false);
-      setForm({ name: '', email: '', phone: '', address: '', source: '', follow_up_date: '', notes: '' });
+      setForm({ name: '', email: '', phone: '', address: '', source: '', follow_up_date: '', notes: '', entity_type:'individual', company_number:'', city:'', postcode:'' });
       await load();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } }; message?: string };
@@ -475,13 +475,13 @@ export default function BDM() {
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-xs text-red-400">{error}</div>
             )}
-            <Input label="Full Name *" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="Landlord name" />
+            <Select label="Landlord Type" value={form.entity_type} onChange={entity_type=>setForm({...form,entity_type})} options={[{value:'individual',label:'Individual'},{value:'company',label:'Limited Company'}]}/>{form.entity_type==='company'&&<Input label="Company Number" value={form.company_number} onChange={company_number=>setForm({...form,company_number})}/>}<Input label={form.entity_type==='company'?'Company Name *':'Full Name *'} value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="Landlord name" />
             <div className="grid grid-cols-2 gap-3">
               <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} placeholder="email@example.com" type="email" />
               <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} placeholder="+44..." />
             </div>
-            <Input label="Address" value={form.address} onChange={v => setForm({ ...form, address: v })} placeholder="Property or contact address" />
-            <div className="grid grid-cols-2 gap-3">
+            <Input label={form.entity_type==='company'?'Registered Address':'Address'} value={form.address} onChange={v => setForm({ ...form, address: v })} placeholder="Property or contact address" />
+            <div className="grid grid-cols-2 gap-3"><Input label="Town/City" value={form.city} onChange={city=>setForm({...form,city})}/><Input label="Postcode" value={form.postcode} onChange={postcode=>setForm({...form,postcode})}/></div><div className="grid grid-cols-2 gap-3">
               <Input label="Source" value={form.source} onChange={v => setForm({ ...form, source: v })} placeholder="e.g. Referral, Rightmove" />
               <DatePicker label="Follow-up Date" value={form.follow_up_date} onChange={v => setForm({ ...form, follow_up_date: v })} />
             </div>

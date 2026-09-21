@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Button, SectionHeader, EmptyState, Input, DatePicker } from './index';
+import { Card, Button, SectionHeader, EmptyState, Input, DatePicker, Select } from './index';
 import { useApi } from '../../hooks/useApi';
 import { PoundSterling, BadgePoundSterling, CheckCircle2, Clock, AlertCircle, Plus } from 'lucide-react';
 
@@ -26,6 +26,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   const api = useApi();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [year,setYear]=useState('all');
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ due_date: '', amount_due: '' });
 
@@ -105,11 +106,12 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
     return 'text-amber-400';
   };
 
-  const displayPayments = compact ? payments.slice(0, 5) : payments;
+  const filteredPayments=payments.filter(p=>year==='all'||p.due_date?.slice(0,4)===year);
+  const displayPayments = compact ? filteredPayments.slice(0, 5) : filteredPayments;
 
   // Calculate summary
-  const totalDue = payments.reduce((sum, p) => sum + (p.amount_due || 0), 0);
-  const totalPaid = payments.reduce((sum, p) => sum + (p.amount_paid || 0), 0);
+  const totalDue = payments.reduce((sum, p) => sum + Number(p.amount_due || 0), 0);
+  const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount_paid || 0), 0);
   const pendingCount = payments.filter(p => p.status !== 'paid').length;
 
   // Average late payment (days between due_date and payment_date for paid payments)
@@ -131,6 +133,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
         actionLabel={showAdd ? 'Cancel' : 'Add Payment'}
       />
 
+      <Select className="max-w-xs mb-4" label="Year" value={year} onChange={setYear} options={[{value:'all',label:'All Years'},...[...new Set(payments.map(p=>p.due_date?.slice(0,4)).filter(Boolean))].sort().reverse().map(y=>({value:y,label:y}))]}/>
       {/* Summary */}
       {!loading && payments.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -187,7 +190,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
                 </p>
               </div>
               <span className={`text-xs font-medium capitalize ${statusColor(payment.status)}`}>
-                {Number(payment.opening_balance_amount)>0 ? "Assumed Paid" : payment.status}
+                {Number(payment.amount_paid)>Number(payment.amount_due)?`Credit £${(Number(payment.amount_paid)-Number(payment.amount_due)).toFixed(2)}`:payment.status}
               </span>
               {payment.status !== 'paid' && (
                 <Button variant="ghost" size="sm" onClick={() => handlePay(payment)}>

@@ -20,7 +20,7 @@ const navItems = [
   { to: '/landlords', icon: LandlordsIcon, label: 'Landlords', roles: null },
   { to: '/tenants', icon: TenantsIcon, label: 'Tenants', roles: null },
   { to: '/enquiries', icon: EnquiriesIcon, label: 'Tenant Enquiries', roles: null },
-  { to: '/bdm', icon: BdmIcon, label: 'Landlord Enquiries', roles: null },
+  { to: '/landlord-enquiries', icon: BdmIcon, label: 'Landlord Enquiries', roles: null },
   { to: '/maintenance', icon: MaintenanceIcon, label: 'Maintenance', roles: null },
   { to: '/tasks', icon: TasksIcon, label: 'Team Calendar', roles: null },
   { to: '/financials', icon: FinancialsIcon, label: 'Financials', roles: null },

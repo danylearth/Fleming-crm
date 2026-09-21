@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Upload, FileText, Trash2, Download, X, AlertCircle } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 
+const API=import.meta.env.VITE_API_URL || '';
+
 interface Document {
   id: number;
   doc_type: string;
@@ -12,7 +14,7 @@ interface Document {
 }
 
 interface Props {
-  entityType: 'landlord' | 'landlord_bdm' | 'tenant' | 'tenant_enquiry' | 'property' | 'maintenance';
+  entityType: 'landlord' | 'landlord_bdm' | 'tenant' | 'tenant_enquiry' | 'property' | 'maintenance' | 'bank_transaction';
   entityId: number;
   title?: string;
 }
@@ -31,14 +33,14 @@ export default function DocumentsSection({ entityType, entityId, title }: Props)
 
   const fetchDocuments = useCallback(async () => {
     try {
-      const res = await fetch(`/api/documents/${entityType}/${entityId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API}/api/documents/${entityType}/${entityId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) setDocuments(await res.json());
     } catch { /* Silently ignore */ } finally { setLoading(false); }
   }, [entityType, entityId, token]);
 
   const fetchDocTypes = useCallback(async () => {
     try {
-      const res = await fetch(`/api/documents/types/${entityType}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API}/api/documents/types/${entityType}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) { const types = await res.json(); setDocTypes(types); if (types.length > 0) setSelectedType(types[0]); }
     } catch { /* Silently ignore */ }
   }, [entityType, token]);
@@ -48,12 +50,13 @@ export default function DocumentsSection({ entityType, entityId, title }: Props)
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedType) return;
+    if(file.size>100*1024*1024){setError('Choose a file up to 100 MB');return;}
     setUploading(true); setError('');
     const formData = new FormData();
     formData.append('file', file);
     formData.append('doc_type', selectedType);
     try {
-      const res = await fetch(`/api/documents/${entityType}/${entityId}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData });
+      const res = await fetch(`${API}/api/documents/${entityType}/${entityId}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData });
       if (res.ok) { fetchDocuments(); setShowUpload(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
       else { const data = await res.json(); setError(data.error || 'Upload failed'); }
     } catch { setError('Upload failed'); } finally { setUploading(false); }
@@ -61,10 +64,12 @@ export default function DocumentsSection({ entityType, entityId, title }: Props)
 
   const handleDelete = async (id: number) => {
     if (!await confirmAction('Delete this document?')) return;
-    try { const res = await fetch(`/api/documents/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); if (res.ok) fetchDocuments(); } catch { /* Silently ignore */ }
+    try { const res = await fetch(`${API}/api/documents/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); if (res.ok) fetchDocuments(); } catch { /* Silently ignore */ }
   };
 
-  const handleDownload = (id: number) => { window.open(`/api/documents/download/${id}?token=${token}`, '_blank'); };
+  const handleDownload = async (id: number) => {
+    try {const res=await fetch(`${API}/api/documents/download/${id}`,{headers:{Authorization:`Bearer ${token}`}});if(!res.ok)throw new Error('Document could not be downloaded');const url=URL.createObjectURL(await res.blob());const a=document.createElement('a');a.href=url;a.download=documents.find(d=>d.id===id)?.original_name||'document';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch{setError('Document could not be downloaded');}
+  };
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B';
@@ -101,7 +106,7 @@ export default function DocumentsSection({ entityType, entityId, title }: Props)
               </select>
             </div>
             <div className="flex-[2] min-w-[200px]">
-              <label className="block text-xs text-gray-500 mb-1">File (PDF, JPG, PNG, DOC — max 10MB)</label>
+              <label className="block text-xs text-gray-500 mb-1">File (PDF, JPG, PNG, DOC — max 100MB)</label>
               <input
                 ref={fileInputRef}
                 type="file"

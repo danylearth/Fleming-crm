@@ -21,6 +21,7 @@ describe('office finance rules',()=>{
  it('keeps the original due day after a short month, including leap years',()=>{
   expect(rentDueDates('2024-01-31','2024-04-30')).toEqual(['2024-01-31','2024-02-29','2024-03-31','2024-04-30']);
   expect(rentDueDates('2026-09-21','2026-09-20')).toEqual([]);
+  expect(rentDueDates('2026-02-06','2026-04-06',5)).toEqual(['2026-02-05','2026-03-05','2026-04-05']);
  });
  it('preserves every contract text run through nested-table layout changes',()=>{
   const xml=new PizZip(fs.readFileSync(path.join(process.cwd(),'src/agreement-assets/assured-periodic-tenancy-template.docx'))).file('word/document.xml')!.asText();

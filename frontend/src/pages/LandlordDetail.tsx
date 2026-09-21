@@ -438,7 +438,7 @@ export default function LandlordDetail() {
                         <p className="text-sm font-medium">{formatPropertyAddress(p.city && !p.address.toLowerCase().includes(p.city.toLowerCase()) ? `${p.address}, ${p.city}` : p.address,p.postcode)}</p>{p.tenant_names && <p className="text-xs mt-1 text-[var(--text-secondary)]">Tenants: {p.tenant_names}</p>}
                         <div className="flex items-center gap-2 mt-1">
                           {p.type && <span className="text-xs text-[var(--text-muted)]">{p.type}</span>}
-                          {!!p.is_primary && <span className="text-[10px] text-[var(--accent-orange)]">Primary</span>}
+
                           {p.status && (
                             <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs capitalize ${p.status==='let'?'bg-emerald-500/15 text-emerald-600':'bg-amber-500/15 text-amber-600'}`}><Building2 size={12}/>{p.status.replaceAll('_', ' ')}</span>
                           )}
@@ -716,8 +716,8 @@ export default function LandlordDetail() {
                   </div>
                 )}
 
-                <ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Primary Identification" label="Primary ID Document" />
-                <ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Address Identification" label="Secondary ID Document (Optional)" />
+                <div className="grid xl:grid-cols-3 gap-3 items-stretch"><div className="rounded-xl border border-[var(--border-input)] p-3 [&>*]:h-full [&>*]:min-w-0 [&>*]:w-full"><ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Primary Identification" label="Primary ID Document" /></div><div className="rounded-xl border border-[var(--border-input)] p-3 [&>*]:h-full [&>*]:min-w-0 [&>*]:w-full">
+                <ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Address Identification" label="Secondary ID Document (Optional)" /></div><div className="rounded-xl border border-[var(--border-input)] p-3 flex flex-col justify-center">
                 <p className="text-xs text-[var(--text-muted)]">One primary identity document is required. Secondary ID is optional.</p>
                 {/* Admin approval button */}
                 {user?.role === 'admin' && !landlord.kyc_completed && (
@@ -741,7 +741,7 @@ export default function LandlordDetail() {
                     <ShieldCheck size={14} className="mr-2" />
                     Approve KYC (Admin)
                   </Button>
-                )}
+                )}{!!landlord.kyc_completed&&<p className="text-sm text-emerald-600">KYC Approved</p>}</div></div>
               </div>
             </GlassCard>
 
@@ -820,8 +820,8 @@ export default function LandlordDetail() {
                   </div>
                 ))}
                 <div className="flex gap-2 mt-2">
-                  <input value={notesInput} onChange={e => setNotesInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addNote()}
+                  <textarea rows={2} value={notesInput} onChange={e => {setNotesInput(e.target.value);e.currentTarget.style.height="auto";e.currentTarget.style.height=`${e.currentTarget.scrollHeight}px`;}}
+
                     placeholder={`Add a note to ${notesFilter === 'landlord' ? 'landlord' : notesFilter === 'all' ? 'landlord' : 'property'}...`}
                     className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/40 transition-colors" />
                   <Button variant="gradient" onClick={addNote} disabled={!notesInput.trim()}>Add</Button>

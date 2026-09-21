@@ -4,13 +4,13 @@ import sharp from 'sharp';
 import { authMiddleware, AuthRequest } from './auth';
 import { queryOne } from './db-pg';
 
-const colors = ['#a32372','#6d28d9','#1d4ed8','#0f766e','#166534'];
+const colors = ['#a32372','#6d28d9','#1d4ed8','#0f766e','#166534','#1e3a5f','#b91c1c','#881337','#c2410c','#854d0e','#4d7c0f','#0e7490','#4338ca','#475569','#27272a'];
 export function registerProfileRoutes(app: Express) {
   app.put('/api/auth/profile', authMiddleware, async (req: AuthRequest, res) => {
     const color = req.body.accent_color;
     const appearance=req.body.appearance;
     if (!colors.includes(color)) return res.status(400).json({error:'Choose one of the available colours'});
-    if(appearance && (!['lufga','system','verdana','arial','aptos','times','comic','georgia','tahoma','trebuchet','courier'].includes(appearance.font) || ![100,112.5,125,150].includes(appearance.scale) || !['default','cream','blue','green'].includes(appearance.background)))return res.status(400).json({error:'Choose the available appearance options'});
+    if(appearance && (!['lufga','system','verdana','arial','aptos','times','comic','georgia','tahoma','trebuchet','courier','calibri','cambria','helvetica','palatino'].includes(appearance.font) || ![100,112.5,125,150].includes(appearance.scale) || !['default','cream','blue','green'].includes(appearance.background)))return res.status(400).json({error:'Choose the available appearance options'});
     const user = await queryOne('UPDATE users SET accent_color=$1,appearance=COALESCE($2::jsonb,appearance) WHERE id=$3 RETURNING accent_color,appearance', [color,appearance?JSON.stringify(appearance):null,req.user.id]);
     res.json(user);
   });

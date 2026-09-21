@@ -407,6 +407,18 @@ try {
     await ok(`/api/tenant-enquiries/${applicant.id}/convert`,{method:'POST',token:auth.staff,body:{property_id:home.id,tenancy_start_date:today}});
     const tenant=await one('SELECT id FROM tenants WHERE source_enquiry_id=$1',[applicant.id]);
     assert(await one("SELECT id FROM documents WHERE entity_type='tenant' AND entity_id=$1 AND doc_type='Signed Tenancy Agreement'",[tenant.id]));
+    for(const service of ['rent_collection','let_only']) {
+      await sql('UPDATE properties SET service_type=$1 WHERE id=$2',[service,home.id]);
+      const e=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,linked_property_id,holding_deposit_received,application_form_completed,application_review_status,credit_check_completed,monthly_rent_agreed,current_address_1) VALUES('Service','Test','service@example.test',$1,1,1,'approved',1,850,'Previous Home') RETURNING id",[home.id]);
+      await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('tenant_enquiry',$1,'Credit Check Report','sample.pdf','Credit.pdf','application/pdf','approved')",[e.id]);
+      const defaults=await ok(`/api/tenant-enquiries/${e.id}/tenancy-agreement-compliance`,{token:auth.staff});assert.match(defaults.defaults.paymentReference,/TEST$/);
+      const input={...issueBody,rent:850,deposit:850,payment_reference:'MY CUSTOM REFERENCE',landlord_bank_sort_code:'123456',landlord_bank_account_number:'12345678',landlord_bank_account_name:'Client Owner',landlord_bank_name:'Test Bank'};
+      if(service==='let_only')assert.equal((await request(`/api/tenant-enquiries/${e.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:{...input,landlord_bank_account_number:''}})).status,400);
+      const made=await ok(`/api/tenant-enquiries/${e.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:input});const saved=await one('SELECT * FROM tenancy_agreements WHERE id=$1',[made.agreement_id]);assert(saved.requires_landlord_signature);assert.equal(saved.agreement_type,'client');
+      assert.equal(saved.agreement_details.bankDetails.accountNumber,service==='let_only'?'12345678':'03803880');assert.equal(saved.agreement_details.paymentReference,service==='let_only'?'MY CUSTOM REFERENCE':defaults.defaults.paymentReference);
+      const extracted=spawnSync('pdftotext',[path.join(dir,saved.filename),'-'],{encoding:'utf8'});assert.equal(extracted.status,0);assert(!extracted.stdout.includes('Signed by Robert Fleming'));assert(extracted.stdout.includes('Client Owner'));
+    }
+
   });
   await test('application review is atomic and supports revising approved documents',async()=>{
     const e=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,status,notes) VALUES('Review','Draft','review-draft@example.test','onboarding','[]') RETURNING id");
@@ -426,6 +438,7 @@ try {
     const base={registration_type:'Limited Company',firstName:'Owner',surname:'Test',email:'intake@example.test',phone:'07700900111',address:'10 Test Road',city:'Wolverhampton',postcode:'WV1 1AA',propertyAddress:'20 Test Road',propertyCity:'Wolverhampton',propertyPostcode:'WV1 1BB',company_name:'Example Ltd',company_number:'12345678',company_address:'30 Test Road',companyCity:'Wolverhampton',companyPostcode:'WV1 1CC'};
     assert.equal((await request('/api/public/landlord-enquiries',{method:'POST',body:base})).status,400);
     const created=await request('/api/public/landlord-enquiries',{method:'POST',body:{...base,beneficial_owners:'Owner Test 100%'}});assert.equal(created.status,201,JSON.stringify(created.data));
+    const company=await one('SELECT entity_type,company_number,name,address FROM landlords_bdm WHERE id=$1',[created.data.enquiry_id]);assert.equal(company.entity_type,'company');assert.equal(company.company_number,'12345678');assert.equal(company.name,'Example Ltd');assert.match(company.address,/30 Test Road/);
     const url=`/api/public/landlord-enquiries/${created.data.enquiry_id}/documents`;
     const body=new FormData();body.append('documents',new Blob([pdf],{type:'application/pdf'}),'Ownership.pdf');body.append('doc_type','Proof of Ownership');
     assert.equal((await fetch(`http://127.0.0.1:${port}`+url,{method:'POST',headers:{'X-Forwarded-For':`192.0.2.${passed+1}`},body})).status,403);
@@ -596,13 +609,14 @@ try {
     const e=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1) VALUES('Same inbox','Test','MARKETING@example.test') RETURNING id");
     assert.equal((await request('/api/marketing/contacts',{token:auth.staff})).status,403);
     const contacts=await ok('/api/marketing/contacts',{token:auth.admin});assert(contacts.some(c=>c.id===l.id&&c.entity_type==='landlord'));
-    const body={channel:'email',subject:'Test',message:'No real send from tests',recipients:[`landlord:${l.id}`,`tenant_enquiry:${e.id}`]};
+    const body={channel:'email',subject:'Test',message:'<h1>Local test</h1><script>alert(1)</script>',message_format:'html',recipients:[`landlord:${l.id}`,`tenant_enquiry:${e.id}`]};
     assert.equal((await request('/api/marketing/campaigns',{method:'POST',token:auth.admin,body})).status,409);
     await ok('/api/marketing/permission',{method:'PUT',token:auth.admin,body:{channel:'email',destination:'marketing@example.test',allowed:true,evidence:'Explicit email consent in local test'}});
     const made=await request('/api/marketing/campaigns',{method:'POST',token:auth.admin,body});assert.equal(made.status,201);assert.equal(made.data.count,1);
     const [s1,s2]=await Promise.all([1,2].map(()=>request(`/api/marketing/campaigns/${made.data.id}/send`,{method:'POST',token:auth.admin,body:{}})));assert.deepEqual([s1.status,s2.status].sort(),[202,409]);
     for(let i=0;i<40;i++){const rows=await sql('SELECT status FROM marketing_recipients WHERE campaign_id=$1',[made.data.id]);if(rows.every(r=>!['pending','sending'].includes(r.status)))break;await new Promise(r=>setTimeout(r,100));}
     const recipient=await one('SELECT * FROM marketing_recipients WHERE campaign_id=$1',[made.data.id]);assert.equal(recipient.status,'failed');
+    const copies=await sql("SELECT entity_type,entity_id,body_html FROM email_messages WHERE template='marketing' AND to_email='marketing@example.test'");assert.equal(copies.length,2);assert(copies.every(m=>m.body_html.includes('<h1>Local test</h1>')&&!m.body_html.includes('<script')));
     const permission=await one("SELECT * FROM marketing_permissions WHERE destination='marketing@example.test'");
     assert.equal((await request(`/api/public/marketing/unsubscribe/${permission.unsubscribe_token}`)).status,200);assert((await one('SELECT allowed FROM marketing_permissions WHERE unsubscribe_token=$1',[permission.unsubscribe_token])).allowed);
     assert.equal((await request(`/api/public/marketing/unsubscribe/${permission.unsubscribe_token}`,{method:'POST'})).status,200);
@@ -623,11 +637,23 @@ try {
     assert.equal((await request(`/api/rent-payments/${charge.id}`,{method:'DELETE',token:auth.admin})).status,409);
     const totals=(await ok('/api/bank-feed/status',{token:auth.staff})).totals;assert.equal(totals.rent_matches,1);assert.equal(totals.deposit_matches,1);
     const extra=await one("INSERT INTO bank_feed_transactions(connection_id,external_id,account_id,booked_at,amount) VALUES($1,'bad-split-test','test',NOW(),100) RETURNING id",[connection.id]);
-    const failed=await request(`/api/bank-feed/transactions/${extra.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'assign',allocations:[{kind:'deposit',tenant_id:tenantId,amount:50},{kind:'rent',rent_payment_id:charge.id,amount:50}]}});assert.equal(failed.status,400);
+    const failed=await request(`/api/bank-feed/transactions/${extra.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'assign',allocations:[{kind:'deposit',tenant_id:tenantId,amount:50},{kind:'rent',rent_payment_id:99999999,amount:50}]}});assert.equal(failed.status,400);
     assert.equal((await sql('SELECT * FROM bank_feed_allocations WHERE bank_transaction_id=$1',[extra.id])).length,0);
     await ok(`/api/bank-feed/transactions/${extra.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'ignore'}});
     await ok(`/api/bank-feed/transactions/${extra.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'restore'}});
     assert.equal((await one('SELECT match_status FROM bank_feed_transactions WHERE id=$1',[extra.id])).match_status,'unmatched');
+    await ok(`/api/bank-feed/transactions/${bank.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'unassign'}});
+    assert.equal(Number((await one('SELECT opening_balance_amount FROM rent_payments WHERE id=$1',[charge.id])).opening_balance_amount),800);
+    const over=await one("INSERT INTO bank_feed_transactions(connection_id,external_id,account_id,booked_at,amount) VALUES($1,'overpay-test','test',NOW(),820) RETURNING id",[connection.id]);
+    await ok(`/api/bank-feed/transactions/${over.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'assign',allocations:[{kind:'rent',rent_payment_id:charge.id,amount:820}]}});
+    assert.equal(Number((await one('SELECT amount_paid FROM rent_payments WHERE id=$1',[charge.id])).amount_paid),820);
+    await ok(`/api/bank-feed/transactions/${over.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'unassign'}});
+    await ok(`/api/bank-feed/transactions/${extra.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'assign',allocations:[{kind:'rent',rent_payment_id:charge.id,amount:100}]}});
+    const under=await one('SELECT amount_paid,status FROM rent_payments WHERE id=$1',[charge.id]);assert.equal(Number(under.amount_paid),100);assert.equal(under.status,'partial');
+    await ok(`/api/bank-feed/transactions/${extra.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'unassign'}});
+    await ok(`/api/bank-feed/transactions/${extra.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'assign',allocations:[{kind:'income',category:'Interest Received',notes:'Office interest',amount:100}]}});
+    assert.equal((await one('SELECT property_id FROM bank_feed_allocations WHERE bank_transaction_id=$1 AND reversed_at IS NULL',[extra.id])).property_id,null);
+
   });
   await test('landlord property creation accepts the card form and KYC needs only primary ID',async()=>{
     const owner=await one("INSERT INTO landlords(name,landlord_type,address,home_address) VALUES('Card Owner','external','1 Home Road, Test Town, WV1 1AA','1 Home Road, Test Town, WV1 1AA') RETURNING id");
@@ -638,7 +664,7 @@ try {
     await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,review_status) VALUES('landlord',$1,'Primary Identification','sample.pdf','ID.pdf','approved')",[owner.id]);
     await ok(`/api/landlords/${owner.id}`,{method:'PUT',token:auth.admin,body:{kyc_completed:1}});
   });
-  await test('daily rent charging deduplicates joint tenants and waits for bank review before chasing',async()=>{
+  await test('daily rent charging deduplicates joint tenants and never sends automatic reminders',async()=>{
     await sql("UPDATE bank_feed_connections SET status='error'");
     await sql("UPDATE rent_tracking_settings SET cutover_date='2026-09-21',chasers_enabled=TRUE WHERE id=1");
     const first=await one("INSERT INTO tenants(name,first_name_1,last_name_1,status,property_id,monthly_rent,tenancy_start_date,email) VALUES('Scheduler A','Scheduler','A','active',$1,800,'2026-09-21','schedule@example.test') RETURNING id",[property.id]);
@@ -653,7 +679,43 @@ try {
     assert.equal((await one('SELECT count(*)::int n FROM rent_chaser_deliveries')).n,0);
     await sql("UPDATE bank_feed_transactions SET match_status='ignored' WHERE match_status='unmatched'");
     const sending=spawnSync(process.execPath,['-e',script],{env,encoding:'utf8'});assert.equal(sending.status,0,sending.stderr);
-    const deliveries=await sql('SELECT * FROM rent_chaser_deliveries WHERE rent_payment_id=$1',[charges[0].id]);assert.equal(deliveries.length,1);assert.equal(deliveries[0].status,'failed');assert.match(deliveries[0].error,/not configured/);
+    const deliveries=await sql('SELECT * FROM rent_chaser_deliveries WHERE rent_payment_id=$1',[charges[0].id]);assert.equal(deliveries.length,0);
+  });
+  await test('inventory reminders reset for a new tenant, escalate at seven days and close only on signed evidence',async()=>{
+    const p=await one("INSERT INTO properties(address,postcode,landlord_id) VALUES('Inventory reset test','WV1 1AA',$1) RETURNING id",[landlord.id]);
+    const old=await one("INSERT INTO tenants(name,first_name_1,last_name_1,status,property_id,tenancy_start_date) VALUES('Previous tenant','Previous','tenant','inactive',$1,CURRENT_DATE-30) RETURNING id",[p.id]);
+    await sql("INSERT INTO inventories(property_id,tenant_id,inventory_type,inspection_date,signed_date,status) VALUES($1,$2,'check_in',CURRENT_DATE-30,CURRENT_DATE-29,'completed')",[p.id,old.id]);
+    const current=await one("INSERT INTO tenants(name,first_name_1,last_name_1,status,property_id,tenancy_start_date) VALUES('New tenant','New','tenant','active',$1,CURRENT_DATE-7) RETURNING id",[p.id]);
+    await sql("INSERT INTO inventories(property_id,tenant_id,inventory_type,inspection_date,signed_date,status) VALUES($1,$2,'check_in',CURRENT_DATE-100,CURRENT_DATE-99,'completed')",[p.id,current.id]);
+    const script="const db=require('./dist/db-pg');require('./dist/tenant-lifecycle-db').syncTenantLifecycle().then(()=>db.default.end()).catch(e=>{console.error(e);process.exit(1)})";
+    const run=()=>{const result=spawnSync(process.execPath,['-e',script],{env,encoding:'utf8'});assert.equal(result.status,0,result.stderr);};run();run();
+    let tasks=await sql("SELECT * FROM tasks WHERE task_type='inventory_due' AND entity_id=$1",[current.id]);assert.equal(tasks.length,1);assert.equal(tasks[0].priority,'high');assert.equal(tasks[0].status,'pending');
+    const draft=await one("INSERT INTO inventories(property_id,tenant_id,inventory_type,inspection_date,status) VALUES($1,$2,'check_in',CURRENT_DATE,'in_progress') RETURNING id",[p.id,current.id]);run();assert.equal((await one('SELECT status FROM tasks WHERE id=$1',[tasks[0].id])).status,'pending');
+    await sql("UPDATE inventories SET signed_date=CURRENT_DATE,status='completed' WHERE id=$1",[draft.id]);run();assert.equal((await one('SELECT status FROM tasks WHERE id=$1',[tasks[0].id])).status,'completed');
+    await sql('DELETE FROM inventories WHERE id=$1',[draft.id]);run();assert.equal((await one('SELECT status FROM tasks WHERE id=$1',[tasks[0].id])).status,'pending');
+    await sql('UPDATE tenants SET tenancy_start_date=CURRENT_DATE WHERE id=$1',[current.id]);run();const renewed=await sql("SELECT * FROM tasks WHERE task_type='inventory_due' AND entity_id=$1",[current.id]);assert.equal(renewed.length,2);assert.equal(renewed.filter(t=>t.status==='pending').length,1);
+  });
+  await test('insurance reminders open at fourteen days and close when a replacement policy covers the renewal',async()=>{
+    const p=await one("INSERT INTO properties(address,postcode,landlord_id) VALUES('Insurance reminder test','WV1 1AA',$1) RETURNING id",[landlord.id]);
+    const policy=await one("INSERT INTO property_policies(policy_type,annual_cost,commencement_date,expiry_date) VALUES('buildings',100,CURRENT_DATE-351,CURRENT_DATE+14) RETURNING id");
+    await sql('INSERT INTO property_policy_allocations(policy_id,property_id,allocated_cost) VALUES($1,$2,100)',[policy.id,p.id]);
+    const run=()=>{const result=spawnSync(process.execPath,['-e',"const db=require('./dist/db-pg');require('./dist/tenant-lifecycle-db').syncTenantLifecycle().then(()=>db.default.end()).catch(e=>{console.error(e);process.exit(1)})"],{env,encoding:'utf8'});assert.equal(result.status,0,result.stderr);};run();
+    const reminder=await one("SELECT * FROM tasks WHERE task_type='insurance_renewal' AND entity_id=$1",[p.id]);assert.equal(reminder.status,'pending');
+    const renewal=await one("INSERT INTO property_policies(policy_type,annual_cost,commencement_date,expiry_date) VALUES('buildings',110,CURRENT_DATE+15,CURRENT_DATE+379) RETURNING id");
+    await sql('INSERT INTO property_policy_allocations(policy_id,property_id,allocated_cost) VALUES($1,$2,110)',[renewal.id,p.id]);run();assert.equal((await one('SELECT status FROM tasks WHERE id=$1',[reminder.id])).status,'completed');
+  });
+  await test('outgoing categories retain notes and documents; reversal excludes costs without losing evidence',async()=>{
+    const connection=await one("SELECT id FROM bank_feed_connections LIMIT 1");
+    const bank=await one("INSERT INTO bank_feed_transactions(connection_id,external_id,account_id,booked_at,amount) VALUES($1,'expense-reversal-test','test',NOW(),-240) RETURNING id",[connection.id]);
+    await ok(`/api/bank-feed/transactions/${bank.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'assign',allocations:[{kind:'expense',property_id:property.id,category:'Service Charge',amount:240,notes:'Quarterly service charge'}]}});
+    const allocated=await one('SELECT * FROM bank_feed_allocations WHERE bank_transaction_id=$1',[bank.id]);assert.equal(allocated.notes,'Quarterly service charge');
+    const f=new FormData();f.append('file',new Blob([pdf],{type:'application/pdf'}),'Invoice.pdf');f.append('doc_type','Invoice');
+    const upload=await fetch(base+`/api/documents/bank_transaction/${bank.id}`,{method:'POST',headers:{Authorization:`Bearer ${auth.staff}`},body:f});assert.equal(upload.status,200,await upload.text());
+    assert.equal((await request(`/api/documents/bank_transaction/${bank.id}`,{token:auth.viewer})).status,403);
+    const evidence=(await ok(`/api/documents/bank_transaction/${bank.id}`,{token:auth.staff}))[0];assert.equal((await request(`/api/documents/download/${evidence.id}`,{token:auth.viewer})).status,403);
+    await ok(`/api/bank-feed/transactions/${bank.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'unassign'}});
+    assert.equal((await one('SELECT is_estimate FROM property_expenses WHERE id=$1',[allocated.expense_id])).is_estimate,true);
+    assert.equal((await ok(`/api/documents/bank_transaction/${bank.id}`,{token:auth.staff})).length,1);
   });
   console.log(`\n${passed} integration scenarios passed. Private artifacts: ${dir}`);
 } catch(error) { console.error(error); console.error('Server log:',path.join(dir,'server.log')); process.exitCode=1; }

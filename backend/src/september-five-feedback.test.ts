@@ -47,7 +47,7 @@ describe('5 September CRM feedback', () => {
     expect(propertyDetail).toContain('Management Company');
     expect(propertyDetail).toContain('Leasehold Issued By');
     expect(propertyDetail).toContain('Portal Website');
-    expect(propertyDetail).toContain('Reveal password');
+    expect(propertyDetail).toContain('Show Password');
     expect(credentialsMigration).toContain('leasehold_portal_password_encrypted TEXT');
     expect(credentialsMigration).toContain('management_company_portal_password_encrypted TEXT');
     expect(backend).toContain("requireRole('admin')");

@@ -1,3 +1,4 @@
+import {cleanMarketingHtml,marketingEmailHtml} from './marketing-html';
 import type {Express} from 'express';
 import crypto from 'crypto';
 import {authMiddleware,requirePermission,type AuthRequest} from './auth';
@@ -21,7 +22,7 @@ export async function processMarketing(){
  try{
   for(let count=0;count<20;count++){
    const c=await pool.connect();let recipient:any;
-   try{await c.query('BEGIN');recipient=(await c.query(`SELECT r.*,c.channel,c.subject,c.message,c.created_by,u.email AS sender_email FROM marketing_recipients r JOIN marketing_campaigns c ON c.id=r.campaign_id JOIN users u ON u.id=c.created_by WHERE c.status='sending' AND r.status='pending' ORDER BY r.id FOR UPDATE OF r SKIP LOCKED LIMIT 1`)).rows[0];
+   try{await c.query('BEGIN');recipient=(await c.query(`SELECT r.*,c.channel,c.subject,c.message,c.message_format,c.created_by,u.email AS sender_email FROM marketing_recipients r JOIN marketing_campaigns c ON c.id=r.campaign_id JOIN users u ON u.id=c.created_by WHERE c.status='sending' AND r.status='pending' ORDER BY r.id FOR UPDATE OF r SKIP LOCKED LIMIT 1`)).rows[0];
     if(recipient)await c.query("UPDATE marketing_recipients SET status='sending' WHERE id=$1",[recipient.id]);await c.query('COMMIT');
    }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
    if(!recipient)break;
@@ -29,13 +30,16 @@ export async function processMarketing(){
     const permission=await queryOne('SELECT * FROM marketing_permissions WHERE channel=$1 AND destination=$2',[recipient.channel,recipient.destination]);
     if(!permission?.allowed){await run("UPDATE marketing_recipients SET status='skipped',error='Marketing permission missing or withdrawn' WHERE id=$1",[recipient.id]);continue;}
     const url=`${base}/api/public/marketing/unsubscribe/${permission.unsubscribe_token}`;
-    const html=`<!doctype html><html><body style="font-family:Arial,sans-serif;color:#202020"><h2>Fleming Lettings</h2><p>Hi ${esc(recipient.name)},</p><div style="white-space:pre-wrap">${esc(recipient.message)}</div><p><a href="${url}">Unsubscribe from marketing emails</a></p><p>Fleming Lettings · 01902 212 415</p></body></html>`;
+    const html=recipient.message_format==='html'?marketingEmailHtml(recipient.message,url):`<!doctype html><html><body style="font-family:Arial,sans-serif;color:#202020"><h2>Fleming Lettings</h2><p>Hi ${esc(recipient.name)},</p><div style="white-space:pre-wrap">${esc(recipient.message)}</div><p><a href="${url}">Unsubscribe from marketing emails</a></p><p>Fleming Lettings · 01902 212 415</p></body></html>`;
     const sms=`Fleming Lettings: ${recipient.message}\nOpt out: ${url}`;
     const result=recipient.channel==='email'?await sendEmail({to:recipient.destination,subject:recipient.subject,html,idempotencyKey:`marketing-${recipient.campaign_id}-${recipient.id}`}):await sendSms({to:recipient.destination,body:sms});
     const providerId=(result as any).id||(result as any).sid||null;
     const status=result.simulated?'simulated':result.success?'sent':'failed';
-    if(recipient.channel==='email')await run(`INSERT INTO email_messages(resend_id,entity_type,entity_id,to_email,from_email,subject,template,body_html,status,sent_by,sent_by_email,error_message) VALUES($1,$2,$3,$4,$5,$6,'marketing',$7,$8,$9,$10,$11)`,[providerId,recipient.entity_type,recipient.entity_id,recipient.destination,OUTBOUND_EMAIL_ADDRESS,recipient.subject,html,status,recipient.created_by,recipient.sender_email,result.error||null]);
-    else await run(`INSERT INTO sms_messages(entity_type,entity_id,to_phone,message_body,status,twilio_sid,error_message,sent_by,sent_by_email) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[recipient.entity_type,recipient.entity_id,recipient.destination,sms,status,providerId,result.error||null,recipient.created_by,recipient.sender_email]);
+    const links=await query('SELECT entity_type,entity_id FROM marketing_recipient_links WHERE recipient_id=$1',[recipient.id]);
+    for(const link of links.length?links:[recipient]) {
+    if(recipient.channel==='email')await run(`INSERT INTO email_messages(resend_id,entity_type,entity_id,to_email,from_email,subject,template,body_html,status,sent_by,sent_by_email,error_message) VALUES($1,$2,$3,$4,$5,$6,'marketing',$7,$8,$9,$10,$11)`,[providerId,link.entity_type,link.entity_id,recipient.destination,OUTBOUND_EMAIL_ADDRESS,recipient.subject,html,status,recipient.created_by,recipient.sender_email,result.error||null]);
+    else await run(`INSERT INTO sms_messages(entity_type,entity_id,to_phone,message_body,status,twilio_sid,error_message,sent_by,sent_by_email) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[link.entity_type,link.entity_id,recipient.destination,sms,status,providerId,result.error||null,recipient.created_by,recipient.sender_email]);
+    }
     await run('UPDATE marketing_recipients SET status=$1,error=$2,provider_id=$3,sent_at=NOW() WHERE id=$4',[status,result.error||null,providerId,recipient.id]);
    }catch{await run("UPDATE marketing_recipients SET status='unknown',error='Delivery could not be confirmed. Check provider history before retrying.' WHERE id=$1",[recipient.id]);}
   }
@@ -52,14 +56,14 @@ export function registerMarketing(app:Express){
  app.get('/api/marketing/export',authMiddleware,requirePermission('manager'),async(req:AuthRequest,res)=>{const rows=await marketingContacts();const filtered=req.query.audience?rows.filter(r=>r.audience===req.query.audience):rows;await audit(req,'export',null,{count:filtered.length,audience:req.query.audience||'All'});res.setHeader('Content-Disposition','attachment; filename="fleming-marketing-contacts.csv"');res.type('text/csv').send('\uFEFF'+[['Audience','Name','Email','Phone','Record type','Record ID'],...filtered.map(r=>[r.audience,r.name,r.email,r.phone,r.entity_type,r.id])].map(r=>r.map(csvCell).join(',')).join('\r\n'));});
  app.get('/api/marketing/campaigns',authMiddleware,requirePermission('manager'),async(req,res)=>res.json(await query(`SELECT c.*,COALESCE((SELECT json_agg(json_build_object('status',t.status,'count',t.n)) FROM (SELECT status,count(*)::int n FROM marketing_recipients WHERE campaign_id=c.id GROUP BY status)t),'[]') AS counts FROM marketing_campaigns c ORDER BY created_at DESC LIMIT 100`)));
  app.post('/api/marketing/campaigns',authMiddleware,requirePermission('manager'),async(req:AuthRequest,res)=>{
-  const {channel,subject,message,recipients}=req.body;if(!['email','sms'].includes(channel)||typeof message!=='string'||!message.trim()||message.length>(channel==='sms'?1000:20000)||(channel==='email'&&(!subject||String(subject).length>200))||!Array.isArray(recipients)||!recipients.length||recipients.length>1000)return res.status(400).json({error:'Choose recipients and enter a message (SMS up to 1,000 characters; email up to 20,000)'});
+  const {channel,subject,message,recipients}=req.body;const format=channel==='email'&&req.body.message_format==='html'?'html':'text';if(!['email','sms'].includes(channel)||typeof message!=='string'||!message.trim()||message.length>(channel==='sms'?1000:200000)||(channel==='email'&&(!subject||String(subject).length>200))||!Array.isArray(recipients)||!recipients.length||recipients.length>1000)return res.status(400).json({error:'Choose recipients and enter a message (SMS up to 1,000 characters; email up to 200,000)'});
   const contacts=await marketingContacts();const chosen=contacts.filter(c=>recipients.includes(`${c.entity_type}:${c.id}`));const unique=new Map<string,any>();
   for(const c of chosen){const dest=marketingDestination(channel,String(channel==='email'?c.email||'':c.phone||''));if(dest)unique.set(dest,c);}
   if(!unique.size)return res.status(400).json({error:'The selected contacts have no valid destinations'});
   const c=await pool.connect();const id=crypto.randomUUID();try{await c.query('BEGIN');
    for(const dest of unique.keys()){const permitted=(await c.query('SELECT allowed FROM marketing_permissions WHERE channel=$1 AND destination=$2',[channel,dest])).rows[0];if(!permitted?.allowed){await c.query('ROLLBACK');return res.status(409).json({error:'Record marketing permission for each recipient before creating this campaign'});}}
-   await c.query('INSERT INTO marketing_campaigns(id,name,channel,subject,message,created_by) VALUES($1,$2,$3,$4,$5,$6)',[id,String(req.body.name||subject||'SMS Campaign').slice(0,200),channel,subject||null,message.trim(),req.user.id]);
-   for(const [dest,r] of unique)await c.query('INSERT INTO marketing_recipients(campaign_id,entity_type,entity_id,name,destination) VALUES($1,$2,$3,$4,$5)',[id,r.entity_type,r.id,r.name,dest]);
+   await c.query('INSERT INTO marketing_campaigns(id,name,channel,subject,message,created_by,message_format) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,String(req.body.name||subject||'SMS Campaign').slice(0,200),channel,subject||null,format==='html'?cleanMarketingHtml(message.trim()):message.trim(),req.user.id,format]);
+   for(const [dest,r] of unique){const inserted=(await c.query('INSERT INTO marketing_recipients(campaign_id,entity_type,entity_id,name,destination) VALUES($1,$2,$3,$4,$5) RETURNING id',[id,r.entity_type,r.id,r.name,dest])).rows[0];for(const linked of chosen.filter(contact=>marketingDestination(channel,String(channel==='email'?contact.email||'':contact.phone||''))===dest))await c.query('INSERT INTO marketing_recipient_links(recipient_id,entity_type,entity_id) VALUES($1,$2,$3)',[inserted.id,linked.entity_type,linked.id]);}
    await c.query('COMMIT');await audit(req,'campaign_created',null,{campaign_id:id,channel,recipients:unique.size});res.status(201).json({id,count:unique.size});
   }catch{await c.query('ROLLBACK');res.status(500).json({error:'Campaign could not be saved'});}finally{c.release();}
  });

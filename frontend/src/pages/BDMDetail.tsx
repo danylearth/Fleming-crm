@@ -16,7 +16,7 @@ import {
 
 interface Prospect {
   id: number; name: string; email: string; phone: string; address: string;
-  status: string; follow_up_date: string; source: string; notes: string;
+  entity_type: string; company_number: string; status: string; follow_up_date: string; source: string; notes: string;
   created_at: string; updated_at: string;
 }
 
@@ -97,7 +97,7 @@ export default function BDMDetail() {
     try {
       const p = await api.get(`/api/landlords-bdm/${id}`);
       setProspect(p);
-      setForm({ name: p.name || '', email: p.email || '', phone: p.phone || '', address: p.address || '', source: p.source || '', follow_up_date: p.follow_up_date || '', status: p.status || 'new' });
+      setForm({ entity_type:p.entity_type||'individual', company_number:p.company_number||'', name: p.name || '', email: p.email || '', phone: p.phone || '', address: p.address || '', source: p.source || '', follow_up_date: p.follow_up_date || '', status: p.status || 'new' });
       if (p.notes) {
         try {
           const parsed = JSON.parse(p.notes);
@@ -269,7 +269,7 @@ export default function BDMDetail() {
               <SectionHeader title="Contact Information" icon={<User size={16} />} />
               {editing ? (
                 <div className="space-y-3">
-                  <Input label="Full Name" value={form.name} onChange={v => setForm({ ...form, name: v })} />
+                  <Select label="Registration Type" value={form.entity_type} onChange={entity_type=>setForm({...form,entity_type})} options={[{value:"individual",label:"Individual"},{value:"company",label:"Limited Company"}]}/>{form.entity_type==='company'&&<Input label="Company Number" value={form.company_number} onChange={company_number=>setForm({...form,company_number})}/>}<Input label={form.entity_type==='company'?"Company Name":"Full Name"} value={form.name} onChange={v => setForm({ ...form, name: v })} />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <Input label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" />
                     <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
@@ -286,6 +286,8 @@ export default function BDMDetail() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
+                      { icon: User, label: 'Registration Type', value: prospect.entity_type==='company'?'Limited Company':'Individual' },
+                      ...(prospect.entity_type==='company'?[{icon:User,label:'Company Number',value:prospect.company_number}]:[]),
                       { icon: Mail, label: 'Email', value: prospect.email },
                       { icon: Phone, label: 'Phone', value: prospect.phone },
                       { icon: MapPin, label: 'Address', value: prospect.address },

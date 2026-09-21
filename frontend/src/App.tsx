@@ -98,7 +98,8 @@ function AppRoutes() {
       <Route path="/enquiries" element={<ProtectedRoute><Enquiries /></ProtectedRoute>} />
       <Route path="/enquiries/kanban" element={<ProtectedRoute><EnquiriesKanban /></ProtectedRoute>} />
       <Route path="/enquiries/:id" element={<ProtectedRoute><EnquiryDetail /></ProtectedRoute>} />
-      <Route path="/bdm" element={<ProtectedRoute><BDM /></ProtectedRoute>} />
+      <Route path="/landlord-enquiries" element={<ProtectedRoute><BDM /></ProtectedRoute>} />
+      <Route path="/bdm" element={<Navigate to="/landlord-enquiries" replace />} />
       <Route path="/bdm/:id" element={<ProtectedRoute><BDMDetail /></ProtectedRoute>} />
       <Route path="/marketing" element={<ProtectedRoute><Marketing /></ProtectedRoute>} />
       <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
