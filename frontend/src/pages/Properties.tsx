@@ -605,7 +605,6 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
             <Input label="Reference" value={form.leasehold_reference} onChange={leasehold_reference => setForm((current: PropertyForm) => ({ ...current, leasehold_reference }))} />
             <Input label="Portal Website" value={form.leasehold_portal_url} onChange={leasehold_portal_url => setForm((current: PropertyForm) => ({ ...current, leasehold_portal_url }))} placeholder="https://…" />
             <Input label="Portal Username" value={form.leasehold_portal_username} onChange={leasehold_portal_username => setForm((current: PropertyForm) => ({ ...current, leasehold_portal_username }))} />
-            <Input label="Portal Notes" value={form.leasehold_notes} onChange={leasehold_notes => setForm((current: PropertyForm) => ({ ...current, leasehold_notes }))} className="sm:col-span-2" />
           </div>}
         </div>
 
@@ -626,7 +625,6 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
             <Input label="Reference" value={form.management_company_reference} onChange={management_company_reference => setForm((current: PropertyForm) => ({ ...current, management_company_reference }))} />
             <Input label="Portal Website" value={form.management_company_portal_url} onChange={management_company_portal_url => setForm((current: PropertyForm) => ({ ...current, management_company_portal_url }))} placeholder="https://…" />
             <Input label="Portal Username" value={form.management_company_portal_username} onChange={management_company_portal_username => setForm((current: PropertyForm) => ({ ...current, management_company_portal_username }))} />
-            <Input label="Portal Notes" value={form.management_company_notes} onChange={management_company_notes => setForm((current: PropertyForm) => ({ ...current, management_company_notes }))} className="sm:col-span-2" />
           </div>}
         </div>}
 

@@ -17,9 +17,10 @@ interface Props {
   entityType: 'landlord' | 'landlord_bdm' | 'tenant' | 'tenant_enquiry' | 'property' | 'maintenance' | 'bank_transaction';
   entityId: number;
   title?: string;
+  compact?: boolean;
 }
 
-export default function DocumentsSection({ entityType, entityId, title }: Props) {
+export default function DocumentsSection({ entityType, entityId, title, compact = false }: Props) {
   const { confirmAction } = useNotifications();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [docTypes, setDocTypes] = useState<string[]>([]);
@@ -80,7 +81,7 @@ export default function DocumentsSection({ entityType, entityId, title }: Props)
   const sectionTitle = title || (entityType === 'property' ? 'Documents & Certificates' : 'Documents');
 
   return (
-    <div className="border border-gray-200 rounded-lg p-5">
+    <div className={`border border-[var(--border-input)] rounded-xl ${compact ? 'p-3' : 'p-5'}`}>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">{sectionTitle}</h2>
         <button
@@ -129,7 +130,7 @@ export default function DocumentsSection({ entityType, entityId, title }: Props)
       {loading ? (
         <p className="text-sm text-gray-400 text-center py-6">Loading...</p>
       ) : documents.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-8">No documents uploaded yet</p>
+        <p className={`text-sm text-[var(--text-muted)] text-center ${compact?'py-2':'py-8'}`}>No documents uploaded yet</p>
       ) : (
         <div className="space-y-2">
           {documents.map(doc => (

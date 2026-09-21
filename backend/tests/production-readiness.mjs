@@ -732,6 +732,67 @@ try {
     assert.equal((await one('SELECT is_estimate FROM property_expenses WHERE id=$1',[allocated.expense_id])).is_estimate,true);
     assert.equal((await ok(`/api/documents/bank_transaction/${bank.id}`,{token:auth.staff})).length,1);
   });
+  await test('unassigned bank transactions remain queued beyond thirty days and keep their original import name',async()=>{
+    const c=await one('SELECT id FROM bank_feed_connections LIMIT 1');
+    const b=await one("INSERT INTO bank_feed_transactions(connection_id,external_id,account_id,booked_at,description,amount) VALUES($1,'old-queue-test','test',CURRENT_DATE-65,'Original bank name',55) RETURNING id",[c.id]);
+    assert((await ok('/api/bank-feed/transactions?limit=1',{token:auth.staff})).some(t=>t.id===b.id));
+    await ok(`/api/bank-feed/transactions/${b.id}/name`,{method:'PATCH',token:auth.staff,body:{display_name:'Readable office name'}});
+    const renamed=await one('SELECT description,display_name FROM bank_feed_transactions WHERE id=$1',[b.id]);assert.equal(renamed.description,'Original bank name');assert.equal(renamed.display_name,'Readable office name');
+    assert.equal((await request(`/api/bank-feed/transactions/${b.id}/name`,{method:'PATCH',token:auth.viewer,body:{display_name:'Denied'}})).status,403);
+    await ok(`/api/bank-feed/transactions/${b.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'ignore'}});
+    assert(!(await ok('/api/bank-feed/transactions?limit=1',{token:auth.staff})).some(t=>t.id===b.id));
+    await ok(`/api/bank-feed/transactions/${b.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'restore'}});
+    assert((await ok('/api/bank-feed/transactions?limit=1',{token:auth.staff})).some(t=>t.id===b.id));
+  });
+  await test('all outgoing expense categories save with a blank optional maintenance link',async()=>{
+    const c=await one('SELECT id FROM bank_feed_connections LIMIT 1');
+    for(const [kind,categories] of Object.entries({expense:['Ground Rent','Insurance','Lease Renewal','Management Fee','Other','Service Charge'],maintenance:['Contractors Invoice','Labour','Materials','Other','Refurbishment','Servicing'],financial:['Accountancy Fees','Administration Expenses','Bank Fees','Commission Payment','Legal & Professional Fees','Office Costs','Other','Refunds','Security Deposit Payments Out']})){
+     for(const category of categories){const b=await one("INSERT INTO bank_feed_transactions(connection_id,external_id,account_id,booked_at,amount) VALUES($1,$2,'test',CURRENT_DATE,-50) RETURNING id",[c.id,'category-'+kind+'-'+category]);
+      await ok(`/api/bank-feed/transactions/${b.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'assign',allocations:[{kind,category,property_id:property.id,maintenance_id:'',notes:'Work completed',amount:50}]}});
+      const a=await one('SELECT * FROM bank_feed_allocations WHERE bank_transaction_id=$1',[b.id]);assert(a.expense_id);assert.equal((await one('SELECT maintenance_id FROM property_expenses WHERE id=$1',[a.expense_id])).maintenance_id,null);
+     }
+    }
+  });
+  await test('email and SMS permissions can be recorded separately with audited office controls',async()=>{
+    for(const [channel,destination] of [['email','office-permission@example.test'],['sms','07700900123']])await ok('/api/marketing/permission',{method:'PUT',token:auth.admin,body:{channel,destination,allowed:true}});
+    const rows=await sql("SELECT channel,allowed,evidence FROM marketing_permissions WHERE destination IN ('office-permission@example.test','+447700900123')");assert.equal(rows.length,2);assert(rows.every(r=>r.allowed&&r.evidence.includes('Office opted in')));
+    await ok('/api/marketing/permission',{method:'PUT',token:auth.admin,body:{channel:'email',destination:'office-permission@example.test',allowed:false}});
+    assert.equal((await one("SELECT allowed FROM marketing_permissions WHERE destination='+447700900123'")).allowed,true);
+  });
+  await test('HTML templates supply images and reject unfinished merge fields; image uploads are validated and readable',async()=>{
+    const library=await ok('/api/message-templates',{token:auth.staff});assert(library.length>=14);assert(library.every(t=>!t.html.includes('src="assets/')));
+    const email=library.find(t=>t.id==='07-completed-tenancy-agreement.html');assert(email.html.includes('https://crm.fleminglettings.co.uk/email-assets/fleming-logo-white.png'));
+    const response=await request('/api/marketing/campaigns',{method:'POST',token:auth.admin,body:{channel:'email',subject:'Unfinished',message:'<p>{{AMOUNT}}</p>',message_format:'html',recipients:[`tenant:${tenantId}`]}});assert.equal(response.status,400);
+    const form=new FormData();form.append('file',new Blob([await (await import('sharp')).default({create:{width:8,height:8,channels:3,background:'#563F6E'}}).png().toBuffer()],{type:'image/png'}),'logo.png');
+    const upload=await fetch(base+'/api/marketing/images',{method:'POST',headers:{Authorization:`Bearer ${auth.admin}`},body:form});assert.equal(upload.status,200);const asset=await upload.json();const image=await fetch(base+new URL(asset.url).pathname);assert.equal(image.status,200);assert.match(image.headers.get('content-type'),/image\/webp/);assert.equal(image.headers.get('cross-origin-resource-policy'),'cross-origin');
+    const bad=new FormData();bad.append('file',new Blob(['not an image']),'invalid.png');assert.equal((await fetch(base+'/api/marketing/images',{method:'POST',headers:{Authorization:`Bearer ${auth.admin}`},body:bad})).status,400);
+  });
+  await test('tenant template library works without arrears and separates email and SMS choices',async()=>{
+    const t=await ok(`/api/tenants/${tenantId}/message-templates`,{token:auth.staff});assert(t.templates.length>=14);assert(t.smsTemplates.some(t=>t.id==='maintenance'));assert(t.smsTemplates.some(t=>t.id==='follow-up'));
+    assert(t.templates.find(t=>t.id==='04-application-received.html').html.indexOf('{{FIRST_NAME}}')<0);
+  });
+  await test('property inspections keep reports and history, advance due dates and exclude collection clients',async()=>{
+    const owner=await one("INSERT INTO landlords(name,landlord_type) VALUES('Inspection portfolio','internal') RETURNING id");
+    const p=await one("INSERT INTO properties(address,postcode,landlord_id) VALUES('Inspection property','WV1 1AA',$1) RETURNING id",[owner.id]);
+    const tenant=await one("INSERT INTO tenants(name,first_name_1,last_name_1,property_id,status,tenancy_start_date) VALUES('Inspection tenant','Inspection','tenant',$1,'active',CURRENT_DATE-100) RETURNING id",[p.id]);
+    const run=()=>{const r=spawnSync(process.execPath,['-e',"const db=require('./dist/db-pg');require('./dist/property-inspections').syncPropertyInspectionTasks().then(()=>db.default.end()).catch(e=>{console.error(e);process.exit(1)})"],{env,encoding:'utf8'});assert.equal(r.status,0,r.stderr);};run();run();
+    assert.equal((await sql("SELECT id FROM tasks WHERE task_type='property_inspection' AND entity_id=$1 AND status='pending'",[p.id])).length,1);
+    const state=await ok(`/api/properties/${p.id}/inspections`,{token:auth.staff});assert(state.enabled);assert(state.next_due<today);
+    const staff=await one("SELECT id FROM users WHERE email='staff@example.test'");
+    const doc=await one("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type) VALUES('property',$1,'Property Inspection Report','inspection.pdf','Inspection.pdf','application/pdf') RETURNING id",[p.id]);
+    const body={inspection_date:today,condition:'good',conducted_by:staff.id,document_id:doc.id};
+    assert.equal((await request(`/api/properties/${p.id}/inspections`,{method:'POST',token:auth.viewer,body})).status,403);
+    assert.equal((await request(`/api/properties/${p.id}/inspections`,{method:'POST',token:auth.staff,body:{...body,document_id:999999}})).status,400);
+    assert.equal((await request(`/api/properties/${p.id}/inspections`,{method:'POST',token:auth.staff,body})).status,201);
+    assert.equal((await request(`/api/properties/${p.id}/inspections`,{method:'POST',token:auth.staff,body})).status,400);
+    const saved=await ok(`/api/properties/${p.id}/inspections`,{token:auth.staff});assert.equal(saved.inspections.length,1);assert(saved.next_due>today);assert.equal(saved.inspections[0].conducted_by_name,'Test staff');
+    assert.equal((await sql("SELECT id FROM tasks WHERE task_type='property_inspection' AND entity_id=$1 AND status='pending'",[p.id])).length,0);
+    await sql("UPDATE landlords SET landlord_type='external' WHERE id=$1",[owner.id]);await sql("UPDATE properties SET service_type='rent_collection' WHERE id=$1",[p.id]);assert.equal((await ok(`/api/properties/${p.id}/inspections`,{token:auth.staff})).enabled,false);assert.equal((await request(`/api/properties/${p.id}/inspections`,{method:'POST',token:auth.staff,body})).status,400);
+    await sql("UPDATE properties SET service_type='full_management' WHERE id=$1",[p.id]);assert.equal((await ok(`/api/properties/${p.id}/inspections`,{token:auth.staff})).enabled,true);
+    await sql('UPDATE tenants SET tenancy_start_date=CURRENT_DATE WHERE id=$1',[tenant.id]);const renewed=await ok(`/api/properties/${p.id}/inspections`,{token:auth.staff});assert.equal(renewed.inspections.length,1);assert(renewed.next_due>today);
+    assert.equal((await request(`/api/properties/${p.id}/inspections`,{method:'POST',token:auth.staff,body:{...body,inspection_date:'2099-01-01'}})).status,400);
+    assert.equal((await request(`/api/properties/${p.id}/inspections`,{method:'POST',token:auth.staff,body})).status,201);const early=await ok(`/api/properties/${p.id}/inspections`,{token:auth.staff});assert(early.next_due>renewed.next_due);assert.equal(early.inspections.length,2);
+  });
   console.log(`\n${passed} integration scenarios passed. Private artifacts: ${dir}`);
 } catch(error) { console.error(error); console.error('Server log:',path.join(dir,'server.log')); process.exitCode=1; }
 finally { server.kill('SIGTERM'); await once(server,'exit').catch(()=>{}); await db.end(); }

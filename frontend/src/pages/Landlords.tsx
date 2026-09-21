@@ -439,7 +439,7 @@ export default function Landlords() {
               },
               {
                 key: 'count', header: '', align: 'right', width: 'w-20',
-                render: (l) => <Tag>{l._props.length} {l._props.length === 1 ? 'property' : 'properties'}</Tag>,
+                render: (l) => <span className="inline-flex whitespace-nowrap rounded-full bg-emerald-500/15 text-emerald-700 px-2.5 py-1 text-xs">{l._props.length} {l._props.length === 1 ? 'Property' : 'Properties'}</span>,
               },
             ]}
             data={filtered.map(l => ({ ...l, _props: landlordProperties[l.id] || [] }))}
@@ -476,7 +476,7 @@ export default function Landlords() {
                     </div>
                   </div>
                   <div className="mt-3 flex items-center gap-2 flex-wrap">
-                    <Tag>{lProps.length} {lProps.length === 1 ? 'property' : 'properties'}</Tag>
+                    <span className="inline-flex whitespace-nowrap rounded-full bg-emerald-500/15 text-emerald-700 px-2.5 py-1 text-xs">{lProps.length} {lProps.length === 1 ? 'Property' : 'Properties'}</span>
                     {l.phone && <Tag><Phone size={11} className="mr-1" />{l.phone}</Tag>}
                   </div>
                 </GlassCard>

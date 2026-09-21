@@ -1,3 +1,4 @@
+import {syncPropertyInspectionTasks} from './property-inspections';
 import { applyDueRentReviews } from './rent-review';
 import { run } from './db-pg';
 
@@ -65,4 +66,5 @@ export async function syncTenantLifecycle(): Promise<void> {
     AND NOT EXISTS(SELECT 1 FROM property_policies newer JOIN property_policy_allocations na ON na.policy_id=newer.id WHERE na.property_id=p.id AND newer.policy_type=pol.policy_type AND newer.expiry_date>pol.expiry_date AND newer.commencement_date<=pol.expiry_date+1))`);
   await run(`UPDATE tasks SET priority='high',dashboard_dismissed_at=NULL WHERE task_type='insurance_renewal' AND status IN ('pending','in_progress') AND due_date<=CURRENT_DATE AND priority<>'high'`);
   await applyDueRentReviews();
+  await syncPropertyInspectionTasks();
 }

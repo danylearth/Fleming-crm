@@ -24,6 +24,10 @@
   --overlay-bg: rgba(0,0,0,0.4);
   --chat-bg: #f5f5f5;
   --chat-header: #eeeeee;
+  --feedback-purple: #7e22ce;
+  --feedback-blue: #1d4ed8;
+  --feedback-emerald: #047857;
+  --feedback-amber: #b45309;
 }
 
 [data-theme="dark"] {
@@ -48,6 +52,10 @@
   --overlay-bg: rgba(0,0,0,0.6);
   --chat-bg: #1e1e1e;
   --chat-header: #232323;
+  --feedback-purple: #d8b4fe;
+  --feedback-blue: #93c5fd;
+  --feedback-emerald: #6ee7b7;
+  --feedback-amber: #fcd34d;
 }
 
 /* Scrollbar theming */
@@ -189,3 +197,6 @@ input[type="checkbox"]:focus {
 :root[data-theme="light"][data-appearance-background="blue"] { --bg-page:#edf3fa; }
 :root[data-theme="light"][data-appearance-background="green"] { --bg-page:#edf5ef; }
 body { font-family:var(--user-font,'Lufga'),sans-serif; }
+
+/* Reserve space so overlay scrollbars do not cover record text. */
+.overflow-auto, .overflow-y-auto, .overflow-y-scroll { scrollbar-gutter: stable; padding-right: max(0.75rem, env(safe-area-inset-right)); }

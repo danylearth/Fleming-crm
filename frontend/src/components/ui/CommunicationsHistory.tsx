@@ -1,7 +1,7 @@
 import TenantMessageTemplates from '../TenantMessageTemplates';
 import { useState } from 'react';
 import { Mail, MessageSquare } from 'lucide-react';
-import { Button, GlassCard, SectionHeader } from './index';
+import { Button, GlassCard } from './index';
 import EmailPreviewModal from './EmailPreviewModal';
 
 export interface Communication {
@@ -23,7 +23,7 @@ export default function CommunicationsHistory({ messages,tenantId,onSent }: { me
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   return <GlassCard className="p-6">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <SectionHeader title="Communications" icon={<Mail size={16} />} />{tenantId&&<TenantMessageTemplates tenantId={tenantId} onSent={onSent||(()=>{})}/>}
+      <h2 className="font-semibold flex items-center gap-2"><Mail size={16}/> Communications</h2>{tenantId&&<TenantMessageTemplates tenantId={tenantId} onSent={onSent||(()=>{})}/>}
       <div role="group" aria-label="Filter communications" className="flex gap-2">{(['all','email','sms'] as const).map(channel => <button key={channel} aria-pressed={filter===channel} onClick={()=>setFilter(channel)} className={`rounded-full border px-4 py-2 text-xs ${filter===channel?'bg-[#dc006d] text-white border-transparent':'border-[var(--border-input)] text-[var(--text-secondary)]'}`}>{channel==='all'?'All':channel==='email'?'Email':'SMS'}</button>)}</div>
     </div>
     <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto">

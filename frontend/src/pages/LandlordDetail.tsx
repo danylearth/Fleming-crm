@@ -717,7 +717,7 @@ export default function LandlordDetail() {
                 )}
 
                 <div className="grid xl:grid-cols-3 gap-3 items-stretch"><div className="rounded-xl border border-[var(--border-input)] p-3 [&>*]:h-full [&>*]:min-w-0 [&>*]:w-full"><ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Primary Identification" label="Primary ID Document" /></div><div className="rounded-xl border border-[var(--border-input)] p-3 [&>*]:h-full [&>*]:min-w-0 [&>*]:w-full">
-                <ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Address Identification" label="Secondary ID Document (Optional)" /></div><div className="rounded-xl border border-[var(--border-input)] p-3 flex flex-col justify-center">
+                <ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Address Identification" label="Secondary ID Document (Optional)" /></div><div className="rounded-xl border border-[var(--border-input)] p-3 flex flex-col justify-center gap-4">
                 <p className="text-xs text-[var(--text-muted)]">One primary identity document is required. Secondary ID is optional.</p>
                 {/* Admin approval button */}
                 {user?.role === 'admin' && !landlord.kyc_completed && (

@@ -1,3 +1,4 @@
+import {registerPropertyInspections} from './property-inspections';
 import {registerTenantMessageTemplates} from './tenant-message-templates';
 import {registerBankReconciliation} from './bank-reconciliation';
 import {registerMarketing} from './marketing';
@@ -1267,7 +1268,8 @@ app.get('/api/landlords-bdm/:id', authMiddleware, async (req: AuthRequest, res) 
 
 app.put('/api/landlords-bdm/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const d = req.body;
+    const d = {...req.body,status:req.body.status==='interested'?'follow_up':req.body.status};
+    if(d.status===undefined)delete d.status;
     const allowed = ['name', 'email', 'phone', 'address', 'status', 'follow_up_date', 'source', 'notes','entity_type','company_number'];
     const fields: string[] = [];
     const values: any[] = [];
@@ -2661,6 +2663,7 @@ registerApplicationReview(app);
 registerPropertyPolicies(app);
 registerMarketing(app);
 registerInventoryReviewRoutes(app);
+registerPropertyInspections(app);
 registerTenantMessageTemplates(app);
 registerFlemoRoutes(app);
 
@@ -7031,7 +7034,7 @@ app.get('/api/bank-feed/status', authMiddleware, async (_req, res) => {
         COUNT(*) FILTER (WHERE match_status = 'matched_deposit' OR EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL AND a.kind='deposit'))::INTEGER AS deposit_matches,
         COUNT(*) FILTER (WHERE match_status = 'matched_expense' OR EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL AND a.kind IN ('expense','maintenance')))::INTEGER AS expense_matches,
         COUNT(*) FILTER (WHERE match_status = 'unmatched')::INTEGER AS unmatched
-      FROM bank_feed_transactions b WHERE booked_at >= (NOW() AT TIME ZONE 'Europe/London')::date - 29
+      FROM bank_feed_transactions b WHERE match_status='unmatched' OR booked_at >= (NOW() AT TIME ZONE 'Europe/London')::date - 29
     `);
     res.json({ configured: Boolean(bankFeedConfig()), connection, totals });
   } catch (error) {
@@ -7130,15 +7133,15 @@ app.get('/api/bank-feed/transactions', authMiddleware, async (req, res) => {
   try {
     const { limit, offset } = pageParams(req);
     const rows = await query(`
-      SELECT b.id, b.booked_at, b.description, b.amount, b.currency, b.transaction_type,
+      SELECT b.id, b.booked_at, b.description, b.display_name, b.amount, b.currency, b.transaction_type,
         b.transaction_category, b.merchant_name, b.match_status, p.address AS property_address,
         (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount,'tenant_id',a.tenant_id,'property_id',a.property_id,'rent_payment_id',a.rent_payment_id,'expense_id',a.expense_id,'category',a.category,'notes',a.notes)) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL) AS allocations,
         COALESCE(NULLIF(CONCAT_WS(' & ',t.name,(SELECT name FROM tenants jt WHERE jt.id=t.linked_tenant_id AND jt.property_id=t.property_id AND jt.tenancy_start_date=t.tenancy_start_date)),''), TRIM(te.first_name_1 || ' ' || te.last_name_1)) AS tenant_name
       FROM bank_feed_transactions b
       LEFT JOIN properties p ON p.id=b.property_id LEFT JOIN tenants t ON t.id=b.tenant_id
       LEFT JOIN tenant_enquiries te ON te.id=b.enquiry_id
-      WHERE b.booked_at >= (NOW() AT TIME ZONE 'Europe/London')::date - 29
-      ORDER BY b.booked_at DESC, b.id DESC LIMIT $1 OFFSET $2
+      WHERE b.match_status='unmatched' OR b.id IN (SELECT id FROM bank_feed_transactions WHERE booked_at >= (NOW() AT TIME ZONE 'Europe/London')::date - 29 ORDER BY booked_at DESC,id DESC LIMIT $1 OFFSET $2)
+      ORDER BY b.booked_at DESC, b.id DESC
     `, [limit, offset]);
     res.json(rows);
   } catch (error) {

@@ -28,7 +28,6 @@ const STATUSES = [
   { value: 'new', label: 'New' },
   { value: 'contacted', label: 'Contacted' },
   { value: 'follow_up', label: 'Follow Up' },
-  { value: 'interested', label: 'Interested' },
   { value: 'not_interested', label: 'Not Interested' },
 ];
 
@@ -404,12 +403,7 @@ export default function BDMDetail() {
                   <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p><p className="text-xs text-[var(--text-muted)]">Schedule a follow-up date with optional SMS</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <button onClick={() => updateStatus('interested')}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center"><UserPlus size={14} className="text-white" /></div>
-                  <div className="flex-1"><p className="text-sm font-medium">Mark as Interested</p><p className="text-xs text-[var(--text-muted)]">Prospect is interested</p></div>
-                  <ArrowRight size={14} className="text-[var(--text-muted)]" />
-                </button>
+
 
                 {/* Convert to Landlord */}
                 {['follow_up', 'interested', 'contacted'].includes(prospect.status) && (

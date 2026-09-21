@@ -52,9 +52,7 @@ const CATEGORIES = [
 const RUNNING_COSTS = new Set(['ground_rent', 'service_charge', 'communal_charge']);
 
 function financialYearLabel(value: string) {
-  if (value.startsWith('calendar:')) return value.slice(9) + ' (year only)';
   if (value === 'all') return 'All time';
-  if (value === 'undated') return 'Date not recorded';
   const [start, end] = value.split('-');
   return `${start}–${end}`;
 }
@@ -86,14 +84,14 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
   useEffect(() => { load(); }, [load]);
 
   const yearOptions = useMemo(() => {
-    const values = new Set(expenses.map(expense => expense.expense_date ? ukFinancialYear(expense.expense_date) : expense.expense_year ? `calendar:${expense.expense_year}` : 'undated'));
+    const values = new Set(expenses.map(expense => expense.expense_date ? ukFinancialYear(expense.expense_date) : expense.expense_year ? `${expense.expense_year}-${Number(expense.expense_year)+1}` : 'undated'));
     values.add(currentFinancialYear);
     const starts=[...values].filter(v=>/^\d{4}-\d{4}$/.test(v)).map(v=>Number(v.slice(0,4)));
     for(let y=Math.min(...starts);y<=Math.max(...starts);y++)values.add(`${y}-${y+1}`);
-    return ['all', ...[...values].sort().reverse()];
+    return ['all', ...[...values].filter(v=>v!=='undated').sort().reverse()];
   }, [currentFinancialYear, expenses]);
 
-  const visibleExpenses = year === 'all' ? expenses : expenses.filter(expense => (expense.expense_date ? ukFinancialYear(expense.expense_date) : expense.expense_year ? `calendar:${expense.expense_year}` : 'undated') === year);
+  const visibleExpenses = year === 'all' ? expenses : expenses.filter(expense => (expense.expense_date ? ukFinancialYear(expense.expense_date) : expense.expense_year ? `${expense.expense_year}-${Number(expense.expense_year)+1}` : 'undated') === year);
   const runningCosts = visibleExpenses.filter(expense => RUNNING_COSTS.has(expense.category));
   const historicCosts = visibleExpenses.filter(expense => !RUNNING_COSTS.has(expense.category));
   const total = (items: Expense[]) => items.filter(e=>!e.is_estimate).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);

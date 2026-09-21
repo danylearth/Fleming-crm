@@ -822,14 +822,6 @@ export default function TenantDetail() {
                   <span className="text-xs">Address Verification</span>
                   <YesNo value={!!form.kyc_address_verification} onChange={v => setForm({ ...form, kyc_address_verification: v })} disabled={!isEditing('checklist')} />
                 </div>
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs">In-person Identity Check</span>
-                    <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Staff have checked the applicant matches their identity documents.</p>
-                  </div>
-                  <YesNo value={!!form.kyc_personal_verification} onChange={v => setForm({ ...form, kyc_personal_verification: v })} disabled={!isEditing('checklist')} />
-                </div>
-
                 {/* KYC — Applicant 2 */}
                 {hasInlineJointApplicant && (
                   <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">

@@ -1,3 +1,4 @@
+import PropertyInspections from '../components/PropertyInspections';
 import { usePermissions } from '../hooks/usePermissions';
 import PropertyInsurance from '../components/PropertyInsurance';
 import DeleteNoteButton from '../components/DeleteNoteButton';
@@ -949,7 +950,6 @@ export default function PropertyDetail() {
                     <Input label="Portal Website" value={form.leasehold_portal_url} onChange={(v: string) => setForm({ ...form, leasehold_portal_url: v })} placeholder="https://…" />
                     <Input label="Portal Username" value={form.leasehold_portal_username} onChange={(v: string) => setForm({ ...form, leasehold_portal_username: v })} />
                     {user?.role === 'admin' && <Input label={property.leasehold_portal_password_set ? 'New Portal Password (leave blank to keep)' : 'Portal Password'} type="password" value={form.leasehold_portal_password} onChange={(v: string) => setForm({ ...form, leasehold_portal_password: v })} />}
-                    <Input label="Portal Notes" value={form.leasehold_notes || form.leaseholder_info} onChange={(v: string) => setForm({ ...form, leasehold_notes: v, leaseholder_info: v })} className="col-span-full" />
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -969,7 +969,6 @@ export default function PropertyDetail() {
                         </button>
                       ) : <p className="mt-0.5 text-sm font-medium">Stored securely · Admin access required</p> : <p className="mt-0.5 text-sm font-medium">—</p>}
                     </div>
-                    <ReadField label="Portal Notes" value={property.leasehold_notes || property.leaseholder_info} />
                   </div>
                 )}
               </GlassCard>
@@ -993,7 +992,6 @@ export default function PropertyDetail() {
                       <Input label="Portal Website" value={form.management_company_portal_url} onChange={(v: string) => setForm({ ...form, management_company_portal_url: v })} placeholder="https://…" />
                       <Input label="Portal Username" value={form.management_company_portal_username} onChange={(v: string) => setForm({ ...form, management_company_portal_username: v })} />
                       {user?.role === 'admin' && <Input label={property.management_company_portal_password_set ? 'New Portal Password (leave blank to keep)' : 'Portal Password'} type="password" value={form.management_company_portal_password} onChange={(v: string) => setForm({ ...form, management_company_portal_password: v })} />}
-                      <Input label="Portal Notes" value={form.management_company_notes} onChange={(v: string) => setForm({ ...form, management_company_notes: v })} className="col-span-full" />
                     </>}
                   </div>
                 ) : !property.has_management_company ? <p className="text-sm text-[var(--text-secondary)]">No Management Company Appointed</p> : (
@@ -1012,7 +1010,6 @@ export default function PropertyDetail() {
                         </button>
                       ) : <p className="mt-0.5 text-sm font-medium">Stored securely · Admin access required</p> : <p className="mt-0.5 text-sm font-medium">—</p>}
                     </div>
-                    <ReadField label="Portal Notes" value={property.management_company_notes} />
                   </div>
                 )}
               </GlassCard>
@@ -1115,6 +1112,7 @@ export default function PropertyDetail() {
             )}
 
 
+            {(property.landlord_type==='internal'||property.service_type==='full_management')&&<PropertyInspections propertyId={property.id}/>}
             <PropertyInventory propertyId={property.id} tenants={linkedTenants} onSaved={()=>setInventoryRefresh(n=>n+1)} />
 
             {/* Tasks */}

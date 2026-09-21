@@ -4,7 +4,7 @@ export function tenantCompletion(form: Record<string, unknown>, linkedTenantId?:
   const yes = (key: string) => form[key] === true || form[key] === 1;
   const fields = [
     ['authority_to_contact','Authority to Contact'], ['kyc_primary_id','Primary ID'], ['kyc_secondary_id','Secondary ID'],
-    ['kyc_address_verification','Address Verification'], ['kyc_personal_verification','In-person Identity Check'],
+    ['kyc_address_verification','Address Verification'],
   ];
   if (yes('is_joint_tenancy') && !linkedTenantId && (form.first_name_2 || form.last_name_2 || form.email_2)) fields.push(['kyc_completed_2','KYC — Applicant 2']);
   fields.push(['application_forms_completed','Application Forms'], ['proof_of_income','Proof of Income']);
