@@ -30,7 +30,9 @@ export interface TenancyAgreementPdfInput {
   deposit: number;
   propertyAddress: string;
   hasGas: boolean;
-  landlord: AgreementPerson;
+  landlord: AgreementPerson & {companyNumber?:string;signingName?:string;serviceAddress?:string;emergencyContact?:string};
+  holdingDeposit?:number;
+  depositScheme?:string;
   tenants: AgreementPerson[];
   permittedOccupiers?: string | null;
   sharedFacilities?: string | null;
@@ -80,7 +82,6 @@ export function bankDetailsForRoute(route: PaymentRoute, landlordBank?: Partial<
   if (!/^\d{2}-?\d{2}-?\d{2}$/.test(bank.sortCode)) throw new Error('Enter the landlord sort code');
   if (!/^\d{8}$/.test(bank.accountNumber)) throw new Error('Enter the landlord 8-digit account number');
   if (!bank.accountName) throw new Error('Enter the landlord account name');
-  if (!bank.bankName) throw new Error('Enter the landlord bank name');
   bank.sortCode = bank.sortCode.replace(/^(\d{2})-?(\d{2})-?(\d{2})$/, '$1-$2-$3');
   return bank;
 }
@@ -239,7 +240,7 @@ const ADDENDUM_TERMS = [
 ];
 
 export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Promise<Buffer> {
-  if (input.agreementType === 'internal') return generateSourceTenancyPdf(input);
+  if (input.agreementType === 'internal' || input.serviceType === 'rent_collection') return generateSourceTenancyPdf(input);
   return new Promise((resolve, reject) => {
     const assetDirectory = path.join(__dirname, 'agreement-assets');
     const headerPath = path.join(assetDirectory, 'letterhead-header.png');
@@ -307,7 +308,7 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     const tenantEmails = input.tenants.map(tenant => tenant.email).filter(Boolean).join(' | ') || 'Not provided';
     const tenantPhones = input.tenants.map(tenant => tenant.phone).filter(Boolean).join(' | ') || 'Not provided';
     const tenantAddresses = input.tenants.map(tenant => tenant.address).filter(Boolean).join(' | ') || 'Not provided';
-    const landlordDisplay = input.agreementType === 'internal' ? `${FLEMING_NAME}, of ${FLEMING_ADDRESS}` : `${input.landlord.name}, of ${input.landlord.address || 'the address held in the CRM'}`;
+    const landlordDisplay = input.agreementType === 'internal' ? `${FLEMING_NAME}, of ${FLEMING_ADDRESS}` : `${input.landlord.name}, of ${input.landlord.address || 'the address held in the CRM'}${input.landlord.companyNumber ? ', Company number: '+input.landlord.companyNumber : ''}`;
     const startDate = longDate(input.tenancyStartDate);
     const rentDay = ordinal(Number(input.tenancyStartDate.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'Europe/London' })));
 
@@ -338,7 +339,7 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     labelValue('Sort Code', input.bankDetails.sortCode);
     labelValue('Account Number', input.bankDetails.accountNumber);
     labelValue('Account Name', input.bankDetails.accountName);
-    labelValue('Bank Name', input.bankDetails.bankName);
+    if(input.bankDetails.bankName)labelValue('Bank Name', input.bankDetails.bankName);
     labelValue('Payment Reference', input.paymentReference);
     if (input.paymentRoute === 'landlord') {
       paragraph(`Initial first-month payment account: ${FLEMING_CLIENT_MONEY_ACCOUNT.accountName}; sort code ${FLEMING_CLIENT_MONEY_ACCOUNT.sortCode}; account number ${FLEMING_CLIENT_MONEY_ACCOUNT.accountNumber}.`, { size: 8.2 });
@@ -358,19 +359,20 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     if (input.agreementType === 'internal') {
       paragraph(`You must pay the deposit of £${input.deposit.toFixed(2)} to ${FLEMING_NAME}, of ${FLEMING_ADDRESS}. We will protect it in The Tenancy Deposit Scheme (TDS) within thirty days of receiving cleared funds and provide the prescribed information in that period, in line with clause 5.0.`);
     } else {
-      paragraph(`You must pay the deposit of £${input.deposit.toFixed(2)} to Fleming Lettings as the landlord's agent. Once cleared funds have been received, the deposit will be transferred to the landlord, ${input.landlord.name}, who is responsible for protecting it in a Government-approved scheme within thirty days and providing the prescribed information. Fleming Lettings has no ongoing role or liability in managing the deposit.`);
+      paragraph(`You must pay the deposit of £${input.deposit.toFixed(2)} to Fleming Lettings as the landlord's agent. Once cleared funds have been received, the deposit will be transferred to the landlord, ${input.landlord.name}, who is responsible for protecting it in ${input.depositScheme || 'a Government-approved scheme'} within thirty days and providing the prescribed information. Fleming Lettings has no ongoing role or liability in managing the deposit.`);
     }
 
     heading('Right to Rent', 2);
     paragraph('It is a condition of this tenancy that you and anyone living in the property must have a right to rent as set out in Section 22 of the Immigration Act 2014.');
     heading('Contact Details', 2);
-    paragraph(`Address for serving notices on the landlord: ${landlordDisplay}.`);
+    paragraph(`Address for serving notices on the landlord: ${input.landlord.serviceAddress || landlordDisplay}.`);
     if (input.agreementType === 'internal') {
       labelValue('Email', 'enquiries@fleminglettings.co.uk');
       labelValue('Phone', '01902 212 415');
     } else {
       labelValue('Email', input.landlord.email || 'Not provided');
       labelValue('Phone', input.landlord.phone || 'Not provided');
+      if(input.landlord.emergencyContact)labelValue('Emergency contact', input.landlord.emergencyContact);
       paragraph(`Managing agent: ${FLEMING_NAME}, ${FLEMING_ADDRESS}; enquiries@fleminglettings.co.uk; 01902 212 415.`);
     }
     labelValue('Tenant name(s)', tenantNames);
@@ -430,7 +432,7 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
 
     heading('Signed as an agreement');
     paragraph('Between us, the Landlord:', { bold: true });
-    paragraph(input.agreementType === 'internal' ? `Mr. Robert Fleming (Managing Director), for and on behalf of ${FLEMING_NAME}` : input.landlord.name);
+    paragraph(input.agreementType === 'internal' ? `Mr. Robert Fleming (Managing Director), for and on behalf of ${FLEMING_NAME}` : input.landlord.signingName || input.landlord.name);
     if (input.agreementType === 'internal' && fs.existsSync(robertSignaturePath)) {
       ensure(72);
       doc.image(robertSignaturePath, contentLeft, doc.y, { width: 112, height: 52 });
@@ -459,7 +461,7 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     paragraph('• Written Statement of Terms (Section A)');
     for (const item of input.complianceDocuments) paragraph(`• ${item}`);
     paragraph('This addendum is binding on all parties.');
-    paragraph(`Landlord: ${input.agreementType === 'internal' ? `Mr. Robert Fleming, for ${FLEMING_NAME}` : input.landlord.name}`);
+    paragraph(`Landlord: ${input.agreementType === 'internal' ? `Mr. Robert Fleming, for ${FLEMING_NAME}` : input.landlord.signingName || input.landlord.name}`);
     paragraph(input.agreementType === 'internal'
       ? `Electronically signed: Robert Fleming    Date: ${longDate(input.tenancyStartDate)}`
       : 'Signed: ____________________________________    Date: ____________________');

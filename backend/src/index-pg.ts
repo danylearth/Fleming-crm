@@ -1,3 +1,4 @@
+import {registerClientAgreementDetails,clientAgreementContext,validateClientDetails} from './client-agreement-details';
 import {registerPropertyInspections} from './property-inspections';
 import {registerTenantMessageTemplates} from './tenant-message-templates';
 import {registerBankReconciliation} from './bank-reconciliation';
@@ -258,7 +259,7 @@ async function sendCompletedAgreementEmails(agreement: any, signedPdf: Buffer): 
   const recipients = [
     { name: contact.first_name_1, email: contact.email_1 },
     ...(agreement.requires_joint_tenant_signature ? [{ name: contact.joint_first_name, email: contact.joint_email }] : []),
-    ...(agreement.requires_landlord_signature ? [{ name: contact.landlord_name, email: contact.landlord_email }] : []),
+    ...(agreement.requires_landlord_signature ? [{ name: parseAgreementDetails(agreement.agreement_details).landlordSignerName || contact.landlord_name, email: parseAgreementDetails(agreement.agreement_details).clientLandlord?.landlordEmail || contact.landlord_email }] : []),
   ];
   const sentTo = new Set<string>();
   const propertyAddress = normalizePropertyAddress(contact.address, contact.postcode);
@@ -320,7 +321,7 @@ async function finaliseTenancyAgreement(agreementId: number): Promise<void> {
     page.drawText(`Signed: ${new Date(signedAt).toLocaleString('en-GB', { timeZone: 'Europe/London' })}`, { x: 52, y: y - 22, size: 10, font });
     page.drawText(`IP address: ${ip || 'Not recorded'}`, {x:52,y:y-40,size:10,font});
     const image = await pdf.embedPng(signatureDataBytes(signature));
-    const scaled = image.scaleToFit(220, 90);
+    const scaled = image.scaleToFit(220, 70);
     page.drawImage(image, { x: 52, y: y - 125, width: scaled.width, height: scaled.height });
     y -= 180;
   };
@@ -328,6 +329,8 @@ async function finaliseTenancyAgreement(agreementId: number): Promise<void> {
   if (agreement.requires_joint_tenant_signature) {
     await drawSignature('Joint tenant', agreement.joint_tenant_signature_name, agreement.joint_tenant_signed_at, agreement.joint_tenant_signature, agreement.joint_tenant_signature_ip);
   }
+  const signedDetails=parseAgreementDetails(agreement.agreement_details);
+  if(agreement.requires_landlord_signature) await drawSignature('Landlord', signedDetails.landlordSignatory || agreement.landlord_signature_name, agreement.landlord_signed_at, agreement.landlord_signature, agreement.landlord_signature_ip);
   page.drawText(`Agreement reference: FL-TA-${agreement.id}`, { x: 52, y: 80, size: 9, font, color: rgb(0.45, 0.45, 0.45) });
   const tenantSigners=[{name:agreement.tenant_signature_name,date:agreement.tenant_signed_at,image:signatureDataBytes(agreement.tenant_signature)},...(agreement.requires_joint_tenant_signature?[{name:agreement.joint_tenant_signature_name,date:agreement.joint_tenant_signed_at,image:signatureDataBytes(agreement.joint_tenant_signature)}]:[])];
   const landlordSigner=agreement.requires_landlord_signature?{name:agreement.landlord_signature_name,date:agreement.landlord_signed_at,image:signatureDataBytes(agreement.landlord_signature)}:{name:'Robert Fleming',date:agreement.issued_at,image:fs.readFileSync(path.join(agreementAssets,'robert-fleming-signature.png'))};
@@ -2664,6 +2667,7 @@ registerPropertyPolicies(app);
 registerMarketing(app);
 registerInventoryReviewRoutes(app);
 registerPropertyInspections(app);
+registerClientAgreementDetails(app);
 registerTenantMessageTemplates(app);
 registerFlemoRoutes(app);
 
@@ -3438,7 +3442,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
 app.get('/api/public/tenancy-agreements/:token', publicReadLimiter, async (req, res) => {
   try {
     const agreement = await queryOne(`
-      SELECT ta.id, ta.original_name, ta.agreement_type, ta.status, ta.issued_at,
+      SELECT ta.id, ta.original_name, ta.agreement_type, ta.status, ta.issued_at, ta.agreement_details,
         ta.requires_landlord_signature, ta.requires_joint_tenant_signature,
         ta.tenant_signature_name, ta.tenant_signed_at,
         ta.joint_tenant_signature_name, ta.joint_tenant_signed_at,
@@ -3462,13 +3466,15 @@ app.get('/api/public/tenancy-agreements/:token', publicReadLimiter, async (req, 
     if (agreement.signer_role !== 'landlord' && agreement.agreement_type === 'client' && !agreement.landlord_signed_at) {
       return res.status(409).json({ error: 'The landlord must sign this agreement before the tenant can review it' });
     }
+    const savedDetails = parseAgreementDetails(agreement.agreement_details);
+    delete agreement.agreement_details;
     const role = agreement.signer_role as 'tenant' | 'joint_tenant' | 'landlord';
     await run(`UPDATE tenancy_agreements SET ${role}_opened_at = NOW() WHERE id = $1`, [agreement.id]);
     const signerName = role === 'tenant'
       ? [agreement.first_name_1, agreement.last_name_1].filter(Boolean).join(' ')
       : role === 'joint_tenant'
         ? [agreement.joint_first_name, agreement.joint_last_name].filter(Boolean).join(' ')
-        : agreement.landlord_name;
+        : savedDetails.landlordSignerName || agreement.landlord_name;
     const outstanding: string[] = [];
     if (!agreement.tenant_signed_at) outstanding.push([agreement.first_name_1, agreement.last_name_1].filter(Boolean).join(' '));
     if (agreement.requires_joint_tenant_signature && !agreement.joint_tenant_signed_at) {
@@ -3478,6 +3484,7 @@ app.get('/api/public/tenancy-agreements/:token', publicReadLimiter, async (req, 
     res.json({
       ...agreement,
       signer_name: signerName,
+      signing_on_behalf_of: role === 'landlord' ? savedDetails.clientLandlord?.companyNumber ? savedDetails.clientLandlord.landlordName : null : null,
       signer_signed: Boolean(agreement[`${role}_signed_at`]),
       outstanding_signers: outstanding.filter(Boolean),
       property_address: normalizePropertyAddress(agreement.address, agreement.postcode),
@@ -5906,6 +5913,14 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
     }
     const paymentRoute = resolvePaymentRoute(agreementType, enquiry.service_type);
     const requiresLandlord = agreementType === 'client';
+    const clientContext = requiresLandlord ? await clientAgreementContext(enquiryId) : null;
+    if (requiresLandlord && (!clientContext?.saved || !clientContext.ready)) {
+      return res.status(409).json({error: clientContext ? validateClientDetails(clientContext.details,clientContext.isCompany) || 'Save client agreement details and approve the landlord bank details first' : 'Complete the client landlord record first'});
+    }
+    const clientLandlord = clientContext?.details;
+    if (clientLandlord) Object.assign(enquiry,{landlord_name:clientLandlord.landlordName,landlord_email:clientLandlord.landlordEmail,landlord_phone:clientLandlord.landlordPhone,landlord_address:clientLandlord.landlordAddress});
+    const landlordSignatory = clientContext?.isCompany ? `${clientLandlord!.directorName} — Signing on behalf of ${clientLandlord!.landlordName}` : enquiry.landlord_name;
+
     if (requiresLandlord && !enquiry.landlord_email && req.body.send_email === true) {
       return res.status(409).json({ error: 'Add the client landlord email before emailing this agreement' });
     }
@@ -5916,10 +5931,10 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
     let bankDetails;
     try {
       bankDetails = bankDetailsForRoute(paymentRoute, {
-        sortCode: req.body.landlord_bank_sort_code,
-        accountNumber: req.body.landlord_bank_account_number,
-        accountName: req.body.landlord_bank_account_name,
-        bankName: req.body.landlord_bank_name,
+        sortCode: clientContext?.bank?.sort_code,
+        accountNumber: clientContext?.bank?.account_number,
+        accountName: clientContext?.bank?.account_name,
+        bankName: clientContext?.bank?.bank_name,
       });
     } catch (bankError) {
       return res.status(400).json({ error: bankError instanceof Error ? bankError.message : 'Enter valid bank details' });
@@ -5961,7 +5976,10 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
     const holdingDeposit = Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
     const balanceDue = Number(Math.max(0, deposit + rent - holdingDeposit).toFixed(2));
     const agreementDetails = {
-      templateVersion: agreementType === 'internal' ? 'supplied-aug26' : 'client-v1',
+      templateVersion: agreementType === 'internal' ? 'supplied-aug26' : enquiry.service_type === 'rent_collection' ? 'client-rent-collection-aug26' : 'client-v2',
+      clientLandlord: clientLandlord || null,
+      landlordSignatory: requiresLandlord ? landlordSignatory : 'Robert Fleming',
+      landlordSignerName: clientContext?.isCompany ? clientLandlord!.directorName : enquiry.landlord_name,
       tenancyStartDate: startDateText,
       rent,
       deposit,
@@ -5987,7 +6005,9 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
       deposit,
       propertyAddress: normalizePropertyAddress(enquiry.address, enquiry.postcode),
       hasGas: Boolean(enquiry.has_gas),
-      landlord: { name: enquiry.landlord_name, email: enquiry.landlord_email, phone: enquiry.landlord_phone, address: enquiry.landlord_address },
+      landlord: { name: enquiry.landlord_name, email: enquiry.landlord_email, phone: enquiry.landlord_phone, address: enquiry.landlord_address,companyNumber:clientContext?.isCompany?clientLandlord!.companyNumber:undefined,signingName:landlordSignatory,serviceAddress:clientLandlord?.serviceAddress,emergencyContact:clientLandlord?.emergencyContact },
+      holdingDeposit,
+      depositScheme:clientLandlord?.depositScheme,
       tenants,
       permittedOccupiers,
       sharedFacilities,

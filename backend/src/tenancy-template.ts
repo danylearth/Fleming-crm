@@ -68,13 +68,21 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
   const work = queue.then(async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fleming-agreement-'));
     try {
-      const template = await fs.readFile(path.join(__dirname, 'agreement-assets/assured-periodic-tenancy-template.docx'));
+      const isClient=input.agreementType==='client';
+      const template = await fs.readFile(path.join(__dirname, isClient?'agreement-assets/client-rent-collection-aug26.docx':'agreement-assets/assured-periodic-tenancy-template.docx'));
       const zip = new PizZip(template);
       const date = formalAgreementDate;
       const names = input.tenants.map(t => t.name).join(' and ');
       const values: Record<string, string> = {
+        LANDLORD_NAME:input.landlord.name,
+        LANDLORD_IDENTITY:`${input.landlord.name}, of ${input.landlord.address || ''}${input.landlord.companyNumber ? ', Company number: '+input.landlord.companyNumber : ''}`,
+        LANDLORD_SIGNATORY:input.landlord.signingName||input.landlord.name,
+        LANDLORD_EMAIL:input.landlord.email||'',LANDLORD_PHONE:input.landlord.phone||'',
+        SERVICE_ADDRESS:input.landlord.serviceAddress||input.landlord.address||'',EMERGENCY_CONTACT:input.landlord.emergencyContact||'',
+        BANK_SORT_CODE:input.bankDetails.sortCode,BANK_ACCOUNT_NUMBER:input.bankDetails.accountNumber,
+        HOLDING_DEPOSIT:Number(input.holdingDeposit||0).toLocaleString('en-GB',{minimumFractionDigits:2}),DEPOSIT_SCHEME:input.depositScheme||'',
         AGREEMENT_DATE: date(input.agreementDate), START_DATE: date(input.tenancyStartDate),
-        RENT_DAY: input.tenancyStartDate.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'Europe/London' }),
+        RENT_DAY: isClient ? date(input.tenancyStartDate).split(' ')[0] : input.tenancyStartDate.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'Europe/London' }),
         TENANT_NAMES: names, PROPERTY_ADDRESS: input.propertyAddress,
         RENT: input.rent.toLocaleString('en-GB',{minimumFractionDigits:2}), DEPOSIT: input.deposit.toLocaleString('en-GB',{minimumFractionDigits:2}), PAYMENT_REFERENCE: input.paymentReference,
         OCCUPIERS: input.permittedOccupiers || 'None', SHARED_FACILITIES: input.sharedFacilities || 'None', PARKING: input.parking || 'None',
@@ -85,7 +93,8 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         DEPOSIT_CONTRIBUTOR: input.depositContributorDetails ? `Deposit contribution disclosed by the tenant(s): ${input.depositContributorDetails}` : '',
         GAS_ACKNOWLEDGEMENT: input.hasGas ? 'Gas Safety Certificate' : 'Gas Safety Certificate: not applicable (no gas connection)',
       };
-      let xml = formatContractLayout(zip.file('word/document.xml')!.asText());
+      let xml = zip.file('word/document.xml')!.asText();
+      if(!isClient)xml=formatContractLayout(xml);
       if(!input.hasGas)xml=xml.replace(/<w:tr\b[\s\S]*?<\/w:tr>/g,row=>row.includes('{{GAS_ACKNOWLEDGEMENT}}')?'':row);
       xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,paragraph=>paragraph.replace(/<[^>]+>/g,'').includes('The electronic signature certificate records each named tenant')?'':paragraph);
       xml = xml.replace(/\{\{([A-Z_]+)\}\}/g, (_match, key) => {
@@ -94,11 +103,11 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
       });
       if (/#####|\{\{[A-Z_]+\}\}/.test(xml)) throw new Error('Agreement template contains an unfilled field');
       // Keep the supplied wording and layout while applying the requested body font.
-      xml=xml.replace(/<w:rFonts[^>]*\/>/g, '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>');
+      if(!isClient)xml=xml.replace(/<w:rFonts[^>]*\/>/g, '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>');
       xml=xml.replace(/(<w:t[^>]*>)Signed:(<\/w:t>)/g, '$1Signed: signatures and dates for each party are recorded in the electronic signature certificate, applying to this addendum.$2');
       zip.file('word/document.xml', xml);
       const styles=zip.file('word/styles.xml');
-      if(styles)zip.file('word/styles.xml',styles.asText().replace(/<w:rFonts[^>]*\/>/g,'<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>'));
+      if(styles&&!isClient)zip.file('word/styles.xml',styles.asText().replace(/<w:rFonts[^>]*\/>/g,'<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>'));
       const docx = path.join(dir, 'agreement.docx');
       await fs.writeFile(docx, zip.generate({ type: 'nodebuffer' }));
       await exec(process.env.LIBREOFFICE_PATH || 'soffice', [

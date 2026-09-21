@@ -27,6 +27,8 @@ export async function stampAgreementSignatures(pdf:PDFDocument,source:string,fon
       const receipts=words.filter((word,index)=>(word.text==='Written'&&words[index+1]?.text==='Statement') || (word.text==='The'&&words[index+1]?.text.startsWith('Renters')) || word.text==='EPC' || word.text==='EICR' || (word.text==='Gas'&&!text.includes('not applicable')));
       for(const receipt of receipts)tenants.forEach((signer,index)=>stamp(i,receipt.top,signer,index,190+index*195,145,true));
     }
+    const landlordSlot=words.find((w,j)=>w.text==='Landlord'&&words[j+1]?.text==='signature'&&words[j+2]?.text==='and'&&words[j+3]?.text==='date:');
+    if(landlordSlot)stamp(i,landlordSlot.top+18,landlord,tenants.length,30,160);
     const slots=words.filter((w,j)=>w.text==='Signature'&&words[j+1]?.text==='and'&&words[j+2]?.text==='date:');
     if(text.includes('Tenant(s):')&&slots.length===tenants.length){
       slots.forEach((slot,index)=>{

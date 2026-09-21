@@ -1,3 +1,4 @@
+import LandlordBankDetails from '../components/LandlordBankDetails';
 import ContextualDocSlot from '../components/ui/ContextualDocSlot';
 import {formatPropertyAddress} from '../utils/propertyAddress';
 import DeleteNoteButton from '../components/DeleteNoteButton';
@@ -407,6 +408,8 @@ export default function LandlordDetail() {
                 );
               })()}
             </GlassCard>
+
+            {user?.role !== 'viewer' && <LandlordBankDetails landlordId={Number(id)}/>}
 
             {/* Properties */}
             <GlassCard className="p-6">

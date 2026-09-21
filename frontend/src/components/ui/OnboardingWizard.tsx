@@ -1,3 +1,4 @@
+import ClientAgreementDetails from '../ClientAgreementDetails';
 import { useNotifications } from '../../context/NotificationContext';
 import React, { useState, useEffect, useRef } from 'react';
 import { useApi } from '../../hooks/useApi';
@@ -133,11 +134,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [agreementOccupiers, setAgreementOccupiers] = useState('');
   const [agreementFacilities, setAgreementFacilities] = useState('');
   const [agreementParking, setAgreementParking] = useState('');
-  const [landlordBankSortCode, setLandlordBankSortCode] = useState('');
-  const [landlordBankAccountNumber, setLandlordBankAccountNumber] = useState('');
-  const [landlordBankAccountName, setLandlordBankAccountName] = useState('');
   const [paymentReference,setPaymentReference]=useState('');
-  const [landlordBankName, setLandlordBankName] = useState('');
+  const [clientDetailsReady,setClientDetailsReady]=useState(false);
   const [agreementSendEmail, setAgreementSendEmail] = useState(true);
   const [agreementSendSms, setAgreementSendSms] = useState(false);
   const [agreementEmailMessage] = useState('Your tenancy agreement for {{property_address}} is ready to review and sign.');
@@ -213,12 +211,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         setAgreementOccupiers(current => current || String(details.permittedOccupiers || ''));
         setAgreementFacilities(current => current || String(details.sharedFacilities || ''));
         setAgreementParking(current => current || String(details.parking || ''));
-        if (details.bankDetails) {
-          setLandlordBankSortCode(current => current || String(details.bankDetails.sortCode || ''));
-          setLandlordBankAccountNumber(current => current || String(details.bankDetails.accountNumber || ''));
-          setLandlordBankAccountName(current => current || String(details.bankDetails.accountName || ''));
-          setLandlordBankName(current => current || String(details.bankDetails.bankName || ''));
-        }
+
       }
       return data || null;
     } catch { setAgreement(null); return null; }
@@ -439,7 +432,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       desc: enquiry.credit_check_completed || creditCheckCompleteOverride ? `Credit check completed${creditScore ? ` — ${creditScore}` : ''}` : 'Run after the application is approved',
     },
     {
-      label: 'Tenancy Agreement for Fleming Lettings Properties',
+      label: agreementCompliance?.agreementType === 'client' ? 'Client Tenancy Agreement' : 'Tenancy Agreement for Fleming Lettings Properties',
       icon: FileSignature,
       getStatus: () => agreement?.status === 'completed' ? 'green' : agreement ? 'amber' : 'red',
       desc: agreement?.status === 'completed' ? 'Agreement signed and stored' : agreement ? 'Waiting for required signatures' : 'Generate and issue the agreement for e-signature',
@@ -576,10 +569,6 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         permitted_occupiers: agreementOccupiers,
         shared_facilities: agreementFacilities,
         parking: agreementParking,
-        landlord_bank_sort_code: landlordBankSortCode,
-        landlord_bank_account_number: landlordBankAccountNumber,
-        landlord_bank_account_name: landlordBankAccountName,
-        landlord_bank_name: landlordBankName,
         payment_reference:paymentReference,
         send_email: agreementSendEmail,
         send_sms: agreementSendSms,
@@ -755,9 +744,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   },[rejectionReasons]);
   const combinedChanges=changesRequired.trim();
   const previewReviewEmail=async()=>{try{const preview=await api.post(`/api/tenant-enquiries/${enquiryId}/application-review/email-preview`,{changes_required:combinedChanges});setHoldingEmailPreview(preview);}catch(e){setReviewError(String(e));}};
-  const landlordBankComplete = agreementCompliance?.paymentRoute !== 'landlord' || Boolean(
-    landlordBankSortCode.trim() && landlordBankAccountNumber.trim() && landlordBankAccountName.trim() && landlordBankName.trim()
-  );
+  const landlordBankComplete = agreementCompliance?.agreementType !== 'client' || clientDetailsReady;
   const agreementServiceComplete = agreementCompliance?.agreementType !== 'client' || ['let_only', 'rent_collection', 'full_management'].includes(String(agreementCompliance?.serviceType || ''));
   const agreementDetailsComplete = Boolean(agreementStartDate && agreementRent && agreementDeposit !== ''
     && agreementOccupiers.trim() && agreementFacilities.trim() && agreementParking.trim()
@@ -1340,17 +1327,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     <label className="text-[10px] text-[var(--text-muted)]">Are there shared facilities? *<textarea rows={2} value={agreementFacilities} onChange={event => setAgreementFacilities(event.target.value)} placeholder="Describe them, or None" className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
                     <label className="text-[10px] text-[var(--text-muted)] sm:col-span-2">Is there permitted parking, and if so where? *<textarea rows={2} value={agreementParking} onChange={event => setAgreementParking(event.target.value)} placeholder="Describe it, or None" className="mt-1 w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-3 text-xs" /></label>
                   </div>
-                  {agreementCompliance?.paymentRoute === 'landlord' && (
-                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 space-y-2">
-                      <p className="text-xs font-medium">Landlord bank details for future monthly rent</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input type="text" inputMode="numeric" value={landlordBankSortCode} onChange={event => setLandlordBankSortCode(event.target.value)} placeholder="Sort code *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
-                        <input type="text" inputMode="numeric" value={landlordBankAccountNumber} onChange={event => setLandlordBankAccountNumber(event.target.value)} placeholder="8-digit account number *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
-                        <input type="text" value={landlordBankAccountName} onChange={event => setLandlordBankAccountName(event.target.value)} placeholder="Account name *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
-                        <input aria-label="Payment Reference" type="text" value={paymentReference} onChange={event=>setPaymentReference(event.target.value)} placeholder="Payment reference" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs"/><input type="text" value={landlordBankName} onChange={event => setLandlordBankName(event.target.value)} placeholder="Bank name *" className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-lg px-3 py-2 text-xs" />
-                      </div>
-                    </div>
-                  )}
+                  {agreementCompliance?.agreementType === 'client' && <ClientAgreementDetails enquiryId={enquiryId} onReady={setClientDetailsReady}/>}
+                  <label className="text-xs">Payment Reference<input aria-label="Payment Reference" value={paymentReference} onChange={e=>setPaymentReference(e.target.value)} className="block w-full mt-1 rounded-lg p-3 bg-[var(--bg-input)] border border-[var(--border-input)]"/></label>
                   <DeliveryChoices email={agreementSendEmail} sms={agreementSendSms} onEmail={setAgreementSendEmail} onSms={setAgreementSendSms} previewEmail={()=>void previewAgreementEmail()} previewSms={()=>setSmsPreview(renderSmsPreview(agreementSmsMessage))}/>
                   <Button className="self-start" variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || agreementCompliance?.ready !== true || !agreementDetailsComplete}>{saving ? 'Generating...' : reissuingAgreement ? 'Reissue New Agreement' : 'Generate & Issue Agreement'}</Button>
                 </>}

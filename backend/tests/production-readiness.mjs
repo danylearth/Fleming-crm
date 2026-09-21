@@ -390,11 +390,16 @@ try {
     const saved=await ok(`/api/properties/${reviewProperty.id}`,{token:auth.staff});assert.equal(saved.amenities,'CCTV,Garden');assert.equal(saved.bedrooms,3);
   });
   await test('client landlord signs before applicant; completed APT converts with its contract attached',async()=>{
-    const owner=await one("INSERT INTO landlords(name,email,address,landlord_type) VALUES('Client Owner','owner@example.test','2 Test Street','external') RETURNING id");
+    const owner=await one("INSERT INTO landlords(name,email,address,phone,landlord_type) VALUES('Client Owner','owner@example.test','2 Test Street','01902123456','external') RETURNING id");
     const home=await one("INSERT INTO properties(address,postcode,landlord_id,has_gas,rent_amount,epc_expiry_date,eicr_expiry_date,service_type) VALUES('Client Test Home','WV1 1AA',$1,0,850,'2030-01-01','2030-01-01','full_management') RETURNING id",[owner.id]);
     for(const type of ['EPC','EICR']) await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('property',$1,$2,'sample.pdf',$3,'application/pdf','approved')",[home.id,type,type+'.pdf']);
     const applicant=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,phone_1,linked_property_id,holding_deposit_received,application_form_completed,application_review_status,credit_check_completed,monthly_rent_agreed,current_address_1) VALUES('Client','Applicant','client@example.test','07700900009',$1,1,1,'approved',1,850,'Previous Test Home') RETURNING id",[home.id]);
     await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('tenant_enquiry',$1,'Credit Check Report','sample.pdf','Client credit.pdf','application/pdf','approved')",[applicant.id]);
+    const bankBody={account_name:'Client Owner',sort_code:'123456',account_number:'12345678',details_approved:true};
+    assert.equal((await request(`/api/landlords/${owner.id}/bank-details`,{token:auth.viewer})).status,403);
+    await ok(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.staff,body:bankBody});
+    const prepareClient=async id=>{const context=await ok(`/api/tenant-enquiries/${id}/client-agreement-details`,{token:auth.staff});await ok(`/api/tenant-enquiries/${id}/client-agreement-details`,{method:'PUT',token:auth.staff,body:{...context.details,depositScheme:'Tenancy Deposit Scheme (TDS)'}});};
+    await prepareClient(applicant.id);
     const apt=await ok(`/api/tenant-enquiries/${applicant.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:{...issueBody,rent:850,deposit:850}});
     assert.equal(apt.agreement_type,'client');assert(apt.landlord_url);
     const tenantToken=new URL(apt.tenant_url).pathname.slice(1), ownerToken=new URL(apt.landlord_url).pathname.slice(1);
@@ -413,12 +418,39 @@ try {
       await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('tenant_enquiry',$1,'Credit Check Report','sample.pdf','Credit.pdf','application/pdf','approved')",[e.id]);
       const defaults=await ok(`/api/tenant-enquiries/${e.id}/tenancy-agreement-compliance`,{token:auth.staff});assert.match(defaults.defaults.paymentReference,/TEST$/);
       const input={...issueBody,rent:850,deposit:850,payment_reference:'MY CUSTOM REFERENCE',landlord_bank_sort_code:'123456',landlord_bank_account_number:'12345678',landlord_bank_account_name:'Client Owner',landlord_bank_name:'Test Bank'};
-      if(service==='let_only')assert.equal((await request(`/api/tenant-enquiries/${e.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:{...input,landlord_bank_account_number:''}})).status,400);
+      await prepareClient(e.id);
+      if(service==='let_only'){
+        await ok(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.staff,body:{...bankBody,account_number:'87654321',details_approved:false}});
+        assert.equal((await request(`/api/tenant-enquiries/${e.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:input})).status,409);
+        await ok(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.staff,body:bankBody});
+      }
       const made=await ok(`/api/tenant-enquiries/${e.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:input});const saved=await one('SELECT * FROM tenancy_agreements WHERE id=$1',[made.agreement_id]);assert(saved.requires_landlord_signature);assert.equal(saved.agreement_type,'client');
       assert.equal(saved.agreement_details.bankDetails.accountNumber,service==='let_only'?'12345678':'03803880');assert.equal(saved.agreement_details.paymentReference,service==='let_only'?'MY CUSTOM REFERENCE':defaults.defaults.paymentReference);
       const extracted=spawnSync('pdftotext',[path.join(dir,saved.filename),'-'],{encoding:'utf8'});assert.equal(extracted.status,0);assert(!extracted.stdout.includes('Signed by Robert Fleming'));assert(extracted.stdout.includes('Client Owner'));
     }
 
+  });
+  await test('company rent collection template keeps legal identity, approved payment routing and director signatures',async()=>{
+    const owner=await one("INSERT INTO landlords(name,email,home_address,phone,landlord_type,entity_type,company_number) VALUES('Example Property Holdings Ltd','director@example.test','20 Registered Road, Birmingham, B1 1AA','01902123456','external','company','01234567') RETURNING id");
+    await sql("INSERT INTO directors(landlord_id,name,email) VALUES($1,'Alex Director','director@example.test')",[owner.id]);
+    const home=await one("INSERT INTO properties(address,postcode,landlord_id,has_gas,rent_amount,epc_expiry_date,eicr_expiry_date,service_type) VALUES('30 Client Road','WV1 1AA',$1,0,850,'2030-01-01','2030-01-01','rent_collection') RETURNING id",[owner.id]);
+    for(const type of ['EPC','EICR'])await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('property',$1,$2,'sample.pdf',$3,'application/pdf','approved')",[home.id,type,type+'.pdf']);
+    const e=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,phone_1,first_name_2,last_name_2,email_2,linked_property_id,holding_deposit_received,application_form_completed,application_review_status,credit_check_completed,monthly_rent_agreed,current_address_1,current_address_2) VALUES('Morgan','Applicant','morgan@example.test','07700900001','Taylor','Applicant','taylor@example.test',$1,1,1,'approved',1,850,'Old Street','Other Street') RETURNING id",[home.id]);
+    const route=`/api/tenant-enquiries/${e.id}/client-agreement-details`,context=await ok(route,{token:auth.staff});assert.equal(context.details.companyNumber,'01234567');assert.equal(context.details.directorName,'Alex Director');assert.equal(context.details.landlordAddress,'20 Registered Road, Birmingham, B1 1AA');
+    assert.equal((await request(route,{method:'PUT',token:auth.staff,body:{...context.details,directorName:'',depositScheme:'MyDeposits'}})).status,400);
+    await ok(route,{method:'PUT',token:auth.staff,body:{...context.details,depositScheme:'MyDeposits'}});
+    assert.equal((await request(`/api/tenant-enquiries/${e.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:issueBody})).status,409);
+    const bank={account_name:'Example Property Holdings Ltd',sort_code:'112233',account_number:'00123456',details_approved:true};
+    assert.equal((await request(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.staff,body:{...bank,sort_code:'abc'}})).status,400);
+    assert.equal((await request(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.viewer,body:bank})).status,403);
+    await ok(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.staff,body:bank});
+    const apt=await ok(`/api/tenant-enquiries/${e.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:issueBody});
+    const saved=await one('SELECT * FROM tenancy_agreements WHERE id=$1',[apt.agreement_id]);assert.equal(saved.agreement_details.bankDetails.accountNumber,'03803880');assert.equal(saved.agreement_details.clientLandlord.companyNumber,'01234567');
+    const source=spawnSync('pdftotext',[path.join(dir,saved.filename),'-'],{encoding:'utf8'}).stdout;for(const value of ['Example Property Holdings Ltd','01234567','20 Registered Road','Alex Director','Signing on behalf of','MyDeposits','03803880'])assert(source.includes(value),value);assert(!source.includes('#####'));assert(!source.includes('00123456'));assert(!source.includes('Robert Fleming'));
+    const landlordToken=new URL(apt.landlord_url).pathname.slice(1);const publicData=await ok(`/api/public/tenancy-agreements/${landlordToken}`);assert.equal(publicData.signer_name,'Alex Director');assert.equal(publicData.signing_on_behalf_of,'Example Property Holdings Ltd');assert(!publicData.agreement_details);
+    for(const [url,name] of [[apt.landlord_url,'Alex Director'],[apt.tenant_url,'Morgan Applicant'],[apt.joint_tenant_url,'Taylor Applicant']])await ok(`/api/public/tenancy-agreements/${new URL(url).pathname.slice(1)}/sign`,{method:'POST',body:{signature_name:name,signature:png,accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true}});
+    const completed=await one('SELECT status,signed_filename FROM tenancy_agreements WHERE id=$1',[apt.agreement_id]);assert.equal(completed.status,'completed');const text=spawnSync('pdftotext',[path.join(dir,completed.signed_filename),'-'],{encoding:'utf8'}).stdout;assert(text.includes('Electronic Signature Certificate'));assert(text.includes('Alex Director'));assert(text.includes('Taylor Applicant'));
+    writeFileSync(path.join(dir,'company-agreement-id.json'),JSON.stringify({agreement:saved.id,filename:saved.filename,signed_filename:completed.signed_filename,enquiry:e.id,landlord:owner.id,property:home.id}));
   });
   await test('application review is atomic and supports revising approved documents',async()=>{
     const e=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,status,notes) VALUES('Review','Draft','review-draft@example.test','onboarding','[]') RETURNING id");
