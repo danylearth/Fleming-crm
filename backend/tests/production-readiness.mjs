@@ -681,6 +681,21 @@ try {
     const sending=spawnSync(process.execPath,['-e',script],{env,encoding:'utf8'});assert.equal(sending.status,0,sending.stderr);
     const deliveries=await sql('SELECT * FROM rent_chaser_deliveries WHERE rent_payment_id=$1',[charges[0].id]);assert.equal(deliveries.length,0);
   });
+  await test('linked historical inventories download from their existing storage location without duplicate files',async()=>{
+    const inventory=await one("INSERT INTO inventories(property_id,tenant_id,inventory_type,inspection_date,status) VALUES($1,$2,'check_in',CURRENT_DATE-30,'in_progress') RETURNING id",[reviewProperty.id,reviewTenant.id]);
+    const pdf=Buffer.from('%PDF-1.4 historical inventory fixture');
+    writeFileSync(path.join(dir,'historic-original.pdf'),pdf);
+    const document=await one("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,size,inventory_id) VALUES('property',$1,'Inventory','historic-original.pdf','Historical inventory.pdf','application/pdf',$2,$3) RETURNING id",[reviewProperty.id,pdf.length,inventory.id]);
+    const token='e'.repeat(64);
+    await sql("INSERT INTO inventory_reviews(inventory_id,tenant_id,token,tenant_name,due_date,expires_at) VALUES($1,$2,$3,'Historical tenant',CURRENT_DATE+7,NOW()+INTERVAL '7 days')",[inventory.id,reviewTenant.id,token]);
+    const routes=[`/api/inventories/${inventory.id}/document`,`/api/public/inventory/${token}/document`];
+    for(const route of routes){const response=await fetch(base+route,{headers:{Authorization:`Bearer ${auth.staff}`}});assert.equal(response.status,200);assert.deepEqual(Buffer.from(await response.arrayBuffer()),pdf);}
+    assert.equal((await fetch(base+routes[0])).status,401);
+    await sql('UPDATE documents SET filename=$1 WHERE id=$2',['../outside.pdf',document.id]);
+    for(const route of routes)assert.equal((await fetch(base+route,{headers:{Authorization:`Bearer ${auth.staff}`}})).status,404);
+    await sql('UPDATE documents SET filename=$1 WHERE id=$2',['missing.pdf',document.id]);
+    assert.equal((await fetch(base+routes[0],{headers:{Authorization:`Bearer ${auth.staff}`}})).status,404);
+  });
   await test('inventory reminders reset for a new tenant, escalate at seven days and close only on signed evidence',async()=>{
     const p=await one("INSERT INTO properties(address,postcode,landlord_id) VALUES('Inventory reset test','WV1 1AA',$1) RETURNING id",[landlord.id]);
     const old=await one("INSERT INTO tenants(name,first_name_1,last_name_1,status,property_id,tenancy_start_date) VALUES('Previous tenant','Previous','tenant','inactive',$1,CURRENT_DATE-30) RETURNING id",[p.id]);

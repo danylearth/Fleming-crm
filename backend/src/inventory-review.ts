@@ -12,6 +12,12 @@ import {sendEmail,propertyInventoryEmail,OUTBOUND_EMAIL_ADDRESS} from './email';
 import {sendSms,normalizeUkPhone,SMS_FROM} from './sms';
 export const inventoryDisclaimer = 'Where no comments are received by the date above, the inventory is taken as agreed as it stands. Please get in touch if you need more time or would like to talk anything through.';
 const filesRoot=path.join(process.env.UPLOADS_PATH || path.join(__dirname,'../uploads'),'inventory');
+function sendStoredInventory(res:Response,filename:string) {
+  const root=path.resolve(path.dirname(filesRoot));
+  const file=path.resolve(root,filename);
+  if(!file.startsWith(root+path.sep)||!fs.existsSync(file))return res.sendStatus(404);
+  return res.type('pdf').sendFile(file);
+}
 const publicLimiter=rateLimit({windowMs:15*60*1000,max:500,standardHeaders:true,legacyHeaders:false});
 const writeLimiter=rateLimit({windowMs:15*60*1000,max:180,standardHeaders:true,legacyHeaders:false});
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:100*1024*1024,files:1}}).single('file');
@@ -131,7 +137,7 @@ export function registerInventoryReviewRoutes(app:Express) {
     }catch{await c.query('ROLLBACK');if(filename)fs.rmSync(path.join(filesRoot,path.basename(filename)),{force:true});res.status(500).json({error:'Inventory could not be saved'});}finally{c.release();}
   }));
   app.post('/api/inventories/:id/review',authMiddleware,async(req,res)=>{try{res.json({success:true,delivery:await issueInventory(Number(req.params.id),req.body.due_date)});}catch(error){res.status(400).json({error:error instanceof Error?error.message:'Inventory could not be sent'});}});
-  app.get('/api/inventories/:id/document',authMiddleware,async(req,res)=>{const d=await queryOne('SELECT * FROM inventory_documents WHERE inventory_id=$1',[req.params.id]);if(!d){const generated=await queryOne('SELECT filename FROM documents WHERE inventory_id=$1 LIMIT 1',[req.params.id]);if(generated)return res.type('pdf').sendFile(path.join(filesRoot,path.basename(generated.filename)));return res.sendStatus(404);}res.type('pdf').setHeader('Content-Disposition','attachment; filename="inventory.pdf"');res.send(d.data);});
+  app.get('/api/inventories/:id/document',authMiddleware,async(req,res)=>{const d=await queryOne('SELECT * FROM inventory_documents WHERE inventory_id=$1',[req.params.id]);if(!d){const generated=await queryOne('SELECT filename FROM documents WHERE inventory_id=$1 LIMIT 1',[req.params.id]);if(generated)return sendStoredInventory(res,generated.filename);return res.sendStatus(404);}res.type('pdf').setHeader('Content-Disposition','attachment; filename="inventory.pdf"');res.send(d.data);});
   app.get('/api/public/inventory/:token',publicLimiter,publicReview,async(req,res)=>{
     const r=res.locals.review;
     const inventory=await queryOne('SELECT i.id,i.inspection_date,i.inventory_type,i.notes,p.address,p.postcode FROM inventories i JOIN properties p ON p.id=i.property_id WHERE i.id=$1',[r.inventory_id]);
@@ -139,7 +145,7 @@ export function registerInventoryReviewRoutes(app:Express) {
     const own_photos=await query('SELECT id,caption FROM inventory_tenant_photos WHERE review_id=$1 ORDER BY id',[r.id]);
     res.json({inventory,photos,own_photos,has_document:!!await queryOne('SELECT inventory_id FROM inventory_documents WHERE inventory_id=$1 UNION ALL SELECT inventory_id FROM documents WHERE inventory_id=$1 LIMIT 1',[r.inventory_id]),name:r.tenant_name,due_date:dateText(r.due_date),signed_at:r.signed_at,general_comments:r.general_comments,disclaimer:inventoryDisclaimer});
   });
-  app.get('/api/public/inventory/:token/document',publicLimiter,publicReview,async(req,res)=>{const d=await queryOne('SELECT data FROM inventory_documents WHERE inventory_id=$1',[res.locals.review.inventory_id]);if(!d){const generated=await queryOne('SELECT filename FROM documents WHERE inventory_id=$1 LIMIT 1',[res.locals.review.inventory_id]);if(generated)return res.type('pdf').sendFile(path.join(filesRoot,path.basename(generated.filename)));return res.sendStatus(404);}res.type('pdf').setHeader('Content-Disposition','attachment; filename="inventory.pdf"');res.send(d.data);});
+  app.get('/api/public/inventory/:token/document',publicLimiter,publicReview,async(req,res)=>{const d=await queryOne('SELECT data FROM inventory_documents WHERE inventory_id=$1',[res.locals.review.inventory_id]);if(!d){const generated=await queryOne('SELECT filename FROM documents WHERE inventory_id=$1 LIMIT 1',[res.locals.review.inventory_id]);if(generated)return sendStoredInventory(res,generated.filename);return res.sendStatus(404);}res.type('pdf').setHeader('Content-Disposition','attachment; filename="inventory.pdf"');res.send(d.data);});
   app.get('/api/public/inventory/:token/photos/:photoId',publicLimiter,publicReview,async(req,res)=>{
     const photo=await queryOne('SELECT filename FROM inventory_photos WHERE id=$1 AND inventory_id=$2',[Number(req.params.photoId)||0,res.locals.review.inventory_id]);if(!photo)return res.sendStatus(404);
     res.sendFile(path.join(filesRoot,path.basename(photo.filename)));
