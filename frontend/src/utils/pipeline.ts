@@ -15,3 +15,11 @@ export function pipelineStage(e:PipelineEnquiry,today:string){
  if(e.follow_up_date&&e.follow_up_date.slice(0,10)<=today)return 'Follow-up Due';
  return e.status.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 }
+
+export function matchesPipelineAgent(agent:string|number|null|undefined,selected:string,members:{id:number;name:string}[]){
+ if(selected==='all')return true;
+ const member=members.find(m=>String(m.id)===selected);
+ if(!member||agent==null)return false;
+ const value=String(agent).trim().toLowerCase();
+ return value===String(member.id)||value===member.name.trim().toLowerCase();
+}

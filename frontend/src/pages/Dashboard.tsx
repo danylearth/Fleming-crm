@@ -1,4 +1,4 @@
-import {pipelineVisible,pipelineStage} from '../utils/pipeline';
+import {pipelineVisible,pipelineStage,matchesPipelineAgent} from '../utils/pipeline';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
@@ -65,6 +65,7 @@ export default function Dashboard() {
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [landlordEnquiries,setLandlordEnquiries]=useState<{id:number;previous_agent?:string;name?:string;first_name?:string;last_name?:string;status:string;updated_at?:string;created_at?:string;follow_up_date?:string}[]>([]);
   const [pipelineOldest,setPipelineOldest]=useState(false);
+  const [pipelineAgent,setPipelineAgent]=useState('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -135,8 +136,8 @@ export default function Dashboard() {
   const pipeline=[
     ...enquiries.filter(e=>pipelineVisible(e,todayKey,new Date(now).toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour12:false}).slice(0,5))).map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',previousAgent:e.previous_agent||'—',type:'Tenant Enquiry',date:e.balance_follow_up_date&&e.balance_follow_up_date.slice(0,10)<=todayKey?e.balance_follow_up_date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:pipelineStage(e,todayKey),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
     ...landlordEnquiries.filter(e=>!['onboarded','not_interested','rejected','closed'].includes(e.status)).map(e=>({key:`landlord-${e.id}`,name:e.name||[e.first_name,e.last_name].filter(Boolean).join(' ')||'Landlord Enquiry',previousAgent:e.previous_agent||'—',type:'Landlord Enquiry',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.status.replaceAll('_',' '),href:`/bdm/${e.id}`,onboarding:false})),
-    ...tasks.filter(t=>t.entity_type==='tenant'&&t.task_type==='follow_up'&&t.status!=='completed'&&t.due_date?.slice(0,10)<=todayKey).map(t=>({key:`followup-${t.id}`,name:t.title,previousAgent:teamMembers.find(m=>String(m.id)===t.assigned_to)?.name||'—',type:'Tenant Follow-up',date:t.due_date,status:'Follow-up Due',href:`/tasks/${t.id}`,onboarding:false})),
-  ].sort((a,b)=>(Date.parse(a.date||'1970-01-01')-Date.parse(b.date||'1970-01-01'))*(pipelineOldest?1:-1));
+    ...tasks.filter(t=>t.entity_type==='tenant'&&t.task_type==='follow_up'&&t.status!=='completed'&&t.due_date?.slice(0,10)<=todayKey).map(t=>({key:`followup-${t.id}`,name:t.title,previousAgent:teamMembers.find(m=>String(m.id)===String(t.assigned_to))?.name||t.assigned_to||'—',type:'Tenant Follow-up',date:t.due_date,status:'Follow-up Due',href:`/tasks/${t.id}`,onboarding:false})),
+  ].filter(row=>matchesPipelineAgent(row.previousAgent,pipelineAgent,teamMembers)).sort((a,b)=>(Date.parse(a.date||'1970-01-01')-Date.parse(b.date||'1970-01-01'))*(pipelineOldest?1:-1));
 
   const deleteTask = async (task: Task) => {
     if (!await confirmAction(`Delete reminder “${task.title}”?`)) return;
@@ -230,8 +231,8 @@ export default function Dashboard() {
 
           {/* Pipeline */}
           <Card className="p-6">
-            <SectionHeader title="Enquiry Pipeline" icon={<MessageSquare size={16}/>} action={() => navigate('/enquiries')} actionLabel="View All" />
-            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="w-full text-sm text-left [&_th+th]:border-l [&_td+td]:border-l [&_th]:border-[var(--border-subtle)] [&_td]:border-[var(--border-subtle)]"><thead><tr className="text-xs text-[var(--text-muted)]"><th className="py-3">Enquiry Name</th><th className="px-3">Enquiry Type</th><th className="px-3">Stage</th><th className="px-3">Previous Agent</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="px-3 py-2 min-w-28 text-left whitespace-nowrap" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="px-3 text-center">Action</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-3 pr-3"><button className="text-left" onClick={()=>navigate(row.href)}><strong className="block">{row.name}</strong></button></td><td className="px-3 text-xs">{row.type}</td><td className="px-3 text-xs">{row.status}</td><td className="px-3 text-xs">{row.previousAgent}</td><td className="px-3 text-xs whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="px-3 text-center"><Button size="sm" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue Onboarding':'View Enquiry'}</Button></td></tr>)}</tbody></table></div>:<EmptyState message="No enquiries or follow-ups awaiting action"/>}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex items-center gap-2"><MessageSquare size={16}/>Enquiry Pipeline</h2><Select hideLabel searchable className="w-64 max-w-full" label="Filter enquiries by agent" value={pipelineAgent} onChange={setPipelineAgent} options={[{value:'all',label:'View All'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/></div>
+            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="w-full text-sm text-left [&_th+th]:border-l [&_td+td]:border-l [&_th]:border-[var(--border-subtle)] [&_td]:border-[var(--border-subtle)]"><thead><tr className="text-xs text-[var(--text-muted)]"><th className="py-3">Enquiry Name</th><th className="px-3">Enquiry Type</th><th className="px-3">Stage</th><th className="px-3">Previous Agent</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="px-3 py-2 min-w-28 text-left whitespace-nowrap" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="px-3 text-center">Action</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-3 pr-3"><button className="text-left" onClick={()=>navigate(row.href)}><strong className="block">{row.name}</strong></button></td><td className="px-3 text-xs">{row.type}</td><td className="px-3 text-xs">{row.status}</td><td className="px-3 text-xs">{row.previousAgent}</td><td className="px-3 text-xs whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="px-3 text-center"><Button size="sm" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue Onboarding':'View Enquiry'}</Button></td></tr>)}</tbody></table></div>:<EmptyState message={pipelineAgent==='all'?"No enquiries or follow-ups awaiting action":"No enquiries or follow-ups awaiting action for this agent"}/>}
           </Card>
         </div>
 
