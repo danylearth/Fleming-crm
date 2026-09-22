@@ -918,7 +918,7 @@ export default function PropertyDetail() {
                 </div>
               )}
             </GlassCard>
-            <GlassCard className="p-4 sm:p-6"><SectionHeader title="Property Financials" icon={<Briefcase size={16}/>}/>{editing?<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">                    <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />                  {property.landlord_type !== 'internal' && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v })}
+            <GlassCard className="p-4 sm:p-6"><SectionHeader title="Property Financials" icon={<Briefcase size={16}/>}/>{editing?<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">                    <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />                  {property.landlord_type !== 'internal' && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v, ...(v==='let_only'&&form.service_type!==v?{charge_percentage:'100',total_charge:''}:{}) })}
                     options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
                   }
                   {property.landlord_type !== 'internal' && <Input label="Charge (%)" value={form.charge_percentage} onChange={(v: string) => setForm({ ...form, charge_percentage: v })} placeholder="e.g. 10" />}

@@ -17,7 +17,7 @@ Reviewed the two previously unhandled feedback documents (21 September late nigh
 - Sam and Robert granted administrator access; Administrator retained; Marie and Danyl remain staff; redundant admin remains archived.
 - Protector policy 778329-9, 1 April 2026–31 March 2027, linked to both Northwood properties with costs included in service charge. Two underlying files stored once and linked to both records; no added premium expense. Existing Intact quotation retained. Current cover summary excludes terrorism.
 - Specified rent allocations and the expired test tenancy were already completed; verified without repeating them. Julia/Katie's bank receipt is £850, despite £800 in the feedback text.
-- Corrected the explicitly identified landlord phone number.
+- Corrected the explicitly identified landlord phone number. The completed Let Only test project had retained a 12% charge; set to the specified 100% first-month fee. Switching a property to Let Only now defaults to 100% instead of carrying a previous service percentage.
 
 ## Verification
 
