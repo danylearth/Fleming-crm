@@ -12,7 +12,7 @@ export const pennies=(value:unknown):number=>{
 export const allocationCategories:Record<string,string[]>={
  expense:['Ground Rent','Insurance','Lease Renewal','Management Fee','Other','Service Charge'],
  maintenance:["Contractors Invoice",'Labour','Materials','Other','Refurbishment','Servicing'],
- financial:['Accountancy Fees','Administration Expenses','Bank Fees','Commission Payment','Legal & Professional Fees','Office Costs','Other','Refunds','Security Deposit Payments In','Security Deposit Payments Out'],
+ financial:['Accountancy Fees','Administration Expenses','Bank Fees','Commission Payment','Council Tax','Marketing Costs','Stamp Duty','Legal & Professional Fees','Office Costs','Other','Refunds','Security Deposit Payments In','Security Deposit Payments Out'],
  income:['Commission Payment','Interest Received','Other','Tax Rebate'],
 };
 async function recalculateRent(client:any,id:number) {

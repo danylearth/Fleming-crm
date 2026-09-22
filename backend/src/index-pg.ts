@@ -1,3 +1,4 @@
+import {registerTenantReactivation} from './tenant-reactivation';
 import {registerAccountRoutes} from './account-access';
 import {normalisePricePaid} from './price-paid';
 import {dashboardAlerts} from './dashboard-alerts';
@@ -425,6 +426,7 @@ app.use('/api', (req: AuthRequest, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)
     || req.path.startsWith('/public/') || req.path.startsWith('/auth/')
     || req.path.startsWith('/feedback-agent/')
+    || (req.method==='POST' && /^\/tenants\/\d+\/reactivate$/.test(req.path))
     || ['/sms/status', '/sms/inbound', '/email/webhook'].includes(req.path)
     || (req.method === 'POST' && ['/activity/heartbeat','/permission-requests','/ai/chat','/ai/account/connect','/ai/account/disconnect'].includes(req.path))) return next();
   return authMiddleware(req, res, () => requirePermission('staff')(req, res, next));
@@ -2137,9 +2139,9 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
       return res.status(400).json({ error: 'Choose the property and tenancy start date' });
     }
     if (property_id !== Number(completedAgreement.property_id)) return res.status(409).json({ error: 'Convert into the property on the signed agreement' });
-    const property = await queryOne('SELECT address, postcode, service_type FROM properties WHERE id = $1 FOR UPDATE', [property_id]);
+    const property = await queryOne('SELECT address, postcode, city, service_type FROM properties WHERE id = $1 FOR UPDATE', [property_id]);
     if (!property) return res.status(404).json({ error: 'Property not found' });
-    const tenantCurrentAddress = normalizePropertyAddress(property.address, property.postcode);
+    const tenantCurrentAddress = normalizePropertyAddress(property.address, property.postcode, property.city);
     const name = `${enquiry.first_name_1} ${enquiry.last_name_1}`;
     const isJoint = !!enquiry.joint_partner_id;
     const activeTenants = await query(`
@@ -2688,6 +2690,7 @@ registerProfileRoutes(app);
 registerApplicationReview(app);
 registerPropertyPolicies(app);
 registerMarketing(app);
+registerTenantReactivation(app);
 registerInventoryReviewRoutes(app);
 registerPropertyInspections(app);
 registerClientAgreementDetails(app);
@@ -2893,6 +2896,7 @@ app.post('/api/tenants/bulk-delete', authMiddleware, requireRole('admin'), async
     }
 
     if(await queryOne('SELECT id FROM tenants WHERE id=ANY($1::int[]) AND source_enquiry_id IS NOT NULL LIMIT 1',[ids]))return res.status(409).json({error:'Archive converted tenants individually to preserve their history'});
+    if(await queryOne('SELECT id FROM tenant_enquiries WHERE source_tenant_id=ANY($1::int[]) LIMIT 1',[ids]))return res.status(409).json({error:'Archive reactivated tenants individually to preserve their history'});
     // Retain files until the database transaction succeeds.
     if (await queryOne('SELECT id FROM rent_reviews WHERE tenant_ids && $1::int[] LIMIT 1', [ids])) return res.status(409).json({ error: 'Archive tenants with rent review history instead of deleting them' });
     if (await queryOne('SELECT id FROM tenancy_agreements WHERE tenant_id=ANY($1::int[]) OR joint_tenant_id=ANY($1::int[]) LIMIT 1', [ids])) return res.status(409).json({ error: 'Archive tenants with issued tenancy agreements to preserve their contract history' });
@@ -4895,7 +4899,7 @@ const removeTenants = async (req: AuthRequest, res: express.Response) => {
     const id = req.params.id;
     const tenant = await queryOne('SELECT * FROM tenants WHERE id=$1',[id]);
     if (!tenant) return res.status(404).json({error:'Tenant not found'});
-    const retained = tenant.source_enquiry_id || await queryOne('SELECT id FROM rent_reviews WHERE $1::int=ANY(tenant_ids) LIMIT 1',[id]) || await queryOne('SELECT id FROM tenancy_agreements WHERE tenant_id=$1 OR joint_tenant_id=$1 LIMIT 1',[id]);
+    const retained = tenant.source_enquiry_id || await queryOne('SELECT id FROM tenant_enquiries WHERE source_tenant_id=$1 LIMIT 1',[id]) || await queryOne('SELECT id FROM rent_reviews WHERE $1::int=ANY(tenant_ids) LIMIT 1',[id]) || await queryOne('SELECT id FROM tenancy_agreements WHERE tenant_id=$1 OR joint_tenant_id=$1 LIMIT 1',[id]);
     if (retained) {
       if (req.method !== 'POST') return res.status(409).json({error:'Archive tenants with converted enquiries or issued contract history'});
       await run("UPDATE tenants SET status='inactive',updated_at=NOW() WHERE id=$1",[id]);

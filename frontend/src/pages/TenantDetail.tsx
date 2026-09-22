@@ -1,3 +1,4 @@
+import TenantSmsComposer from '../components/TenantSmsComposer';
 import { usePermissions } from '../hooks/usePermissions';
 import DeleteNoteButton from '../components/DeleteNoteButton';
 import AdditionalGuarantors, {type AdditionalGuarantor} from '../components/AdditionalGuarantors';
@@ -717,10 +718,11 @@ export default function TenantDetail() {
                   <SectionEditButton editing onEdit={() => setEditingSection('tenancy')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
                 ) : (
                   <div className="flex flex-wrap justify-end gap-2">
+                    {tenant.status==='inactive'&&<Button size="sm" disabled={saving} onClick={async()=>{if(!await confirmAction('Create a fresh enquiry for this returning tenant? Their previous tenancy history will be retained.','Reactivate Tenant'))return;setSaving(true);try{const result=await api.post(`/api/tenants/${tenant.id}/reactivate`,{});navigate(`/enquiries/${result.enquiry_id}`);}catch(e){notify(e instanceof Error?e.message:'Could not reactivate tenant','error');}finally{setSaving(false);}}}>Reactivate to Enquiry</Button>}
                     <Button variant="outline" className="!bg-yellow-400 !text-yellow-950 !border-yellow-400" size="sm" onClick={() => setEditingSection('tenancy')}>Update Tenancy</Button>
                     {tenant.status !== 'inactive' && <Button variant="outline" className="!bg-red-600 !text-white !border-red-600" size="sm" onClick={() => setShowEndModal(true)}>Schedule Tenancy End</Button>}
                     <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => setShowRentReview(true)}>£ Rent Review</Button>
-                    {user?.role === 'admin' && <Button variant="outline" size="sm" className="!text-red-600" onClick={async () => {
+                    {user?.role === 'admin' && <Button variant="outline" size="sm" className="!bg-red-600 !text-white !border-red-600" onClick={async () => {
                       if (!await confirmAction(`Remove ${tenant.name}? Records with issued agreements will be archived; otherwise the record and its linked files will be permanently deleted.`, 'Delete / Archive Tenant')) return;
                       try { const result = await api.post(`/api/tenants/${tenant.id}/remove`, {}); if (result.archived) { await loadDetail(); notify('Tenant archived; history retained','success'); } else navigate('/tenants'); }
                       catch (e) { notify(e instanceof Error ? e.message : 'Could not remove tenant','error'); }
@@ -972,6 +974,7 @@ export default function TenantDetail() {
               </div>
             </GlassCard>
 
+            <TenantSmsComposer tenantId={tenant.id} phone={tenant.phone} onSent={loadDetail}/>
             <CommunicationsHistory messages={communications} tenantId={Number(id)} onSent={()=>window.location.reload()} />
 
             {/* Activity Timeline */}

@@ -16,7 +16,7 @@ describe('email provider safety', () => {
     vi.unstubAllEnvs();
   });
 
-  it('forces every provider send to use and reply to the verified mailbox', async () => {
+  it('defaults to the verified mailbox and preserves an explicitly selected campaign sender', async () => {
     let sentPayload: any;
     vi.doMock('resend', () => ({
       Resend: class {
@@ -31,6 +31,10 @@ describe('email provider safety', () => {
     expect(result.success).toBe(true);
     expect(sentPayload.from).toBe('Fleming Lettings <contact@tenancies.fleminglettings.co.uk>');
     expect(sentPayload.replyTo).toBe('contact@tenancies.fleminglettings.co.uk');
+    expect(sentPayload.attachments).toEqual(attachments);
+    await sendEmail({to:'applicant@example.test',subject:'Campaign',html:'<p>News</p>',attachments,fromEmail:'enquiries@fleminglettings.co.uk'});
+    expect(sentPayload.from).toBe('Fleming Lettings <enquiries@fleminglettings.co.uk>');
+    expect(sentPayload.replyTo).toBe('enquiries@fleminglettings.co.uk');
     expect(sentPayload.attachments).toEqual(attachments);
     vi.doUnmock('resend');
     vi.unstubAllEnvs();
@@ -53,6 +57,8 @@ describe('email provider safety', () => {
     const { normalizePropertyAddress } = await import('./email');
     expect(normalizePropertyAddress('40 Spring Road, Ettingshall, WV4 6LQ', 'WV4 6LQ'))
       .toBe('40 Spring Road, Ettingshall, WV4 6LQ');
+    expect(normalizePropertyAddress('76 Goof Street, WV10 8UL','WV10 8UL','Wolverhampton')).toBe('76 Goof Street, Wolverhampton, WV10 8UL');
+    expect(normalizePropertyAddress('76 Goof Street, Wolverhampton','WV10 8UL','Wolverhampton')).toBe('76 Goof Street, Wolverhampton, WV10 8UL');
   });
 
   it('builds the requested changes email with requirements and a secure link', async () => {

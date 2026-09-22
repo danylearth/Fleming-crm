@@ -44,6 +44,7 @@ function emailTime(value: string): string {
 }
 
 export interface SendEmailParams {
+  fromEmail?: string;
   idempotencyKey?: string;
   to: string | string[];
   subject: string;
@@ -229,8 +230,14 @@ export function handoverAppointmentEmail(input: HandoverAppointmentEmailInput): 
   };
 }
 
-export function normalizePropertyAddress(address: string, postcode?: string | null): string {
-  const cleanAddress = String(address || '').trim().replace(/,\s*$/, '');
+export function normalizePropertyAddress(address: string, postcode?: string | null, city?: string | null): string {
+  let cleanAddress = String(address || '').trim().replace(/,\s*$/, '');
+  if(city?.trim()&&!cleanAddress.split(',').some(part=>part.trim().toLowerCase()===city.trim().toLowerCase())) {
+    const parts=cleanAddress.split(',').map(p=>p.trim()).filter(Boolean);
+    const last=parts[parts.length-1];
+    if(postcode&&last?.replace(/\s/g,'').toLowerCase()===postcode.replace(/\s/g,'').toLowerCase())parts.pop();
+    cleanAddress=[...parts,city.trim()].join(', ');
+  }
   const cleanPostcode = String(postcode || '').trim();
   if (!cleanPostcode) return cleanAddress;
   const compactAddress = cleanAddress.replace(/\s/g, '').toLowerCase();
@@ -276,11 +283,11 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
   try {
     const inline = inlineEmailImages(params.html);
     const { data, error } = await resend.emails.send({
-      from: EMAIL_FROM,
+      from: params.fromEmail ? `Fleming Lettings <${params.fromEmail}>` : EMAIL_FROM,
       to: params.to,
       subject: params.subject,
       html: inline.html,
-      replyTo: OUTBOUND_EMAIL_ADDRESS,
+      replyTo: params.fromEmail || OUTBOUND_EMAIL_ADDRESS,
       attachments: [...(params.attachments || []), ...inline.attachments],
     }, params.idempotencyKey ? { idempotencyKey: params.idempotencyKey } : undefined);
 

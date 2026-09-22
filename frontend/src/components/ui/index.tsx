@@ -1,6 +1,7 @@
-import { type ReactNode, useState, useRef, useEffect, useCallback } from 'react';
+import {PHONE_PLACEHOLDER,normaliseUkPhone} from '../../utils/phone';
+import { type ReactNode, useState, useRef, useEffect } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { createPortal } from 'react-dom';
+import FloatingDropdown from '../FloatingDropdown';
 
 // ─── Card ───
 export function Card({ children, className = '', onClick, hover }: {
@@ -62,6 +63,7 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
   type?: string; className?: string;
 }) {
   const [showPassword,setShowPassword]=useState(false);
+  const phone = type==='tel'||/phone|mobile|contact number/i.test(label||'');
   const currency = type === 'currency';
   const shown = currency ? value.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : value;
   const shouldCap = !currency && !['email', 'number', 'password', 'time', 'tel'].includes(type);
@@ -76,7 +78,7 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
   return (
     <div className={className}>
       {label && <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">{label}</label>}
-      <div className="relative">{currency && <span className="absolute left-3 top-2.5 text-sm" aria-hidden="true">£</span>}<input aria-label={label} type={currency || (type==='password'&&showPassword) ? 'text' : type} inputMode={currency ? 'decimal' : undefined} style={currency ? {paddingLeft:28} : undefined} value={shown} onChange={e => handleChange(e.target.value)} placeholder={placeholder}
+      <div className="relative">{currency && <span className="absolute left-3 top-2.5 text-sm" aria-hidden="true">£</span>}<input aria-label={label} type={phone?'tel':currency || (type==='password'&&showPassword) ? 'text' : type} inputMode={currency ? 'decimal' : undefined} style={currency ? {paddingLeft:28} : undefined} value={shown} onChange={e => handleChange(e.target.value)} placeholder={phone?PHONE_PLACEHOLDER:placeholder} onFocus={()=>{if(phone&&!value)onChange('+44');}} onBlur={()=>{if(phone)onChange(value==='+44'?'':normaliseUkPhone(value));}}
         className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors" />{type==='password'&&<button type="button" className="mt-2 flex items-center gap-2 text-xs" onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={14}/>:<Eye size={14}/>} {showPassword?'Hide Password':'Show Password'}</button>}</div>
     </div>
   );
@@ -90,60 +92,16 @@ export function Select({ label, value, onChange, options, className = '', search
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0, openUp: false });
   const selected = options.find(o => o.value === value);
   const showSearch = searchable === true || (searchable !== false && options.length > 5);
   const filtered = search ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase())) : options;
-
-  const updatePos = useCallback(() => {
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const openUp = spaceBelow < 260 && rect.top > spaceBelow;
-      setPos({
-        top: openUp ? rect.top : rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-        openUp,
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    updatePos();
-    const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        triggerRef.current && !triggerRef.current.contains(target) &&
-        dropdownRef.current && !dropdownRef.current.contains(target)
-      ) {
-        setOpen(false);
-        setSearch('');
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open, updatePos]);
 
   useEffect(() => {
     if (open && showSearch && searchRef.current) searchRef.current.focus();
   }, [open, showSearch]);
 
-  const dropdown = open ? createPortal(
-    <div
-      ref={dropdownRef}
-      className="fixed bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden"
-      style={{
-        top: pos.openUp ? undefined : pos.top,
-        bottom: pos.openUp ? window.innerHeight - pos.top + 4 : undefined,
-        left: pos.left,
-        width: pos.width,
-        zIndex: 9999,
-      }}
-    >
+  const dropdown = open ? <FloatingDropdown anchor={triggerRef} onClose={()=>{setOpen(false);setSearch('');}}>
       {showSearch && (
         <div className="p-2 border-b border-[var(--border-subtle)]">
           <input ref={searchRef} type="text" value={search} onChange={e => setSearch(e.target.value)}
@@ -157,7 +115,7 @@ export function Select({ label, value, onChange, options, className = '', search
             type="button"
             onClick={() => { onChange(o.value); setOpen(false); setSearch(''); }}
             className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-[var(--bg-hover)] ${
-              value === o.value ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-secondary)]'
+              value === o.value ? 'text-[var(--text-primary)] bg-[var(--bg-hover)] font-medium' : 'text-[var(--text-secondary)]'
             }`}
           >
             {o.label}
@@ -165,9 +123,7 @@ export function Select({ label, value, onChange, options, className = '', search
         ))}
         {filtered.length === 0 && <p className="px-4 py-2 text-xs text-[var(--text-muted)]">No results</p>}
       </div>
-    </div>,
-    document.body,
-  ) : null;
+    </FloatingDropdown> : null;
 
   return (
     <div className={`${inlineLabel ? 'flex items-center gap-3' : ''} ${className}`}>

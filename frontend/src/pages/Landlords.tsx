@@ -1,3 +1,5 @@
+import FloatingDropdown from '../components/FloatingDropdown';
+import {validUkPhone,normaliseUkPhone} from '../utils/phone';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
@@ -130,7 +132,7 @@ export default function Landlords() {
     const errors: Record<string, string> = {};
     if (!form.name.trim()) errors.name = 'Name is required';
     if (!form.email.trim()) errors.email = 'Email is required';
-    if (!form.phone.trim()) errors.phone = 'Phone is required';
+    if (!validUkPhone(form.phone)) errors.phone = 'Enter a valid UK phone number, for example +44 7700 900123';
 
     // Basic email validation
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
@@ -172,7 +174,7 @@ export default function Landlords() {
       const landlordData = {
         name: form.name,
         email: form.email,
-        phone: form.phone,
+        phone: normaliseUkPhone(form.phone),
         address: [form.address,form.city,form.postcode].filter(Boolean).join(', '),
         home_address: [form.address,form.city,form.postcode].filter(Boolean).join(', '),
         entity_type: form.entity_type,
@@ -639,14 +641,6 @@ function PropertyMultiSelect({ properties, selected, onChange }: {
   const [showOnlyUnlinked, setShowOnlyUnlinked] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
   // Filter by search and optionally by unlinked status
   const filtered = properties.filter(p => {
     const matchesSearch = p.address.toLowerCase().includes(search.toLowerCase()) ||
@@ -686,7 +680,7 @@ function PropertyMultiSelect({ properties, selected, onChange }: {
         </div>
       )}
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-[var(--bg-card)] border border-[var(--border-input)] rounded-xl shadow-2xl overflow-hidden">
+        <FloatingDropdown anchor={ref} onClose={()=>setOpen(false)}>
           <div className="p-2 border-b border-[var(--border-subtle)]">
             <div className="flex items-center gap-2 bg-[var(--bg-input)] rounded-lg px-3 py-2">
               <Search size={14} className="text-[var(--text-muted)]" />
@@ -725,7 +719,7 @@ function PropertyMultiSelect({ properties, selected, onChange }: {
               );
             })}
           </div>
-        </div>
+        </FloatingDropdown>
       )}
     </div>
   );

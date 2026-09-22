@@ -92,8 +92,8 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
   }, [currentFinancialYear, expenses]);
 
   const visibleExpenses = year === 'all' ? expenses : expenses.filter(expense => (expense.expense_date ? ukFinancialYear(expense.expense_date) : expense.expense_year ? `${expense.expense_year}-${Number(expense.expense_year)+1}` : 'undated') === year);
-  const runningCosts = visibleExpenses.filter(expense => RUNNING_COSTS.has(expense.category));
-  const historicCosts = visibleExpenses.filter(expense => !RUNNING_COSTS.has(expense.category));
+  const runningCosts = visibleExpenses.filter(expense => RUNNING_COSTS.has(expense.category.toLowerCase().replaceAll(' ','_')));
+  const historicCosts = visibleExpenses.filter(expense => !RUNNING_COSTS.has(expense.category.toLowerCase().replaceAll(' ','_')));
   const total = (items: Expense[]) => items.filter(e=>!e.is_estimate).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   const allTimeTotal = total(expenses);
   const yearToDateTotal = total(visibleExpenses);
