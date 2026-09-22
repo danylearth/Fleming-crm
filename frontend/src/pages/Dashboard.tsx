@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Card, GlassCard, SectionHeader, StatusDot, EmptyState, Tag, Select, Button } from '../components/ui';
+import { Card, GlassCard, SectionHeader, EmptyState, Tag, Select, Button } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -58,6 +58,7 @@ export default function Dashboard() {
   const [expandAlerts,setExpandAlerts]=useState(false);
   const matchesMaintenanceOwner=(assigned:unknown)=>maintenanceOwner==='all'||(maintenanceOwner==='unassigned'?!assigned:[maintenanceOwner,teamMembers.find(m=>String(m.id)===maintenanceOwner)?.name].includes(String(assigned||'')));
   const [taskOwner,setTaskOwner]=useState('all');
+  const [calendarOwner,setCalendarOwner]=useState('all');
   const [selectedTask,setSelectedTask]=useState<Task|null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
@@ -103,10 +104,10 @@ export default function Dashboard() {
       return {
         key,
         date,
-        tasks: tasks.filter(task => task.due_date?.slice(0, 10) === key && task.status !== 'completed'),
+        tasks: tasks.filter(task => task.due_date?.slice(0, 10) === key && task.status !== 'completed' && (calendarOwner==='all'||(calendarOwner==='unassigned'?!task.assigned_to:[calendarOwner,teamMembers.find(m=>String(m.id)===calendarOwner)?.name].includes(String(task.assigned_to))))),
       };
     });
-  }, [now, tasks]);
+  }, [now, tasks, calendarOwner, teamMembers]);
 
   const teamColors = ['bg-violet-400', 'bg-cyan-400', 'bg-emerald-400', 'bg-amber-400', 'bg-pink-400'];
   const colorForMember = (name?: string) => {
@@ -192,7 +193,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Compliance and maintenance alerts */}
           <Card className="p-6">
-            <div className="flex flex-wrap justify-between items-center gap-3 mb-5"><h2 className="font-semibold flex items-center gap-2"><AlertTriangle size={16}/> Compliance Alerts & Maintenance Requests</h2><div className="flex items-center gap-2 ml-auto"><Select inlineLabel className="w-44" label="Assigned" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'All'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" variant="outline" aria-expanded={expandAlerts} aria-controls="dashboard-alerts" onClick={()=>setExpandAlerts(!expandAlerts)}>{expandAlerts?'Show Less':'View All'}</Button></div></div>
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-5"><h2 className="font-semibold flex items-center gap-2"><AlertTriangle size={16}/> Compliance Alerts & Maintenance Requests</h2><div className="flex items-center gap-2 ml-auto"><Select hideLabel searchable className="w-64 max-w-full" label="Filter alerts by user" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'Select a User…'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" variant="outline" aria-expanded={expandAlerts} aria-controls="dashboard-alerts" onClick={()=>setExpandAlerts(!expandAlerts)}>{expandAlerts?'Show Less':'View All'}</Button></div></div>
             {dashboard?.complianceAlerts?.some(a=>matchesMaintenanceOwner(a.assigned_to)) || dashboard?.recentMaintenance?.some(m=>matchesMaintenanceOwner(m.assigned_to)) ? (
               <div id="dashboard-alerts" className={`space-y-3 ${expandAlerts?'':'max-h-[32rem] overflow-y-auto'}`}>
                 {dashboard!.complianceAlerts.filter(a=>matchesMaintenanceOwner(a.assigned_to)).map((alert, i) => (
@@ -223,7 +224,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <EmptyState message="No compliance alerts or open maintenance requests" />
-            )}
+            )}{user?.role==='admin'&&!!(dashboard?.complianceAlerts.length||dashboard?.recentMaintenance.length)&&<div className="flex justify-end mt-4"><Button size="sm" variant="outline" className="!text-red-600 !border-red-300" onClick={async()=>{if(!await confirmAction('Clear all current compliance alerts and maintenance requests from the dashboard? The records and tasks will remain available.','Clear Dashboard Alerts'))return;try{await api.post('/api/dashboard/clear-alerts',{});setDashboard(await api.get('/api/dashboard'));}catch(e){alert(e instanceof Error?e.message:'Could not clear alerts');}}}>Clear All</Button></div>}
           </Card>
 
           {/* Pipeline */}
@@ -235,8 +236,8 @@ export default function Dashboard() {
 
         {/* Team Calendar */}
         <Card className="p-6">
-          <SectionHeader title="Team Calendar" icon={<CalendarDays size={16}/>} action={() => navigate('/tasks')} actionLabel="Open Calendar" />
-          <div className="grid grid-cols-7 gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex items-center gap-2"><CalendarDays size={16}/>Team Calendar</h2><div className="flex flex-wrap items-center gap-2"><Select hideLabel searchable className="w-64 max-w-full" label="Filter calendar by user" value={calendarOwner} onChange={setCalendarOwner} options={[{value:'all',label:'All Users'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" variant="outline" onClick={()=>navigate('/tasks')}>Open Calendar</Button></div></div>
+          <div className="overflow-x-auto"><div className="grid grid-cols-7 gap-2 min-w-[600px]">
             {calendarDays.map(({ key, date, tasks: dayTasks }, index) => (
               <button
                 key={key}
@@ -256,7 +257,7 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-xs text-[var(--text-muted)]">
+          </div><div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-xs text-[var(--text-muted)]">
             {[...new Set(calendarDays.flatMap(day => day.tasks.map(task => task.assigned_to).filter(Boolean)))].map(name => (
               <div key={name}><span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${colorForMember(name)}`} />{teamMembers.find(member=>String(member.id)===String(name))?.name || name}</span><div className="flex flex-wrap gap-3 mt-2">{[{label:'Viewings',kind:'viewing',Icon:Eye},{label:'Handovers',kind:'handover',Icon:KeyRound},{label:'Meetings',kind:'meeting',Icon:Handshake},{label:'Tasks Due Today',kind:'today',Icon:ListChecks}].map(({label,kind,Icon})=>{const count=calendarDays.flatMap(day=>day.tasks).filter(t=>String(t.assigned_to)===String(name)&&(kind==='today'?t.due_date?.slice(0,10)===todayKey:t.task_type===kind)).length;return count?<span key={kind} className="flex items-center gap-1 text-[10px]"><Icon size={12}/>{count} {label}</span>:null;})}</div></div>
             ))}
@@ -268,7 +269,7 @@ export default function Dashboard() {
 
         {/* Recent Tasks */}
         <Card className="p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex gap-2 items-center"><ListChecks size={16}/> Tasks</h2><div className="flex flex-wrap items-center gap-3"><Select inlineLabel className="w-64" label="Assigned To" value={taskOwner} onChange={setTaskOwner} options={[{value:'all',label:'All'},{value:'me',label:'My Tasks'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" className="h-11 min-w-24" variant="outline" onClick={()=>navigate('/tasks')}>View All</Button></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex gap-2 items-center"><ListChecks size={16}/> Tasks</h2><div className="flex flex-wrap items-center gap-3"><Select hideLabel searchable className="w-64 max-w-full" label="Filter tasks by user" value={taskOwner} onChange={setTaskOwner} options={[{value:'all',label:'Select a User…'},{value:'me',label:'My Tasks'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" className="h-11 min-w-24" variant="outline" onClick={()=>navigate('/tasks')}>View All</Button></div></div>
           {visibleRecentTasks.length ? (
             <div className="space-y-2">
               {visibleRecentTasks.slice(0, 5).map(task => (
@@ -333,10 +334,7 @@ export default function Dashboard() {
                     }}
                   />
                   <div className="p-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <StatusDot status={prop.status === 'active' ? 'active' : 'inactive'} />
-                      <span className="text-xs text-[var(--text-muted)] capitalize">{prop.status}</span>
-                    </div>
+                    <div className="mb-2"><span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${prop.status==='let'?'bg-emerald-500/15 text-[var(--feedback-emerald)]':prop.status==='to_let'?'bg-red-500/15 text-red-600':prop.status==='let_agreed'?'bg-amber-500/15 text-[var(--feedback-amber)]':'bg-slate-500/15 text-[var(--text-secondary)]'}`}>{({let:'Let',to_let:'To Let',let_agreed:'Let Agreed'} as Record<string,string>)[prop.status]||prop.status.replaceAll('_',' ')}</span></div>
                     <p className="font-semibold text-sm truncate">{prop.address}</p>
                     <p className="text-xs text-[var(--text-muted)]">{prop.postcode}</p>
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-subtle)]">

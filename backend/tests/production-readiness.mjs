@@ -19,7 +19,7 @@ const count = await db.query("SELECT count(*)::int AS n FROM information_schema.
 assert.equal(count.rows[0].n, 0, 'Test database must be empty; refusing to modify existing data');
 const dir = mkdtempSync(path.join(tmpdir(), 'fleming-integration-'));
 const port = Number(process.env.TEST_PORT || 3309);
-const env = { PATH: process.env.PATH, HOME: process.env.HOME, NODE_ENV: 'test', DATABASE_URL: databaseUrl, JWT_SECRET: 'integration-only-do-not-deploy-this-secret', UPLOADS_PATH: dir, PORT: String(port), LOG_LEVEL: 'error', ...(process.env.LIBREOFFICE_PATH ? {LIBREOFFICE_PATH: process.env.LIBREOFFICE_PATH} : {}) };
+const env = { PATH: process.env.PATH, HOME: process.env.HOME, NODE_ENV: 'test', DATABASE_URL: databaseUrl, JWT_SECRET: 'integration-only-do-not-deploy-this-secret', PORTAL_CREDENTIALS_KEY: Buffer.alloc(32,1).toString('base64'), UPLOADS_PATH: dir, PORT: String(port), LOG_LEVEL: 'error', ...(process.env.LIBREOFFICE_PATH ? {LIBREOFFICE_PATH: process.env.LIBREOFFICE_PATH} : {}) };
 const migration = spawnSync(process.execPath, ['dist/migrate.js'], { env, encoding: 'utf8' });
 assert.equal(migration.status, 0, migration.stderr);
 const secondMigration = spawnSync(process.execPath, ['dist/migrate.js'], { env, encoding: 'utf8' });
@@ -304,6 +304,14 @@ try {
     assert.match((await chat('Tell me about Review A')).text,/Review A/);
     assert.match((await chat('Who pays late?',auth.staff)).text,/recorded.*payments/);
     assert.equal((await ok('/api/ai/account',{token:auth.viewer})).connected,false);
+  });
+  await test('portal passwords can be explicitly removed without exposing or clearing untouched credentials',async()=>{
+    await ok(`/api/properties/${property.id}`,{method:'PUT',token:auth.admin,body:{is_leasehold:true,leasehold_portal_username:'test-user',leasehold_portal_password:'Local-only-secret'}});
+    let saved=await ok(`/api/properties/${property.id}`,{token:auth.admin});assert(saved.leasehold_portal_password_set);assert(!JSON.stringify(saved).includes('Local-only-secret'));
+    await ok(`/api/properties/${property.id}`,{method:'PUT',token:auth.admin,body:{notes:'Unrelated edit'}});assert((await ok(`/api/properties/${property.id}`,{token:auth.admin})).leasehold_portal_password_set);
+    assert.equal((await request(`/api/properties/${property.id}`,{method:'PUT',token:auth.staff,body:{leasehold_portal_password:null}})).status,403);
+    await ok(`/api/properties/${property.id}`,{method:'PUT',token:auth.admin,body:{leasehold_portal_username:null,leasehold_portal_password:null}});
+    saved=await ok(`/api/properties/${property.id}`,{token:auth.admin});assert.equal(saved.leasehold_portal_password_set,false);assert.equal(saved.leasehold_portal_username,null);
   });
   await test('clear recent tasks preserves calendar records and is restricted to administrators',async()=>{
     const before=(await one('SELECT count(*)::int n FROM tasks')).n;
@@ -649,6 +657,10 @@ try {
     for(let i=0;i<40;i++){const rows=await sql('SELECT status FROM marketing_recipients WHERE campaign_id=$1',[made.data.id]);if(rows.every(r=>!['pending','sending'].includes(r.status)))break;await new Promise(r=>setTimeout(r,100));}
     const recipient=await one('SELECT * FROM marketing_recipients WHERE campaign_id=$1',[made.data.id]);assert.equal(recipient.status,'failed');
     const copies=await sql("SELECT entity_type,entity_id,body_html FROM email_messages WHERE template='marketing' AND to_email='marketing@example.test'");assert.equal(copies.length,2);assert(copies.every(m=>m.body_html.includes('<h1>Local test</h1>')&&!m.body_html.includes('<script')));
+    await sql("UPDATE marketing_recipients SET status='sent',provider_id='delivery-audit' WHERE id=$1",[recipient.id]);
+    const delivery=await one("INSERT INTO email_messages(resend_id,to_email,subject,status) VALUES('delivery-audit','marketing@example.test','Delivery audit','delivered') RETURNING id");
+    let campaign=(await ok('/api/marketing/campaigns',{token:auth.admin})).find(c=>c.id===made.data.id);assert.equal(Number(campaign.success_rate),100);assert.equal(campaign.sender_name,'Test admin');assert(campaign.started_at);assert.equal(campaign.delivered_count,1);
+    await sql("UPDATE email_messages SET status='bounced' WHERE id=$1",[delivery.id]);campaign=(await ok('/api/marketing/campaigns',{token:auth.admin})).find(c=>c.id===made.data.id);assert.equal(Number(campaign.success_rate),0);assert.equal(campaign.failed_count,1);
     const permission=await one("SELECT * FROM marketing_permissions WHERE destination='marketing@example.test'");
     assert.equal((await request(`/api/public/marketing/unsubscribe/${permission.unsubscribe_token}`)).status,200);assert((await one('SELECT allowed FROM marketing_permissions WHERE unsubscribe_token=$1',[permission.unsubscribe_token])).allowed);
     assert.equal((await request(`/api/public/marketing/unsubscribe/${permission.unsubscribe_token}`,{method:'POST'})).status,200);
@@ -838,6 +850,20 @@ try {
     await sql('UPDATE tenants SET tenancy_start_date=CURRENT_DATE WHERE id=$1',[tenant.id]);const renewed=await ok(`/api/properties/${p.id}/inspections`,{token:auth.staff});assert.equal(renewed.inspections.length,1);assert(renewed.next_due>today);
     assert.equal((await request(`/api/properties/${p.id}/inspections`,{method:'POST',token:auth.staff,body:{...body,inspection_date:'2099-01-01'}})).status,400);
     assert.equal((await request(`/api/properties/${p.id}/inspections`,{method:'POST',token:auth.staff,body})).status,201);const early=await ok(`/api/properties/${p.id}/inspections`,{token:auth.staff});assert(early.next_due>renewed.next_due);assert.equal(early.inspections.length,2);
+  });
+  await test('service-charge insurance records cover without creating another expense',async()=>{
+    const count=()=>one('SELECT count(*)::int n FROM property_expenses WHERE property_id=$1',[property.id]);const before=(await count()).n;
+    const body={policy_type:'buildings',policy_number:'Included test',annual_cost:0,commencement_date:today,expiry_date:'2030-12-31',cost_included_in_service_charge:true};
+    const result=await request(`/api/properties/${property.id}/policies`,{method:'POST',token:auth.staff,body});assert.equal(result.status,201);assert.equal(result.data.cost_included_in_service_charge,true);assert.equal((await count()).n,before);
+    assert.equal((await request(`/api/properties/${property.id}/policies`,{method:'POST',token:auth.staff,body:{...body,annual_cost:100}})).status,400);
+  });
+  await test('clearing dashboard alerts preserves records and allows new reminders',async()=>{
+    const before=await ok('/api/dashboard',{token:auth.admin});assert(before.complianceAlerts.length);const taskCount=(await one('SELECT count(*)::int n FROM tasks')).n;
+    assert.equal((await request('/api/dashboard/clear-alerts',{method:'POST',token:auth.staff,body:{}})).status,403);
+    await ok('/api/dashboard/clear-alerts',{method:'POST',token:auth.admin,body:{}});let after=await ok('/api/dashboard',{token:auth.admin});assert.equal(after.complianceAlerts.length,0);assert.equal(after.recentMaintenance.length,0);assert.equal((await one('SELECT count(*)::int n FROM tasks')).n,taskCount);
+    await sql("INSERT INTO maintenance(property_id,title,description,status,priority) VALUES($1,'New after clear','New after clear','open','high')",[property.id]);
+    await sql("INSERT INTO properties(address,postcode,landlord_id,eicr_expiry_date) VALUES('New expiry after clear','WV1 1AA',$1,CURRENT_DATE+1)",[landlord.id]);
+    after=await ok('/api/dashboard',{token:auth.admin});assert(after.complianceAlerts.some(a=>a.property_address==='New expiry after clear'));assert(after.recentMaintenance.some(m=>m.description==='New after clear'));
   });
   console.log(`\n${passed} integration scenarios passed. Private artifacts: ${dir}`);
 } catch(error) { console.error(error); console.error('Server log:',path.join(dir,'server.log')); process.exitCode=1; }

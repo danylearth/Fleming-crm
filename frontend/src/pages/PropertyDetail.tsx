@@ -1,3 +1,4 @@
+import {Copy,Check} from 'lucide-react';
 import PropertyInspections from '../components/PropertyInspections';
 import { usePermissions } from '../hooks/usePermissions';
 import PropertyInsurance from '../components/PropertyInsurance';
@@ -206,6 +207,7 @@ export default function PropertyDetail() {
   const [tenantModalMode, setTenantModalMode] = useState<'select' | 'create'>('select');
   const [tenantSearch, setTenantSearch] = useState('');
   const [showPreviousTenancies, setShowPreviousTenancies] = useState(false);
+  const [copiedPortal,setCopiedPortal]=useState('');
   const [revealedPortalPasswords, setRevealedPortalPasswords] = useState<Record<string, string>>({});
   const [revealingPortalPassword, setRevealingPortalPassword] = useState<string | null>(null);
   const [newTenantForm, setNewTenantForm] = useState({
@@ -355,8 +357,8 @@ export default function PropertyDetail() {
         management_company_portal_url: form.management_company_portal_url || null,
         management_company_portal_username: form.management_company_portal_username || null,
       };
-      if (!form.leasehold_portal_password) delete payload.leasehold_portal_password;
-      if (!form.management_company_portal_password) delete payload.management_company_portal_password;
+      if (form.leasehold_portal_password === '') delete payload.leasehold_portal_password;
+      if (form.management_company_portal_password === '') delete payload.management_company_portal_password;
       await api.put(`/api/properties/${id}`, payload);
       const updated = await api.get(`/api/properties/${id}`);
       setProperty(updated);
@@ -949,7 +951,7 @@ export default function PropertyDetail() {
                     <Input label="Reference" value={form.leasehold_reference} onChange={(v: string) => setForm({ ...form, leasehold_reference: v })} />
                     <Input label="Portal Website" value={form.leasehold_portal_url} onChange={(v: string) => setForm({ ...form, leasehold_portal_url: v })} placeholder="https://…" />
                     <Input label="Portal Username" value={form.leasehold_portal_username} onChange={(v: string) => setForm({ ...form, leasehold_portal_username: v })} />
-                    {user?.role === 'admin' && <Input label={property.leasehold_portal_password_set ? 'New Portal Password (leave blank to keep)' : 'Portal Password'} type="password" value={form.leasehold_portal_password} onChange={(v: string) => setForm({ ...form, leasehold_portal_password: v })} />}
+                    {user?.role === 'admin' && <div><Input label={form.leasehold_portal_password === null ? 'Portal Password (will be removed)' : property.leasehold_portal_password_set ? 'New Portal Password (leave blank to keep)' : 'Portal Password'} type="password" value={form.leasehold_portal_password || ''} onChange={(v: string) => setForm({ ...form, leasehold_portal_password: v })} />{property.leasehold_portal_password_set && <button type="button" className="text-xs text-red-600 mt-2 underline" onClick={()=>setForm({...form,leasehold_portal_password:null})}>Remove Stored Password</button>}</div>}
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -964,9 +966,9 @@ export default function PropertyDetail() {
                     <div>
                       <p className="text-xs text-[var(--text-muted)]">Portal Password</p>
                       {property.leasehold_portal_password_set ? user?.role === 'admin' ? (
-                        <button type="button" onClick={() => revealPortalPassword('leasehold')} className="mt-0.5 text-sm font-medium text-[var(--accent-orange)] hover:underline">
+                        <div className="flex items-center gap-2"><button type="button" onClick={() => revealPortalPassword('leasehold')} className="mt-0.5 text-sm font-medium text-[var(--accent-orange)] hover:underline">
                           <Eye size={14} className="inline mr-1" />{revealedPortalPasswords.leasehold || (revealingPortalPassword === 'leasehold' ? 'Revealing…' : 'Show Password')}
-                        </button>
+                        </button>{revealedPortalPasswords['leasehold'] && <button type="button" aria-label="Copy leasehold portal password" title="Copy Password" className="p-1 text-[var(--accent-orange)]" onClick={async()=>{try{await navigator.clipboard.writeText(revealedPortalPasswords['leasehold']);setCopiedPortal('leasehold');setTimeout(()=>setCopiedPortal(''),2000);}catch{alert('Clipboard access failed. Select the revealed password to copy it.');}}}>{copiedPortal==='leasehold'?<Check size={14}/>:<Copy size={14}/>}</button>}</div>
                       ) : <p className="mt-0.5 text-sm font-medium">Stored securely · Admin access required</p> : <p className="mt-0.5 text-sm font-medium">—</p>}
                     </div>
                   </div>
@@ -991,7 +993,7 @@ export default function PropertyDetail() {
                       <Input label="Reference" value={form.management_company_reference} onChange={(v: string) => setForm({ ...form, management_company_reference: v })} />
                       <Input label="Portal Website" value={form.management_company_portal_url} onChange={(v: string) => setForm({ ...form, management_company_portal_url: v })} placeholder="https://…" />
                       <Input label="Portal Username" value={form.management_company_portal_username} onChange={(v: string) => setForm({ ...form, management_company_portal_username: v })} />
-                      {user?.role === 'admin' && <Input label={property.management_company_portal_password_set ? 'New Portal Password (leave blank to keep)' : 'Portal Password'} type="password" value={form.management_company_portal_password} onChange={(v: string) => setForm({ ...form, management_company_portal_password: v })} />}
+                      {user?.role === 'admin' && <div><Input label={form.management_company_portal_password === null ? 'Portal Password (will be removed)' : property.management_company_portal_password_set ? 'New Portal Password (leave blank to keep)' : 'Portal Password'} type="password" value={form.management_company_portal_password || ''} onChange={(v: string) => setForm({ ...form, management_company_portal_password: v })} />{property.management_company_portal_password_set && <button type="button" className="text-xs text-red-600 mt-2 underline" onClick={()=>setForm({...form,management_company_portal_password:null})}>Remove Stored Password</button>}</div>}
                     </>}
                   </div>
                 ) : !property.has_management_company ? <p className="text-sm text-[var(--text-secondary)]">No Management Company Appointed</p> : (
@@ -1005,9 +1007,9 @@ export default function PropertyDetail() {
                     <div>
                       <p className="text-xs text-[var(--text-muted)]">Portal Password</p>
                       {property.management_company_portal_password_set ? user?.role === 'admin' ? (
-                        <button type="button" onClick={() => revealPortalPassword('management-company')} className="mt-0.5 text-sm font-medium text-[var(--accent-orange)] hover:underline">
+                        <div className="flex items-center gap-2"><button type="button" onClick={() => revealPortalPassword('management-company')} className="mt-0.5 text-sm font-medium text-[var(--accent-orange)] hover:underline">
                           <Eye size={14} className="inline mr-1" />{revealedPortalPasswords['management-company'] || (revealingPortalPassword === 'management-company' ? 'Revealing…' : 'Show Password')}
-                        </button>
+                        </button>{revealedPortalPasswords['management-company'] && <button type="button" aria-label="Copy management-company portal password" title="Copy Password" className="p-1 text-[var(--accent-orange)]" onClick={async()=>{try{await navigator.clipboard.writeText(revealedPortalPasswords['management-company']);setCopiedPortal('management-company');setTimeout(()=>setCopiedPortal(''),2000);}catch{alert('Clipboard access failed. Select the revealed password to copy it.');}}}>{copiedPortal==='management-company'?<Check size={14}/>:<Copy size={14}/>}</button>}</div>
                       ) : <p className="mt-0.5 text-sm font-medium">Stored securely · Admin access required</p> : <p className="mt-0.5 text-sm font-medium">—</p>}
                     </div>
                   </div>

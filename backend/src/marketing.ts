@@ -71,7 +71,21 @@ export function registerMarketing(app:Express){
   await run(`INSERT INTO marketing_permissions(channel,destination,allowed,evidence,updated_by,unsubscribe_token) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(channel,destination) DO UPDATE SET allowed=$3,evidence=$4,updated_by=$5,updated_at=NOW()`,[channel,destination,allowed,String(evidence||`Office ${allowed?'opted in':'opted out'} through the marketing permission controls`).slice(0,4000),req.user.id,crypto.randomUUID()]);await audit(req,'marketing_permission',null,{channel,destination,allowed,evidence});res.json({success:true});
  });
  app.get('/api/marketing/export',authMiddleware,requirePermission('manager'),async(req:AuthRequest,res)=>{const rows=await marketingContacts();const filtered=req.query.audience?rows.filter(r=>r.audience===req.query.audience):rows;await audit(req,'export',null,{count:filtered.length,audience:req.query.audience||'All'});res.setHeader('Content-Disposition','attachment; filename="fleming-marketing-contacts.csv"');res.type('text/csv').send('\uFEFF'+[['Audience','Name','Email','Phone','Record type','Record ID'],...filtered.map(r=>[r.audience,r.name,r.email,r.phone,r.entity_type,r.id])].map(r=>r.map(csvCell).join(',')).join('\r\n'));});
- app.get('/api/marketing/campaigns',authMiddleware,requirePermission('manager'),async(req,res)=>res.json(await query(`SELECT c.*,COALESCE((SELECT json_agg(json_build_object('status',t.status,'count',t.n)) FROM (SELECT status,count(*)::int n FROM marketing_recipients WHERE campaign_id=c.id GROUP BY status)t),'[]') AS counts FROM marketing_campaigns c ORDER BY created_at DESC LIMIT 100`)));
+ app.get('/api/marketing/campaigns',authMiddleware,requirePermission('manager'),async(req,res)=>res.json(await query(`
+   SELECT c.*,u.name AS sender_name,u.email AS sender_email,stats.counts,stats.total_count,stats.delivered_count,stats.failed_count,
+     CASE WHEN stats.total_count>0 THEN ROUND(100.0*stats.delivered_count/stats.total_count) ELSE NULL END AS success_rate
+   FROM marketing_campaigns c LEFT JOIN users u ON u.id=c.created_by
+   CROSS JOIN LATERAL (
+     SELECT COALESCE(json_agg(json_build_object('status',grouped.status,'count',grouped.n)),'[]') AS counts,
+       COALESCE(sum(grouped.n),0)::int AS total_count,
+       COALESCE(sum(grouped.n) FILTER(WHERE grouped.status='delivered'),0)::int AS delivered_count,
+       COALESCE(sum(grouped.n) FILTER(WHERE grouped.status IN ('failed','bounced','complained','undelivered')),0)::int AS failed_count
+     FROM (SELECT effective.status,count(*)::int n FROM (
+       SELECT COALESCE(CASE WHEN c.channel='email' THEN (SELECT em.status FROM email_messages em WHERE em.resend_id=r.provider_id ORDER BY em.id DESC LIMIT 1)
+         ELSE (SELECT sm.status FROM sms_messages sm WHERE sm.twilio_sid=r.provider_id ORDER BY sm.id DESC LIMIT 1) END,r.status) AS status
+       FROM marketing_recipients r WHERE r.campaign_id=c.id
+     ) effective GROUP BY effective.status) grouped
+   ) stats ORDER BY c.created_at DESC LIMIT 100`)));
  app.post('/api/marketing/campaigns',authMiddleware,requirePermission('manager'),async(req:AuthRequest,res)=>{
   const {channel,subject,message,recipients}=req.body;const format=channel==='email'&&req.body.message_format==='html'?'html':'text';if(!['email','sms'].includes(channel)||typeof message!=='string'||!message.trim()||message.length>(channel==='sms'?1000:200000)||(channel==='email'&&(!subject||String(subject).length>200))||!Array.isArray(recipients)||!recipients.length||recipients.length>1000)return res.status(400).json({error:'Choose recipients and enter a message (SMS up to 1,000 characters; email up to 200,000)'});
   if(format==='html'&&(message.match(/\{\{[A-Z_]+\}\}/g)||[]).some(key=>key!=='{{FIRST_NAME}}'))return res.status(400).json({error:'Fill in the template details before sending'});

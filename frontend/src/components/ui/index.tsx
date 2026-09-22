@@ -83,9 +83,9 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
 }
 
 // ─── Select ───
-export function Select({ label, value, onChange, options, className = '', searchable, inlineLabel = false }: {
+export function Select({ label, value, onChange, options, className = '', searchable, inlineLabel = false, hideLabel = false }: {
   label?: string; value: string; onChange: (v: string) => void;
-  options: { value: string; label: string }[]; className?: string; searchable?: boolean; inlineLabel?: boolean;
+  options: { value: string; label: string }[]; className?: string; searchable?: boolean; inlineLabel?: boolean; hideLabel?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -171,7 +171,7 @@ export function Select({ label, value, onChange, options, className = '', search
 
   return (
     <div className={`${inlineLabel ? 'flex items-center gap-3' : ''} ${className}`}>
-      {label && <label className={`text-xs text-[var(--text-secondary)] font-medium ${inlineLabel ? 'shrink-0' : 'block mb-1.5'}`}>{label}</label>}
+      {label && !hideLabel && <label className={`text-xs text-[var(--text-secondary)] font-medium ${inlineLabel ? 'shrink-0' : 'block mb-1.5'}`}>{label}</label>}
       <button
         ref={triggerRef}
         aria-label={label}

@@ -1,8 +1,22 @@
+import {dashboardAlerts} from './dashboard-alerts';
 import type { Express } from 'express';
 import pool, { query } from './db-pg';
 import { AuthRequest, authMiddleware, requireRole } from './auth';
 
 export function registerTeamActivityRoutes(app: Express) {
+  app.post('/api/dashboard/clear-alerts', authMiddleware, requireRole('admin'), async(req:AuthRequest,res)=>{
+    const client=await pool.connect();
+    try{
+      const alerts=await dashboardAlerts();
+      const maintenance=await query("SELECT id FROM maintenance WHERE status IN ('open','in_progress')");
+      const keys=[...alerts.map(a=>a.alert_key),...maintenance.map(m=>'maintenance:'+m.id)];
+      await client.query('BEGIN');
+      const changed=await client.query('INSERT INTO dashboard_alert_dismissals(alert_key,cleared_by) SELECT unnest($1::text[]),$2 ON CONFLICT DO NOTHING RETURNING alert_key',[keys,req.user!.id]);
+      await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,changes) VALUES($1,$2,'update','dashboard',$3)",[req.user!.id,req.user!.email,JSON.stringify({action:'clear_alerts',keys:changed.rows.map(r=>r.alert_key)})]);
+      await client.query('COMMIT');res.json({cleared:changed.rowCount});
+    }catch{await client.query('ROLLBACK');res.status(500).json({error:'Could not clear dashboard alerts'});}finally{client.release();}
+  });
+
   app.post('/api/tasks/clear-recent', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
     const client = await pool.connect();
     try {
