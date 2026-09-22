@@ -12,7 +12,15 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+      "altcha-lib": [
+        "./node_modules/altcha-lib/dist/cjs/v2/index.d.ts"
+      ],
+      "altcha-lib/algorithms/*": [
+        "./node_modules/altcha-lib/dist/cjs/v2/algorithms/*.d.ts"
+      ]
+    }
   },
   "include": [
     "src/**/*.ts"

@@ -10,7 +10,7 @@ export interface ImportField {
   transform?: 'phone' | 'date';
 }
 
-export type ImportEntity = 'tenant-enquiries' | 'landlords' | 'properties';
+export type ImportEntity = 'tenant-enquiries' | 'landlords' | 'landlords-bdm' | 'properties';
 
 export const IMPORT_CONFIGS: Record<ImportEntity, { title: string; fields: ImportField[] }> = {
   'tenant-enquiries': {
@@ -29,6 +29,17 @@ export const IMPORT_CONFIGS: Record<ImportEntity, { title: string; fields: Impor
       { key: 'preferred_tenancy_type', label: 'Tenancy Type', aliases: ['tenancy type', 'is this for long term rent 12 months or short term rent 3 11 months'] },
       { key: 'preferred_property_type', label: 'Property Type', aliases: ['property type', 'is it a house an apartment or a studio'] },
       { key: 'notes', label: 'Notes', aliases: ['notes', 'additional information', 'please provide any additional information or questions you have for us'] },
+    ],
+  },
+  'landlords-bdm': {
+    title: 'Landlord Enquiries',
+    fields: [
+      {key:'name',label:'Name',required:true,aliases:['name','landlord name','full name']},
+      {key:'email',label:'Email',aliases:['email','email address']},
+      {key:'phone',label:'Phone',aliases:['phone','phone number','mobile','contact number'],transform:'phone'},
+      {key:'address',label:'Address',aliases:['address','property address']},
+      {key:'source',label:'Source',aliases:['source','lead source']},
+      {key:'notes',label:'Notes',aliases:['notes','additional information']},
     ],
   },
   landlords: {

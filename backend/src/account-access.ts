@@ -1,4 +1,6 @@
 import type {Express} from 'express';
+import {createChallenge,verifySolution} from 'altcha-lib';
+import {deriveKey} from 'altcha-lib/algorithms/pbkdf2';
 import type {PoolClient} from 'pg';
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
@@ -32,14 +34,31 @@ async function createUser(client:PoolClient,body:any){
  await issueLink(client,user,'invite');return user;
 }
 export function registerAccountRoutes(app:Express){
- const limiter=rateLimit({windowMs:15*60*1000,limit:10,standardHeaders:true,legacyHeaders:false});
+ const limiter=rateLimit({windowMs:15*60*1000,limit:10,standardHeaders:true,legacyHeaders:false,message:{error:'Too many requests. Please try again in 15 minutes.'}});
+ const challengeSecret=()=>crypto.createHmac('sha256',process.env.JWT_SECRET!).update('password-reset-bot-check').digest('hex');
+ const challengeLimiter=rateLimit({windowMs:15*60*1000,limit:30,standardHeaders:true,legacyHeaders:false,message:{error:'Too many bot checks. Please try again in 15 minutes.'}});
+ app.get('/api/auth/reset-challenge',challengeLimiter,async(_req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  res.json(await createChallenge({algorithm:'PBKDF2/SHA-256',cost:1000,counter:crypto.randomInt(1000,2000),deriveKey,hmacSignatureSecret:challengeSecret(),expiresAt:new Date(Date.now()+5*60*1000),data:{purpose:'password-reset'}}));
+ });
  app.post('/api/auth/forgot-password',limiter,async(req,res)=>{
+  if(typeof req.body.email!=='string'||req.body.email.length>254||!/^\S+@\S+\.\S+$/.test(req.body.email.trim()))return res.status(400).json({error:'Enter a valid email address'});
+  let payload;
+  try{
+   if(typeof req.body.altcha!=='string'||req.body.altcha.length>8000)throw Error();
+   payload=JSON.parse(Buffer.from(req.body.altcha,'base64').toString());
+   if(payload.challenge?.parameters?.data?.purpose!=='password-reset'||payload.challenge.parameters.algorithm!=='PBKDF2/SHA-256'||payload.challenge.parameters.cost!==1000)throw Error();
+   if(!(await verifySolution({challenge:payload.challenge,solution:payload.solution,deriveKey,hmacSignatureSecret:challengeSecret()})).verified)throw Error();
+  }catch{return res.status(400).json({error:'Complete the bot check again before submitting'});}
+  await run('DELETE FROM auth_challenge_uses WHERE expires_at<NOW()');
+  const used=await query('INSERT INTO auth_challenge_uses(signature_hash,expires_at) VALUES($1,to_timestamp($2)) ON CONFLICT DO NOTHING RETURNING signature_hash',[tokenHash(payload.challenge.signature),payload.challenge.parameters.expiresAt]);
+  if(!used.length)return res.status(400).json({error:'This bot check has already been used. Complete a new check.'});
   const email=String(req.body.email||'').trim().toLowerCase();
   const user=await queryOne('SELECT id,email FROM users WHERE LOWER(email)=$1 AND is_active=1',[email]);
   if(user){const rows=await query("INSERT INTO account_requests(kind,user_id,email) VALUES('reset',$1,$2) ON CONFLICT DO NOTHING RETURNING id",[user.id,user.email]);if(rows.length)await run("INSERT INTO audit_log(action,entity_type,entity_id,changes) VALUES('update','user',$1,$2)",[user.id,JSON.stringify({action:'password_reset_requested'})]);}
-  res.json({message:'If this is an active CRM account, a reset request is awaiting administrator approval. Once approved, a link will be sent to its email address.'});
+  res.json({message:'Request received and pending administrator approval. Please contact your manager or administrator to expedite this process.'});
  });
- app.post('/api/auth/set-password',limiter,async(req,res)=>{
+ app.post('/api/auth/set-password',rateLimit({windowMs:15*60*1000,limit:10,standardHeaders:true,legacyHeaders:false,message:{error:'Too many requests. Please try again in 15 minutes.'}}),async(req,res)=>{
   const token=String(req.body.token||''),password=req.body.password;
   if(!/^[A-Za-z0-9_-]{43}$/.test(token)||typeof password!=='string'||password.length<12||Buffer.byteLength(password)>72)return res.status(400).json({error:'Enter a password of at least 12 characters (maximum 72 bytes), using a valid account link'});
   const client=await pool.connect();let user:any;

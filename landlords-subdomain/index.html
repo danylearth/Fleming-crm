@@ -816,7 +816,7 @@
                     </div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">👈 Back</button>
                         <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
@@ -937,7 +937,7 @@
                     </div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">👈 Back</button>
                         <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
@@ -1084,7 +1084,7 @@
                     </div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">👈 Back</button>
                         <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
@@ -1159,7 +1159,7 @@
                     </div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">👈 Back</button>
                         <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
@@ -1220,7 +1220,7 @@
                     <div id="messageContainer"></div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button type="button" class="btn btn-secondary" onclick="prevStep()">👈 Back</button>
                         <button type="submit" class="btn btn-primary" id="submitBtn">Submit Application ✓</button>
                     </div>
                 </div>
@@ -1247,12 +1247,12 @@
     <div class="dp-overlay" id="dpOverlay" onclick="closeDatePicker()"></div>
 
     <!-- Date Picker Dropdown -->
-    <div class="date-picker-dropdown" id="datePicker">
+    <div class="date-picker-dropdown" id="datePicker" role="dialog" aria-modal="true" aria-label="Choose date">
         <div class="dp-header">
             <button type="button" class="dp-nav" onclick="dpPrevMonth()">&#x2039;</button>
             <div class="dp-header-center">
-                <button type="button" class="dp-month-btn" id="dpMonthBtn" onclick="showMonthSelector()">January</button>
-                <button type="button" class="dp-year-btn" id="dpYearBtn" onclick="showYearSelector()">2026</button>
+                <button type="button" class="dp-month-btn" aria-label="Choose month" id="dpMonthBtn" onclick="showMonthSelector()">January</button>
+                <button type="button" class="dp-year-btn" aria-label="Choose year" id="dpYearBtn" onclick="showYearSelector()">2026</button>
             </div>
             <button type="button" class="dp-nav" onclick="dpNextMonth()">&#x203A;</button>
         </div>
@@ -1332,18 +1332,23 @@
             if (existing) { dpYear = existing.getFullYear(); dpMonth = existing.getMonth(); dpSelectedDate = existing; }
             else { dpYear = now.getFullYear(); dpMonth = now.getMonth(); dpSelectedDate = null; }
             const picker = document.getElementById('datePicker');
+            document.getElementById('monthSelector').classList.remove('open');
+            document.getElementById('yearSelector').classList.remove('open');
+            showDpContent();
+            picker.style.removeProperty('top');picker.style.removeProperty('left');picker.style.removeProperty('width');
             document.getElementById('dpOverlay').classList.add('open');
             if (window.innerWidth > 768) {
                 const rect = dpTargetInput.getBoundingClientRect();
                 const spaceBelow = window.innerHeight - rect.bottom;
-                picker.style.left = rect.left + 'px';
+                picker.style.left = Math.max(8,Math.min(rect.left,window.innerWidth-Math.min(320,rect.width)-8)) + 'px';
                 picker.style.width = Math.min(320, rect.width) + 'px';
-                picker.style.top = (spaceBelow >= 380 ? rect.bottom + 5 : rect.top - 385) + 'px';
+                picker.style.top = Math.max(8,spaceBelow >= 380 ? rect.bottom + 5 : rect.top - 385) + 'px';
             }
             renderCalendar();
             picker.classList.add('open');
         }
 
+        document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDatePicker();});
         function closeDatePicker() {
             document.getElementById('datePicker').classList.remove('open');
             document.getElementById('dpOverlay').classList.remove('open');
@@ -1416,7 +1421,7 @@
             document.getElementById('yearSelector').classList.add('open');
             document.getElementById('monthSelector').classList.remove('open');
             hideDpContent();
-            setTimeout(() => { const a = grid.querySelector('.active'); if (a) a.scrollIntoView({ block: 'center' }); }, 50);
+            setTimeout(() => { const a = grid.querySelector('.active'); if (a) grid.scrollTop = a.offsetTop-grid.offsetTop-grid.clientHeight/2; }, 50);
         }
         function selectYear(y) { dpYear = y; document.getElementById('yearSelector').classList.remove('open'); showDpContent(); renderCalendar(); }
 

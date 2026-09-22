@@ -5010,10 +5010,11 @@ const IMPORT_COLUMNS: Record<string, string[]> = {
   'tenant-enquiries': ['first_name_1', 'last_name_1', 'email_1', 'phone_1', 'date_of_birth_1', 'nationality_1',
     'current_address_1', 'employment_status_1', 'employer_1', 'income_1', 'preferred_tenancy_type',
     'preferred_property_type', 'notes'],
+  'landlords-bdm': ['name', 'email', 'phone', 'address', 'source', 'notes'],
   'landlords': ['name', 'email', 'phone', 'address', 'home_address', 'entity_type', 'company_number'],
   'properties': ['address', 'postcode', 'property_type', 'bedrooms', 'rent_amount', 'notes'],
 };
-app.post('/api/import/:entity', requirePermission('staff'), async (req: AuthRequest, res) => {
+app.post('/api/import/:entity', authMiddleware, requirePermission('manager'), async (req: AuthRequest, res) => {
   const entity = req.params.entity as string;
   if (!(entity in IMPORT_COLUMNS)) return res.status(400).json({ error: 'Unknown import entity' });
   const rows = req.body?.rows;
@@ -5075,7 +5076,8 @@ app.post('/api/import/:entity', requirePermission('staff'), async (req: AuthRequ
         seen.add(`e:${email}`);
         if (phone) seen.add(`p:${phone}`);
         await insertRow('tenant_enquiries', { ...data, email_1: email, status: 'new' });
-      } else if (entity === 'landlords') {
+      } else if (entity === 'landlords' || entity === 'landlords-bdm') {
+        const targetTable=entity==='landlords'?'landlords':'landlords_bdm';
         if (!data.name) {
           skipped.push({ row: rowNum, reason: 'missing required field (name)' });
           continue;
@@ -5087,7 +5089,7 @@ app.post('/api/import/:entity', requirePermission('staff'), async (req: AuthRequ
           continue;
         }
         const dup = await client.query(
-          'SELECT id FROM landlords WHERE lower(name) = $1 OR ($2::text IS NOT NULL AND lower(email) = $2) LIMIT 1',
+          `SELECT id FROM ${targetTable} WHERE lower(name) = $1 OR ($2::text IS NOT NULL AND lower(email) = $2) LIMIT 1`,
           [name, email]
         );
         if (dup.rows.length) {
@@ -5096,7 +5098,7 @@ app.post('/api/import/:entity', requirePermission('staff'), async (req: AuthRequ
         }
         seen.add(`n:${name}`);
         if (email) seen.add(`e:${email}`);
-        await insertRow('landlords', data);
+        await insertRow(targetTable,entity==='landlords-bdm'?{...data,status:'new'}:data);
       } else {
         // properties — resolve landlord by email or exact name; never auto-create
         if (!data.address) {

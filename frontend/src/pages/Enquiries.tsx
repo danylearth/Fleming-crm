@@ -270,7 +270,7 @@ function EmploymentFields({ form, setField, suffix, editing }: {
 export default function Enquiries() {
   const api = useApi();
   const { confirmAction } = useNotifications();
-  const { canCreate, canDelete } = usePermissions();
+  const { canDelete, isManager } = usePermissions();
   const navigate = useNavigate();
   const [rawEnquiries, setRawEnquiries] = useState<EnquiryRaw[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
@@ -641,7 +641,7 @@ export default function Enquiries() {
           >
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
-          {canCreate() && (
+          {isManager() && (
             <Button variant="outline" onClick={() => setShowImport(true)}>
               <Upload size={16} className="mr-2" /> Import CSV
             </Button>
@@ -651,7 +651,7 @@ export default function Enquiries() {
           </Button>
         </div>
 
-        {showImport && <CsvImport entity="tenant-enquiries" onClose={() => setShowImport(false)} onDone={load} />}
+        {showImport && isManager() && <CsvImport entity="tenant-enquiries" onClose={() => setShowImport(false)} onDone={load} />}
 
         {/* Property filter */}
         <div className="flex flex-wrap items-center gap-3">

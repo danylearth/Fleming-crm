@@ -1616,12 +1616,12 @@
     <div class="dp-overlay" id="dpOverlay" onclick="closeDatePicker()"></div>
 
     <!-- Date Picker Dropdown -->
-    <div class="date-picker-dropdown" id="datePicker">
+    <div class="date-picker-dropdown" id="datePicker" role="dialog" aria-modal="true" aria-label="Choose date">
         <div class="dp-header">
             <button type="button" class="dp-nav" onclick="dpPrevMonth()">&#x2039;</button>
             <div class="dp-header-center">
-                <button type="button" class="dp-month-btn" id="dpMonthBtn" onclick="showMonthSelector()">January</button>
-                <button type="button" class="dp-year-btn" id="dpYearBtn" onclick="showYearSelector()">2026</button>
+                <button type="button" class="dp-month-btn" aria-label="Choose month" id="dpMonthBtn" onclick="showMonthSelector()">January</button>
+                <button type="button" class="dp-year-btn" aria-label="Choose year" id="dpYearBtn" onclick="showYearSelector()">2026</button>
             </div>
             <button type="button" class="dp-nav" onclick="dpNextMonth()">&#x203A;</button>
         </div>
@@ -1711,6 +1711,10 @@
             }
 
             const picker = document.getElementById('datePicker');
+            document.getElementById('monthSelector').classList.remove('open');
+            document.getElementById('yearSelector').classList.remove('open');
+            showDpContent();
+            picker.style.removeProperty('top');picker.style.removeProperty('left');picker.style.removeProperty('width');
             document.getElementById('dpOverlay').classList.add('open');
 
             // Position picker below the input using fixed positioning
@@ -1719,13 +1723,13 @@
                 const pickerHeight = 380;
                 const spaceBelow = window.innerHeight - rect.bottom;
 
-                picker.style.left = rect.left + 'px';
+                picker.style.left = Math.max(8,Math.min(rect.left,window.innerWidth-Math.min(320,rect.width)-8)) + 'px';
                 picker.style.width = Math.min(320, rect.width) + 'px';
 
                 if (spaceBelow >= pickerHeight) {
                     picker.style.top = (rect.bottom + 5) + 'px';
                 } else {
-                    picker.style.top = (rect.top - pickerHeight - 5) + 'px';
+                    picker.style.top = Math.max(8,rect.top - pickerHeight - 5) + 'px';
                 }
             }
 
@@ -1733,6 +1737,7 @@
             picker.classList.add('open');
         }
 
+        document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDatePicker();});
         function closeDatePicker() {
             document.getElementById('datePicker').classList.remove('open');
             document.getElementById('dpOverlay').classList.remove('open');
@@ -1863,7 +1868,7 @@
 
             setTimeout(() => {
                 const active = grid.querySelector('.active');
-                if (active) active.scrollIntoView({ block: 'center' });
+                if (active) grid.scrollTop = active.offsetTop-grid.offsetTop-grid.clientHeight/2;
             }, 50);
         }
 

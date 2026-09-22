@@ -30,7 +30,7 @@ export default function Landlords() {
   const navigate = useNavigate();
   const api = useApi();
   const { confirmAction } = useNotifications();
-  const { canCreate } = usePermissions();
+  const { isManager } = usePermissions();
   const [landlords, setLandlords] = useState<Landlord[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [directors, setDirectors] = useState<{ id: number; landlord_id: number; name?: string; email?: string; phone?: string }[]>([]);
@@ -297,7 +297,7 @@ export default function Landlords() {
           >
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
-          {canCreate() && (
+          {isManager() && (
             <Button variant="outline" onClick={() => setShowImport(true)}>
               <Upload size={16} className="mr-2" /> Import CSV
             </Button>
@@ -307,7 +307,7 @@ export default function Landlords() {
           </Button>
         </div>
 
-        {showImport && <CsvImport entity="landlords" onClose={() => setShowImport(false)} onDone={load} />}
+        {showImport && isManager() && <CsvImport entity="landlords" onClose={() => setShowImport(false)} onDone={load} />}
 
         {/* Dropdown filters + Filter tabs */}
         <div className="flex flex-wrap items-center gap-3">

@@ -58,7 +58,7 @@ export default function Properties() {
   const api = useApi();
   const { confirmAction } = useNotifications();
   const navigate = useNavigate();
-  const { canCreate } = usePermissions();
+  const { isManager } = usePermissions();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -211,7 +211,7 @@ export default function Properties() {
           >
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
-          {canCreate() && (
+          {isManager() && (
             <Button variant="outline" onClick={() => setShowImport(true)}>
               <Upload size={16} className="mr-2" /> Import CSV
             </Button>
@@ -221,7 +221,7 @@ export default function Properties() {
           </Button>
         </div>
 
-        {showImport && <CsvImport entity="properties" onClose={() => setShowImport(false)} onDone={load} />}
+        {showImport && isManager() && <CsvImport entity="properties" onClose={() => setShowImport(false)} onDone={load} />}
 
         {/* Dropdown filters + Status filter */}
         <div className="flex flex-wrap items-center gap-3">

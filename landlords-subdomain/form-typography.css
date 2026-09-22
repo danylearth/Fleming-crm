@@ -27,3 +27,21 @@ input[type="text"],input[type="email"],input[type="tel"],input[type="date"],inpu
 .checkbox-group input[type="checkbox"]{width:20px!important;height:20px!important;margin:2px 0 0!important;padding:0!important;}
 .checkbox-group label{width:auto!important;display:block!important;margin:0!important;line-height:24px!important;}
 .marketing-prefs .checkbox-group{margin-bottom:10px;}
+
+/* September 22: consistent public form spacing and mobile navigation. */
+.header{justify-content:space-between!important;flex-wrap:nowrap!important;gap:12px;}
+.header .logo{flex:0 1 auto;max-width:40%;object-fit:contain;}
+.header .back-button{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;white-space:nowrap;font-family:Helvetica,Arial,sans-serif;font-weight:700;font-size:14px;line-height:20px;min-height:44px;padding:8px 16px;border-radius:999px;box-sizing:border-box;}
+.form-wrapper{padding:32px;}
+.step p.step-description{margin-bottom:24px;}
+.input-group{margin-bottom:20px;}
+.button-group{margin-top:24px;gap:12px;}
+.radio-group{gap:16px;}
+.radio-option label{font-size:16px!important;font-weight:600!important;}
+.date-picker-dropdown{box-sizing:border-box;max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;}
+.dp-month-btn,.dp-year-btn{border:1px solid #ddd;background:#f7f4f8;min-height:40px;padding:6px 10px;font-family:Helvetica,Arial,sans-serif;}
+.dp-month-btn::after,.dp-year-btn::after{content:' ▾';color:#dc006d;}
+.dp-header-center{min-width:0;flex-wrap:wrap;justify-content:center;}
+.dp-year-grid{overscroll-behavior:contain;}
+@media(max-width:768px){.date-picker-dropdown{width:100%!important;max-height:85dvh;padding:16px 16px calc(16px + env(safe-area-inset-bottom));}.dp-day{min-height:40px;}.dp-footer button{min-height:44px;}}
+@media(max-width:480px){.header{padding:12px 15px;gap:8px;}.header .back-button{font-size:13px;padding:8px 12px;}.form-wrapper{padding:24px 16px;}.button-group{margin-top:24px;}.radio-option label{padding:16px 18px;}}

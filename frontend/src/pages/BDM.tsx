@@ -1,10 +1,12 @@
+import CsvImport from '../components/ui/CsvImport';
+import {usePermissions} from '../hooks/usePermissions';
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Avatar, Tag, SearchBar, EmptyState, DatePicker, Select } from '../components/ui';
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
-import { Plus, X, Mail, Phone, Calendar, ArrowRight, UserPlus, XCircle, LayoutGrid, List } from 'lucide-react';
+import { Plus, X, Mail, Phone, Calendar, ArrowRight, UserPlus, XCircle, LayoutGrid, List, Upload } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -41,6 +43,8 @@ function isOverdue(d: string) {
 
 export default function BDM() {
   const navigate = useNavigate();
+  const {isManager}=usePermissions();
+  const [showImport,setShowImport]=useState(false);
   const api = useApi();
   const { confirmAction } = useNotifications();
   const [prospects, setProspects] = useState<Prospect[]>([]);
@@ -248,11 +252,13 @@ export default function BDM() {
           >
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
+          {isManager()&&<Button variant="outline" onClick={()=>setShowImport(true)}><Upload size={16} className="mr-2"/>Import CSV</Button>}
           <Button variant="gradient" onClick={() => setShowModal(true)}>
             <Plus size={16} className="mr-2" /> Add Prospect
           </Button>
         </div>
 
+        {showImport&&isManager()&&<CsvImport entity="landlords-bdm" onClose={()=>setShowImport(false)} onDone={load}/>}
         {/* Status filter */}
         <div className="flex flex-wrap gap-2">
           {[

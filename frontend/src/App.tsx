@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
 
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const AccountSetup = lazy(() => import('./pages/AccountSetup'));
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -79,6 +80,7 @@ function AppRoutes() {
     }>
     <Routes>
       <Route path="/account-setup" element={<AccountSetup />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/password-reset" element={<AccountSetup />} />
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/v3/*" element={<V3Redirect />} />
