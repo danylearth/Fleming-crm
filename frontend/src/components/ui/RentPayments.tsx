@@ -110,12 +110,12 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   const displayPayments = compact ? filteredPayments.slice(0, 5) : filteredPayments;
 
   // Calculate summary
-  const totalDue = payments.reduce((sum, p) => sum + Number(p.amount_due || 0), 0);
-  const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount_paid || 0), 0);
-  const pendingCount = payments.filter(p => p.status !== 'paid').length;
+  const totalDue = filteredPayments.reduce((sum, p) => sum + Number(p.amount_due || 0), 0);
+  const totalPaid = filteredPayments.reduce((sum, p) => sum + Number(p.amount_paid || 0), 0);
+  const pendingCount = filteredPayments.filter(p => p.status !== 'paid').length;
 
   // Average late payment (days between due_date and payment_date for paid payments)
-  const paidPayments = payments.filter(p => p.status === 'paid' && p.payment_date && p.due_date);
+  const paidPayments = filteredPayments.filter(p => p.status === 'paid' && p.payment_date && p.due_date);
   const avgLateDays = paidPayments.length > 0
     ? Math.round(paidPayments.reduce((sum, p) => {
       const due = new Date(p.due_date).getTime();

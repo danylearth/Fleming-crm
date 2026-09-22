@@ -55,6 +55,7 @@ export default function Dashboard() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [teamMembers,setTeamMembers]=useState<{id:number;name:string}[]>([]);
   const [maintenanceOwner,setMaintenanceOwner]=useState('all');
+  const [expandAlerts,setExpandAlerts]=useState(false);
   const matchesMaintenanceOwner=(assigned:unknown)=>maintenanceOwner==='all'||(maintenanceOwner==='unassigned'?!assigned:[maintenanceOwner,teamMembers.find(m=>String(m.id)===maintenanceOwner)?.name].includes(String(assigned||'')));
   const [taskOwner,setTaskOwner]=useState('all');
   const [selectedTask,setSelectedTask]=useState<Task|null>(null);
@@ -191,10 +192,10 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Compliance and maintenance alerts */}
           <Card className="p-6">
-            <div className="flex flex-wrap justify-between items-center gap-3 mb-5"><h2 className="font-semibold flex items-center gap-2"><AlertTriangle size={16}/> Compliance Alerts & Maintenance Requests</h2><div className="flex items-center gap-2 ml-auto"><Select inlineLabel className="w-44" label="Assigned" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'All'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" variant="outline" onClick={()=>navigate('/maintenance')}>View All</Button></div></div>
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-5"><h2 className="font-semibold flex items-center gap-2"><AlertTriangle size={16}/> Compliance Alerts & Maintenance Requests</h2><div className="flex items-center gap-2 ml-auto"><Select inlineLabel className="w-44" label="Assigned" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'All'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" variant="outline" aria-expanded={expandAlerts} aria-controls="dashboard-alerts" onClick={()=>setExpandAlerts(!expandAlerts)}>{expandAlerts?'Show Less':'View All'}</Button></div></div>
             {dashboard?.complianceAlerts?.some(a=>matchesMaintenanceOwner(a.assigned_to)) || dashboard?.recentMaintenance?.some(m=>matchesMaintenanceOwner(m.assigned_to)) ? (
-              <div className="space-y-3">
-                {dashboard!.complianceAlerts.filter(a=>matchesMaintenanceOwner(a.assigned_to)).slice(0, 8).map((alert, i) => (
+              <div id="dashboard-alerts" className={`space-y-3 ${expandAlerts?'':'max-h-[32rem] overflow-y-auto'}`}>
+                {dashboard!.complianceAlerts.filter(a=>matchesMaintenanceOwner(a.assigned_to)).map((alert, i) => (
                   <button key={`compliance-${i}`} onClick={() => navigate(alert.task_id?`/tasks/${alert.task_id}`:`/properties/${alert.id}`)} className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                     <div className="flex items-center gap-3">
                       <AlertTriangle size={16} className={urgencyColor(alert.expiry_date)} />
@@ -213,7 +214,7 @@ export default function Dashboard() {
                     </div>
                   </button>
                 ))}
-                {dashboard!.recentMaintenance.filter(m=>matchesMaintenanceOwner(m.assigned_to)).slice(0, 5).map(item => (
+                {dashboard!.recentMaintenance.filter(m=>matchesMaintenanceOwner(m.assigned_to)).map(item => (
                   <button key={`maintenance-${item.id}`} onClick={() => navigate(`/maintenance/${item.id}`)} className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                     <div className="flex items-center gap-3 min-w-0"><Wrench size={16} className="text-amber-400 shrink-0" /><div className="min-w-0"><p className="text-sm font-medium truncate">{item.property_address}</p><p className="text-xs text-[var(--text-muted)] truncate">{item.description}</p></div></div>
                     {item.assigned_name && <span title={item.assigned_name} className="rounded-full bg-amber-500/15 px-2 py-1 text-xs mx-2">{item.assigned_name?item.assigned_name.split(' ').map(n=>n[0]).join('').slice(0,2):''}</span>}<span className="text-[10px] font-semibold uppercase text-amber-400">{item.status.replace('_', ' ')}<span aria-label="View maintenance" title="View maintenance" className="inline-flex ml-2 rounded-full bg-[var(--bg-hover)] p-2"><Eye size={14}/></span></span>

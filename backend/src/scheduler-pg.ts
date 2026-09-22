@@ -272,9 +272,6 @@ async function runDueFollowUps(): Promise<number> {
 
 async function runAllChecks() {
   await syncTenantLifecycle();
-  const policies=await query("SELECT pol.id,pol.expiry_date::text,p.address FROM property_policies pol JOIN property_policy_allocations a ON a.policy_id=pol.id JOIN properties p ON p.id=a.property_id WHERE pol.expiry_date<=CURRENT_DATE+INTERVAL '14 days' AND NOT EXISTS(SELECT 1 FROM property_policies newer JOIN property_policy_allocations na ON na.policy_id=newer.id WHERE na.property_id=p.id AND newer.policy_type=pol.policy_type AND newer.expiry_date>pol.expiry_date AND newer.commencement_date<=CURRENT_DATE) AND p.archived_at IS NULL ORDER BY pol.id,p.id");
-  const seenPolicies=new Set<number>();
-  for(const policy of policies){if(seenPolicies.has(policy.id))continue;seenPolicies.add(policy.id);if(!await taskExists('insurance_reminder',policy.id,'property_policy',policy.expiry_date))await createTask(`Insurance renewal — ${policy.address}${policies.filter(p=>p.id===policy.id).length>1?' and other covered properties':''}`,'high',policy.expiry_date,'insurance_reminder',policy.id,'property_policy');}
   const complianceTasks = await runComplianceChecks();
   const tenancyTasks = await runTenancyEndChecks();
   const rentReviewTasks = await runRentReviewChecks();

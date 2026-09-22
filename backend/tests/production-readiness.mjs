@@ -737,16 +737,29 @@ try {
     const script="const db=require('./dist/db-pg');require('./dist/tenant-lifecycle-db').syncTenantLifecycle().then(()=>db.default.end()).catch(e=>{console.error(e);process.exit(1)})";
     const run=()=>{const result=spawnSync(process.execPath,['-e',script],{env,encoding:'utf8'});assert.equal(result.status,0,result.stderr);};run();run();
     let tasks=await sql("SELECT * FROM tasks WHERE task_type='inventory_due' AND entity_id=$1",[current.id]);assert.equal(tasks.length,1);assert.equal(tasks[0].priority,'high');assert.equal(tasks[0].status,'pending');
+    const dashboard=await ok('/api/dashboard',{token:auth.staff});
+    assert(dashboard.complianceAlerts.some(alert=>alert.task_id===tasks[0].id&&alert.type==='Inventory Due'&&alert.id===p.id));
     const draft=await one("INSERT INTO inventories(property_id,tenant_id,inventory_type,inspection_date,status) VALUES($1,$2,'check_in',CURRENT_DATE,'in_progress') RETURNING id",[p.id,current.id]);run();assert.equal((await one('SELECT status FROM tasks WHERE id=$1',[tasks[0].id])).status,'pending');
     await sql("UPDATE inventories SET signed_date=CURRENT_DATE,status='completed' WHERE id=$1",[draft.id]);run();assert.equal((await one('SELECT status FROM tasks WHERE id=$1',[tasks[0].id])).status,'completed');
     await sql('DELETE FROM inventories WHERE id=$1',[draft.id]);run();assert.equal((await one('SELECT status FROM tasks WHERE id=$1',[tasks[0].id])).status,'pending');
     await sql('UPDATE tenants SET tenancy_start_date=CURRENT_DATE WHERE id=$1',[current.id]);run();const renewed=await sql("SELECT * FROM tasks WHERE task_type='inventory_due' AND entity_id=$1",[current.id]);assert.equal(renewed.length,2);assert.equal(renewed.filter(t=>t.status==='pending').length,1);
   });
+  await test('dashboard includes assigned maintenance beyond the first five requests',async()=>{
+    const staff=await one("SELECT id FROM users WHERE role='staff' LIMIT 1");
+    const oldest=await one("INSERT INTO maintenance(property_id,title,description,status,priority,assigned_to,created_at) VALUES($1,'Assigned older request','Assigned older request','open','medium',$2,NOW()-INTERVAL '20 days') RETURNING id",[property.id,staff.id]);
+    for(let i=0;i<6;i++)await sql("INSERT INTO maintenance(property_id,title,description,status,priority) VALUES($1,'New unassigned request','New unassigned request','open','medium')",[property.id]);
+    const dashboard=await ok('/api/dashboard',{token:auth.staff});
+    assert(dashboard.recentMaintenance.some(item=>item.id===oldest.id&&item.assigned_to===staff.id));
+  });
   await test('insurance reminders open at fourteen days and close when a replacement policy covers the renewal',async()=>{
     const p=await one("INSERT INTO properties(address,postcode,landlord_id) VALUES('Insurance reminder test','WV1 1AA',$1) RETURNING id",[landlord.id]);
     const policy=await one("INSERT INTO property_policies(policy_type,annual_cost,commencement_date,expiry_date) VALUES('buildings',100,CURRENT_DATE-351,CURRENT_DATE+14) RETURNING id");
     await sql('INSERT INTO property_policy_allocations(policy_id,property_id,allocated_cost) VALUES($1,$2,100)',[policy.id,p.id]);
+    const legacy=await one("INSERT INTO tasks(title,task_type,entity_type,entity_id,status,due_date) VALUES('Old insurance reminder','insurance_reminder','property_policy',$1,'pending',CURRENT_DATE+14) RETURNING id",[policy.id]);
     const run=()=>{const result=spawnSync(process.execPath,['-e',"const db=require('./dist/db-pg');require('./dist/tenant-lifecycle-db').syncTenantLifecycle().then(()=>db.default.end()).catch(e=>{console.error(e);process.exit(1)})"],{env,encoding:'utf8'});assert.equal(result.status,0,result.stderr);};run();
+    assert.equal((await one('SELECT status FROM tasks WHERE id=$1',[legacy.id])).status,'completed');
+    assert.equal((await one("SELECT count(*)::int n FROM audit_log WHERE entity_type='task' AND entity_id=$1 AND changes LIKE '%Replaced by per-property%'",[legacy.id])).n,1);
+    run();assert.equal((await one("SELECT count(*)::int n FROM audit_log WHERE entity_type='task' AND entity_id=$1 AND changes LIKE '%Replaced by per-property%'",[legacy.id])).n,1);
     const reminder=await one("SELECT * FROM tasks WHERE task_type='insurance_renewal' AND entity_id=$1",[p.id]);assert.equal(reminder.status,'pending');
     const renewal=await one("INSERT INTO property_policies(policy_type,annual_cost,commencement_date,expiry_date) VALUES('buildings',110,CURRENT_DATE+15,CURRENT_DATE+379) RETURNING id");
     await sql('INSERT INTO property_policy_allocations(policy_id,property_id,allocated_cost) VALUES($1,$2,110)',[renewal.id,p.id]);run();assert.equal((await one('SELECT status FROM tasks WHERE id=$1',[reminder.id])).status,'completed');
@@ -810,6 +823,7 @@ try {
     const run=()=>{const r=spawnSync(process.execPath,['-e',"const db=require('./dist/db-pg');require('./dist/property-inspections').syncPropertyInspectionTasks().then(()=>db.default.end()).catch(e=>{console.error(e);process.exit(1)})"],{env,encoding:'utf8'});assert.equal(r.status,0,r.stderr);};run();run();
     assert.equal((await sql("SELECT id FROM tasks WHERE task_type='property_inspection' AND entity_id=$1 AND status='pending'",[p.id])).length,1);
     const state=await ok(`/api/properties/${p.id}/inspections`,{token:auth.staff});assert(state.enabled);assert(state.next_due<today);
+    assert((await ok('/api/dashboard',{token:auth.staff})).complianceAlerts.some(a=>a.id===p.id&&a.type==='Property Inspection'&&a.task_id));
     const staff=await one("SELECT id FROM users WHERE email='staff@example.test'");
     const doc=await one("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type) VALUES('property',$1,'Property Inspection Report','inspection.pdf','Inspection.pdf','application/pdf') RETURNING id",[p.id]);
     const body={inspection_date:today,condition:'good',conducted_by:staff.id,document_id:doc.id};

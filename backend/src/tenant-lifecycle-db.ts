@@ -65,6 +65,11 @@ export async function syncTenantLifecycle(): Promise<void> {
     WHERE p.id=task.entity_id AND p.archived_at IS NULL AND pol.expiry_date<=CURRENT_DATE+14
     AND NOT EXISTS(SELECT 1 FROM property_policies newer JOIN property_policy_allocations na ON na.policy_id=newer.id WHERE na.property_id=p.id AND newer.policy_type=pol.policy_type AND newer.expiry_date>pol.expiry_date AND newer.commencement_date<=pol.expiry_date+1))`);
   await run(`UPDATE tasks SET priority='high',dashboard_dismissed_at=NULL WHERE task_type='insurance_renewal' AND status IN ('pending','in_progress') AND due_date<=CURRENT_DATE AND priority<>'high'`);
+  // Retire the old per-policy reminders after the canonical per-property reminders exist.
+  await run(`WITH retired AS (UPDATE tasks SET status='completed' WHERE task_type='insurance_reminder'
+    AND entity_type='property_policy' AND status IN ('pending','in_progress') RETURNING id)
+    INSERT INTO audit_log(action,entity_type,entity_id,changes) SELECT 'update','task',id,
+      '{"source":"tenant lifecycle","reason":"Replaced by per-property insurance renewal reminders"}' FROM retired`);
   await applyDueRentReviews();
   await syncPropertyInspectionTasks();
 }
