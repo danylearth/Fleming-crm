@@ -993,7 +993,7 @@
                     <h2>Tenancy, guarantor and next of kin</h2>
                     <p class="step-description">Tell us about your tenancy and the people supporting your application.</p>
                     <div class="section-divider"><div class="dot"></div><span>TENANCY INFORMATION</span><div class="line"></div></div>
-                    <div class="two-col"><div class="input-group full-width"><label>Property Address *</label><input type="text" id="f_property_address" required /></div><div class="input-group"><label>Preferred Start Date *</label><div class="date-picker-wrapper"><input type="text" id="f_preferred_start" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_preferred_start')" /><span class="calendar-icon">&#x1F4C5;</span></div></div><div class="input-group"><label>Rental Period *</label><select id="f_rental_period" required><option value="">Select...</option><option>Monthly</option><option>Quarterly</option><option>Other</option></select></div><div class="input-group"><label>Preferred Tenancy Duration *</label><input type="text" id="f_tenancy_duration" placeholder="e.g. 12 months" required /></div><div class="input-group"><label>Rental Amount (&pound;) *</label><input type="text" id="f_rental_amount" class="pre-filled" readonly aria-readonly="true" inputmode="decimal" oninput="formatMoney(this)" required /></div></div>
+                    <div class="two-col"><div class="input-group full-width"><label>Property Address *</label><input type="text" id="f_property_address" required /></div><div class="input-group"><label>Preferred Start Date *</label><div class="date-picker-wrapper"><input type="text" id="f_preferred_start" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_preferred_start')" /><span class="calendar-icon">&#x1F4C5;</span></div></div><div class="input-group"><label>Rental Period *</label><select id="f_rental_period" required><option value="">Select...</option><option selected>Monthly</option><option>Quarterly</option><option>Other</option></select></div><div class="input-group"><label>Preferred Tenancy Duration *</label><input type="text" id="f_tenancy_duration" placeholder="e.g. 12 months" required /></div><div class="input-group"><label>Rental Amount (&pound;) *</label><input type="text" id="f_rental_amount" class="pre-filled" readonly aria-readonly="true" inputmode="decimal" oninput="formatMoney(this)" required /></div></div>
                     <div class="input-group"><label>Will there be any other occupants, including children or dependants? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_other_occupants" data-value="yes" onclick="setYesNo('f_has_other_occupants','yes'); togglePanelFromYesNo('f_has_other_occupants','other-occupants-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_other_occupants" data-value="no" onclick="setYesNo('f_has_other_occupants','no'); togglePanelFromYesNo('f_has_other_occupants','other-occupants-fields')">No</button></div><input type="hidden" id="f_has_other_occupants" data-required-choice="true" /></div>
                     <div id="other-occupants-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Other Occupant Details *</label><textarea id="f_other_occupants" placeholder="Names, ages and relationship to you"></textarea></div></div>
                     <div class="input-group"><label>Do you have any pets? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_pets" data-value="yes" onclick="setYesNo('f_has_pets','yes'); togglePanelFromYesNo('f_has_pets','pet-details-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_pets" data-value="no" onclick="setYesNo('f_has_pets','no'); togglePanelFromYesNo('f_has_pets','pet-details-fields')">No</button></div><input type="hidden" id="f_has_pets" data-required-choice="true" /></div>
@@ -1022,7 +1022,7 @@
                     <div class="document-card" id="income-document-card"><h3>Proof of Income or Employment *</h3><p>Three months of payslips, CIS statements, P60/P45, pension evidence, benefit entitlement or proof of savings.</p><label class="upload-button" for="doc-income">Choose files</label><input class="visually-hidden" type="file" id="doc-income" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Proof of Income or Employment')"><ul class="uploaded-list" data-doc-list="Proof of Income or Employment"></ul></div>
                     <div class="document-card"><h3>Bank Statements *</h3><p>Three months of statements. Upload one combined file or several named files.</p><label class="upload-button" for="doc-bank">Choose files</label><input class="visually-hidden" type="file" id="doc-bank" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Bank Statements')"><ul class="uploaded-list" data-doc-list="Bank Statements"></ul></div>
                     <div class="document-card"><h3>Other Financial Document</h3><p>Optional supporting evidence, such as benefit entitlement or savings.</p><label class="upload-button" for="doc-other">Choose files</label><input class="visually-hidden" type="file" id="doc-other" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Other Financial Document')"><ul class="uploaded-list" data-doc-list="Other Financial Document"></ul></div>
-                    <div class="document-card"><h3>Right-to-Rent Share Code(s)</h3><p>Your GOV.UK right-to-rent certificate and/or share codes. Optional.</p><label class="upload-button" for="doc-right-to-rent">Choose files</label><input class="visually-hidden" type="file" id="doc-right-to-rent" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadDocuments(this,'Right to Rent Share Code')"><ul class="uploaded-list" data-doc-list="Right to Rent Share Code"></ul></div>
+                    <div class="document-card"><h3>Right-to-Rent Share Code(s)</h3><p>Optional GOV.UK right-to-rent certificate and/or share codes.</p><label class="upload-button" for="doc-right-to-rent">Choose files</label><input class="visually-hidden" type="file" id="doc-right-to-rent" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadDocuments(this,'Right to Rent Share Code')"><ul class="uploaded-list" data-doc-list="Right to Rent Share Code"></ul></div>
                     <p id="document-error" class="error-text" style="display:none;"></p>
                     <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(4)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(6)">Continue to Declaration ✅</button></div>
                 </div>
@@ -1119,6 +1119,7 @@
         let sigCtx = null;
         let isDrawing = false;
         let signatureInitialised = false;
+        let retainedSignature = false;
         let currentStep = 1;
         let applicationDocuments = [];
         let isRevision = false;
@@ -1595,7 +1596,7 @@
             const dialog=document.createElement('dialog');dialog.className='review-changes';dialog.style.cssText='margin:auto;background:#fff;color:#27083d;border:1px solid #e5d7e2;border-radius:16px;padding:24px;max-width:560px;width:calc(100% - 32px);max-height:85vh;overflow:auto';dialog.setAttribute('aria-label','Changes requested');
             const title=document.createElement('h2');title.textContent='Changes requested';dialog.appendChild(title);
             const stepFor=section=>section==='Employment & Income'?3:['Tenancy Details','Bank Details','Next of Kin'].includes(section)?4:section==='Declaration'?6:2;
-            function item(label,reason,step,type){const box=document.createElement('div');box.style.cssText='padding:12px 0;border-bottom:1px solid #eee';const text=document.createElement('p');text.textContent=label+': '+reason;box.appendChild(text);const link=document.createElement('button');link.type='button';link.className='btn btn-secondary';link.textContent=type?'Click here to update this document':'Click here to review application details';link.onclick=()=>{dialog.close();goToStep(step,true);if(type){const list=Array.from(document.querySelectorAll('[data-doc-list]')).find(el=>el.dataset.docList===type);const card=list?.closest('.document-card');card?.scrollIntoView({behavior:'smooth',block:'center'});card?.querySelector('input[type=file]')?.focus();}};box.appendChild(link);dialog.appendChild(box);}
+            function item(label,reason,step,type){const box=document.createElement('div');box.style.cssText='padding:12px 0;border-bottom:1px solid #eee';const heading=document.createElement('strong');heading.style.display='block';heading.textContent=label;box.appendChild(heading);const text=document.createElement('p');text.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere';text.textContent=reason;box.appendChild(text);const link=document.createElement('button');link.type='button';link.className='btn btn-secondary';link.textContent=type?'Click here to update this document':'Click here to review application details';link.onclick=()=>{dialog.close();goToStep(step,true);if(type){const list=Array.from(document.querySelectorAll('[data-doc-list]')).find(el=>el.dataset.docList===type);const card=list?.closest('.document-card');card?.scrollIntoView({behavior:'smooth',block:'center'});card?.querySelector('input[type=file]')?.focus();}};box.appendChild(link);dialog.appendChild(box);}
             sections.forEach(([section,r])=>item(section,r.reason||'Please check this information.',stepFor(section)));
             docs.forEach(d=>item(d.doc_type+' — '+d.original_name,d.review_notes||'Please provide a replacement.',5,d.doc_type));
             missing.forEach(type=>item(type,'Please upload this required document.',5,type));
@@ -1627,9 +1628,10 @@
             isRevision = !!formData.application_form_completed && (formData.application_review_status === 'changes_requested' || formData.application_data_approved);
             if (isRevision) {
                 const requested = document.getElementById('changes-request-banner');
-                requested.textContent = `Changes requested by Fleming Lettings: ${formData.application_review_notes || 'Please update the highlighted items below.'}`;
+                requested.replaceChildren();const heading=document.createElement('strong');heading.textContent='Changes requested by Fleming Lettings';requested.appendChild(heading);const explanation=document.createElement('p');explanation.textContent='Please review the items below and update those requested.';requested.appendChild(explanation);
                 requested.style.display = 'block';
-                hasSigned = formData.signature_retained === true;
+                retainedSignature = formData.signature_retained === true;
+                hasSigned = retainedSignature;
                 if (hasSigned) {
                     document.getElementById('signature-controls').style.display = 'none';
                     document.getElementById('signature-retained').style.display = 'block';
@@ -1722,7 +1724,7 @@
                 el.classList.toggle('active', s === n);
             });
             currentStep = n; updateProgress(n); window.scrollTo({ top: 0, behavior: 'smooth' });
-            if (n === 6 && !isRevision) initSignature();
+            if (n === 6 && !retainedSignature) initSignature();
         }
 
         function initSignature() {
@@ -1861,7 +1863,7 @@
                 });
                 const result = await res.json();
                 if (!res.ok) throw new Error(result.error || 'Draft could not be saved');
-                status.textContent = 'Draft saved. Reopen this same link to resume.';
+                status.textContent = '🔏 Application saved – feel free to close this page and revisit to pick back up.';
                 button.textContent = 'Saved';
             } catch (err) {
                 status.textContent = err.message || 'Draft could not be saved. Please try again.';
@@ -1879,7 +1881,7 @@
             if (!declarationIds.every(id => document.getElementById(id).checked)) {
                 errEl.textContent = 'Please agree to every mandatory declaration.'; errEl.style.display = 'block'; return;
             }
-            if (!hasSigned && !isRevision) {
+            if (!hasSigned && !retainedSignature) {
                 errEl.textContent = 'Please add or generate your signature.'; errEl.style.display = 'block'; return;
             }
             if (!validateDocuments()) { goToStep(5); return; }
@@ -1889,7 +1891,7 @@
                 const payload = {
                     app_form_data: collectApplicationData(),
                     app_signature_name: document.getElementById('f_typed_name').value.trim(),
-                    app_signature: isRevision ? null : (hasSigned ? canvas.toDataURL('image/png') : null)
+                    app_signature: retainedSignature ? null : (hasSigned ? canvas.toDataURL('image/png') : null)
                 };
                 const res = await fetch(`${API_BASE_URL}/api/public/application-form/${token}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 const result = await res.json();

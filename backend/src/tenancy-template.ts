@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { PDFDocument } from 'pdf-lib';
 import PizZip from 'pizzip';
-import type { TenancyAgreementPdfInput } from './tenancy-agreement-pdf';
+import { FLEMING_CLIENT_MONEY_ACCOUNT, type TenancyAgreementPdfInput } from './tenancy-agreement-pdf';
 
 const exec = promisify(execFile);
 let queue: Promise<unknown> = Promise.resolve();
@@ -69,7 +69,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fleming-agreement-'));
     try {
       const isClient=input.agreementType==='client';
-      const template = await fs.readFile(path.join(__dirname, isClient?'agreement-assets/client-rent-collection-aug26.docx':'agreement-assets/assured-periodic-tenancy-template.docx'));
+      const template = await fs.readFile(path.join(__dirname, isClient?(input.serviceType==='let_only'?'agreement-assets/client-let-only-aug26.docx':'agreement-assets/client-rent-collection-aug26.docx'):'agreement-assets/assured-periodic-tenancy-template.docx'));
       const zip = new PizZip(template);
       const date = formalAgreementDate;
       const names = input.tenants.map(t => t.name).join(' and ');
@@ -79,6 +79,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         LANDLORD_SIGNATORY:input.landlord.signingName||input.landlord.name,
         LANDLORD_EMAIL:input.landlord.email||'',LANDLORD_PHONE:input.landlord.phone||'',
         SERVICE_ADDRESS:input.landlord.serviceAddress||input.landlord.address||'',EMERGENCY_CONTACT:input.landlord.emergencyContact||'',
+        CLIENT_SORT_CODE:FLEMING_CLIENT_MONEY_ACCOUNT.sortCode,CLIENT_ACCOUNT_NUMBER:FLEMING_CLIENT_MONEY_ACCOUNT.accountNumber,BANK_ACCOUNT_NAME:input.bankDetails.accountName,BANK_NAME:input.bankDetails.bankName||'Not supplied',
         BANK_SORT_CODE:input.bankDetails.sortCode,BANK_ACCOUNT_NUMBER:input.bankDetails.accountNumber,
         HOLDING_DEPOSIT:Number(input.holdingDeposit||0).toLocaleString('en-GB',{minimumFractionDigits:2}),DEPOSIT_SCHEME:input.depositScheme||'',
         AGREEMENT_DATE: date(input.agreementDate), START_DATE: date(input.tenancyStartDate),
@@ -102,12 +103,14 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         return xmlText(values[key]);
       });
       if (/#####|\{\{[A-Z_]+\}\}/.test(xml)) throw new Error('Agreement template contains an unfilled field');
+      // Filled fields are final contract text; remove the template's drafting highlights.
+      xml=xml.replace(/<w:highlight[^>]*\/>/g,'').replace(/<w:shd[^>]*w:fill="FFFF00"[^>]*\/>/gi,'');
       // Keep the supplied wording and layout while applying the requested body font.
-      if(!isClient)xml=xml.replace(/<w:rFonts[^>]*\/>/g, '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>');
+      xml=xml.replace(/<w:rFonts[^>]*\/>/g, '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>');
       xml=xml.replace(/(<w:t[^>]*>)Signed:(<\/w:t>)/g, '$1Signed: signatures and dates for each party are recorded in the electronic signature certificate, applying to this addendum.$2');
       zip.file('word/document.xml', xml);
       const styles=zip.file('word/styles.xml');
-      if(styles&&!isClient)zip.file('word/styles.xml',styles.asText().replace(/<w:rFonts[^>]*\/>/g,'<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>'));
+      if(styles)zip.file('word/styles.xml',styles.asText().replace(/<w:rFonts[^>]*\/>/g,'<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>'));
       const docx = path.join(dir, 'agreement.docx');
       await fs.writeFile(docx, zip.generate({ type: 'nodebuffer' }));
       await exec(process.env.LIBREOFFICE_PATH || 'soffice', [

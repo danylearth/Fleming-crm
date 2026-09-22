@@ -42,7 +42,7 @@ export default function DocumentsSection({ entityType, entityId, title, compact 
   const fetchDocTypes = useCallback(async () => {
     try {
       const res = await fetch(`${API}/api/documents/types/${entityType}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) { const types = await res.json(); setDocTypes(types); if (types.length > 0) setSelectedType(types[0]); }
+      if (res.ok) { const types = await res.json(); setDocTypes(types); setSelectedType(''); }
     } catch { /* Silently ignore */ }
   }, [entityType, token]);
 
@@ -132,7 +132,7 @@ export default function DocumentsSection({ entityType, entityId, title, compact 
       ) : documents.length === 0 ? (
         <p className={`text-sm text-[var(--text-muted)] text-center ${compact?'py-2':'py-8'}`}>No documents uploaded yet</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-80 overflow-y-auto pr-2" aria-label="Document list">
           {documents.map(doc => (
             <div key={doc.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
               <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">

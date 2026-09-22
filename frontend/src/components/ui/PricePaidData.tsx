@@ -88,7 +88,7 @@ export default function PricePaidData({ postcode }: PricePaidDataProps) {
         <div className="p-6">
           <div className="flex items-center gap-3 text-red-600">
             <AlertCircle className="w-5 h-5" />
-            <p>Failed to load price data: {error}</p>
+            <p>Failed to load price data: {error}</p><Button variant="outline" onClick={loadPriceData} disabled={loading}>Try Again</Button>
           </div>
         </div>
       </Card>

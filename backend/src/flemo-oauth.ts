@@ -3,15 +3,15 @@ import {spawn, type ChildProcessWithoutNullStreams} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import fs from 'node:fs';
 import path from 'node:path';
-import {authMiddleware, type AuthRequest} from './auth';
+import {authMiddleware, requireRole, type AuthRequest} from './auth';
 import {run,queryOne} from './db-pg';
 
 type Login = {loginId:string;verificationUrl:string;userCode:string};
 const sessions=new Map<number,Promise<FlemoAccount>>();
 const root=process.env.FLEMO_ACCOUNT_PATH || path.join(process.env.UPLOADS_PATH || path.join(__dirname,'../uploads'),'../flemo-accounts');
 
-// This is an independent, per-CRM-user sign-in. Desktop Codex credentials are
-// never read or copied. Only the supported account and conversation methods are exposed.
+// The office shares its administrator connection. Each answer uses a fresh
+// ephemeral conversation and the requesting CRM user’s permission-filtered evidence.
 export class FlemoAccount {
   private child:ChildProcessWithoutNullStreams;
   private sequence=0;
@@ -83,8 +83,12 @@ export async function flemoAccountStatus(userId:number){
   if(!sessions.has(userId)&&!fs.existsSync(path.join(root,`user-${userId}`,'auth.json')))return {connected:false,email:null,plan:null,login:null,error:null};
   return (await flemoAccount(userId)).status();
 }
+export async function sharedFlemoOwner(){
+ const owner=await queryOne("SELECT id FROM users WHERE lower(email)='accounts@fleminglettings.co.uk' AND role='admin' AND is_active=1");
+ if(!owner)throw new Error('The office administrator account is not configured');return Number(owner.id);
+}
 export function registerFlemoOAuthRoutes(app:Express){
-  app.get('/api/ai/account',authMiddleware,async(req:AuthRequest,res)=>{try{const status=await flemoAccountStatus(req.user.id);const record=await queryOne('SELECT ai_connected_at FROM users WHERE id=$1',[req.user.id]);res.json({...status,connected_at:record?.ai_connected_at});}catch(error){res.status(503).json({error:error instanceof Error?error.message:'AI connection unavailable'});}});
-  app.post('/api/ai/account/connect',authMiddleware,async(req:AuthRequest,res)=>{try{const login=await(await flemoAccount(req.user.id)).startLogin();await run("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','user',$1,$3)",[req.user.id,req.user.email,JSON.stringify({action:'ai_sign_in_started',provider:'chatgpt'})]);res.json(login);}catch(error){res.status(503).json({error:error instanceof Error?error.message:'AI sign-in unavailable'});}});
-  app.post('/api/ai/account/disconnect',authMiddleware,async(req:AuthRequest,res)=>{try{await(await flemoAccount(req.user.id)).disconnect();await run('UPDATE users SET ai_connected_at=NULL WHERE id=$1',[req.user.id]);await run("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','user',$1,$3)",[req.user.id,req.user.email,JSON.stringify({action:'ai_disconnected'})]);res.json({success:true});}catch(error){res.status(503).json({error:'Could not disconnect. Please try again.'});}});
+ app.get('/api/ai/account',authMiddleware,async(req:AuthRequest,res)=>{try{const owner=await sharedFlemoOwner().catch(()=>null);if(!owner)return res.json({connected:false,email:null,plan:null,login:null,error:null,shared:true,configured:false,can_manage:req.user.role==='admin'});const status=await flemoAccountStatus(owner);const record=await queryOne('SELECT ai_connected_at FROM users WHERE id=$1',[owner]);res.json({...status,email:req.user.role==='admin'?status.email:null,login:req.user.role==='admin'?status.login:null,shared:true,can_manage:req.user.role==='admin',connected_at:record?.ai_connected_at});}catch(error){res.status(503).json({error:error instanceof Error?error.message:'AI connection unavailable'});}});
+ app.post('/api/ai/account/connect',authMiddleware,requireRole('admin'),async(req:AuthRequest,res)=>{try{const login=await(await flemoAccount(await sharedFlemoOwner())).startLogin();await run("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','user',$1,$3)",[req.user.id,req.user.email,JSON.stringify({action:'shared_ai_sign_in_started',provider:'chatgpt'})]);res.json(login);}catch(error){res.status(503).json({error:error instanceof Error?error.message:'AI sign-in unavailable'});}});
+ app.post('/api/ai/account/disconnect',authMiddleware,requireRole('admin'),async(req:AuthRequest,res)=>{try{const owner=await sharedFlemoOwner();await(await flemoAccount(owner)).disconnect();await run('UPDATE users SET ai_connected_at=NULL WHERE id=$1',[owner]);await run("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','user',$1,$3)",[req.user.id,req.user.email,JSON.stringify({action:'shared_ai_disconnected'})]);res.json({success:true});}catch{res.status(503).json({error:'Could not disconnect. Please try again.'});}});
 }

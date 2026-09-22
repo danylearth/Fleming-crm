@@ -1076,12 +1076,11 @@ export default function EnquiryDetail() {
                   </div>
                 ))}
               </div>
-              <div className="flex gap-2 mt-3">
-                <input value={newNote} onChange={e => setNewNote(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addNote()}
+              <div className="relative mt-3">
+                <textarea rows={2} aria-label="Add a note" value={newNote} onChange={e=>{setNewNote(e.target.value);e.currentTarget.style.height="auto";e.currentTarget.style.height=`${e.currentTarget.scrollHeight}px`;}}
                   placeholder="Add a note..."
-                  className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
-                <Button variant="gradient" onClick={addNote} disabled={addingNote || !newNote.trim()}>
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl pl-3 pr-20 pt-3 pb-10 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
+                <Button variant="gradient" size="sm" className="absolute right-2 bottom-2" onClick={addNote} disabled={addingNote || !newNote.trim()}>
                   <Plus size={14} />
                 </Button>
               </div>

@@ -1,3 +1,4 @@
+import {Check} from 'lucide-react';
 import LandlordBankDetails from '../components/LandlordBankDetails';
 import ContextualDocSlot from '../components/ui/ContextualDocSlot';
 import {formatPropertyAddress} from '../utils/propertyAddress';
@@ -18,6 +19,7 @@ import { calculateSmsSegments } from '../utils/sms';
 import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Briefcase, Trash2, RotateCcw, Send, Clock } from 'lucide-react';
 
 interface Landlord {
+  kyc_approved_at?:string;
   id: number; name: string; email: string; phone: string; address: string; notes: string;
   alt_email: string; date_of_birth: string; home_address: string; company_number: string;
   entity_type: string; // 'individual' | 'company' | 'trust'
@@ -443,11 +445,11 @@ export default function LandlordDetail() {
                           {p.type && <span className="text-xs text-[var(--text-muted)]">{p.type}</span>}
 
                           {p.status && (
-                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs capitalize ${p.status==='let'?'bg-emerald-500/15 text-emerald-600':'bg-amber-500/15 text-amber-600'}`}><Building2 size={12}/>{p.status.replaceAll('_', ' ')}</span>
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs capitalize ${p.status==='let'?'bg-emerald-500/15 text-emerald-600':p.status==='to_let'?'bg-red-500/15 text-red-600':'bg-amber-500/15 text-amber-600'}`}><Building2 size={12}/>{p.status.replaceAll('_', ' ')}</span>
                           )}
                         </div>
                       </button>
-                      {p.service_type && <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs capitalize bg-blue-500/15 text-blue-600"><Briefcase size={12}/>{p.service_type.replaceAll('_',' ')}</span>}
+                      {p.service_type && <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs capitalize ${p.service_type==='full_management'?'bg-amber-500/15 text-amber-600':p.service_type==='rent_collection'?'bg-purple-500/15 text-purple-600':'bg-blue-500/15 text-blue-600'}`}><Briefcase size={12}/>{p.service_type.replaceAll('_',' ')}</span>}
                       {p.link_id && (
                         <button
                           type="button"
@@ -744,7 +746,7 @@ export default function LandlordDetail() {
                     <ShieldCheck size={14} className="mr-2" />
                     Approve KYC (Admin)
                   </Button>
-                )}{!!landlord.kyc_completed&&<p className="text-sm text-emerald-600">KYC Approved</p>}</div></div>
+                )}{!!landlord.kyc_completed&&<div className="flex items-center gap-3"><span className="w-9 h-9 shrink-0 rounded-full bg-emerald-500/15 text-emerald-600 grid place-items-center"><Check size={20}/></span><div><p className="text-sm font-semibold">KYC Approved</p><p className="text-xs text-[var(--text-muted)]">{landlord.kyc_approved_at?new Date(landlord.kyc_approved_at).toLocaleDateString('en-GB'):'Approval recorded'}</p></div></div>}</div></div>
               </div>
             </GlassCard>
 
@@ -822,12 +824,12 @@ export default function LandlordDetail() {
                     </div>
                   </div>
                 ))}
-                <div className="flex gap-2 mt-2">
+                <div className="relative mt-2">
                   <textarea rows={2} value={notesInput} onChange={e => {setNotesInput(e.target.value);e.currentTarget.style.height="auto";e.currentTarget.style.height=`${e.currentTarget.scrollHeight}px`;}}
 
                     placeholder={`Add a note to ${notesFilter === 'landlord' ? 'landlord' : notesFilter === 'all' ? 'landlord' : 'property'}...`}
-                    className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/40 transition-colors" />
-                  <Button variant="gradient" onClick={addNote} disabled={!notesInput.trim()}>Add</Button>
+                    className="block w-full resize-none bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl pl-4 pr-20 pt-3 pb-10 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/40 transition-colors" />
+                  <Button size="sm" className="!absolute right-2 bottom-2 !px-4 !py-1 !text-xs" variant="gradient" onClick={addNote} disabled={!notesInput.trim()}>Add</Button>
                 </div>
               </div>
             </GlassCard>
@@ -938,7 +940,7 @@ export default function LandlordDetail() {
                     options={[
                       { value: '', label: 'Select a property...' },
                       ...allProperties
-                        .filter(p => !properties.some(lp => lp.id === p.id)) // Exclude already linked properties
+                        .filter(p => !p.landlord_id && !properties.some(lp => lp.id === p.id)) // Exclude already linked properties
                         .map(p => ({ value: String(p.id), label: p.address || 'Unknown Address' }))
                     ]}
                   />
@@ -982,7 +984,7 @@ export default function LandlordDetail() {
                       await api.post('/api/property-landlords', {
                         property_id: Number(selectedPropertyId),
                         landlord_id: Number(id),
-                        is_primary: properties.length === 0 ? 1 : 0,
+                        is_primary: 1, unlinked_only:true,
                         ownership_entity_type: landlord?.entity_type || 'individual'
                       });
                       setShowAddProp(false);

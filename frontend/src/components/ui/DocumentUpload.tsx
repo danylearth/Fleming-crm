@@ -55,7 +55,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
     ]).then(([d, t]) => {
       setDocs(Array.isArray(d) ? d.filter(doc => !group || (/^guarantor/i.test(doc.doc_type) === (group==='guarantor'))) : []);
       setDocTypes(Array.isArray(t) ? t.filter(type => !group || (/^guarantor/i.test(type) === (group==='guarantor'))) : []);
-      if (Array.isArray(t) && t.length) setSelectedType(group==='guarantor' ? (t.find((type: string) => /^guarantor/i.test(type)) || t[0]) : t[0]);
+      setSelectedType('');
     }).catch(() => { })
       .finally(() => setLoading(false));
   }, [entityType, entityId, applicantNumber, group, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -94,7 +94,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
       if (newDoc.id) {
         setDocs(prev => [{ ...newDoc, uploaded_at: new Date().toISOString() }, ...prev.filter(doc=>doc.id!==newDoc.id)]);
         setShowUpload(false);
-        setSelectedType(docTypes[0] || '');
+        setSelectedType('');
         setCustomTypeName('');
         await onChange?.();
       }
@@ -157,7 +157,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
               setSelectedType(v);
               if (v !== 'Other') setCustomTypeName('');
             }}
-            options={docTypes.map(t => ({ value: t, label: t }))}
+            options={[{value:'',label:'Please Select…'},...docTypes.map(t => ({ value: t, label: t }))]}
           />
           {selectedType === 'Other' && (
             <Input
@@ -181,7 +181,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
             variant="gradient"
             size="sm"
             onClick={() => fileRef.current?.click()}
-            disabled={uploading || (selectedType === 'Other' && !customTypeName.trim())}
+            disabled={uploading || !selectedType || (selectedType === 'Other' && !customTypeName.trim())}
           >
             <Upload size={14} className="mr-2" />
             {uploading ? 'Uploading...' : 'Choose File'}
@@ -207,7 +207,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
               })),
             ]}
           />
-          {(filterType === 'all' ? docs : docs.filter(doc => doc.doc_type === filterType)).map(doc => (
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-2" aria-label="Document list">{(filterType === 'all' ? docs : docs.filter(doc => doc.doc_type === filterType)).map(doc => (
             <div key={doc.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] group">
               <span className="text-lg">{mimeIcon(doc.mime_type)}</span>
               <div className="flex-1 min-w-0">
@@ -229,7 +229,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
                 <Trash2 size={14} />
               </button>
             </div>
-          ))}
+          ))}</div>
         </div>
       )}
     </Card>

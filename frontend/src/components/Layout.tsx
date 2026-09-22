@@ -25,7 +25,7 @@ const navItems = [
   { to: '/tasks', icon: TasksIcon, label: 'Team Calendar', roles: null },
   { to: '/financials', icon: FinancialsIcon, label: 'Financials', roles: null },
   { to: '/marketing', icon: Megaphone, label: 'Marketing', roles: ['admin','manager'] },
-  { to: '/users', icon: Users, label: 'Team', roles: ['admin'] }, // Admin only
+  { to: '/users', icon: Users, label: 'Team', roles: ['admin','manager'] }, // Admin only
   { to: '/settings', icon: SettingsIcon, label: 'Settings', roles: null },
 ];
 

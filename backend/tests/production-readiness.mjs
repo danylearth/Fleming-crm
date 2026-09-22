@@ -405,7 +405,7 @@ try {
     await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('tenant_enquiry',$1,'Credit Check Report','sample.pdf','Client credit.pdf','application/pdf','approved')",[applicant.id]);
     const bankBody={account_name:'Client Owner',sort_code:'123456',account_number:'12345678',details_approved:true};
     assert.equal((await request(`/api/landlords/${owner.id}/bank-details`,{token:auth.viewer})).status,403);
-    await ok(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.staff,body:bankBody});
+    await ok(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.admin,body:bankBody});
     const prepareClient=async id=>{const context=await ok(`/api/tenant-enquiries/${id}/client-agreement-details`,{token:auth.staff});await ok(`/api/tenant-enquiries/${id}/client-agreement-details`,{method:'PUT',token:auth.staff,body:{...context.details,depositScheme:'Tenancy Deposit Scheme (TDS)'}});};
     await prepareClient(applicant.id);
     const apt=await ok(`/api/tenant-enquiries/${applicant.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:{...issueBody,rent:850,deposit:850}});
@@ -430,11 +430,25 @@ try {
       if(service==='let_only'){
         await ok(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.staff,body:{...bankBody,account_number:'87654321',details_approved:false}});
         assert.equal((await request(`/api/tenant-enquiries/${e.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:input})).status,409);
-        await ok(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.staff,body:bankBody});
+        await ok(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.admin,body:bankBody});
       }
       const made=await ok(`/api/tenant-enquiries/${e.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:input});const saved=await one('SELECT * FROM tenancy_agreements WHERE id=$1',[made.agreement_id]);assert(saved.requires_landlord_signature);assert.equal(saved.agreement_type,'client');
       assert.equal(saved.agreement_details.bankDetails.accountNumber,service==='let_only'?'12345678':'03803880');assert.equal(saved.agreement_details.paymentReference,service==='let_only'?'MY CUSTOM REFERENCE':defaults.defaults.paymentReference);
       const extracted=spawnSync('pdftotext',[path.join(dir,saved.filename),'-'],{encoding:'utf8'});assert.equal(extracted.status,0);assert(!extracted.stdout.includes('Signed by Robert Fleming'));assert(extracted.stdout.includes('Client Owner'));
+      if(service==='let_only'){
+        assert.equal(saved.agreement_details.templateVersion,'client-let-only-aug26');assert(extracted.stdout.includes('03803880'));assert(extracted.stdout.includes('12345678'));assert(!extracted.stdout.includes('Managing Agent'));
+        writeFileSync(path.join(dir,'let-only-agreement-id.json'),JSON.stringify({filename:saved.filename,enquiry:e.id}));
+        await sql("UPDATE tenancy_agreements SET status='completed' WHERE id=$1",[made.agreement_id]);
+        const preview=await ok(`/api/tenant-enquiries/${e.id}/request-balance/email-preview`,{method:'POST',token:auth.staff,body:{follow_up_date:today}});assert(preview.body_html.includes('03803880'));assert(!preview.body_html.includes('12345678'));
+        await sql("UPDATE tenant_enquiries SET email_2='second-receipt@example.test',first_name_2='Second' WHERE id=$1",[e.id]);
+        await ok(`/api/tenant-enquiries/${e.id}/request-balance`,{method:'POST',token:auth.staff,body:{follow_up_date:today,send_email:true,send_sms:false}});
+        assert.equal((await request(`/api/tenant-enquiries/${e.id}/confirm-balance`,{method:'POST',token:auth.staff,body:{received_date:'2099-01-01'}})).status,400);
+        await ok(`/api/tenant-enquiries/${e.id}/confirm-balance`,{method:'POST',token:auth.staff,body:{received_date:today,send_email:true,send_sms:false}});
+        const receipts=await sql("SELECT to_email,body_html FROM email_messages WHERE entity_id=$1 AND template='final_balance_receipt'",[e.id]);assert.equal(receipts.length,2);assert(receipts.some(r=>r.to_email==='second-receipt@example.test'));
+        const total=await ok('/api/financial-summary',{token:auth.admin});assert(Number(total.let_only_fee_total)>=850);assert(Number(total.let_only_fee_month)>=850);
+        await sql("UPDATE properties SET total_charge=1500,service_type='rent_collection' WHERE id=$1",[home.id]);const unchanged=await ok('/api/financial-summary',{token:auth.admin});assert.equal(unchanged.let_only_fee_total,total.let_only_fee_total);
+      }
+
     }
 
   });
@@ -451,10 +465,12 @@ try {
     const bank={account_name:'Example Property Holdings Ltd',sort_code:'112233',account_number:'00123456',details_approved:true};
     assert.equal((await request(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.staff,body:{...bank,sort_code:'abc'}})).status,400);
     assert.equal((await request(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.viewer,body:bank})).status,403);
-    await ok(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.staff,body:bank});
-    const apt=await ok(`/api/tenant-enquiries/${e.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:issueBody});
+    await ok(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.admin,body:bank});
+    const override={...context.details,bankAccountName:'Alternative tenancy account',bankSortCode:'102030',bankAccountNumber:'99887766',bank_override_approved:true};
+    await ok(route,{method:'PUT',token:auth.staff,body:override});assert.equal((await ok(`/api/landlords/${owner.id}/bank-details`,{token:auth.staff})).account_number,'00123456');
+    const apt=await ok(`/api/tenant-enquiries/${e.id}/tenancy-agreement`,{method:'POST',token:auth.staff,body:{...issueBody,landlord_send_email:true,landlord_send_sms:true}});assert.match(apt.delivery.landlord_email.error,/not configured/);assert.match(apt.delivery.landlord_sms.error,/not configured/);assert(await one("SELECT id FROM email_messages WHERE entity_id=$1 AND template='landlord_tenancy_agreement'",[e.id]));assert(await one("SELECT id FROM sms_messages WHERE enquiry_id=$1 AND to_phone='+441902123456'",[e.id]));
     const saved=await one('SELECT * FROM tenancy_agreements WHERE id=$1',[apt.agreement_id]);assert.equal(saved.agreement_details.bankDetails.accountNumber,'03803880');assert.equal(saved.agreement_details.clientLandlord.companyNumber,'01234567');
-    const source=spawnSync('pdftotext',[path.join(dir,saved.filename),'-'],{encoding:'utf8'}).stdout;for(const value of ['Example Property Holdings Ltd','01234567','20 Registered Road','Alex Director','Signing on behalf of','MyDeposits','03803880'])assert(source.includes(value),value);assert(!source.includes('#####'));assert(!source.includes('00123456'));assert(!source.includes('Robert Fleming'));
+    const source=spawnSync('pdftotext',[path.join(dir,saved.filename),'-'],{encoding:'utf8'}).stdout;for(const value of ['Example Property Holdings Ltd','01234567','20 Registered Road','Alex Director','Signing on behalf of','Government-approved tenancy deposit scheme','03803880'])assert(source.includes(value),value);assert(!source.includes('#####'));assert(!source.includes('00123456'));assert(!source.includes('Robert Fleming'));
     const landlordToken=new URL(apt.landlord_url).pathname.slice(1);const publicData=await ok(`/api/public/tenancy-agreements/${landlordToken}`);assert.equal(publicData.signer_name,'Alex Director');assert.equal(publicData.signing_on_behalf_of,'Example Property Holdings Ltd');assert(!publicData.agreement_details);
     for(const [url,name] of [[apt.landlord_url,'Alex Director'],[apt.tenant_url,'Morgan Applicant'],[apt.joint_tenant_url,'Taylor Applicant']])await ok(`/api/public/tenancy-agreements/${new URL(url).pathname.slice(1)}/sign`,{method:'POST',body:{signature_name:name,signature:png,accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true}});
     const completed=await one('SELECT status,signed_filename FROM tenancy_agreements WHERE id=$1',[apt.agreement_id]);assert.equal(completed.status,'completed');const text=spawnSync('pdftotext',[path.join(dir,completed.signed_filename),'-'],{encoding:'utf8'}).stdout;assert(text.includes('Electronic Signature Certificate'));assert(text.includes('Alex Director'));assert(text.includes('Taylor Applicant'));
@@ -864,6 +880,16 @@ try {
     await sql("INSERT INTO maintenance(property_id,title,description,status,priority) VALUES($1,'New after clear','New after clear','open','high')",[property.id]);
     await sql("INSERT INTO properties(address,postcode,landlord_id,eicr_expiry_date) VALUES('New expiry after clear','WV1 1AA',$1,CURRENT_DATE+1)",[landlord.id]);
     after=await ok('/api/dashboard',{token:auth.admin});assert(after.complianceAlerts.some(a=>a.property_address==='New expiry after clear'));assert(after.recentMaintenance.some(m=>m.description==='New after clear'));
+  });
+  await test('only unlinked current tenants can be assigned, and closed client properties must reopen first',async()=>{
+    const owner=await one("INSERT INTO landlords(name,landlord_type) VALUES('Closed test owner','external') RETURNING id");
+    const home=await one("INSERT INTO properties(address,postcode,landlord_id,status) VALUES('Closed test property','WV1 1AA',$1,'closed') RETURNING id",[owner.id]);
+    const t=await one("INSERT INTO tenants(name,first_name_1,last_name_1,status) VALUES('Unlinked test','Unlinked','Test','active') RETURNING id");
+    const route=`/api/properties/${home.id}/assign-tenant`,body={tenant_id:t.id};
+    assert.equal((await request(route,{method:'POST',token:auth.viewer,body})).status,403);assert.equal((await request(route,{method:'POST',token:auth.staff,body})).status,409);
+    await ok(`/api/properties/${home.id}`,{method:'PUT',token:auth.staff,body:{status:'to_let'}});await ok(route,{method:'POST',token:auth.staff,body});
+    assert.equal((await one('SELECT property_id FROM tenants WHERE id=$1',[t.id])).property_id,home.id);assert.equal((await request(route,{method:'POST',token:auth.staff,body})).status,409);
+    assert.equal((await request(`/api/properties/${home.id}`,{method:'PUT',token:auth.staff,body:{status:'closed'}})).status,409);
   });
   console.log(`\n${passed} integration scenarios passed. Private artifacts: ${dir}`);
 } catch(error) { console.error(error); console.error('Server log:',path.join(dir,'server.log')); process.exitCode=1; }

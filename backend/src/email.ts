@@ -535,3 +535,13 @@ export function propertyInventoryEmail(name: string, address: string, dueDate: s
 export function applicationReminderEmail(name: string, link: string) {
  return {subject:'Complete your Fleming Lettings application',html:renderFinalEmailTemplate('13-application-reminder.html',{FIRST_NAME:escapeHtml(name),APPLICATION_LINK:escapeHtml(link)})};
 }
+
+export function accountEmail(kind:'invite'|'reset'|'updated',user:{name:string;email:string},link='') {
+ return {subject:kind==='invite'?'Set up your Fleming CRM account':kind==='reset'?'Reset your Fleming CRM password':'Your Fleming CRM password has been updated',html:renderFinalEmailTemplate(`account-${kind}.html`,{NAME:escapeHtml(user.name.split(' ')[0]),EMAIL:escapeHtml(user.email),LINK:escapeHtml(link)})};
+}
+
+export function landlordSignatureEmail(name:string,address:string,signingUrl:string,automaticDelivery=true){
+ return {subject:'Landlord signature required on a tenancy agreement',html:renderFinalEmailTemplate('landlord-signature.html',{LANDLORD_NAME:escapeHtml(name),PROPERTY_ADDRESS:escapeHtml(address),SIGNING_URL:escapeHtml(signingUrl),DELIVERY_DESCRIPTION:automaticDelivery?'After you sign, the tenant will automatically receive their signing link.':'After you sign, the office will arrange the tenant signing link.'})};
+}
+
+export function finalBalanceReceiptEmail(name:string,amount:number,date:string,address:string){return {subject:'Your final tenancy balance has been received',html:brandedEmailHtml('Payment Received',`<p>Hi ${escapeHtml(name)},</p><p>We confirm receipt of your final tenancy balance of <strong>£${emailMoney(amount)}</strong> on <strong>${emailDate(date)}</strong> for ${escapeHtml(address)}.</p><p>Thank you. The office will confirm the handover arrangements with you.</p>`) };}

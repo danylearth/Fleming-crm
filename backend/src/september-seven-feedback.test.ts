@@ -47,7 +47,7 @@ describe('7 September CRM feedback', () => {
     expect(signingForm).toContain("value=d.signer_name||''");
     expect(signingForm).toContain("value=d.today||new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date())");
     expect(signingForm).toContain('@media(max-width:820px)');
-    expect(signingForm).toContain('Privacy Policy');
+    expect(signingForm).not.toContain('Privacy Policy');
     expect(signingForm).toContain('#toolbar=0&navpanes=0');
   });
 

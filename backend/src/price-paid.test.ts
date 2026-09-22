@@ -1,0 +1,3 @@
+import {describe,it,expect} from 'vitest';
+import {normalisePricePaid} from './price-paid';
+describe('HM Land Registry linked-data records',()=>{it('converts language-labelled objects to renderable text',()=>{const row=normalisePricePaid({propertyAddress:{paon:'16',street:'VINE CLOSE',postcode:'WV10 6NG'},pricePaid:138950,transactionDate:'Fri, 14 Oct 2005',propertyType:{label:[{_value:'Flat-maisonette',_lang:'en'}]},estateType:{label:[{_value:'Leasehold'}]}});expect(row.property_type).toBe('Flat-maisonette');expect(row.estate_type).toBe('Leasehold');expect(row.address).toBe('16 VINE CLOSE');expect(row.price).toBe(138950);});});

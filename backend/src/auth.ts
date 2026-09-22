@@ -24,11 +24,11 @@ export interface AuthRequest extends Request {
 }
 
 export function generateToken(user: { id: number; email: string; role: string; name: string }) {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: '24h' });
+  return jwt.sign({...user,issuedAtMs:Date.now()}, JWT_SECRET, { expiresIn: '24h' });
 }
 
 export function verifyToken(token: string) {
-  return jwt.verify(token, JWT_SECRET) as { id: number; email: string; role: string; name: string; iat?: number };
+  return jwt.verify(token, JWT_SECRET) as { id: number; email: string; role: string; name: string; iat?: number;issuedAtMs?:number };
 }
 
 export async function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
@@ -45,14 +45,14 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
     // Revocation: deactivating a user or changing their password invalidates
     // every token issued before that moment
     const user = await queryOne(
-      'SELECT is_active, last_password_change, role, name, email, department, finance_access, last_login, avatar_url, accent_color, appearance FROM users WHERE id = $1',
+      'SELECT is_active, password_setup_required, last_password_change, role, name, email, department, finance_access, last_login, avatar_url, accent_color, appearance FROM users WHERE id = $1',
       [decoded.id]
     );
-    if (!user || !user.is_active) {
+    if (!user || !user.is_active || user.password_setup_required) {
       return res.status(401).json({ error: 'Invalid token' });
     }
     if (user.last_password_change && decoded.iat &&
-        decoded.iat * 1000 < new Date(user.last_password_change).getTime()) {
+        (decoded.issuedAtMs || decoded.iat * 1000) < new Date(user.last_password_change).getTime()) {
       return res.status(401).json({ error: 'Invalid token' });
     }
     // Role changes take effect on the next request, not the next login
@@ -95,7 +95,7 @@ export function requirePermission(minRole: 'viewer' | 'staff' | 'manager' | 'adm
 }
 
 export function canAccessFinance(user?: {role?:string;department?:string;finance_access?:boolean}): boolean {
-  return Boolean(user && (user.role==='admin' || user.finance_access===true || ['accounts','administration'].includes(String(user.department || '').trim().toLowerCase())));
+  return Boolean(user && (user.role==='admin' || user.role==='manager' || user.finance_access===true || ['accounts','administration'].includes(String(user.department || '').trim().toLowerCase())));
 }
 export function requireFinance(req:AuthRequest,res:Response,next:NextFunction) {
   if(!req.user)return res.status(401).json({error:'Not authenticated'});

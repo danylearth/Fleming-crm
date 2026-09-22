@@ -51,7 +51,7 @@ export default function Transactions() {
   const api = useApi();
   const [payments, setPayments] = useState<RentPayment[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
-  const [summary, setSummary] = useState({ monthly_rent: 0, collected: 0, outstanding: 0, active_tenancies: 0, assumed:0 });
+  const [summary, setSummary] = useState({ monthly_rent: 0, collected: 0, outstanding: 0, active_tenancies: 0, assumed:0,let_only_fee_count:0,let_only_fee_total:0,let_only_fee_month:0 });
   const [bankStatus, setBankStatus] = useState<BankFeedStatus | null>(null);
   const [bankTransactions, setBankTransactions] = useState<BankFeedTransaction[]>([]);
   const [bankBusy, setBankBusy] = useState(false);
@@ -158,6 +158,7 @@ export default function Transactions() {
   const fmt = (n: number) => `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const statusGroups = rentServiceGroups(properties);
+  statusGroups['Let Only Service']={count:Number(summary.let_only_fee_count||0),rent:Number(summary.let_only_fee_total||0)};
 
   return (
     <Layout title="Financials" breadcrumb={[{ label: 'Financials' }]}>
@@ -169,12 +170,12 @@ export default function Transactions() {
           <Select label="Payment Type" value={a.kind} onChange={kind=>setAllocation(index,{kind,category:''})} options={(incoming?[{value:'rent',label:'Rent Payment'},{value:'deposit',label:'Security Deposit'},{value:'holding_deposit',label:'Holding Deposit'},{value:'income',label:'Other Money In'},{value:'financial',label:'Financials'}]:[{value:'expense',label:'Property Expense'},{value:'maintenance',label:'Maintenance & Repairs'},{value:'financial',label:'Financials'}]).sort((a,b)=>a.label.localeCompare(b.label))}/>
           <Input label="Amount (£)" type="currency" value={a.amount} onChange={amount=>setAllocation(index,{amount})}/>
           {categories[a.kind]&&<Select label="Category" value={a.category} onChange={category=>setAllocation(index,{category})} options={[{value:'',label:'Choose category'},...categories[a.kind].map(v=>({value:v,label:v}))]}/>}
-          {a.kind==='rent'?<Select className="sm:col-span-2" searchable label="Rent Charge" value={a.rent_payment_id} onChange={rent_payment_id=>setAllocation(index,{rent_payment_id})} options={[{value:'',label:'Choose rent due'},...selectablePayments.map(p=>({value:String(p.id),label:`${p.tenant_name} · ${p.address} · ${p.due_date?.slice(0,10)} · £${Number(p.amount_due).toFixed(2)}`}))]}/>:a.kind==='deposit'?<Select label="Tenant" searchable value={a.tenant_id} onChange={tenant_id=>setAllocation(index,{tenant_id})} options={[{value:'',label:'Choose tenant'},...tenants.map(t=>({value:String(t.id),label:[t.name,tenants.find(j=>j.id===t.linked_tenant_id&&j.property_id===t.property_id&&j.tenancy_start_date===t.tenancy_start_date)?.name].filter(Boolean).join(' & ')}))]}/>:<Select label={['financial','income'].includes(a.kind)?'Property (optional)':'Property'} searchable value={a.property_id} onChange={property_id=>setAllocation(index,{property_id,maintenance_id:''})} options={[{value:'',label:'Choose property'},...properties.map(p=>({value:String(p.id),label:p.address}))]}/>}
-          {a.kind==='maintenance'&&<Select label="Maintenance Task (optional)" value={a.maintenance_id} onChange={maintenance_id=>setAllocation(index,{maintenance_id})} options={[{value:'',label:'No linked task'},...jobs.filter(j=>String(j.property_id)===a.property_id).map(j=>({value:String(j.id),label:j.title}))]}/>}
+          {a.kind==='rent'?<Select className="sm:col-span-2" searchable label="Rent Charge" value={a.rent_payment_id} onChange={rent_payment_id=>setAllocation(index,{rent_payment_id})} options={[{value:'',label:'Choose rent due'},...selectablePayments.map(p=>({value:String(p.id),label:`${p.tenant_name} · ${p.address} · ${p.due_date?.slice(0,10)} · £${Number(p.amount_due).toFixed(2)}`}))]}/>:a.kind==='deposit'?<Select label="Tenant" searchable value={a.tenant_id} onChange={tenant_id=>setAllocation(index,{tenant_id})} options={[{value:'',label:'Choose tenant'},...tenants.map(t=>({value:String(t.id),label:[t.name,tenants.find(j=>j.id===t.linked_tenant_id&&j.property_id===t.property_id&&j.tenancy_start_date===t.tenancy_start_date)?.name].filter(Boolean).join(' & ')}))]}/>:<Select className="sm:col-span-2" label={['financial','income'].includes(a.kind)?'Property (optional)':'Property'} searchable value={a.property_id} onChange={property_id=>setAllocation(index,{property_id,maintenance_id:''})} options={[{value:'',label:'Choose property'},...properties.map(p=>({value:String(p.id),label:p.address}))]}/>}
+          {a.kind==='maintenance'&&<Select className="sm:col-span-2" label="Maintenance Task (optional)" value={a.maintenance_id} onChange={maintenance_id=>setAllocation(index,{maintenance_id})} options={[{value:'',label:'No linked task'},...jobs.filter(j=>String(j.property_id)===a.property_id).map(j=>({value:String(j.id),label:j.title}))]}/>}
           <label className="text-sm sm:col-span-2">Notes<textarea className="block w-full mt-2 p-3 rounded-xl border border-[var(--border-input)] bg-[var(--bg-input)]" rows={2} value={a.notes} onChange={e=>setAllocation(index,{notes:e.target.value})}/></label>
           {allocations.length>1&&<button className="text-sm underline" onClick={()=>setAllocations(current=>current.filter((_,i)=>i!==index))}>Remove Allocation</button>}</div>})}
         <div className="flex justify-between"><Button size="sm" variant="outline" onClick={()=>setAllocations(current=>[...current,freshAllocation()])}>Split Payment</Button><p className="text-sm">Remaining: £{(Math.abs(Number(selectedBank.amount))-allocations.reduce((sum,a)=>sum+Number(a.amount||0),0)).toFixed(2)}</p></div></>}
-        <DocumentsSection entityType="bank_transaction" entityId={selectedBank.id} title="Payment Documents" compact/>
+        <DocumentsSection entityType="bank_transaction" entityId={selectedBank.id} title="Related Documents" compact/>
         {bankMessage&&<p role="alert" className="text-red-500">{bankMessage}</p>}<div className="flex justify-end gap-3"><Button disabled={bankBusy} variant="ghost" onClick={()=>setSelectedBank(null)}>Cancel</Button>{selectedBank.match_status==='unmatched'&&<Button disabled={bankBusy} onClick={()=>void reconcile(selectedBank,'assign')}>Save Assignment</Button>}</div>
       </div></div>}
       <div className="p-4 md:p-8">
@@ -248,15 +249,15 @@ export default function Transactions() {
                 ) : (
                   <div className="overflow-auto max-h-72">
                     <div className="min-w-[400px] space-y-1">
-                    <div className="grid grid-cols-4 gap-2 text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider pb-2 border-b border-[var(--border-subtle)]">
+                    <div className="grid grid-cols-[1fr_1.4fr_0.8fr_1fr] gap-3 text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider pb-2 border-b border-[var(--border-subtle)]">
                       <span>Tenant</span><span>Property</span><span className="text-right">Amount</span><span className="text-right">Date</span>
                     </div>
                     {payments.filter(p=>Number(p.bank_received)>0&&p.bank_payment_date&&new Date(p.bank_payment_date).getTime()>=Date.now()-30*86400000).sort((a,b)=>String(b.bank_payment_date).localeCompare(String(a.bank_payment_date))).map(p => (
-                      <div key={p.id} className="grid grid-cols-4 gap-2 py-2.5 border-b border-[var(--border-subtle)] text-sm">
+                      <div key={p.id} className="grid grid-cols-[1fr_1.4fr_0.8fr_1fr] gap-3 py-2.5 border-b border-[var(--border-subtle)] text-sm">
                         <span>{p.tenant_name || '—'}</span>
-                        <span className="truncate text-[var(--text-secondary)]">{p.address || '—'}</span>
+                        <span className="whitespace-normal break-words text-[var(--text-secondary)]">{p.address || '—'}</span>
                         <span className="text-right font-medium text-emerald-400">{fmt(Number(p.bank_received || 0))}</span>
-                        <span className="text-right text-[var(--text-muted)]">{p.bank_payment_date ? new Date(p.bank_payment_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : Number(p.amount_paid || 0) > 0 ? 'Not recorded' : 'Unpaid'}</span>
+                        <span className="text-right text-[var(--text-muted)]">{p.bank_payment_date ? new Date(p.bank_payment_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short',year:'numeric' }) : Number(p.amount_paid || 0) > 0 ? 'Not recorded' : 'Unpaid'}</span>
                       </div>
                     ))}
                     </div>
@@ -266,7 +267,7 @@ export default function Transactions() {
 
               {/* Property Rent Breakdown */}
               <Card className="p-5">
-                <h3 className="text-lg font-semibold mb-4">Rent by Status</h3><p className="text-xs text-[var(--text-muted)] mb-4">Monthly rental values by service, excluding Fleming-owned properties. These are rents, not service fees.</p>
+                <h3 className="text-lg font-semibold mb-4">Service Income & Rent</h3><p className="text-xs text-[var(--text-muted)] mb-4">Let Only shows agreed fees earned after the agreement is signed and the initial balance is received. Other services show monthly rents, excluding Fleming-owned properties.</p>
                 {Object.keys(statusGroups).length === 0 ? (
                   <EmptyState message="No property data available" icon={<Home size={24} />} />
                 ) : (
@@ -277,7 +278,7 @@ export default function Transactions() {
                           <p className="text-sm font-medium capitalize">{status.replace(/_/g, ' ')}</p>
                           <p className="text-xs text-[var(--text-muted)]">{data.count} propert{data.count !== 1 ? 'ies' : 'y'}</p>
                         </div>
-                        <p className="text-sm font-semibold">{fmt(data.rent)}<span className="text-[var(--text-muted)] text-xs">/mo</span></p>
+                        <div className="text-right"><p className="text-sm font-semibold">{fmt(data.rent)}<span className="text-[var(--text-muted)] text-xs">{status==='Let Only Service'?' earned':'/mo'}</span></p>{status==='Let Only Service'&&<p className="text-xs text-[var(--text-muted)]">{fmt(Number(summary.let_only_fee_month||0))} this month</p>}</div>
                       </div>
                     ))}
                     {/* Total */}
@@ -292,7 +293,7 @@ export default function Transactions() {
 
             {bankTransactions.length > 0 && (
               <Card className="p-5 mt-6">
-                <h3 className="text-lg font-semibold mb-4">Bank Transactions</h3><p className="text-sm text-[var(--text-muted)] mb-3">Transactions are imported daily into your Financials view. Please remember that all rent reminders need to be sent manually from tenant(s) records.</p><Select className="max-w-xs mb-4 ml-auto" label="Show Transactions" value={bankFilter} onChange={setBankFilter} options={[{value:"unmatched",label:"Needs Review"},{value:"all",label:"All Transactions"},{value:"ignored",label:"Ignored"}]}/>
+                <div className="flex flex-wrap justify-between items-start gap-3"><h3 className="text-lg font-semibold">Bank Transactions</h3><Select className="w-56 mb-4" label="Show Transactions" value={bankFilter} onChange={setBankFilter} options={[{value:"unmatched",label:"Needs Review"},{value:"all",label:"All Transactions"},{value:"ignored",label:"Ignored"}]}/></div><p className="text-sm text-[var(--text-muted)] mb-3">Transactions are imported daily into your Financials view. Please remember that all rent reminders need to be sent manually from tenant(s) records.</p>
                 <div className="overflow-x-auto">
                   <div className="min-w-[620px]">
                     <div className="grid grid-cols-[100px_1fr_120px_200px] gap-3 text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider pb-2 border-b border-[var(--border-subtle)]">

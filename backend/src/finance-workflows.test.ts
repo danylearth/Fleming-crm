@@ -11,7 +11,7 @@ describe('office finance rules',()=>{
   expect(canAccessFinance({role:'admin'})).toBe(true);
   expect(canAccessFinance({role:'staff',department:'Accounts'})).toBe(true);
   expect(canAccessFinance({role:'staff',finance_access:true})).toBe(true);
-  expect(canAccessFinance({role:'manager'})).toBe(false);
+  expect(canAccessFinance({role:'manager'})).toBe(true);
   expect(canAccessFinance({role:'staff',department:'Lettings'})).toBe(false);
  });
  it('rejects invalid money instead of rounding allocations silently',()=>{

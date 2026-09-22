@@ -4,5 +4,5 @@ const details:ClientDetails={landlordName:'Test Ltd',landlordAddress:'Registered
 describe('client agreement required information',()=>{
  it('requires a real company signatory and company number',()=>{expect(validateClientDetails(details,true)).toBeNull();expect(validateClientDetails({...details,directorName:''},true)).toContain('director');expect(validateClientDetails({...details,companyNumber:'123'},true)).toContain('company number');});
  it('does not require company data for an individual',()=>expect(validateClientDetails({...details,companyNumber:'',directorName:''},false)).toBeNull());
- it('requires deposit scheme and service details rather than guessing',()=>{expect(validateClientDetails({...details,depositScheme:''},true)).toContain('scheme');expect(validateClientDetails({...details,serviceAddress:''},true)).toContain('service');});
+ it('uses generic deposit wording but requires service details',()=>{expect(validateClientDetails({...details,depositScheme:''},true)).toBeNull();expect(validateClientDetails({...details,serviceAddress:''},true)).toContain('service');});
 });

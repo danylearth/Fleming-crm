@@ -22,3 +22,8 @@ p, .intro, .form-description, .step p.step-description { font-size: 16px; line-h
 input[type="text"],input[type="email"],input[type="tel"],input[type="date"],input[type="number"],select,textarea,.btn {font-family:Helvetica,Arial,sans-serif;}
 
 .input-group input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),.input-group select {font-family:Helvetica,Arial,sans-serif;}
+
+.checkbox-group{display:grid!important;grid-template-columns:20px minmax(0,1fr);align-items:start;column-gap:12px;}
+.checkbox-group input[type="checkbox"]{width:20px!important;height:20px!important;margin:2px 0 0!important;padding:0!important;}
+.checkbox-group label{width:auto!important;display:block!important;margin:0!important;line-height:24px!important;}
+.marketing-prefs .checkbox-group{margin-bottom:10px;}

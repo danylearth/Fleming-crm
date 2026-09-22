@@ -78,7 +78,7 @@ describe('31 August CRM feedback regressions', () => {
     expect(wizardSource).toContain('Click to add document');
     expect(wizardSource).toContain('Upload Credit Report *');
     expect(wizardSource).not.toContain('Editable tenant email preview');
-    expect(wizardSource).toContain('<DatePicker label="Tenancy start *"');
+    expect(wizardSource).toContain('<DatePicker label="Tenancy Start *"');
   });
 
   it('wires the tenancy email templates to signing, completion and final balance', () => {

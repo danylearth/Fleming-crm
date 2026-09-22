@@ -1,5 +1,5 @@
 import {flemoActions,registerFlemoActions} from './flemo-actions';
-import {flemoAccount,flemoAccountStatus,registerFlemoOAuthRoutes} from './flemo-oauth';
+import {flemoAccount,flemoAccountStatus,registerFlemoOAuthRoutes,sharedFlemoOwner} from './flemo-oauth';
 import {flemoEvidence} from './flemo-records';
 import type { Express } from 'express';
 import { authMiddleware, canAccessFinance, AuthRequest } from './auth';
@@ -31,10 +31,11 @@ export function registerFlemoRoutes(app: Express) {
       const financeAllowed=canAccessFinance(req.user);
       if(!financeAllowed&&(intent==='rent'||/late|overdue|arrears|payment.*trend/i.test(message)))return res.status(403).json({error:'Financial information is restricted to authorised accounts staff'});
       const previous = Array.isArray(history) ? history.slice(-8).filter(item=>item && ['user','assistant'].includes(item.role)&&typeof item.text==='string').map(item=>({role:item.role,text:item.text.slice(0,3000)})) : [];
-      const accountStatus=await flemoAccountStatus(req.user.id).catch(()=>({connected:false}));
-      if(accountStatus.connected){
+      const accountOwner=await sharedFlemoOwner().catch(()=>null);
+      const accountStatus=accountOwner?await flemoAccountStatus(accountOwner).catch(()=>({connected:false})):{connected:false};
+      if(accountOwner&&accountStatus.connected){
         const evidence=await flemoEvidence([...previous.filter(item=>item.role==='user').slice(-2).map(item=>item.text),message].join(' '),portfolio,context,true,financeAllowed);
-        const text=await(await flemoAccount(req.user.id)).answer(message,JSON.stringify({...evidence,conversation:previous}));
+        const text=await(await flemoAccount(accountOwner)).answer(message,JSON.stringify({...evidence,conversation:previous}));
         const result=await flemoActions(req.user,message,text,evidence);
         return res.json({text:text+(result.note?'\n\n'+result.note:''),actions:result.actions,as_of:new Date().toISOString()});
       }

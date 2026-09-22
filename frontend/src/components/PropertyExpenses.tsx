@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { invalidateCache, useApi } from '../hooks/useApi';
 import { Button, Card, DatePicker, EmptyState, Input, Select, Tag } from './ui';
-import { isUkFinancialYearToDate, ukFinancialYear } from '../utils/propertyExpenses';
+import { ukFinancialYear } from '../utils/propertyExpenses';
 
 interface Expense {
   id: number;
@@ -96,7 +96,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
   const historicCosts = visibleExpenses.filter(expense => !RUNNING_COSTS.has(expense.category));
   const total = (items: Expense[]) => items.filter(e=>!e.is_estimate).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   const allTimeTotal = total(expenses);
-  const yearToDateTotal = total(expenses.filter(expense => isUkFinancialYearToDate(expense.expense_date)));
+  const yearToDateTotal = total(visibleExpenses);
   const monthlyTotals = Array.from({ length: 12 }, (_, index) => {
     const calendarMonth = (index + 3) % 12;
     const value = total(visibleExpenses.filter(expense => {
@@ -220,7 +220,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><Select inlineLabel className="max-w-xs" label="Financial Year" value={year} onChange={setYear} options={yearOptions.map(value => ({ value, label: financialYearLabel(value) }))} /></div>
-        <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><p className="text-xs text-[var(--text-muted)]">Year to date</p><p className="text-lg font-bold">£{yearToDateTotal.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p></div>
+        <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><p className="text-xs text-[var(--text-muted)]">{financialYearLabel(year)} total</p><p className="text-lg font-bold">£{yearToDateTotal.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p></div>
         <div className="rounded-xl bg-[var(--bg-subtle)] p-3"><p className="text-xs text-[var(--text-muted)]">All-time total</p><p className="text-lg font-bold">£{allTimeTotal.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p></div>
       </div>
 

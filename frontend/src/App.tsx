@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
 
+const AccountSetup = lazy(() => import('./pages/AccountSetup'));
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Properties = lazy(() => import('./pages/Properties'));
@@ -46,14 +47,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function FinanceRoute({children}:{children:React.ReactNode}) {const {canAccessFinance}=usePermissions();return canAccessFinance()?<>{children}</>:<Navigate to="/" replace/>;}
 
-function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'admin') return <Navigate to="/" replace />;
-  return <>{children}</>;
-}
-
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
 
@@ -85,6 +78,8 @@ function AppRoutes() {
       </div>
     }>
     <Routes>
+      <Route path="/account-setup" element={<AccountSetup />} />
+      <Route path="/password-reset" element={<AccountSetup />} />
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/v3/*" element={<V3Redirect />} />
 
@@ -107,7 +102,7 @@ function AppRoutes() {
       <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
       <Route path="/tasks/:id" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
       <Route path="/financials" element={<ProtectedRoute><FinanceRoute><Transactions /></FinanceRoute></ProtectedRoute>} />
-      <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
+      <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
       <Route path="/inventories" element={<ProtectedRoute><Navigate to="/properties" replace /></ProtectedRoute>} />
       <Route path="/inventories/:id" element={<ProtectedRoute><Navigate to="/properties" replace /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

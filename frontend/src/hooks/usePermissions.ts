@@ -46,7 +46,7 @@ export function usePermissions() {
   };
 
   const canManageUsers = (): boolean => {
-    return isAdmin(); // Only admin can manage users
+    return isManager(); // Managers request access; administrators approve
   };
 
   const canAccessSettings = (): boolean => {
@@ -58,7 +58,7 @@ export function usePermissions() {
   };
 
   return {
-    canAccessFinance: () => user?.role === 'admin' || user?.finance_access === true || ['accounts','administration'].includes((user?.department || '').trim().toLowerCase()),
+    canAccessFinance: () => user?.role === 'admin' || user?.role === 'manager' || user?.finance_access === true || ['accounts','administration'].includes((user?.department || '').trim().toLowerCase()),
     userRole,
     hasMinimumRole,
     isAdmin,

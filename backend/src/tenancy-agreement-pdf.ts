@@ -240,7 +240,7 @@ const ADDENDUM_TERMS = [
 ];
 
 export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Promise<Buffer> {
-  if (input.agreementType === 'internal' || input.serviceType === 'rent_collection') return generateSourceTenancyPdf(input);
+  if (input.agreementType === 'internal' || ['let_only','rent_collection','full_management'].includes(input.serviceType||'')) return generateSourceTenancyPdf(input);
   return new Promise((resolve, reject) => {
     const assetDirectory = path.join(__dirname, 'agreement-assets');
     const headerPath = path.join(assetDirectory, 'letterhead-header.png');

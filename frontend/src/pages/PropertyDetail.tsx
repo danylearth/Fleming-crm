@@ -100,11 +100,11 @@ const STATUS_COLORS: Record<string, string> = {
   let: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
   to_let: 'bg-red-500/20 text-red-400 border-red-500/30',
   let_agreed: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
-  full_management: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  rent_collection: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  full_management: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  rent_collection: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
 };
 const STATUS_LABELS: Record<string, string> = {
-  let: 'Let', to_let: 'To Let', let_agreed: 'Let Agreed', full_management: 'Full Management', rent_collection: 'Rent Collection',
+  closed:'Closed', let: 'Let', to_let: 'To Let', let_agreed: 'Let Agreed', full_management: 'Full Management', rent_collection: 'Rent Collection',
 };
 const EPC_COLORS: Record<string, string> = {
   A: 'bg-emerald-500 text-white', B: 'bg-emerald-400 text-white', C: 'bg-lime-500 text-white',
@@ -565,7 +565,7 @@ export default function PropertyDetail() {
   // Tenant management handlers
   const handleLinkTenant = async (tenantId: number) => {
     try {
-      await api.put(`/api/properties/${id}`, {
+      await api.post(`/api/properties/${id}/assign-tenant`, {
         tenant_id: tenantId
       });
       await loadDetail();
@@ -574,18 +574,13 @@ export default function PropertyDetail() {
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } }; message?: string };
       console.error('Failed to link tenant:', err);
-      alert(err.response?.data?.error || 'Failed to link tenant to property');
+      alert(err.message || 'Failed to link tenant to property');
     }
   };
 
   const handleCreateAndLinkTenant = async () => {
     try {
-      // Create new tenant
-      const newTenant = await api.post('/api/tenants', newTenantForm);
-      // Link to property
-      await api.put(`/api/properties/${id}`, {
-        tenant_id: newTenant.id
-      });
+      await api.post('/api/tenants', {...newTenantForm,name:[newTenantForm.first_name_1,newTenantForm.last_name_1].filter(Boolean).join(' '),email:newTenantForm.email_1,phone:newTenantForm.phone_1,property_id:Number(id)});
       await loadDetail();
       setShowTenantModal(false);
       setNewTenantForm({
@@ -761,12 +756,12 @@ export default function PropertyDetail() {
                     <Input label="Address line 2 (optional)" value={form.address_line_2} onChange={address_line_2 => setForm({...form,address_line_2})} />
                     <Input label="Town / City *" value={form.city} onChange={city => setForm({...form,city})} />
                     <Input label="Postcode *" value={form.postcode} onChange={postcode => setForm({...form,postcode})} />
-                    <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />
+
                     <Select label="Type" value={form.property_type} onChange={(v: string) => setForm({ ...form, property_type: v })}
                       options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
                     <Input label="Bedrooms" value={form.bedrooms} onChange={(v: string) => setForm({ ...form, bedrooms: v })} />
                     <Select label="Status" value={form.status} onChange={(v: string) => setForm({ ...form, status: v })}
-                      options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' }]} />
+                      options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' },...(property.status==='let'?[{value:'let',label:'Let'}]:[]),...(property.landlord_type!=='internal'?[{value:'closed',label:'Closed'}]:[])]} />
                     {property.landlord_type === 'internal' && <Input label="Key Colour Code" value={form.key_colour_code} onChange={(v: string) => setForm({ ...form, key_colour_code: v })} placeholder="e.g. Pink / Blue" />}
                   </div>
                   <div className="mt-4">
@@ -841,11 +836,6 @@ export default function PropertyDetail() {
               {(editing?form.has_gas:property.has_gas)?<div className="mb-4">{editing?<DatePicker label="Gas Safety Commissioned Date" value={form.gas_safety_commissioned_date} onChange={v=>setForm(f=>({...f,gas_safety_commissioned_date:v}))}/>:<ReadField label="Gas Safety Commissioned" value={formatDate(property.gas_safety_commissioned_date || null)}/>}</div>:null}
               {editing ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                  {property.landlord_type !== 'internal' && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v })}
-                    options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
-                  }
-                  {property.landlord_type !== 'internal' && <Input label="Charge (%)" value={form.charge_percentage} onChange={(v: string) => setForm({ ...form, charge_percentage: v })} placeholder="e.g. 10" />}
-                  {property.landlord_type !== 'internal' && <Input label="Total Charge (£)" value={form.total_charge} onChange={(v: string) => setForm({ ...form, total_charge: v })} />}
                   <Select label="Council Tax Band" value={form.council_tax_band} onChange={(v: string) => setForm({ ...form, council_tax_band: v })}
                     options={[{ value: '', label: 'Select...' }, { value: 'TBC', label: 'TBC' }, ...['A','B','C','D','E','F','G','H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
                   <Select label="EPC Grade" value={form.epc_grade} onChange={(v: string) => setForm({ ...form, epc_grade: v })}
@@ -915,13 +905,6 @@ export default function PropertyDetail() {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-                  {property.landlord_type !== 'internal' && <ReadField label="Service Type" value={
-                    property.service_type === 'full_management' ? 'Full Management' :
-                    property.service_type === 'rent_collection' ? 'Rent Collection' :
-                    property.service_type === 'let_only' ? 'Let Only' : null
-                  } />}
-                  {property.landlord_type !== 'internal' && <ReadField label="Charge" value={property.charge_percentage ? `${property.charge_percentage}%` : null} />}
-                  {property.landlord_type !== 'internal' && <ReadField label="Total Charge" value={property.total_charge ? `£${property.total_charge}` : null} />}
                   <ReadField label="Council Tax" value={property.council_tax_band ? `Band ${property.council_tax_band}` : null} />
                   <ReadField label="EPC Grade" value={property.epc_grade ? (
                     <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-bold ${EPC_COLORS[property.epc_grade] || 'bg-[var(--bg-hover)] text-[var(--text-muted)]'}`}>
@@ -935,6 +918,20 @@ export default function PropertyDetail() {
                 </div>
               )}
             </GlassCard>
+            <GlassCard className="p-4 sm:p-6"><SectionHeader title="Property Financials" icon={<Briefcase size={16}/>}/>{editing?<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">                    <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />                  {property.landlord_type !== 'internal' && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v })}
+                    options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
+                  }
+                  {property.landlord_type !== 'internal' && <Input label="Charge (%)" value={form.charge_percentage} onChange={(v: string) => setForm({ ...form, charge_percentage: v })} placeholder="e.g. 10" />}
+                  {property.landlord_type !== 'internal' && <Input label="Total Charge (£)" value={form.total_charge} onChange={(v: string) => setForm({ ...form, total_charge: v })} />}
+</div>:<div className="grid grid-cols-2 sm:grid-cols-3 gap-4"><ReadField label="Monthly Rent" value={`£${Number(property.rent_amount||0).toLocaleString('en-GB')}`}/>                  {property.landlord_type !== 'internal' && <ReadField label="Service Type" value={
+                    property.service_type === 'full_management' ? 'Full Management' :
+                    property.service_type === 'rent_collection' ? 'Rent Collection' :
+                    property.service_type === 'let_only' ? 'Let Only' : null
+                  } />}
+                  {property.landlord_type !== 'internal' && <ReadField label="Charge" value={property.charge_percentage ? `${property.charge_percentage}%` : null} />}
+                  {property.landlord_type !== 'internal' && <ReadField label="Total Charge" value={property.total_charge ? `£${property.total_charge}` : null} />}
+</div>}</GlassCard>
+
 
             {/* Leasehold (conditional) */}
             {(editing ? form.is_leasehold : property.is_leasehold) ? (
@@ -1383,15 +1380,15 @@ export default function PropertyDetail() {
                     </div>
                   </div>
                 ))}
-                <div className="flex gap-2 mt-2">
+                <div className="relative mt-2">
                   <textarea rows={2}
                     value={notesInput}
                     onChange={e => {setNotesInput(e.target.value);e.currentTarget.style.height="auto";e.currentTarget.style.height=`${e.currentTarget.scrollHeight}px`;}}
 
                     placeholder={`Add a note to ${notesFilter}...`}
-                    className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/40 transition-colors"
+                    className="block w-full resize-none bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl pl-4 pr-20 pt-3 pb-10 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/40 transition-colors"
                   />
-                  <Button variant="gradient" onClick={addNote} disabled={!notesInput.trim()}>
+                  <Button size="sm" className="!absolute right-2 bottom-2 !px-4 !py-1 !text-xs" variant="gradient" onClick={addNote} disabled={!notesInput.trim()}>
                     Add
                   </Button>
                 </div>
@@ -1771,11 +1768,11 @@ export default function PropertyDetail() {
                       className="mb-4"
                     />
                     <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {allTenants
+                      {allTenants.filter(t=>!t.property_id&&t.status!=='inactive')
                         .filter(t =>
                           tenantSearch === '' ||
-                          `${t.first_name_1} ${t.last_name_1}`.toLowerCase().includes(tenantSearch.toLowerCase()) ||
-                          t.email_1?.toLowerCase().includes(tenantSearch.toLowerCase()) ||
+                          (t.name||[t.first_name_1,t.last_name_1].filter(Boolean).join(' ')).toLowerCase().includes(tenantSearch.toLowerCase()) ||
+                          (t.email||t.email_1)?.toLowerCase().includes(tenantSearch.toLowerCase()) ||
                           t.phone_1?.toLowerCase().includes(tenantSearch.toLowerCase())
                         )
                         .map(tenant => (
@@ -1783,18 +1780,18 @@ export default function PropertyDetail() {
                             key={tenant.id}
                             onClick={() => handleLinkTenant(tenant.id)}
                             className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                            <Avatar name={`${tenant.first_name_1} ${tenant.last_name_1}`} size="sm" />
+                            <Avatar name={tenant.name||[tenant.first_name_1,tenant.last_name_1].filter(Boolean).join(' ')} size="sm" />
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{tenant.first_name_1} {tenant.last_name_1}</p>
-                              <p className="text-xs text-[var(--text-muted)] truncate">{tenant.email_1 || tenant.phone_1 || '—'}</p>
+                              <p className="text-sm font-medium truncate">{tenant.name||[tenant.first_name_1,tenant.last_name_1].filter(Boolean).join(' ')}</p>
+                              <p className="text-xs text-[var(--text-muted)] truncate">{tenant.email||tenant.email_1||tenant.phone||tenant.phone_1||'—'}</p>
                             </div>
                             <ChevronRight size={16} className="text-[var(--text-muted)]" />
                           </div>
                         ))}
-                      {allTenants.filter(t =>
+                      {allTenants.filter(t=>!t.property_id&&t.status!=='inactive').filter(t =>
                         tenantSearch === '' ||
-                        `${t.first_name_1} ${t.last_name_1}`.toLowerCase().includes(tenantSearch.toLowerCase()) ||
-                        t.email_1?.toLowerCase().includes(tenantSearch.toLowerCase()) ||
+                        (t.name||[t.first_name_1,t.last_name_1].filter(Boolean).join(' ')).toLowerCase().includes(tenantSearch.toLowerCase()) ||
+                        (t.email||t.email_1)?.toLowerCase().includes(tenantSearch.toLowerCase()) ||
                         t.phone_1?.toLowerCase().includes(tenantSearch.toLowerCase())
                       ).length === 0 && (
                         <EmptyState message={tenantSearch ? "No tenants match your search" : "No tenants available"} />

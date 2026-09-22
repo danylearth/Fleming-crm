@@ -61,8 +61,8 @@ export default function Settings() {
       setPasswordMsg('Passwords do not match');
       return;
     }
-    if (newPassword.length < 6) {
-      setPasswordMsg('Password must be at least 6 characters');
+    if (newPassword.length < 12) {
+      setPasswordMsg('Password must be at least 12 characters');
       return;
     }
 

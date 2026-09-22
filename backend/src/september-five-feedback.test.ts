@@ -21,7 +21,7 @@ const credentialsMigration = fs.readFileSync(path.resolve(__dirname, '../migrati
 
 describe('5 September CRM feedback', () => {
   it('keeps postcode spacing for Land Registry Price Paid searches', () => {
-    expect(backend).toContain("postcode.replace(/\\s+/g, ' ').trim().toUpperCase()");
+    expect(backend).toContain('normalisePricePaid');
     expect(backend).not.toContain("postcode.replace(/\\s/g, '').toUpperCase()");
   });
 
@@ -60,7 +60,7 @@ describe('5 September CRM feedback', () => {
     expect(propertyExpenses).toContain('Service Charges & Ground Rent');
     expect(propertyExpenses).toContain('Historic Costs');
     expect(propertyExpenses).toContain('Financial Year');
-    expect(propertyExpenses).toContain('Year to date');
+    expect(propertyExpenses).toContain('financialYearLabel(year)');
     expect(propertyExpenses).toContain('All-time total');
     expect(propertyExpenses).toContain('Refurbishment');
   });
@@ -77,9 +77,9 @@ describe('5 September CRM feedback', () => {
     expect(icons).toContain('aria-label="British pound"');
   });
 
-  it('guards the team route and user administration with the admin role', () => {
-    expect(app).toContain('<AdminRoute><Users /></AdminRoute>');
-    expect(backend).toContain("app.get('/api/users', authMiddleware, requireRole('admin')");
+  it('allows manager requests while reserving user changes for administrators', () => {
+    expect(app).toContain('<ProtectedRoute><Users /></ProtectedRoute>');
+    expect(backend).toContain("app.get('/api/users', authMiddleware, requireRole('admin','manager')");
     expect(backend).toContain("app.get('/api/users/options', authMiddleware");
     expect(backend).toContain("app.put('/api/users/:id', authMiddleware, requireRole('admin')");
   });

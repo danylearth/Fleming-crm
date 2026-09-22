@@ -87,7 +87,7 @@ export function useApi() {
   const mutate = async (endpoint: string, options: RequestInit, invalidate?: string) => {
     const data = await request(endpoint, options);
     // Preview endpoints are read-only even though the request carries a JSON body.
-    if (endpoint.endsWith('/email-preview') || endpoint==='/api/ai/chat') return data;
+    if ((endpoint.endsWith('/email-preview') || endpoint.endsWith('/landlord-agreement-preview')) || endpoint==='/api/ai/chat') return data;
     // Invalidate related cache entries after any write
     if (invalidate) invalidateCache(invalidate);
     else {

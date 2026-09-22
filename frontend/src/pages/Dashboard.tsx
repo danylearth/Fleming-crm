@@ -1,7 +1,8 @@
+import {pipelineVisible,pipelineStage} from '../utils/pipeline';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Card, GlassCard, SectionHeader, EmptyState, Tag, Select, Button } from '../components/ui';
+import { Card, GlassCard, SectionHeader, EmptyState, Select, Button } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -39,7 +40,7 @@ interface Task {
 }
 
 interface Enquiry {
-  previous_agent?:string; id: number; status: string; first_name_1?: string; last_name_1?: string;
+  viewing_date?:string;viewing_time?:string;handover_date?:string;handover_not_required?:number; previous_agent?:string; id: number; status: string; first_name_1?: string; last_name_1?: string;
   property_address?: string; property_id?: number; created_at?: string;
   email_1?: string; phone_1?: string;
   application_form_completed?: number | boolean; application_review_status?: string;
@@ -132,7 +133,7 @@ export default function Dashboard() {
 
   const todayKey=new Date(now).toLocaleDateString('en-CA',{timeZone:'Europe/London'});
   const pipeline=[
-    ...enquiries.filter(e=>e.balance_payment_requested&&!e.balance_payment_received ? !!(e.balance_follow_up_date&&e.balance_follow_up_date.slice(0,10)<=todayKey) : !e.tenancy_agreement_status||e.tenancy_agreement_status==='completed'||!!(e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey)).map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',previousAgent:e.previous_agent||'—',type:'Tenant Enquiry',date:e.balance_follow_up_date&&e.balance_follow_up_date.slice(0,10)<=todayKey?e.balance_follow_up_date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.balance_payment_requested&&!e.balance_payment_received?'Final Balance Follow-up':e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.tenancy_agreement_status==='completed'&&!e.balance_payment_received?'Agreement Completed — Final Balance':e.application_form_completed&&e.application_review_status!=='approved'?'Application Ready for Review':e.status.replaceAll('_',' '),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
+    ...enquiries.filter(e=>pipelineVisible(e,todayKey,new Date(now).toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour12:false}).slice(0,5))).map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',previousAgent:e.previous_agent||'—',type:'Tenant Enquiry',date:e.balance_follow_up_date&&e.balance_follow_up_date.slice(0,10)<=todayKey?e.balance_follow_up_date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:pipelineStage(e,todayKey),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
     ...landlordEnquiries.filter(e=>!['onboarded','not_interested','rejected','closed'].includes(e.status)).map(e=>({key:`landlord-${e.id}`,name:e.name||[e.first_name,e.last_name].filter(Boolean).join(' ')||'Landlord Enquiry',previousAgent:e.previous_agent||'—',type:'Landlord Enquiry',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.status.replaceAll('_',' '),href:`/bdm/${e.id}`,onboarding:false})),
     ...tasks.filter(t=>t.entity_type==='tenant'&&t.task_type==='follow_up'&&t.status!=='completed'&&t.due_date?.slice(0,10)<=todayKey).map(t=>({key:`followup-${t.id}`,name:t.title,previousAgent:teamMembers.find(m=>String(m.id)===t.assigned_to)?.name||'—',type:'Tenant Follow-up',date:t.due_date,status:'Follow-up Due',href:`/tasks/${t.id}`,onboarding:false})),
   ].sort((a,b)=>(Date.parse(a.date||'1970-01-01')-Date.parse(b.date||'1970-01-01'))*(pipelineOldest?1:-1));
@@ -190,7 +191,7 @@ export default function Dashboard() {
         </div>
 
         {/* Two Column: Compliance + Pipeline */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 min-[1700px]:grid-cols-2 gap-6">
           {/* Compliance and maintenance alerts */}
           <Card className="p-6">
             <div className="flex flex-wrap justify-between items-center gap-3 mb-5"><h2 className="font-semibold flex items-center gap-2"><AlertTriangle size={16}/> Compliance Alerts & Maintenance Requests</h2><div className="flex items-center gap-2 ml-auto"><Select hideLabel searchable className="w-64 max-w-full" label="Filter alerts by user" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'Select a User…'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" variant="outline" aria-expanded={expandAlerts} aria-controls="dashboard-alerts" onClick={()=>setExpandAlerts(!expandAlerts)}>{expandAlerts?'Show Less':'View All'}</Button></div></div>
@@ -230,7 +231,7 @@ export default function Dashboard() {
           {/* Pipeline */}
           <Card className="p-6">
             <SectionHeader title="Enquiry Pipeline" icon={<MessageSquare size={16}/>} action={() => navigate('/enquiries')} actionLabel="View All" />
-            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="w-full text-sm text-left [&_th+th]:border-l [&_td+td]:border-l [&_th]:border-[var(--border-subtle)] [&_td]:border-[var(--border-subtle)]"><thead><tr className="text-xs text-[var(--text-muted)]"><th className="py-3">Enquiry Name</th><th className="px-3">Enquiry Type</th><th className="px-3">Previous Agent</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="px-3 py-2 min-w-28 text-left whitespace-nowrap" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="px-3 text-center">Action</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-3 pr-3"><button className="text-left" onClick={()=>navigate(row.href)}><strong className="block">{row.name}</strong><span className="text-xs text-[var(--text-muted)]">{row.status}</span></button></td><td className="px-3 text-xs">{row.type}</td><td className="px-3 text-xs">{row.previousAgent}</td><td className="px-3 text-xs whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="px-3 text-center"><Button size="sm" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue Onboarding':'View Enquiry'}</Button></td></tr>)}</tbody></table></div>:<EmptyState message="No enquiries or follow-ups awaiting action"/>}
+            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="w-full text-sm text-left [&_th+th]:border-l [&_td+td]:border-l [&_th]:border-[var(--border-subtle)] [&_td]:border-[var(--border-subtle)]"><thead><tr className="text-xs text-[var(--text-muted)]"><th className="py-3">Enquiry Name</th><th className="px-3">Enquiry Type</th><th className="px-3">Stage</th><th className="px-3">Previous Agent</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="px-3 py-2 min-w-28 text-left whitespace-nowrap" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="px-3 text-center">Action</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-3 pr-3"><button className="text-left" onClick={()=>navigate(row.href)}><strong className="block">{row.name}</strong></button></td><td className="px-3 text-xs">{row.type}</td><td className="px-3 text-xs">{row.status}</td><td className="px-3 text-xs">{row.previousAgent}</td><td className="px-3 text-xs whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="px-3 text-center"><Button size="sm" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue Onboarding':'View Enquiry'}</Button></td></tr>)}</tbody></table></div>:<EmptyState message="No enquiries or follow-ups awaiting action"/>}
           </Card>
         </div>
 
@@ -259,10 +260,10 @@ export default function Dashboard() {
           </div>
           </div><div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-xs text-[var(--text-muted)]">
             {[...new Set(calendarDays.flatMap(day => day.tasks.map(task => task.assigned_to).filter(Boolean)))].map(name => (
-              <div key={name}><span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${colorForMember(name)}`} />{teamMembers.find(member=>String(member.id)===String(name))?.name || name}</span><div className="flex flex-wrap gap-3 mt-2">{[{label:'Viewings',kind:'viewing',Icon:Eye},{label:'Handovers',kind:'handover',Icon:KeyRound},{label:'Meetings',kind:'meeting',Icon:Handshake},{label:'Tasks Due Today',kind:'today',Icon:ListChecks}].map(({label,kind,Icon})=>{const count=calendarDays.flatMap(day=>day.tasks).filter(t=>String(t.assigned_to)===String(name)&&(kind==='today'?t.due_date?.slice(0,10)===todayKey:t.task_type===kind)).length;return count?<span key={kind} className="flex items-center gap-1 text-[10px]"><Icon size={12}/>{count} {label}</span>:null;})}</div></div>
+              <div key={name}><span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${colorForMember(name)}`} />{teamMembers.find(member=>String(member.id)===String(name))?.name || name}</span><div className="flex flex-col gap-2 mt-2">{[{label:'Viewings',kind:'viewing',Icon:Eye},{label:'Handovers',kind:'handover',Icon:KeyRound},{label:'Meetings',kind:'meeting',Icon:Handshake},{label:'Tasks Due Today',kind:'today',Icon:ListChecks}].map(({label,kind,Icon})=>{const count=calendarDays.flatMap(day=>day.tasks).filter(t=>String(t.assigned_to)===String(name)&&(kind==='today'?t.due_date?.slice(0,10)===todayKey:t.task_type===kind)).length;return count?<span key={kind} className="flex items-center gap-1 text-[10px]"><Icon size={12}/>{count} {label}</span>:null;})}</div></div>
             ))}
             {calendarDays.some(day => day.tasks.some(task => !task.assigned_to)) && (
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-400" />Unassigned</span>
+              <div className="self-start"><span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-400" />Unassigned</span><div className="flex flex-col gap-2 mt-2">{[{label:'Viewings',kind:'viewing'},{label:'Handovers',kind:'handover'},{label:'Meetings',kind:'meeting'},{label:'Tasks Due Today',kind:'today'}].map(({label,kind})=>{const count=calendarDays.flatMap(d=>d.tasks).filter(t=>!t.assigned_to&&(kind==='today'?t.due_date?.slice(0,10)===todayKey:t.task_type===kind)).length;return count?<span key={kind} className="text-[10px]">{count} {label}</span>:null;})}</div></div>
             )}
           </div>
         </Card>
@@ -286,14 +287,7 @@ export default function Dashboard() {
                     <p className="text-xs text-[var(--text-muted)] truncate">{task.property_address || task.description}</p>
                   </button>
                   <span className="text-xs text-[var(--text-muted)]">{teamMembers.find(m=>String(m.id)===String(task.assigned_to))?.name||task.assigned_to||(task.entity_type==='maintenance'?'Maintenance':'Unassigned')}</span>
-                  <div className="text-right shrink-0">
-                    <Tag active={task.priority === 'high'}>{task.priority}</Tag>
-                    {task.due_date && (
-                      <p className={`text-xs mt-1 ${urgencyColor(task.due_date)}`}>
-                        {new Date(task.due_date).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
+                  <div className="flex flex-wrap items-center gap-3 shrink-0"><span className="text-xs text-[var(--text-muted)]">{task.due_date?new Date(task.due_date).toLocaleDateString('en-GB'):'—'}</span><span className={`rounded-full px-2 py-1 text-xs ${task.priority==='high'||task.priority==='urgent'?'bg-red-500/15 text-red-600':task.priority==='medium'?'bg-amber-500/15 text-amber-600':'bg-emerald-500/15 text-emerald-600'}`}>{task.priority.charAt(0).toUpperCase()+task.priority.slice(1)}</span><Button size="sm" variant="outline" onClick={()=>setSelectedTask(task)}>View</Button></div>
                   <button
                     type="button"
                     onClick={() => deleteTask(task)}

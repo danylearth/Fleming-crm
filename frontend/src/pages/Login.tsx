@@ -9,6 +9,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [notice,setNotice]=useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -28,6 +29,7 @@ export default function Login() {
     }
   };
 
+  const forgot=async()=>{if(!email.trim()){setError('Enter your email address first.');return;}setLoading(true);setError('');try{const response=await fetch(`${import.meta.env.VITE_API_URL||''}/api/auth/forgot-password`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not request a reset');setNotice(data.message);}catch(e){setError(e instanceof Error?e.message:'Could not request a reset');}finally{setLoading(false);}};
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#25073b] via-[#61114b] to-[#dc006d] font-[Lufga] flex items-center justify-center px-4">
       {/* Background gradient orbs */}
@@ -44,7 +46,7 @@ export default function Login() {
             alt="Fleming Lettings"
             className="h-20 w-auto object-contain mb-3"
           />
-          <p className="text-white/80 text-sm">Property management, simplified</p>
+          <p className="text-white/80 text-sm">Your local property experts.</p>
         </div>
 
         {/* Card */}
@@ -76,16 +78,17 @@ export default function Login() {
                   className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 pr-11 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors"
                   required
                 />
-                <button
+                <div className="flex justify-between items-center mt-2"><button type="button" disabled={loading} onClick={()=>void forgot()} className="text-xs underline">Forgot Password?</button><button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="mt-2 ml-auto flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                  className="ml-auto flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}{showPassword ? 'Hide Password' : 'Show Password'}
-                </button>
+                </button></div>
               </div>
             </div>
 
+            {notice&&<p role="status" className="text-sm">{notice}</p>}
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5 text-sm text-red-400">
                 {error}
