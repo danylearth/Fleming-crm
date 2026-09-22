@@ -1,6 +1,9 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
@@ -24,5 +27,9 @@
         }
       ]
     }
-  ]
+  ],
+  "framework": null,
+  "installCommand": null,
+  "buildCommand": null,
+  "outputDirectory": null
 }
