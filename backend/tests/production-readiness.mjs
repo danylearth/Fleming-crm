@@ -822,7 +822,7 @@ try {
     for(const [kind,categories] of Object.entries({expense:['Ground Rent','Insurance','Lease Renewal','Management Fee','Other','Service Charge'],maintenance:['Contractors Invoice','Labour','Materials','Other','Refurbishment','Servicing'],financial:['Accountancy Fees','Administration Expenses','Bank Fees','Commission Payment','Legal & Professional Fees','Office Costs','Other','Refunds','Security Deposit Payments Out']})){
      for(const category of categories){const b=await one("INSERT INTO bank_feed_transactions(connection_id,external_id,account_id,booked_at,amount) VALUES($1,$2,'test',CURRENT_DATE,-50) RETURNING id",[c.id,'category-'+kind+'-'+category]);
       await ok(`/api/bank-feed/transactions/${b.id}/reconcile`,{method:'POST',token:auth.staff,body:{action:'assign',allocations:[{kind,category,property_id:property.id,maintenance_id:'',notes:'Work completed',amount:50}]}});
-      const a=await one('SELECT * FROM bank_feed_allocations WHERE bank_transaction_id=$1',[b.id]);assert(a.expense_id);assert.equal((await one('SELECT maintenance_id FROM property_expenses WHERE id=$1',[a.expense_id])).maintenance_id,null);
+      const a=await one('SELECT * FROM bank_feed_allocations WHERE bank_transaction_id=$1',[b.id]);if(category==='Security Deposit Payments Out')assert.equal(a.expense_id,null);else{assert(a.expense_id);assert.equal((await one('SELECT maintenance_id FROM property_expenses WHERE id=$1',[a.expense_id])).maintenance_id,null);}
      }
     }
   });

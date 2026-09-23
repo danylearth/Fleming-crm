@@ -56,7 +56,7 @@ export default function Dashboard() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [teamMembers,setTeamMembers]=useState<{id:number;name:string}[]>([]);
   const [maintenanceOwner,setMaintenanceOwner]=useState('all');
-  const [expandAlerts,setExpandAlerts]=useState(false);
+  const [expandAlerts,setExpandAlerts]=useState(true);
   const matchesMaintenanceOwner=(assigned:unknown)=>maintenanceOwner==='all'||(maintenanceOwner==='unassigned'?!assigned:[maintenanceOwner,teamMembers.find(m=>String(m.id)===maintenanceOwner)?.name].includes(String(assigned||'')));
   const [taskOwner,setTaskOwner]=useState('all');
   const [calendarOwner,setCalendarOwner]=useState('all');
@@ -195,7 +195,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 min-[1700px]:grid-cols-2 gap-6">
           {/* Compliance and maintenance alerts */}
           <Card className="p-6">
-            <div className="flex flex-wrap justify-between items-center gap-3 mb-5"><h2 className="font-semibold flex items-center gap-2"><AlertTriangle size={16}/> Compliance Alerts & Maintenance Requests</h2><div className="flex items-center gap-2 ml-auto"><Select hideLabel searchable className="w-64 max-w-full" label="Filter alerts by user" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'Select a User…'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" variant="outline" aria-expanded={expandAlerts} aria-controls="dashboard-alerts" onClick={()=>setExpandAlerts(!expandAlerts)}>{expandAlerts?'Show Less':'View All'}</Button></div></div>
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-5"><h2 className="font-semibold flex items-center gap-2"><AlertTriangle size={16}/> Compliance Alerts & Maintenance Requests</h2><div className="flex flex-wrap items-center gap-2 ml-auto max-w-full"><Select hideLabel searchable className="w-64 max-w-full" label="Select User…" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'View All'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" className="h-11 w-28 shrink-0" variant="outline" aria-expanded={expandAlerts} aria-controls="dashboard-alerts" onClick={()=>setExpandAlerts(!expandAlerts)}>{expandAlerts?'Show Less':'View All'}</Button></div></div>
             {dashboard?.complianceAlerts?.some(a=>matchesMaintenanceOwner(a.assigned_to)) || dashboard?.recentMaintenance?.some(m=>matchesMaintenanceOwner(m.assigned_to)) ? (
               <div id="dashboard-alerts" className={`space-y-3 ${expandAlerts?'':'max-h-[32rem] overflow-y-auto'}`}>
                 {dashboard!.complianceAlerts.filter(a=>matchesMaintenanceOwner(a.assigned_to)).map((alert, i) => (
@@ -238,7 +238,7 @@ export default function Dashboard() {
 
         {/* Team Calendar */}
         <Card className="p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex items-center gap-2"><CalendarDays size={16}/>Team Calendar</h2><div className="flex flex-wrap items-center gap-2"><Select hideLabel searchable className="w-64 max-w-full" label="Filter calendar by user" value={calendarOwner} onChange={setCalendarOwner} options={[{value:'all',label:'All Users'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" variant="outline" onClick={()=>navigate('/tasks')}>Open Calendar</Button></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex items-center gap-2"><CalendarDays size={16}/>Team Calendar</h2><div className="flex flex-wrap items-center gap-2"><Select hideLabel searchable className="w-64 max-w-full" label="Filter calendar by user" value={calendarOwner} onChange={setCalendarOwner} options={[{value:'all',label:'All Users'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" className="h-11 w-28 shrink-0" variant="outline" onClick={()=>navigate('/tasks')}>Open Calendar</Button></div></div>
           <div className="overflow-x-auto"><div className="grid grid-cols-7 gap-2 min-w-[600px]">
             {calendarDays.map(({ key, date, tasks: dayTasks }, index) => (
               <button
@@ -271,7 +271,7 @@ export default function Dashboard() {
 
         {/* Recent Tasks */}
         <Card className="p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex gap-2 items-center"><ListChecks size={16}/> Tasks</h2><div className="flex flex-wrap items-center gap-3"><Select hideLabel searchable className="w-64 max-w-full" label="Filter tasks by user" value={taskOwner} onChange={setTaskOwner} options={[{value:'all',label:'Select a User…'},{value:'me',label:'My Tasks'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" className="h-11 min-w-24" variant="outline" onClick={()=>navigate('/tasks')}>View All</Button></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex gap-2 items-center"><ListChecks size={16}/> Tasks</h2><div className="flex flex-wrap items-center gap-2"><Select hideLabel searchable className="w-64 max-w-full" label="Select User…" value={taskOwner} onChange={setTaskOwner} options={[{value:'all',label:'View All'},{value:'me',label:'My Tasks'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" className="h-11 w-28 shrink-0" variant="outline" onClick={()=>navigate('/tasks')}>View All</Button></div></div>
           {visibleRecentTasks.length ? (
             <div className="space-y-2">
               {visibleRecentTasks.slice(0, 5).map(task => (

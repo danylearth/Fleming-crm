@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import type { ReactNode } from 'react';
 
 interface User {
-  department?: string; finance_access?: boolean;
+  department?: string; phone?:string;office_extension?:string; finance_access?: boolean;
   last_login?: string;
   avatar_url?: string;
   accent_color?: string;

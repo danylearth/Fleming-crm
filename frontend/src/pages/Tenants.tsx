@@ -1,3 +1,5 @@
+import CsvImport from '../components/ui/CsvImport';
+import {usePermissions} from '../hooks/usePermissions';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -45,6 +47,8 @@ function MapAutoFit({ tenants, coords }: {
 }
 
 export default function Tenants() {
+  const {isManager}=usePermissions();
+  const [showImport,setShowImport]=useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -268,6 +272,7 @@ export default function Tenants() {
           >
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
+          {isManager()&&<Button variant="outline" onClick={()=>setShowImport(true)}>Import CSV</Button>}
           <Button variant="gradient" onClick={() => setShowModal(true)}>
             <Plus size={16} className="mr-2" /> Add Tenant
           </Button>
@@ -680,6 +685,7 @@ export default function Tenants() {
           </div>
         </div>
       )}
-    </Layout>
+    {showImport&&isManager()&&<CsvImport entity="tenants" onClose={()=>setShowImport(false)} onDone={load}/>}
+</Layout>
   );
 }

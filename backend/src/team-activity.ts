@@ -36,6 +36,13 @@ export function registerTeamActivityRoutes(app: Express) {
       res.json({ success: true });
     } catch { res.status(500).json({ error: 'Could not record activity' }); }
   });
+  app.get('/api/team-activity',authMiddleware,requireRole('admin'),async(_req,res)=>{
+    res.json(await query(`SELECT u.id,u.name,u.email,u.department,u.is_active,
+      COUNT(a.minute) FILTER(WHERE a.minute>=date_trunc('day',NOW() AT TIME ZONE 'Europe/London') AT TIME ZONE 'Europe/London')::int AS today_minutes,
+      ROUND(COUNT(a.minute) FILTER(WHERE a.minute>=NOW()-INTERVAL '7 days')/7.0,1) AS week_daily_average,
+      ROUND(COUNT(a.minute) FILTER(WHERE a.minute>=NOW()-INTERVAL '30 days')/30.0,1) AS month_daily_average
+      FROM users u LEFT JOIN user_activity_minutes a ON a.user_id=u.id AND a.minute>=NOW()-INTERVAL '30 days' GROUP BY u.id ORDER BY u.name`));
+  });
   app.get('/api/users/:id/activity', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
     const offset = Number(req.query.offset || 0);
     if (!Number.isSafeInteger(offset) || offset < 0) return res.status(400).json({ error: 'Invalid activity offset' });

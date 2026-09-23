@@ -1,3 +1,4 @@
+import {contactDetails,validDepartment} from './departments';
 import type {Express} from 'express';
 import {createChallenge,verifySolution} from 'altcha-lib';
 import {deriveKey} from 'altcha-lib/algorithms/pbkdf2';
@@ -11,7 +12,7 @@ import {accountEmail,sendEmail} from './email';
 
 const tokenHash=(token:string)=>crypto.createHash('sha256').update(token).digest('hex');
 export function accountInput(body:any){
- const value={name:String(body.name||'').trim(),email:String(body.email||'').trim().toLowerCase(),role:String(body.role||'staff'),department:String(body.department||'').trim(),finance_access:body.finance_access===true};
+ const value={...contactDetails(body),name:String(body.name||'').trim(),email:String(body.email||'').trim().toLowerCase(),role:String(body.role||'staff'),department:String(body.department||'').trim(),finance_access:body.finance_access===true};
  if(!value.name||value.name.length>150||!/^\S+@\S+\.\S+$/.test(value.email)||value.email.length>254||!['admin','manager','staff','viewer'].includes(value.role)||value.department.length>150)throw new Error('Enter a valid name, email address and role');
  return value;
 }
@@ -28,9 +29,10 @@ async function issueLink(client:PoolClient,user:any,kind:'invite'|'reset'){
 }
 async function createUser(client:PoolClient,body:any){
  const d=accountInput(body);
+ if(!await validDepartment(d.department))throw Error('Choose an existing department/team');
  if((await client.query('SELECT id FROM users WHERE LOWER(email)=$1',[d.email])).rows.length)throw new Error('An account with that email already exists');
  const password=await bcrypt.hash(crypto.randomBytes(32).toString('base64url'),12);
- const user=(await client.query('INSERT INTO users(name,email,password,role,department,finance_access,password_setup_required) VALUES($1,$2,$3,$4,$5,$6,TRUE) RETURNING id,name,email',[d.name,d.email,password,d.role,d.department,d.finance_access])).rows[0];
+ const user=(await client.query('INSERT INTO users(name,email,password,role,department,finance_access,password_setup_required,phone,office_extension) VALUES($1,$2,$3,$4,$5,$6,TRUE,$7,$8) RETURNING id,name,email',[d.name,d.email,password,d.role,d.department,d.finance_access,d.phone,d.office_extension])).rows[0];
  await issueLink(client,user,'invite');return user;
 }
 export function registerAccountRoutes(app:Express){
@@ -76,7 +78,7 @@ export function registerAccountRoutes(app:Express){
   res.json(await query(`SELECT r.*,u.name AS requester_name FROM account_requests r LEFT JOIN users u ON u.id=r.requested_by WHERE r.status='pending' AND ($1='admin' OR r.requested_by=$2) ORDER BY r.created_at`,[req.user!.role,req.user!.id]));
  });
  app.post('/api/users',authMiddleware,requireRole('admin','manager'),async(req:AuthRequest,res)=>{
-  const client=await pool.connect();try{await client.query('BEGIN');const d=accountInput(req.body);
+  const client=await pool.connect();try{await client.query('BEGIN');const d=accountInput(req.body);if(!await validDepartment(d.department))throw Error('Choose an existing department/team');
    if(req.user!.role==='manager'){
     const approver=Number(req.body.approver_id);
     if(!Number.isSafeInteger(approver)||!(await client.query("SELECT id FROM users WHERE id=$1 AND role='admin' AND is_active=1",[approver])).rows.length)throw new Error('Choose an active administrator to approve the request');

@@ -59,6 +59,7 @@ export default function Transactions() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [selectedBank,setSelectedBank]=useState<BankFeedTransaction|null>(null);
+  const [deposits,setDeposits]=useState<{security:number;holding:number;transactions:BankFeedTransaction[]}>({security:0,holding:0,transactions:[]});
   const [bankFilter,setBankFilter]=useState('unmatched');
   const [transactionName,setTransactionName]=useState(''),[showImportName,setShowImportName]=useState(false);
   const rentCutoff=new Date();rentCutoff.setUTCDate(rentCutoff.getUTCDate()-30);
@@ -96,6 +97,7 @@ export default function Transactions() {
         setPayments(Array.isArray(pay) ? pay : pay?.payments || []);
         setProperties(Array.isArray(prop) ? prop : prop?.properties || []);
         setSummary(ten);
+        setDeposits(await api.get('/api/bank-feed/deposit-balances'));
         setBankStatus(feedStatus);
         setBankTransactions(Array.isArray(feedTransactions) ? feedTransactions : []);
       } catch {
@@ -111,6 +113,7 @@ export default function Transactions() {
       api.get(`/api/bank-feed/status?at=${Date.now()}`),
       api.get(`/api/bank-feed/transactions?limit=500&at=${Date.now()}`),
     ]);
+    setDeposits(await api.get(`/api/bank-feed/deposit-balances?at=${Date.now()}`));
     setBankStatus(status);
     setBankTransactions(Array.isArray(transactions) ? transactions : []);
   };
@@ -160,13 +163,13 @@ export default function Transactions() {
   statusGroups['Let Only Service']={count:Number(summary.let_only_fee_count||0),rent:Number(summary.let_only_fee_total||0)};
 
   return (
-    <Layout title="Administrative & Financials" breadcrumb={[{ label: 'Administrative & Financials' }]}>
+    <Layout title="Financials" breadcrumb={[{ label: 'Financials' }]}>
       {selectedBank&&<div role="dialog" aria-modal="true" aria-label="Assign bank transaction" className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4"><div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--bg-card)] p-6 space-y-4">
         <h2 className="text-lg font-semibold">{selectedBank.match_status==='unmatched'?'Assign':'Review'} £{Math.abs(Number(selectedBank.amount)).toFixed(2)}</h2><div className="flex items-end gap-2"><Input className="flex-1" label="Transaction Name" value={transactionName} onChange={setTransactionName}/><Button variant="outline" size="sm" disabled={bankBusy||!transactionName.trim()} onClick={()=>void renameTransaction()}>Save Name</Button></div>{selectedBank.display_name?.trim()&&selectedBank.display_name.trim()!==selectedBank.description?.trim()&&<button className="text-xs rounded-full border border-[var(--border-input)] px-3 py-1.5" onClick={()=>setShowImportName(v=>!v)}>{showImportName?'Hide Import Name':'View Import Name'}</button>}{showImportName&&selectedBank.display_name?.trim()!==selectedBank.description?.trim()&&<p className="text-sm break-words">{selectedBank.description}</p>}
-        {selectedBank.match_status!=='unmatched'?<><div className="space-y-2">{selectedBank.allocations?.map((a,i)=><div key={i}><p>{a.kind.replaceAll('_',' ')}{a.category?` · ${a.category}`:''} · £{Number(a.amount).toFixed(2)}</p>{a.notes&&<p className="text-sm whitespace-pre-wrap text-[var(--text-secondary)]">{a.notes}</p>}</div>)}</div><Button disabled={bankBusy} onClick={()=>void reconcile(selectedBank,'unassign')}>Unallocate Payment</Button><p className="text-xs">The original allocation and attached documents stay in the history. You can assign the payment again after removing its current allocation.</p></>:<>
+        {selectedBank.match_status!=='unmatched'?<><div className="space-y-2">{selectedBank.allocations?.map((a,i)=><div key={i}><p>{a.kind.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase())}{a.category?` · ${a.category}`:''} · £{Number(a.amount).toFixed(2)}</p>{a.notes&&<p className="text-sm whitespace-pre-wrap text-[var(--text-secondary)]">{a.notes}</p>}</div>)}</div><Button disabled={bankBusy} onClick={()=>void reconcile(selectedBank,'unassign')}>Unallocate Payment</Button><p className="text-xs">The original allocation and attached documents stay in the history. You can assign the payment again after removing its current allocation.</p></>:<>
 
         {allocations.map((a,index)=>{const incoming=Number(selectedBank.amount)>0;const categories:Record<string,string[]>={expense:['Ground Rent','Insurance','Lease Renewal','Management Fee','Other','Service Charge'],maintenance:['Contractors Invoice','Labour','Materials','Other','Refurbishment','Servicing'],financial:['Accountancy Fees','Administration Expenses','Bank Fees','Commission Payment','Council Tax','Marketing Costs','Stamp Duty','Legal & Professional Fees','Office Costs','Other','Refunds',incoming?'Security Deposit Payments In':'Security Deposit Payments Out'],income:['Commission Payment','Interest Received','Other','Tax Rebate']};return <div key={index} className="grid sm:grid-cols-2 gap-3 p-4 rounded-xl border border-[var(--border-input)]">
-          <Select label="Payment Type" value={a.kind} onChange={kind=>setAllocation(index,{kind,category:''})} options={(incoming?[{value:'rent',label:'Rent Payment'},{value:'deposit',label:'Security Deposit'},{value:'holding_deposit',label:'Holding Deposit'},{value:'income',label:'Other Money In'},{value:'financial',label:'Administrative & Financials'}]:[{value:'expense',label:'Property Expense'},{value:'maintenance',label:'Maintenance & Repairs'},{value:'financial',label:'Administrative & Financials'}]).sort((a,b)=>a.label.localeCompare(b.label))}/>
+          <Select label="Payment Type" value={a.kind} onChange={kind=>setAllocation(index,{kind,category:''})} options={(incoming?[{value:'rent',label:'Rent Payment'},{value:'deposit',label:'Security Deposit'},{value:'holding_deposit',label:'Holding Deposit'},{value:'income',label:'Other Money In'},{value:'financial',label:'Financials'}]:[{value:'deposit',label:'Security Deposit'},{value:'holding_deposit',label:'Holding Deposit'},{value:'expense',label:'Property Expense'},{value:'maintenance',label:'Maintenance & Repairs'},{value:'financial',label:'Financials'}]).sort((a,b)=>a.label.localeCompare(b.label))}/>
           <Input label="Amount (£)" type="currency" value={a.amount} onChange={amount=>setAllocation(index,{amount})}/>
           {categories[a.kind]&&<Select label="Category" value={a.category} onChange={category=>setAllocation(index,{category})} options={[{value:'',label:'Choose category'},...categories[a.kind].map(v=>({value:v,label:v}))]}/>}
           {a.kind==='rent'?<Select className="sm:col-span-2" searchable label="Rent Charge" value={a.rent_payment_id} onChange={rent_payment_id=>setAllocation(index,{rent_payment_id})} options={[{value:'',label:'Choose rent due'},...selectablePayments.map(p=>({value:String(p.id),label:`${p.tenant_name} · ${p.address} · ${p.due_date?.slice(0,10)} · £${Number(p.amount_due).toFixed(2)}`}))]}/>:a.kind==='deposit'?<Select label="Tenant" searchable value={a.tenant_id} onChange={tenant_id=>setAllocation(index,{tenant_id})} options={[{value:'',label:'Choose tenant'},...tenants.map(t=>({value:String(t.id),label:[t.name,tenants.find(j=>j.id===t.linked_tenant_id&&j.property_id===t.property_id&&j.tenancy_start_date===t.tenancy_start_date)?.name].filter(Boolean).join(' & ')}))]}/>:<Select className="sm:col-span-2" label={['financial','income'].includes(a.kind)?'Property (optional)':'Property'} searchable value={a.property_id} onChange={property_id=>setAllocation(index,{property_id,maintenance_id:''})} options={[{value:'',label:'Choose property'},...properties.map(p=>({value:String(p.id),label:p.address}))]}/>}
@@ -239,6 +242,7 @@ export default function Transactions() {
             </div>
 
 
+            <div className="grid sm:grid-cols-2 gap-4 mb-6">{[{key:'security',label:'Security Deposits on Account',amount:deposits.security},{key:'holding',label:'Holding Deposits on Account',amount:deposits.holding}].map(d=><button key={d.key} type="button" onClick={()=>{setBankFilter(d.key);document.getElementById('bank-transactions')?.scrollIntoView({behavior:'smooth',block:'start'});}} className="rounded-2xl border border-[var(--border-input)] bg-[var(--bg-card)] p-5 text-left"><p className="text-sm font-medium">{d.label}</p><p className={`text-2xl font-semibold mt-2 ${d.amount<0?'text-red-500':'text-[var(--feedback-emerald)]'}`}>{fmt(d.amount)}</p><p className="text-xs text-[var(--text-muted)] mt-2">Bank receipts less payments out · View transactions</p></button>)}</div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Rent Payments Table */}
               <Card className="p-5">
@@ -291,24 +295,24 @@ export default function Transactions() {
             </div>
 
             {bankTransactions.length > 0 && (
-              <Card className="p-5 mt-6">
-                <div className="flex flex-wrap justify-between items-start gap-3"><h3 className="text-lg font-semibold">Bank Transactions</h3><Select className="w-56 mb-4" label="Show Transactions" value={bankFilter} onChange={setBankFilter} options={[{value:"unmatched",label:"Needs Review"},{value:"all",label:"All Transactions"},{value:"ignored",label:"Ignored"}]}/></div><p className="text-sm text-[var(--text-muted)] mb-3">Transactions are imported daily into your Administrative & Financials view. Please remember that all rent reminders need to be sent manually from tenant(s) records.</p>
+              <div id="bank-transactions"><Card className="p-5 mt-6">
+                <h3 className="text-lg font-semibold mb-2">Bank Transactions</h3><div className="flex flex-wrap justify-between items-center gap-3 mb-3"><p className="text-sm text-[var(--text-muted)] flex-1 min-w-56">Transactions are imported daily into Financials. Rent reminders are sent manually from tenant records.</p><Select className="w-56" hideLabel label="Filter Bank Transactions" value={bankFilter} onChange={setBankFilter} options={[{value:'unmatched',label:'Needs Review'},{value:'all',label:'All Transactions'},{value:'ignored',label:'Ignored'},{value:'security',label:'Security Deposits'},{value:'holding',label:'Holding Deposits'}]}/></div>
                 <div className="overflow-x-auto">
                   <div className="min-w-[620px]">
                     <div className="grid grid-cols-[100px_1fr_120px_200px] gap-3 text-[11px] text-[var(--text-muted)] font-medium uppercase tracking-wider pb-2 border-b border-[var(--border-subtle)]">
                       <span>Date</span><span>Description</span><span className="text-right">Amount</span><span>Action</span>
                     </div>
-                    {bankTransactions.filter(t=>bankFilter==='all'||t.match_status===(bankFilter==='unmatched'?'unmatched':bankFilter)).map(transaction => (
+                    {(bankFilter==='security'||bankFilter==='holding'?deposits.transactions.filter(t=>t.allocations?.some(a=>bankFilter==='holding'?a.kind==='holding_deposit':a.kind==='deposit'||a.category?.startsWith('Security Deposit Payments'))):bankTransactions).filter(t=>['security','holding'].includes(bankFilter)||bankFilter==='all'||t.match_status===(bankFilter==='unmatched'?'unmatched':bankFilter)).map(transaction => (
                       <div key={transaction.id} className="grid grid-cols-[100px_1fr_120px_200px] gap-3 py-2.5 border-b border-[var(--border-subtle)] text-sm items-center">
                         <span className="text-[var(--text-muted)]">{new Date(transaction.booked_at).toLocaleDateString('en-GB')}</span>
                         <span className="truncate">{transaction.display_name || transaction.description || transaction.merchant_name || 'Bank transaction'}</span>
                         <span className={`text-right font-medium ${Number(transaction.amount) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{Number(transaction.amount) >= 0 ? '+' : '-'}{fmt(Math.abs(Number(transaction.amount)))}</span>
-                        <div className="text-xs">{transaction.match_status==='unmatched'?<div className="flex gap-2"><Button size="sm" disabled={bankBusy} onClick={()=>void beginAssign(transaction)}>Assign</Button><Button size="sm" variant="outline" className="!bg-red-500/10 !text-red-600 !border-red-500/20 rounded-full" disabled={bankBusy} onClick={()=>void reconcile(transaction,'ignore')}>Ignore</Button></div>:transaction.match_status==='ignored'?<div>Ignored <button className="underline ml-2" disabled={bankBusy} onClick={()=>void reconcile(transaction,'restore')}>Undo</button></div>:<span>{transaction.allocations?.map(a=>`${a.kind} £${Number(a.amount).toFixed(2)}`).join(' + ') || transaction.match_status.replace('matched_','')} · {transaction.tenant_name || transaction.property_address}<button className="block underline mt-2" onClick={()=>void beginAssign(transaction)}>View / Edit</button></span>}</div>
+                        <div className="text-xs">{transaction.match_status==='unmatched'?<div className="flex gap-2"><Button size="sm" disabled={bankBusy} onClick={()=>void beginAssign(transaction)}>Assign</Button><Button size="sm" variant="outline" className="!bg-red-500/10 !text-red-600 !border-red-500/20 rounded-full" disabled={bankBusy} onClick={()=>void reconcile(transaction,'ignore')}>Ignore</Button></div>:transaction.match_status==='ignored'?<div>Ignored <Button size="sm" variant="outline" className="ml-2" disabled={bankBusy} onClick={()=>void reconcile(transaction,'restore')}>Undo</Button></div>:<span>{transaction.allocations?.map(a=>`${a.kind.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase())} £${Number(a.amount).toFixed(2)}`).join(' + ') || transaction.match_status.replace('matched_','')} · {transaction.tenant_name || transaction.property_address}<Button size="sm" variant="outline" className="mt-2" onClick={()=>void beginAssign(transaction)}>View / Edit</Button></span>}</div>
                       </div>
                     ))}
                   </div>
                 </div>
-              </Card>
+              </Card></div>
             )}
 
             {/* Vacancy info */}

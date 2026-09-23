@@ -22,7 +22,7 @@ import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { Users,
   Pencil, Mail, Phone, Building2, Calendar, MessageSquare, Clock,
-  AlertTriangle, ChevronRight, Plus, User, CheckCircle,
+  AlertTriangle, ChevronRight, User, CheckCircle,
   ChevronDown, BadgePoundSterling, ShieldCheck, UsersRound
 } from 'lucide-react';
 
@@ -806,40 +806,40 @@ export default function TenantDetail() {
 
               <div className="space-y-2">
                 {/* Authority to Contact */}
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24 flex items-center justify-between">
                   <span className="text-xs">Authority to Contact</span>
                   <YesNo value={!!form.authority_to_contact} onChange={v => setForm({ ...form, authority_to_contact: v })} disabled={!isEditing('checklist')} />
                 </div>
 
                 {/* KYC Breakdown */}
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24 flex items-center justify-between">
                   <span className="text-xs">Primary ID</span>
                   <YesNo value={!!form.kyc_primary_id} onChange={v => setForm({ ...form, kyc_primary_id: v })} disabled={!isEditing('checklist')} />
                 </div>
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24 flex items-center justify-between">
                   <span className="text-xs">Secondary ID</span>
                   <YesNo value={!!form.kyc_secondary_id} onChange={v => setForm({ ...form, kyc_secondary_id: v })} disabled={!isEditing('checklist')} />
                 </div>
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24 flex items-center justify-between">
                   <span className="text-xs">Address Verification</span>
                   <YesNo value={!!form.kyc_address_verification} onChange={v => setForm({ ...form, kyc_address_verification: v })} disabled={!isEditing('checklist')} />
                 </div>
                 {/* KYC — Applicant 2 */}
                 {hasInlineJointApplicant && (
-                  <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24 flex items-center justify-between">
                     <span className="text-xs">KYC — {form.first_name_2 || 'Applicant 2'}</span>
                     <YesNo value={!!form.kyc_completed_2} onChange={v => setForm({ ...form, kyc_completed_2: v })} disabled={!isEditing('checklist')} />
                   </div>
                 )}
 
                 {/* Application Forms */}
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24 flex items-center justify-between">
                   <span className="text-xs">Application Forms Completed</span>
                   <YesNo value={!!form.application_forms_completed} onChange={v => setForm({ ...form, application_forms_completed: v })} disabled={!isEditing('checklist')} />
                 </div>
 
                 {/* Proof of Income */}
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
+                <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24">
                   <div className="flex items-center justify-between">
                     <span className="text-xs">Proof of Income</span>
                     <span className={`text-[10px] font-medium ${(form.income_amount || form.proof_of_income) ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
@@ -867,7 +867,7 @@ export default function TenantDetail() {
                 </div>
 
                 {/* Holding Deposit */}
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
+                <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24">
                   <div className="flex items-center justify-between">
                     <span className="text-xs">Holding Deposit</span>
                     <YesNo value={!!form.holding_deposit_received} onChange={v => setForm({ ...form, holding_deposit_received: v })} disabled={!isEditing('checklist')} />
@@ -890,7 +890,7 @@ export default function TenantDetail() {
                 </div>
 
                 {/* Guarantor */}
-                <div className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
+                <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24">
                   <div className="flex items-center justify-between">
                     <span className="text-xs">Guarantor Required</span>
                     <YesNo value={!!form.guarantor_required} onChange={v => {
@@ -951,10 +951,10 @@ export default function TenantDetail() {
                   Property ({propertyNotes.length})
                 </button>}
               </div>
-              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-64 overflow-y-auto">
                 {displayedNotes.length === 0 && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
                 {displayedNotes.map(note => (
-                  <div key={note.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
+                  <div key={note.id} className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24">
                     <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p>
                     <div className="flex items-center justify-between mt-1.5">
                       <span className="text-[10px] text-[var(--text-muted)]">{note.author}</span>
@@ -968,8 +968,8 @@ export default function TenantDetail() {
                   aria-label="Add a note"
                   placeholder={`Add a note to ${notesFilter}...`}
                   className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl pl-3 pr-20 pt-3 pb-10 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
-                <Button variant="gradient" size="sm" className="absolute right-2 bottom-2" onClick={addNote} disabled={addingNote || !newNote.trim()}>
-                  <Plus size={14} />
+                <Button variant="gradient" size="sm" className="absolute right-2 bottom-3 h-8 min-w-20" onClick={addNote} disabled={addingNote || !newNote.trim()}>
+                  {addingNote?'Saving…':'Save'}
                 </Button>
               </div>
             </GlassCard>

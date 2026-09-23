@@ -115,12 +115,13 @@ export function registerInventoryReviewRoutes(app:Express) {
     const c=await pool.connect();let filename:string|undefined;
     try {
       await c.query('BEGIN');await c.query('SELECT pg_advisory_xact_lock(917,$1::int)',[tenancyIds[0]]);
-      const existing=(await c.query('SELECT * FROM inventories WHERE property_id=$1 AND tenant_id=ANY($2::int[]) AND (signed_date IS NOT NULL OR signed_document) ORDER BY id FOR UPDATE',[req.params.id,tenancyIds])).rows[0];
+      const existing=(await c.query('SELECT * FROM inventories WHERE property_id=$1 AND tenant_id=ANY($2::int[]) AND (signed_date IS NOT NULL OR signed_document) AND (applies_to_tenancy_start_date=$3 OR (applies_to_tenancy_start_date IS NULL AND inspection_date >= $3)) ORDER BY id FOR UPDATE',[req.params.id,tenancyIds,tenant.tenancy_start_date])).rows[0];
       if(existing && (!inventory_id || Number(inventory_id)!==existing.id)){await c.query('ROLLBACK');return res.status(409).json({error:'This tenancy already has a signed inventory. An administrator can edit the existing record'});}
       if(inventory_id && (!existing||req.user.role!=='admin')){await c.query('ROLLBACK');return res.status(403).json({error:'Only administrators can edit a completed inventory'});}
       if(existing?.review_issued_at){await c.query('ROLLBACK');return res.status(409).json({error:'Issued tenant reviews retain their original evidence'});}
       const row=existing || (await c.query("INSERT INTO inventories(property_id,tenant_id,inventory_type,inspection_date,conducted_by,status,completed_at,signed_document,signed_date) VALUES($1,$2,'check_in',$3,$4,'completed',NOW(),true,$5) RETURNING id",[req.params.id,tenant_id,inspection_date,req.user.id,signed_date||null])).rows[0];
       if(existing)await c.query('UPDATE inventories SET inspection_date=$1,signed_date=$2,signed_document=true WHERE id=$3',[inspection_date,signed_date||null,row.id]);
+      await c.query('UPDATE inventories SET applies_to_tenancy_start_date=$1 WHERE id=$2',[tenant.tenancy_start_date,row.id]);
       await c.query('INSERT INTO inventory_documents(inventory_id,filename,data) VALUES($1,$2,$3) ON CONFLICT(inventory_id) DO UPDATE SET filename=EXCLUDED.filename,data=EXCLUDED.data',[row.id,path.basename(req.file.originalname),req.file.buffer]);
       fs.mkdirSync(filesRoot,{recursive:true});filename='inventory/'+crypto.randomUUID()+'.pdf';fs.writeFileSync(path.join(filesRoot,path.basename(filename)),req.file.buffer,{mode:0o600});
       const entities=[{type:'property',id:Number(req.params.id)},{type:'tenant',id:tenant.id}];

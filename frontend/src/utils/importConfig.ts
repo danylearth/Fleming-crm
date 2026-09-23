@@ -10,9 +10,17 @@ export interface ImportField {
   transform?: 'phone' | 'date';
 }
 
-export type ImportEntity = 'tenant-enquiries' | 'landlords' | 'landlords-bdm' | 'properties';
+export type ImportEntity = 'tenants' | 'tenant-enquiries' | 'landlords' | 'landlords-bdm' | 'properties';
 
 export const IMPORT_CONFIGS: Record<ImportEntity, { title: string; fields: ImportField[] }> = {
+  tenants: {
+    title:'Tenants',fields:[
+      {key:'name',label:'Name',required:true,aliases:['name','full name','tenant name']},
+      {key:'email',label:'Email',required:true,aliases:['email','email address']},
+      {key:'phone',label:'Phone',aliases:['phone','mobile','phone number','contact number'],transform:'phone'},
+      {key:'notes',label:'Notes',aliases:['notes','additional information']},
+    ],
+  },
   'tenant-enquiries': {
     title: 'Tenant Enquiries',
     fields: [

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from './index';
 import { X, Upload, FileText } from 'lucide-react';
-import { useApi } from '../../hooks/useApi';
+import { useApi, invalidateCache } from '../../hooks/useApi';
 import { parseCsv } from '../../utils/csv';
 import { IMPORT_CONFIGS, autoDetect, transformValue, type ImportEntity } from '../../utils/importConfig';
 
@@ -70,7 +70,7 @@ export default function CsvImport({ entity, onClose, onDone }: {
     try {
       const res = await api.post(`/api/import/${entity}`, { rows: mappedRows() }, `/api/${entity}`) as ImportResult;
       setResult(res);
-      onDone();
+      invalidateCache('/api/'+entity);onDone();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       setError(e?.message || 'Import failed — nothing was imported');

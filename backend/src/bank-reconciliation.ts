@@ -1,5 +1,5 @@
 import type {Express} from 'express';
-import pool,{queryOne,run} from './db-pg';
+import pool,{query,queryOne,run} from './db-pg';
 import {authMiddleware,requireFinance,requirePermission,type AuthRequest} from './auth';
 
 export const pennies=(value:unknown):number=>{
@@ -22,6 +22,16 @@ async function recalculateRent(client:any,id:number) {
  await client.query('UPDATE rent_payments SET amount_paid=$1,opening_balance_amount=$2,payment_date=$3,status=$4 WHERE id=$5',[paid,actual.n?0:rent.bank_base_opening,actual.n?actual.paid_date:rent.bank_base_date,paid>=Number(rent.amount_due)?'paid':paid>0?'partial':'pending',id]);
 }
 export function registerBankReconciliation(app:Express) {
+ app.get('/api/bank-feed/deposit-balances',authMiddleware,requireFinance,async(_req,res)=>{
+  const rows=await query(`SELECT b.id,b.booked_at,b.description,b.display_name,b.amount,b.currency,b.match_status,t.name AS tenant_name,p.address AS property_address,
+   (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount,'tenant_id',a.tenant_id,'property_id',a.property_id,'category',a.category,'notes',a.notes)) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL) AS allocations
+   FROM bank_feed_transactions b LEFT JOIN tenants t ON t.id=b.tenant_id LEFT JOIN properties p ON p.id=b.property_id
+   WHERE EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL AND (a.kind IN ('deposit','holding_deposit') OR a.category IN ('Security Deposit Payments In','Security Deposit Payments Out')))
+   ORDER BY b.booked_at DESC,b.id DESC`);
+  let security=0,holding=0;for(const row of rows)for(const a of row.allocations){const signed=Math.sign(Number(row.amount))*Math.round(Number(a.amount)*100);if(a.kind==='holding_deposit')holding+=signed;else if(a.kind==='deposit'||['Security Deposit Payments In','Security Deposit Payments Out'].includes(a.category))security+=signed;}
+  res.json({security:security/100,holding:holding/100,transactions:rows});
+ });
+
  app.patch('/api/bank-feed/transactions/:id/name',authMiddleware,requireFinance,requirePermission('staff'),async(req:AuthRequest,res)=>{
   const name=String(req.body.display_name||'').trim();if(!name||name.length>300)return res.status(400).json({error:'Enter a transaction name up to 300 characters'});
   const row=await queryOne('UPDATE bank_feed_transactions SET display_name=$1 WHERE id=$2 RETURNING id,description,display_name',[name,req.params.id]);if(!row)return res.sendStatus(404);
@@ -72,12 +82,11 @@ export function registerBankReconciliation(app:Express) {
        propertyId=rent.property_id;tenantId=rent.tenant_id;rentId=rent.id;
       } else if(a.kind==='deposit') {
        if(!Number.isInteger(Number(a.tenant_id))||Number(a.tenant_id)<=0)throw new Error('Choose a tenant');
-       if(!incoming)throw new Error('A security deposit requires an incoming payment');
        const tenant=(await client.query('SELECT id,property_id FROM tenants WHERE id=$1',[a.tenant_id])).rows[0];
        if(!tenant?.property_id)throw new Error('Choose a tenant with a linked property');
        propertyId=tenant.property_id;tenantId=tenant.id;
       } else if(['holding_deposit','expense','maintenance','financial','income'].includes(a.kind)) {
-       if(['holding_deposit','income'].includes(a.kind)&&!incoming)throw new Error('This payment type requires money in');
+       if(a.kind==='income'&&!incoming)throw new Error('This payment type requires money in');
        if(['expense','maintenance'].includes(a.kind)&&incoming)throw new Error('Costs require an outgoing transaction');
        if(a.kind!=='holding_deposit'&&!allocationCategories[a.kind].includes(category))throw new Error('Choose a payment category');
        if(category==='Security Deposit Payments In'&&!incoming||category==='Security Deposit Payments Out'&&incoming)throw new Error('Choose the correct deposit direction');
@@ -88,7 +97,7 @@ export function registerBankReconciliation(app:Express) {
         const job=(await client.query('SELECT id FROM maintenance WHERE id=$1 AND property_id=$2',[a.maintenance_id,propertyId])).rows[0];
         if(!job)throw new Error('Choose a maintenance job at this property');
        }
-       if(!incoming&&propertyId)expenseId=(await client.query('INSERT INTO property_expenses(property_id,description,amount,category,expense_date,maintenance_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[propertyId,[bank.display_name||bank.description,notes].filter(Boolean).join(' — ').slice(0,4000),amount,category,bank.booked_at,a.kind==='maintenance'&&a.maintenance_id?a.maintenance_id:null])).rows[0].id;
+       if(!incoming&&propertyId&&a.kind!=='holding_deposit'&&!category.startsWith('Security Deposit Payments'))expenseId=(await client.query('INSERT INTO property_expenses(property_id,description,amount,category,expense_date,maintenance_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[propertyId,[bank.display_name||bank.description,notes].filter(Boolean).join(' — ').slice(0,4000),amount,category,bank.booked_at,a.kind==='maintenance'&&a.maintenance_id?a.maintenance_id:null])).rows[0].id;
       } else throw new Error('Choose a payment type');
       await client.query('INSERT INTO bank_feed_allocations(bank_transaction_id,kind,amount,rent_payment_id,tenant_id,property_id,expense_id,created_by,category,notes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[bank.id,a.kind,amount,rentId,tenantId,propertyId,expenseId,req.user.id,category||null,notes||null]);
       if(allocations.length===1)await client.query('UPDATE bank_feed_transactions SET property_id=$1,tenant_id=$2,rent_payment_id=$3,expense_id=$4 WHERE id=$5',[propertyId,tenantId,rentId,expenseId,bank.id]);

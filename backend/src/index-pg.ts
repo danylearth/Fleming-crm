@@ -1,3 +1,4 @@
+import {registerDepartments,validDepartment,contactDetails} from './departments';
 import {registerTenantReactivation} from './tenant-reactivation';
 import {registerAccountRoutes} from './account-access';
 import {normalisePricePaid} from './price-paid';
@@ -426,6 +427,7 @@ app.use('/api', (req: AuthRequest, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)
     || req.path.startsWith('/public/') || req.path.startsWith('/auth/')
     || req.path.startsWith('/feedback-agent/')
+    || (req.method==='PUT' && /^\/properties\/\d+\/policies\/\d+$/.test(req.path))
     || (req.method==='POST' && /^\/tenants\/\d+\/reactivate$/.test(req.path))
     || ['/sms/status', '/sms/inbound', '/email/webhook'].includes(req.path)
     || (req.method === 'POST' && ['/activity/heartbeat','/permission-requests','/ai/chat','/ai/account/connect','/ai/account/disconnect'].includes(req.path))) return next();
@@ -611,7 +613,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     await logAudit(user.id, user.email, 'login', 'user', user.id);
     
     const token = generateToken({ id: user.id, email: user.email, role: user.role, name: user.name });
-    res.json({ user: { id: user.id, email: user.email, role: user.role, name: user.name, avatar_url: user.avatar_url, accent_color: user.accent_color, appearance: user.appearance, department:user.department, finance_access:user.finance_access, last_login: new Date().toISOString() }, token });
+    res.json({ user: { id: user.id, email: user.email, role: user.role, name: user.name, avatar_url: user.avatar_url, accent_color: user.accent_color, appearance: user.appearance, department:user.department, phone:user.phone, office_extension:user.office_extension, finance_access:user.finance_access, last_login: new Date().toISOString() }, token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login failed' });
@@ -2687,6 +2689,7 @@ registerCompletionRoutes(app);
 registerTeamActivityRoutes(app);
 registerFeedbackRoutes(app);
 registerProfileRoutes(app);
+registerDepartments(app);
 registerApplicationReview(app);
 registerPropertyPolicies(app);
 registerMarketing(app);
@@ -4495,6 +4498,7 @@ app.get('/api/documents/:entityType/:entityId', authMiddleware, async (req: Auth
     let sql = `SELECT id, doc_type, original_name, mime_type, size, uploaded_at,
       COALESCE(review_status, 'pending') AS review_status, review_notes, reviewed_at
       FROM documents WHERE entity_type = $1 AND entity_id = $2`;
+    if(req.params.entityType==='bank_transaction')sql=sql.replace('WHERE entity_type = $1 AND entity_id = $2', `WHERE (entity_type=$1 AND entity_id=$2) OR id IN (SELECT e.receipt_document_id FROM property_expenses e JOIN bank_feed_allocations a ON a.expense_id=e.id WHERE a.bank_transaction_id=$2 AND e.receipt_document_id IS NOT NULL)`);
     const params: any[] = [req.params.entityType, req.params.entityId];
     if (applicantNumber !== undefined) {
       sql += ' AND applicant_number = $3';
@@ -4801,7 +4805,7 @@ app.get('/api/users/options', authMiddleware, async (_req: AuthRequest, res) => 
 
 app.get('/api/users', authMiddleware, requireRole('admin','manager'), async (req: AuthRequest, res) => {
   try {
-    const users = await query('SELECT id, email, name, role, department, finance_access, is_active, password_setup_required, created_at, last_login FROM users ORDER BY created_at DESC');
+    const users = await query('SELECT id, email, name, role, department, phone, office_extension, finance_access, is_active, password_setup_required, created_at, last_login FROM users ORDER BY created_at DESC');
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -4812,6 +4816,8 @@ app.put('/api/users/:id', authMiddleware, requireRole('admin'), async (req: Auth
   try {
     const userId = parseInt(req.params.id as string);
     const { name, email, role, department, is_active, finance_access } = req.body;
+    if(department!==undefined&&!await validDepartment(department))return res.status(400).json({error:'Choose an existing department/team'});
+    let contact;try{contact=contactDetails(req.body);}catch(e){return res.status(400).json({error:(e as Error).message});}
     if(finance_access!==undefined && typeof finance_access!=='boolean')return res.status(400).json({error:'Invalid finance access'});
     if (role !== undefined && !['admin','manager','staff','viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
     if (is_active !== undefined && ![0,1].includes(is_active)) return res.status(400).json({ error: 'Invalid active status' });
@@ -4834,6 +4840,7 @@ app.put('/api/users/:id', authMiddleware, requireRole('admin'), async (req: Auth
     if (email && isAdmin) { updates.push(`email = $${paramIdx++}`); params.push(email); }
     if (role && isAdmin) { updates.push(`role = $${paramIdx++}`); params.push(role); }
     if (finance_access !== undefined) { updates.push(`finance_access = $${paramIdx++}`); params.push(finance_access); }
+    for(const key of ['phone','office_extension'] as const)if(req.body[key]!==undefined){updates.push(`${key} = $${paramIdx++}`);params.push(contact[key]);}
     if (department !== undefined) { updates.push(`department = $${paramIdx++}`); params.push(department); }
     if (is_active !== undefined && isAdmin) { updates.push(`is_active = $${paramIdx++}`); params.push(is_active); }
 
@@ -4844,8 +4851,8 @@ app.put('/api/users/:id', authMiddleware, requireRole('admin'), async (req: Auth
     params.push(userId);
     await run(`UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIdx}`, params);
 
-    await logAudit(req.user?.id, req.user?.email, 'update', 'user', userId, { name, email, role, department, is_active, finance_access });
-    const updated = await queryOne('SELECT id, email, name, role, department, finance_access, is_active, created_at, last_login FROM users WHERE id = $1', [userId]);
+    await logAudit(req.user?.id, req.user?.email, 'update', 'user', userId, { name, email, role, department, phone:req.body.phone!==undefined?contact.phone:undefined, office_extension:req.body.office_extension!==undefined?contact.office_extension:undefined, is_active, finance_access });
+    const updated = await queryOne('SELECT id, email, name, role, department, phone, office_extension, finance_access, is_active, created_at, last_login FROM users WHERE id = $1', [userId]);
     res.json(updated);
   } catch (err: any) {
     if (err.message?.includes('unique') || err.message?.includes('duplicate')) {
@@ -5007,6 +5014,7 @@ app.post('/api/directors/:id/reinstate', authMiddleware, async (req: AuthRequest
 const IMPORT_MAX_ROWS = 1000;
 // Column whitelists per entity — unknown keys in rows are ignored.
 const IMPORT_COLUMNS: Record<string, string[]> = {
+  tenants:['name','email','phone','notes'],
   'tenant-enquiries': ['first_name_1', 'last_name_1', 'email_1', 'phone_1', 'date_of_birth_1', 'nationality_1',
     'current_address_1', 'employment_status_1', 'employer_1', 'income_1', 'preferred_tenancy_type',
     'preferred_property_type', 'notes'],
@@ -5076,6 +5084,14 @@ app.post('/api/import/:entity', authMiddleware, requirePermission('manager'), as
         seen.add(`e:${email}`);
         if (phone) seen.add(`p:${phone}`);
         await insertRow('tenant_enquiries', { ...data, email_1: email, status: 'new' });
+      } else if(entity==='tenants'){
+        if(!data.name||!data.email||!/^\S+@\S+\.\S+$/.test(String(data.email))){skipped.push({row:rowNum,reason:'name and email are required'});continue;}
+        const email=String(data.email).toLowerCase(),name=String(data.name).trim(),phone=data.phone?String(data.phone):null;
+        if(seen.has(`e:${email}`)||(phone&&seen.has(`p:${phone}`))){skipped.push({row:rowNum,reason:'duplicate within file'});continue;}
+        const existing=await client.query('SELECT id FROM tenants WHERE LOWER(email)=$1 OR LOWER(email_2)=$1 OR ($2::text IS NOT NULL AND (phone=$2 OR phone_2=$2))',[email,phone]);
+        if(existing.rows.length){skipped.push({row:rowNum,reason:`duplicate of existing tenant #${existing.rows[0].id}`});continue;}
+        seen.add(`e:${email}`);if(phone)seen.add(`p:${phone}`);
+        await insertRow('tenants',{...data,name,first_name_1:name.split(/\s+/)[0],last_name_1:name.split(/\s+/).slice(1).join(' '),email,status:'active',property_id:null});
       } else if (entity === 'landlords' || entity === 'landlords-bdm') {
         const targetTable=entity==='landlords'?'landlords':'landlords_bdm';
         if (!data.name) {
@@ -5216,7 +5232,7 @@ app.get('/api/property-expenses/:propertyId', authMiddleware, async (req: AuthRe
     const expenses = await query(`SELECT expense.*, document.original_name AS receipt_name
       FROM property_expenses expense
       LEFT JOIN documents document ON document.id=expense.receipt_document_id
-      WHERE expense.property_id = $1
+      WHERE expense.property_id = $1 AND NOT expense.excluded_from_costs
       ORDER BY expense.expense_date DESC NULLS LAST, expense.created_at DESC`, [req.params.propertyId]);
     res.json(expenses);
   } catch (err) {

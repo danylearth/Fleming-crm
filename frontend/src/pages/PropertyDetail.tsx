@@ -255,6 +255,7 @@ export default function PropertyDetail() {
     try { return JSON.parse(raw || '[]'); } catch { return raw ? [{ id: '1', text: raw, author: 'System', created_at: '' }] : []; }
   };
 
+  const [policyRefresh,setPolicyRefresh]=useState(0);
   const loadDetail = async () => {
     try {
       const [prop, tks, maint, usrs, propLandlords, landlords, tenants] = await Promise.all([
@@ -1175,8 +1176,8 @@ export default function PropertyDetail() {
               )}
             </Card>
 
-            {property.landlord_type==='internal'&&<PropertyInsurance propertyId={property.id}/>}
-            {canAccessFinance() && <PropertyExpenses propertyId={property.id} />}
+            {property.landlord_type==='internal'&&<PropertyInsurance propertyId={property.id} onSaved={()=>{setPolicyRefresh(n=>n+1);void loadDetail();}}/>}
+            {canAccessFinance() && <PropertyExpenses key={policyRefresh} propertyId={property.id} />}
 
             {/* Rent Payments */}
             {canAccessFinance() && <RentPayments propertyId={property.id} compact />}
@@ -1388,8 +1389,8 @@ export default function PropertyDetail() {
                     placeholder={`Add a note to ${notesFilter}...`}
                     className="block w-full resize-none bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl pl-4 pr-20 pt-3 pb-10 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/40 transition-colors"
                   />
-                  <Button size="sm" className="!absolute right-2 bottom-2 !px-4 !py-1 !text-xs" variant="gradient" onClick={addNote} disabled={!notesInput.trim()}>
-                    Add
+                  <Button size="sm" className="!absolute right-2 bottom-3 h-8 min-w-20" variant="gradient" onClick={addNote} disabled={!notesInput.trim()}>
+                    Save
                   </Button>
                 </div>
               </div>
