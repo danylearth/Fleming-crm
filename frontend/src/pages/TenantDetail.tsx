@@ -774,7 +774,7 @@ export default function TenantDetail() {
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3">
                     <ReadField label="Tenancy Start" value={form.tenancy_start_date ? formatDateDMY(form.tenancy_start_date) : null} />
-                    <ReadField label={form.tenancy_end_date && form.tenancy_end_date.slice(0,10) < new Date().toLocaleDateString('en-CA') ? 'End date' : 'Scheduled end date'} value={form.tenancy_end_date ? formatDateDMY(form.tenancy_end_date) : 'Not scheduled'} />
+                    <ReadField label={form.tenancy_end_date && form.tenancy_end_date.slice(0,10) < new Date().toLocaleDateString('en-CA') ? 'End Date' : 'Scheduled End Date'} value={form.tenancy_end_date ? formatDateDMY(form.tenancy_end_date) : 'Not scheduled'} />
                     <ReadField label="Last Rent Reviewed" value={tenant.rent_last_reviewed ? formatDateDMY(tenant.rent_last_reviewed) : null} />
                     <ReadField label="Tenancy Type" value={form.tenancy_type} />
                   </div>

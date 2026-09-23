@@ -22,7 +22,7 @@ export function registerProfileRoutes(app: Express) {
   });
   app.put('/api/auth/profile/contact',authMiddleware,async(req:AuthRequest,res)=>{
     try{const contact=contactDetails(req.body);if(!await validDepartment(req.body.department))return res.status(400).json({error:'Choose an existing department/team'});
-      const user=await queryOne('UPDATE users SET phone=$1,office_extension=$2,department=$3 WHERE id=$4 RETURNING phone,office_extension,department',[contact.phone,contact.office_extension,req.body.department,req.user.id]);await auditProfile(req,'update_profile_contact',user);res.json(user);
+      const user=await queryOne('UPDATE users SET phone=$1,contact_email=$2,department=$3 WHERE id=$4 RETURNING phone,contact_email,department',[contact.phone,contact.contact_email,req.body.department,req.user.id]);await auditProfile(req,'update_profile_contact',user);res.json(user);
     }catch(e){res.status(400).json({error:(e as Error).message});}
   });
   app.delete('/api/auth/profile/photo',authMiddleware,async(req:AuthRequest,res)=>{

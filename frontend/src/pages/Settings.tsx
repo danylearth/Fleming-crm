@@ -21,10 +21,12 @@ export default function Settings() {
 
   const photoInput=useRef<HTMLInputElement>(null);
   const [departments,setDepartments]=useState<{id:number;name:string}[]>([]);
-  const [contact,setContact]=useState({phone:user?.phone||'',office_extension:user?.office_extension||'',department:user?.department||''});
+  const [contact,setContact]=useState({phone:user?.phone||'',contact_email:user?.contact_email||user?.email||'',department:user?.department||''});
   const [contactMessage,setContactMessage]=useState('');
+  const [editingContact,setEditingContact]=useState(false),[contactBusy,setContactBusy]=useState(false);
+  const resetContact=()=>{setContact({phone:user?.phone||'',contact_email:user?.contact_email||user?.email||'',department:user?.department||''});setContactMessage('');};
   useEffect(()=>{api.get('/api/departments').then(setDepartments).catch(()=>setContactMessage('Could not load departments'));},[api]);
-  const saveContact=async()=>{try{const data=await api.put('/api/auth/profile/contact',contact);updateUser(data);setContactMessage('Contact details saved');}catch(e){setContactMessage(e instanceof Error?e.message:'Could not save contact details');}};
+  const saveContact=async()=>{setContactBusy(true);try{const data=await api.put('/api/auth/profile/contact',contact);updateUser(data);setContactMessage('Contact details saved');setEditingContact(false);}catch(e){setContactMessage(e instanceof Error?e.message:'Could not save contact details');}finally{setContactBusy(false);}};
   const [profileMessage, setProfileMessage] = useState('');
   const [profileBusy, setProfileBusy] = useState(false);
   const uploadPhoto = async (file?: File) => {
@@ -112,7 +114,7 @@ export default function Settings() {
           <p role="status" className="mt-4 text-sm">{profileMessage || 'Click your photo to upload a JPG, PNG or WebP (up to 5 MB).'}</p><p className="mt-3 text-sm">Last Login: {user?.last_login ? new Date(user.last_login).toLocaleString('en-GB') : 'Not Recorded'}</p><details className="mt-3 text-sm"><summary>Recent Login History</summary>{loginHistory.map((row,i)=><p key={i} className="mt-2">{new Date(row.created_at).toLocaleString('en-GB')}</p>)}</details>
         </GlassCard>
 
-        <GlassCard className="p-6 space-y-4"><SectionHeader title="Contact Details"/><Input label="Mobile Number" type="tel" value={contact.phone} onChange={phone=>setContact({...contact,phone})}/><Input label="Office Extension" value={contact.office_extension} onChange={office_extension=>setContact({...contact,office_extension})}/><Select label="Department / Team" value={contact.department} onChange={department=>setContact({...contact,department})} options={[{value:'',label:'No Department'},...departments.map(d=>({value:d.name,label:d.name}))]}/><Button size="sm" onClick={()=>void saveContact()}>Save Contact Details</Button>{contactMessage&&<p role="status" className="text-sm">{contactMessage}</p>}</GlassCard>
+        <GlassCard className="p-6 space-y-4"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Contact Details</h2>{!editingContact&&<Button size="sm" variant="outline" onClick={()=>{resetContact();setEditingContact(true);}}>Edit</Button>}</div>{editingContact?<><Input label="Mobile Number (Optional)" type="tel" value={contact.phone} onChange={phone=>setContact({...contact,phone})}/><Input label="Email Address" type="email" value={contact.contact_email} onChange={contact_email=>setContact({...contact,contact_email})}/><Select label="Department / Team" value={contact.department} onChange={department=>setContact({...contact,department})} options={[{value:'',label:'No Department'},...departments.map(d=>({value:d.name,label:d.name}))]}/><div className="flex gap-2"><Button size="sm" disabled={contactBusy} onClick={()=>void saveContact()}>Save Contact Details</Button><Button size="sm" variant="ghost" disabled={contactBusy} onClick={()=>{resetContact();setEditingContact(false);}}>Cancel</Button></div></>:<dl className="space-y-3 text-sm"><div><dt className="text-[var(--text-muted)]">Mobile Number</dt><dd>{user?.phone||'Not Set'}</dd></div><div><dt className="text-[var(--text-muted)]">Email Address</dt><dd>{user?.contact_email||user?.email||'Not Set'}</dd></div><div><dt className="text-[var(--text-muted)]">Department / Team</dt><dd>{user?.department||'Unassigned'}</dd></div></dl>}{contactMessage&&<p role="status" className="text-sm">{contactMessage}</p>}</GlassCard>
         <PermissionRequests />
         <FlemoConnection />
         <FreeAgentConnection />

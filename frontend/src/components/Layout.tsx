@@ -53,6 +53,11 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
   const { theme, toggleTheme } = useTheme();
   const { portfolioFilter, setPortfolioFilter } = usePortfolio();
 
+  const visibleNavItems=navItems.filter(item => (item.to!=='/financials'||canAccessFinance()) && (!item.roles || (user?.role && item.roles.includes(user.role))));
+  const headerIndex=Math.max(0,visibleNavItems.findIndex(item => item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)||(item.to==='/landlord-enquiries'&&location.pathname.startsWith('/bdm'))));
+  const HeaderIcon=visibleNavItems[headerIndex]?.icon||DashboardIcon;
+  const iconStyle=(index:number)=>({backgroundColor:['#f973161c','#3b82f61c','#a855f71c','#10b9811c','#ec48991c'][index%5],color:['#ea580c','#3b82f6','#a855f7','#10b981','#ec4899'][index%5]});
+
   useEffect(() => {
     const section = navItems.find(item => item.to === '/'
       ? location.pathname === '/'
@@ -104,8 +109,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
 
         {/* Nav */}
         <nav className="flex-1 py-3 px-2 space-y-1.5 overflow-y-auto">
-          {navItems
-            .filter(item => (item.to!=='/financials'||canAccessFinance()) && (!item.roles || (user?.role && item.roles.includes(user.role))))
+          {visibleNavItems
             .map((item, index) => (
               <NavLink
                 key={item.to}
@@ -119,7 +123,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
                   }`
                 }
               >
-                <span className="p-2 rounded-xl shrink-0" style={{backgroundColor:['#f973161c','#3b82f61c','#a855f71c','#10b9811c','#ec48991c'][index%5],color:['#ea580c','#3b82f6','#a855f7','#10b981','#ec4899'][index%5]}}><item.icon size={18} /></span>
+                <span className="p-2 rounded-xl shrink-0" style={iconStyle(index)}><item.icon size={18} /></span>
                 {(!collapsed || mobileOpen) && <span className="whitespace-nowrap">{item.label}</span>}
               </NavLink>
             ))}
@@ -153,7 +157,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
               <button onClick={() => setMobileOpen(true)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden mr-1">
                 <Menu size={22} />
               </button>
-              {title && <h1 className="text-xl md:text-2xl font-bold">{title}</h1>}
+              {title && <><span className="rounded-xl p-2.5 shrink-0" style={iconStyle(headerIndex)}><HeaderIcon size={22}/></span><h1 className="text-xl md:text-2xl font-bold">{title}</h1></>}
             </div>
             <div className="flex items-center gap-2 sm:gap-3 max-w-full">
               {/* Portfolio toggle - Admin only */}

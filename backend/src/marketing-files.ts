@@ -8,11 +8,11 @@ import {query,queryOne} from './db-pg';
 export const marketingRoot=()=>path.join(process.env.UPLOADS_PATH||path.join(__dirname,'../uploads'),'marketing-attachments');
 export const allowedMarketingSender=(value:string)=>/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@(tenancies\.)?fleminglettings\.co\.uk$/i.test(value);
 const signatureEscape=(value:unknown)=>String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
-export function emailSignatures(users:{id:number;name:string;email:string;department?:string;phone?:string;office_extension?:string}[]=[],currentUserId?:number){
+export function emailSignatures(users:{id:number;name:string;email:string;department?:string;phone?:string;office_extension?:string;contact_email?:string}[]=[],currentUserId?:number){
  const read=(name:string)=>fs.readFileSync(path.join(__dirname,'email-signatures',name+'.html'),'utf8');
- return [{id:'accounts',label:'Accounts Department',html:read('accounts')},{id:'office',label:'Office Support Team',html:read('office')},...users.map(u=>{
+ return [{id:'accounts',label:'Accounts Department',html:read('accounts')},{id:'office',label:'Office Support Team',html:read('office')},...users.filter(u=>u.id===currentUserId).map(u=>{
   const line='01902 212 415'+(u.office_extension?' ext. '+signatureEscape(u.office_extension):'')+(u.phone?'&nbsp; |&nbsp; <a href="tel:'+signatureEscape(u.phone.replace(/[ ()-]/g,''))+'" style="color:#ffffff;text-decoration:none;white-space:nowrap">'+signatureEscape(u.phone)+'</a>':'');
-  const values:Record<string,string>={NAME:signatureEscape(u.name),DEPARTMENT:signatureEscape(u.department),EMAIL:signatureEscape(u.email),PHONE_LINE:line};
+  const values:Record<string,string>={NAME:signatureEscape(u.name),DEPARTMENT:signatureEscape(u.department),EMAIL:signatureEscape(u.contact_email||u.email),PHONE_LINE:line};
   return {id:u.id===currentUserId?'user':`user:${u.id}`,label:u.name,html:read('user').replace(/\{\{(NAME|DEPARTMENT|EMAIL|PHONE_LINE)\}\}/g,(_,key)=>values[key])};
  })];
 }
@@ -26,7 +26,7 @@ export async function campaignAttachments(ids:unknown){
 }
 export function registerMarketingFiles(app:Express){
  const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024,files:1}}).single('file');
- app.get('/api/marketing/signatures',authMiddleware,requirePermission('manager'),async(req:AuthRequest,res)=>res.json(emailSignatures(await query('SELECT id,name,email,department,phone,office_extension FROM users WHERE is_active=1 ORDER BY name'),req.user.id)));
+ app.get('/api/marketing/signatures',authMiddleware,requirePermission('manager'),async(req:AuthRequest,res)=>res.json(emailSignatures(await query('SELECT id,name,email,department,phone,office_extension,contact_email FROM users WHERE is_active=1 AND id=$1',[req.user.id]),req.user.id)));
  app.get('/api/marketing/assets',authMiddleware,requirePermission('manager'),async(_req,res)=>{
   const defaults=fs.readdirSync(path.join(__dirname,'email-assets')).filter(n=>/\.(png|jpe?g)$/i.test(n)).map(name=>({name,url:`https://crm.fleminglettings.co.uk/email-assets/${name}`}));
   const saved=await query("SELECT original_name AS name,filename FROM marketing_files WHERE kind='image' ORDER BY created_at DESC");

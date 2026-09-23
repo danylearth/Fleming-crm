@@ -106,6 +106,7 @@ export default function Tasks() {
   const { confirmAction } = useNotifications();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [statusError,setStatusError]=useState<{message:string;propertyId:number|null}|null>(null);
   const [properties, setProperties] = useState<{ id: number; address: string; landlord_id: number | null }[]>([]);
   const [landlords, setLandlords] = useState<{ id: number; name: string }[]>([]);
   const [tenants, setTenants] = useState<{ id: number; name: string; property_id: number | null }[]>([]);
@@ -216,7 +217,7 @@ export default function Tasks() {
   });
 
   const updateStatus = async (id: number, status: string) => {
-    try { await api.put(`/api/tasks/${id}`, { status }); await load(); } catch { /* Silently ignore */ }
+    setStatusError(null);try { await api.put(`/api/tasks/${id}`, { status }); await load(); } catch (error) {const task=tasks.find(t=>t.id===id);const propertyId=task?.entity_type==='property'?task.entity_id:task?.entity_type==='tenant'?tenants.find(t=>t.id===task.entity_id)?.property_id:null;setStatusError({message:error instanceof Error?error.message:'Could not update task',propertyId:propertyId||null});}
   };
   const addTask = async () => {
     try {
@@ -297,7 +298,7 @@ export default function Tasks() {
 
   return (
     <Layout title="Team Calendar" breadcrumb={[{ label: 'Team Calendar' }]}>
-      <div className="p-4 md:p-8 space-y-6">
+      <div className="p-4 md:p-8 space-y-6">{statusError&&<div role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-3"><p className="text-sm">{statusError.message}</p>{statusError.propertyId&&<Button size="sm" onClick={()=>navigate(`/properties/${statusError.propertyId}`)}>Open Property</Button>}<Button size="sm" variant="ghost" onClick={()=>setStatusError(null)}>Dismiss</Button></div>}
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {[

@@ -26,7 +26,7 @@ export default function CommunicationsHistory({ messages,tenantId,onSent }: { me
       <h2 className="font-semibold flex items-center gap-2"><Mail size={16}/> Communications</h2>{tenantId&&<TenantMessageTemplates tenantId={tenantId} onSent={onSent||(()=>{})}/>}
       <div role="group" aria-label="Filter communications" className="flex gap-2">{(['all','email','sms'] as const).map(channel => <button key={channel} aria-pressed={filter===channel} onClick={()=>setFilter(channel)} className={`rounded-full border px-4 py-2 text-xs ${filter===channel?'bg-[#dc006d] text-white border-transparent':'border-[var(--border-input)] text-[var(--text-secondary)]'}`}>{channel==='all'?'All':channel==='email'?'Email':'SMS'}</button>)}</div>
     </div>
-    <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto">
+    <div className="mt-4 w-full max-h-[420px] space-y-3 overflow-y-auto [scrollbar-gutter:auto] !pr-0">
       {!filtered.length && <p className="text-xs text-[var(--text-muted)]">No messages recorded.</p>}
       {filtered.map(message => <div key={`${message.channel}-${message.id}`} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3">
         <div className="flex items-start justify-between gap-3">

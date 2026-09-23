@@ -593,11 +593,11 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
               </button>
             ))}
           </div>
-          {form.has_gas === null && <p className="mt-1.5 text-[10px] text-amber-400">Choose Yes or No before creating the property.</p>}
+
         </div>
 
         <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
-          <fieldset><legend className="text-sm font-medium mb-2">Is this a freehold or leasehold property?</legend><div className="flex gap-2">{[false,true].map(value => <button key={String(value)} type="button" aria-pressed={form.is_leasehold === value} onClick={() => setForm(f => ({...f,is_leasehold:value,has_management_company:value?null:false}))} className={`flex-1 rounded-xl border p-3 text-sm ${form.is_leasehold === value ? 'bg-[var(--btn-primary-bg)] text-white' : 'border-[var(--border-input)]'}`}>{value ? 'Leasehold' : 'Freehold'}</button>)}</div></fieldset>
+          <fieldset><legend className="text-sm font-normal mb-2">Is this a freehold or leasehold property?</legend><div className="flex gap-2">{[false,true].map(value => <button key={String(value)} type="button" aria-pressed={form.is_leasehold === value} onClick={() => setForm(f => ({...f,is_leasehold:value,has_management_company:value?null:false}))} className={`flex-1 rounded-xl border p-3 text-sm ${form.is_leasehold === value ? 'bg-[var(--btn-primary-bg)] text-white' : 'border-[var(--border-input)]'}`}>{value ? 'Leasehold' : 'Freehold'}</button>)}</div></fieldset>
                     {form.is_leasehold && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Leasehold Issued By" value={form.leasehold_issued_by} onChange={leasehold_issued_by => setForm((current: PropertyForm) => ({ ...current, leasehold_issued_by }))} />
             <Input label="Email Address" type="email" value={form.leasehold_email} onChange={leasehold_email => setForm((current: PropertyForm) => ({ ...current, leasehold_email }))} />

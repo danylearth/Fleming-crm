@@ -1,3 +1,4 @@
+import {useNavigate} from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BadgePoundSterling, Download, Pencil, Plus, ReceiptText, Trash2, Upload } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -8,6 +9,7 @@ import { ukFinancialYear } from '../utils/propertyExpenses';
 
 interface Expense {
   id: number;
+  bank_transaction_id?:number;
   description: string;
   amount: number | string;
   category: string;
@@ -37,6 +39,9 @@ const EMPTY_FORM: ExpenseForm = {
 };
 
 const CATEGORIES = [
+  {value:'marketing',label:'Marketing Costs'},
+  {value:'council_tax',label:'Council Tax'},
+  {value:'utilities',label:'Utilities'},
   { value: 'maintenance', label: 'Maintenance' },
   { value: 'refurbishment', label: 'Refurbishment' },
   { value: 'property_purchase', label: 'Property Purchase' },
@@ -64,6 +69,8 @@ function formatCategory(value: string) {
 
 export default function PropertyExpenses({ propertyId }: { propertyId: number }) {
   const api = useApi();
+  const navigate=useNavigate();
+  const [linkedExpense,setLinkedExpense]=useState<Expense|null>(null);
   const { token } = useAuth();
   const { confirmAction } = useNotifications();
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -127,6 +134,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
   };
 
   const edit = (expense: Expense) => {
+    if(expense.bank_transaction_id){setLinkedExpense(expense);return;}
     setForm({
       description: expense.description,
       amount: String(expense.amount),
@@ -177,7 +185,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
           <div className="flex-1 min-w-0">
             <p className="text-sm truncate">{expense.description}{expense.is_estimate&&<span className="ml-2 text-xs text-amber-600">Budget estimate — excluded from totals</span>}</p>{(expense.coverage_start||expense.payee)&&<p className="text-xs text-[var(--text-muted)]">{expense.payee}{expense.coverage_start?` · ${expense.coverage_start.slice(0,10)} — ${expense.coverage_end?.slice(0,10)||'Not Set'}`:''}</p>}
             <div className="flex flex-wrap gap-1.5 mt-1 text-[10px] text-[var(--text-muted)]">
-              <span>{formatCategory(expense.category)}</span>
+              <span>{formatCategory(expense.category)}</span>{expense.bank_transaction_id&&<span>· Linked via bank feed</span>}
               {!expense.expense_date && expense.expense_year && <span>· {expense.expense_year}</span>}
               {expense.expense_date && <span>· {new Date(`${expense.expense_date.slice(0, 10)}T12:00:00`).toLocaleDateString('en-GB')}</span>}
               {expense.is_recurring ? <Tag>Repeats {expense.recurrence_frequency}</Tag> : null}
@@ -196,11 +204,10 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
             </label>
           )}
           <button title="Edit expense" onClick={() => edit(expense)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Pencil size={14} /></button>
-          <button title="Delete expense" onClick={async () => {
+          {!expense.bank_transaction_id&&<button title="Delete expense" onClick={async () => {
             if (!await confirmAction(`Delete “${expense.description}”?`)) return;
-            await api.delete(`/api/property-expenses/${expense.id}`);
-            await load();
-          }} className="text-[var(--text-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+            try{await api.delete(`/api/property-expenses/${expense.id}`);await load();}catch(error){alert(error instanceof Error?error.message:'Could not delete expense');}
+          }} className="text-[var(--text-muted)] hover:text-red-400"><Trash2 size={14} /></button>}
         </div>
       ))}
     </div>
@@ -208,6 +215,7 @@ export default function PropertyExpenses({ propertyId }: { propertyId: number })
 
   return (
     <Card className="p-4 sm:p-6 space-y-5">
+      {linkedExpense&&<div role="dialog" aria-modal="true" aria-label="Bank-linked expense" className="fixed inset-0 z-50 bg-black/60 grid place-items-center p-4"><div className="w-full max-w-md rounded-2xl bg-[var(--bg-card)] p-6 space-y-4"><h3 className="font-semibold">Linked via bank feed</h3><p className="text-sm">This expense cannot be deleted independently. Open its bank transaction to edit the name, or unallocate and reassign the payment to the correct property, category or tenant. Its history and receipts are retained.</p><div className="flex justify-end gap-2"><Button variant="ghost" onClick={()=>setLinkedExpense(null)}>Cancel</Button><Button onClick={()=>navigate(`/financials?transaction=${linkedExpense.bank_transaction_id}`)}>View / Reassign</Button></div></div></div>}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="font-semibold flex items-center gap-2"><BadgePoundSterling size={16} />Property Costs</h3>

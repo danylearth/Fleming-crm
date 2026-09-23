@@ -6,7 +6,9 @@ export function contactDetails(body:any){
  const phone=String(body.phone||'').trim(),office_extension=String(body.office_extension||'').trim();
  if(phone&&!/^\+?[0-9 ()-]{7,24}$/.test(phone))throw Error('Enter a valid mobile number');
  if(office_extension&&!/^[0-9]{1,8}$/.test(office_extension))throw Error('Enter an office extension of up to eight digits');
- return {phone,office_extension};
+ const contact_email=String(body.contact_email||'').trim();
+ if(contact_email&&(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact_email)||contact_email.length>254))throw Error('Enter a valid email address');
+ return {phone,office_extension,contact_email};
 }
 export function registerDepartments(app:Express){
  app.get('/api/departments',authMiddleware,async(_req,res)=>res.json(await query('SELECT id,name FROM departments ORDER BY name')));
@@ -27,4 +29,15 @@ export function registerDepartments(app:Express){
  };
  app.post('/api/departments',authMiddleware,requirePermission('manager'),save);
  app.put('/api/departments/:id',authMiddleware,requirePermission('manager'),save);
+ app.delete('/api/departments/:id',authMiddleware,requirePermission('manager'),async(req:AuthRequest,res)=>{
+  const c=await pool.connect();try{
+   await c.query('BEGIN');await c.query("SELECT pg_advisory_xact_lock(hashtext('department-membership'))");
+   const team=(await c.query('SELECT * FROM departments WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];
+   if(!team){await c.query('ROLLBACK');return res.status(404).json({error:'Team not found'});}
+   const members=(await c.query("UPDATE users SET department='' WHERE department=$1 RETURNING id",[team.name])).rows;
+   await c.query('DELETE FROM departments WHERE id=$1',[team.id]);
+   await c.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'delete','department',$3,$4)",[req.user.id,req.user.email,team.id,JSON.stringify({team,unassigned_user_ids:members.map(u=>u.id)})]);
+   await c.query('COMMIT');res.json({success:true});
+  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+ });
 }

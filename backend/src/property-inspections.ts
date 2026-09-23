@@ -38,7 +38,17 @@ export async function syncPropertyInspectionTasks(){
  await query("UPDATE tasks t SET status='completed' WHERE task_type='property_inspection' AND status IN ('pending','in_progress') AND NOT EXISTS(SELECT 1 FROM properties p JOIN landlords l ON l.id=p.landlord_id JOIN tenants ten ON ten.property_id=p.id AND ten.status IN ('active','scheduled') WHERE p.id=t.entity_id AND p.archived_at IS NULL AND (l.landlord_type='internal' OR p.service_type='full_management'))");
 }
 export function registerPropertyInspections(app:Express){
- app.get('/api/properties/:id/inspections',authMiddleware,async(req,res)=>{const state=await context(Number(req.params.id));if(!state)return res.sendStatus(404);res.json(state);});
+ app.get('/api/properties/:id/inspections',authMiddleware,async(req,res)=>{const state=await context(Number(req.params.id));if(!state)return res.sendStatus(404);const task=await queryOne("SELECT id,assigned_to FROM tasks WHERE entity_type='property' AND entity_id=$1 AND task_type='property_inspection' AND due_date=$2 AND status IN ('pending','in_progress') ORDER BY id LIMIT 1",[req.params.id,state.next_due]);res.json({...state,assigned_to:task?.assigned_to||''});});
+ app.put('/api/properties/:id/inspections/assignment',authMiddleware,requirePermission('staff'),async(req:AuthRequest,res)=>{
+  const state=await context(Number(req.params.id)),assigned=String(req.body.assigned_to||'');
+  if(!state?.enabled||!state.next_due)return res.status(400).json({error:'No inspection is scheduled'});
+  if(assigned&&!await queryOne("SELECT id FROM users WHERE id::text=$1 AND is_active=1 AND role IN ('admin','manager','staff')",[assigned]))return res.status(400).json({error:'Choose an active staff member'});
+  const c=await pool.connect();try{await c.query('BEGIN');await c.query("SELECT pg_advisory_xact_lock(hashtext('property-inspection-'||$1::text))",[state.property.id]);
+   const existing=(await c.query("SELECT id FROM tasks WHERE task_type='property_inspection' AND entity_type='property' AND entity_id=$1 AND due_date=$2 AND status IN ('pending','in_progress') FOR UPDATE",[state.property.id,state.next_due])).rows[0];
+   const task=existing?(await c.query('UPDATE tasks SET assigned_to=$1,updated_at=NOW() WHERE id=$2 RETURNING id',[assigned||null,existing.id])).rows[0]:(await c.query("INSERT INTO tasks(title,task_type,entity_type,entity_id,due_date,assigned_to,status,priority) VALUES($1,'property_inspection','property',$2,$3,$4,'pending','medium') RETURNING id",['Property Inspection — '+state.property.address,state.property.id,state.next_due,assigned||null])).rows[0];
+   await c.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'assign','task',$3,$4)",[req.user.id,req.user.email,task.id,JSON.stringify({assigned_to:assigned,scheduled_due_date:state.next_due})]);await c.query('COMMIT');res.json({success:true});
+  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+ });
  app.put('/api/properties/:id/inspections/:inspectionId',authMiddleware,requirePermission('admin'),async(req:AuthRequest,res)=>{
   const {inspection_date,condition,conducted_by,document_id}=req.body;
   const c=await pool.connect();try{await c.query('BEGIN');

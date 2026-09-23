@@ -12,7 +12,7 @@ export const pennies=(value:unknown):number=>{
 export const allocationCategories:Record<string,string[]>={
  expense:['Ground Rent','Insurance','Lease Renewal','Management Fee','Other','Service Charge'],
  maintenance:["Contractors Invoice",'Labour','Materials','Other','Refurbishment','Servicing'],
- financial:['Accountancy Fees','Administration Expenses','Bank Fees','Commission Payment','Council Tax','Marketing Costs','Stamp Duty','Legal & Professional Fees','Office Costs','Other','Refunds','Security Deposit Payments In','Security Deposit Payments Out'],
+ financial:['Utilities','Accountancy Fees','Administration Expenses','Bank Fees','Commission Payment','Council Tax','Marketing Costs','Stamp Duty','Legal & Professional Fees','Office Costs','Other','Refunds','Security Deposit Payments In','Security Deposit Payments Out'],
  income:['Commission Payment','Interest Received','Other','Tax Rebate'],
 };
 async function recalculateRent(client:any,id:number) {
@@ -24,7 +24,7 @@ async function recalculateRent(client:any,id:number) {
 export function registerBankReconciliation(app:Express) {
  app.get('/api/bank-feed/deposit-balances',authMiddleware,requireFinance,async(_req,res)=>{
   const rows=await query(`SELECT b.id,b.booked_at,b.description,b.display_name,b.amount,b.currency,b.match_status,t.name AS tenant_name,p.address AS property_address,
-   (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount,'tenant_id',a.tenant_id,'property_id',a.property_id,'category',a.category,'notes',a.notes)) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL) AS allocations
+   (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount,'tenant_id',a.tenant_id,'property_id',a.property_id,'category',a.category,'notes',a.notes,'tenant_name',(SELECT name FROM tenants WHERE id=a.tenant_id),'property_address',(SELECT address FROM properties WHERE id=a.property_id))) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL) AS allocations
    FROM bank_feed_transactions b LEFT JOIN tenants t ON t.id=b.tenant_id LEFT JOIN properties p ON p.id=b.property_id
    WHERE EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL AND (a.kind IN ('deposit','holding_deposit') OR a.category IN ('Security Deposit Payments In','Security Deposit Payments Out')))
    ORDER BY b.booked_at DESC,b.id DESC`);

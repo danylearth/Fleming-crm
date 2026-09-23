@@ -1,3 +1,4 @@
+import {Activity} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { GlassCard, Select, Input } from './index';
@@ -15,7 +16,7 @@ export default function TeamActivity({ users }: { users: { id: number; name: str
     refresh();const timer=window.setInterval(refresh,30000);
     return () => { current = false;clearInterval(timer); };
   }, [api, selected]);
-  return <GlassCard className="p-6 space-y-4"><h2 className="font-semibold">Team Activity</h2><Select label="Team Member" value={selected} onChange={value => { setData(null); setError(''); setSelected(value); }} options={[{ value: '', label: 'View All Users' }, ...users.map(u => ({ value: String(u.id), label: u.name }))]} />
+  return <GlassCard className="p-6 space-y-4"><h2 className="font-semibold flex items-center gap-2"><Activity size={18}/>Team Activity</h2><Select label="Team Member" value={selected} onChange={value => { setData(null); setError(''); setSelected(value); }} options={[{ value: '', label: 'View All Users' }, ...users.map(u => ({ value: String(u.id), label: u.name }))]} />
     <p className="text-xs text-[var(--text-muted)]">Active minutes count visible CRM use with recent keyboard, pointer or touch activity. Seven- and thirty-day figures are daily averages, including inactive days. Activity is recorded while the CRM is open and in use.</p>{error && <p role="alert">{error}</p>}
     {!selected&&<><Input label="Search Team Activity" value={search} onChange={setSearch} placeholder="Search by user or department"/><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead><tr><th className="py-2">User</th><th>Today</th><th>7-day average</th><th>30-day average</th></tr></thead><tbody>{overview.filter(u=>[u.name,u.department].some(v=>v?.toLowerCase().includes(search.toLowerCase()))).map(u=><tr key={u.id} className="border-t border-[var(--border-input)]"><td className="py-3"><button className="text-[var(--accent)] underline" onClick={()=>{setSelected(String(u.id));setData(null);}}>{u.name}</button><p className="text-xs text-[var(--text-muted)]">{u.department||'Unassigned'}</p></td><td>{u.today_minutes} min</td><td>{u.week_daily_average} min</td><td>{u.month_daily_average} min</td></tr>)}</tbody></table></div></>}
     {data && <><div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{[['Today',data.usage.today_minutes],['7-day daily average',data.usage.week_daily_average],['30-day daily average',data.usage.month_daily_average]].map(([label,value]) => <div key={label} className="rounded-xl bg-[var(--bg-hover)] p-3"><p className="text-xs">{label}</p><p className="text-xl font-semibold">{value} min</p></div>)}</div>

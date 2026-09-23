@@ -56,7 +56,6 @@ export default function Dashboard() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [teamMembers,setTeamMembers]=useState<{id:number;name:string}[]>([]);
   const [maintenanceOwner,setMaintenanceOwner]=useState('all');
-  const [expandAlerts,setExpandAlerts]=useState(true);
   const matchesMaintenanceOwner=(assigned:unknown)=>maintenanceOwner==='all'||(maintenanceOwner==='unassigned'?!assigned:[maintenanceOwner,teamMembers.find(m=>String(m.id)===maintenanceOwner)?.name].includes(String(assigned||'')));
   const [taskOwner,setTaskOwner]=useState('all');
   const [calendarOwner,setCalendarOwner]=useState('all');
@@ -106,7 +105,7 @@ export default function Dashboard() {
       return {
         key,
         date,
-        tasks: tasks.filter(task => task.due_date?.slice(0, 10) === key && task.status !== 'completed' && (calendarOwner==='all'||(calendarOwner==='unassigned'?!task.assigned_to:[calendarOwner,teamMembers.find(m=>String(m.id)===calendarOwner)?.name].includes(String(task.assigned_to))))),
+        tasks: tasks.filter(task => task.due_date?.slice(0, 10) === key && ['pending','in_progress'].includes(task.status) && (calendarOwner==='all'||(calendarOwner==='unassigned'?!task.assigned_to:[calendarOwner,teamMembers.find(m=>String(m.id)===calendarOwner)?.name].includes(String(task.assigned_to))))),
       };
     });
   }, [now, tasks, calendarOwner, teamMembers]);
@@ -130,7 +129,7 @@ export default function Dashboard() {
     return 'text-emerald-400';
   };
 
-  const visibleRecentTasks = tasks.filter(task => !task.dashboard_dismissed_at && !['tenant_enquiry','landlord_bdm'].includes(task.entity_type||'') && (taskOwner==='all' || (taskOwner==='me' ? [String(user?.id),user?.name].includes(task.assigned_to) : [taskOwner,teamMembers.find(member=>String(member.id)===taskOwner)?.name].includes(String(task.assigned_to)))));
+  const visibleRecentTasks = tasks.filter(task => ['pending','in_progress'].includes(task.status) && !task.dashboard_dismissed_at && !['tenant_enquiry','landlord_bdm'].includes(task.entity_type||'') && (taskOwner==='all' || (taskOwner==='me' ? [String(user?.id),user?.name].includes(task.assigned_to) : [taskOwner,teamMembers.find(member=>String(member.id)===taskOwner)?.name].includes(String(task.assigned_to)))));
 
   const todayKey=new Date(now).toLocaleDateString('en-CA',{timeZone:'Europe/London'});
   const pipeline=[
@@ -195,9 +194,9 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 min-[1700px]:grid-cols-2 gap-6">
           {/* Compliance and maintenance alerts */}
           <Card className="p-6">
-            <div className="flex flex-wrap justify-between items-center gap-3 mb-5"><h2 className="font-semibold flex items-center gap-2"><AlertTriangle size={16}/> Compliance Alerts & Maintenance Requests</h2><div className="flex flex-wrap items-center gap-2 ml-auto max-w-full"><Select hideLabel searchable className="w-64 max-w-full" label="Select User…" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'View All'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" className="h-11 w-28 shrink-0" variant="outline" aria-expanded={expandAlerts} aria-controls="dashboard-alerts" onClick={()=>setExpandAlerts(!expandAlerts)}>{expandAlerts?'Show Less':'View All'}</Button></div></div>
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-5"><h2 className="font-semibold flex items-center gap-2"><AlertTriangle size={16}/> Compliance Alerts & Maintenance Requests</h2><div className="flex flex-wrap items-center gap-2 ml-auto max-w-full"><Select hideLabel searchable className="w-64 max-w-full" label="Select User…" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'View All'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/></div></div>
             {dashboard?.complianceAlerts?.some(a=>matchesMaintenanceOwner(a.assigned_to)) || dashboard?.recentMaintenance?.some(m=>matchesMaintenanceOwner(m.assigned_to)) ? (
-              <div id="dashboard-alerts" className={`space-y-3 ${expandAlerts?'':'max-h-[32rem] overflow-y-auto'}`}>
+              <div id="dashboard-alerts" className="space-y-3">
                 {dashboard!.complianceAlerts.filter(a=>matchesMaintenanceOwner(a.assigned_to)).map((alert, i) => (
                   <button key={`compliance-${i}`} onClick={() => navigate(alert.task_id?`/tasks/${alert.task_id}`:`/properties/${alert.id}`)} className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                     <div className="flex items-center gap-3">

@@ -1,3 +1,4 @@
+import {ShieldCheck} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
@@ -21,7 +22,7 @@ export default function PermissionRequests() {
     } catch (e) { setMessage(e instanceof Error ? e.message : 'Could not save request'); }
     finally { setBusy(false); }
   };
-  return <GlassCard className="p-6 space-y-4"><h2 className="font-semibold">Permission Requests</h2>
+  return <GlassCard className="p-6 space-y-4"><h2 className="font-semibold flex items-center gap-2"><ShieldCheck size={18}/>Permission Requests</h2>
     {user?.role !== 'admin' && <div className="space-y-3"><p className="text-sm text-[var(--text-muted)]">Ask an administrator to change your access.</p><Select label="Requested Role" value={role} onChange={setRole} options={['viewer','staff','manager'].filter(r => r !== user?.role).map(r => ({ value: r, label: r.charAt(0).toUpperCase()+r.slice(1) }))} /><Input label="Reason" value={reason} onChange={setReason} /><Button disabled={busy || !reason.trim() || requests.some(r => r.status === 'pending')} onClick={() => submit()}>Request Change</Button></div>}
     {message && <p role="status" className="text-sm">{message}</p>}
     {!requests.length && <p className="text-sm text-[var(--text-muted)]">No permission requests.</p>}

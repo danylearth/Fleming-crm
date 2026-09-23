@@ -1,3 +1,4 @@
+import {vacancyLoss} from './vacancy-loss';
 import {registerDepartments,validDepartment,contactDetails} from './departments';
 import {registerTenantReactivation} from './tenant-reactivation';
 import {registerAccountRoutes} from './account-access';
@@ -613,7 +614,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     await logAudit(user.id, user.email, 'login', 'user', user.id);
     
     const token = generateToken({ id: user.id, email: user.email, role: user.role, name: user.name });
-    res.json({ user: { id: user.id, email: user.email, role: user.role, name: user.name, avatar_url: user.avatar_url, accent_color: user.accent_color, appearance: user.appearance, department:user.department, phone:user.phone, office_extension:user.office_extension, finance_access:user.finance_access, last_login: new Date().toISOString() }, token });
+    res.json({ user: { id: user.id, email: user.email, role: user.role, name: user.name, avatar_url: user.avatar_url, accent_color: user.accent_color, appearance: user.appearance, department:user.department, phone:user.phone, office_extension:user.office_extension, contact_email:user.contact_email, finance_access:user.finance_access, last_login: new Date().toISOString() }, token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login failed' });
@@ -3993,6 +3994,20 @@ app.post('/api/tasks', authMiddleware, async (req: AuthRequest, res) => {
 app.put('/api/tasks/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const d = req.body;
+    const before=await queryOne('SELECT * FROM tasks WHERE id=$1',[req.params.id]);
+    if(!before)return res.status(404).json({error:'Task not found'});
+    if(d.status==='completed'&&before.task_type==='inventory_due'&&before.entity_type==='tenant'){
+      const missing=await queryOne(`SELECT t.id,t.property_id FROM tenants t WHERE t.id=$1 AND t.status='active' AND t.tenancy_start_date=$2
+        AND NOT EXISTS(SELECT 1 FROM inventories i WHERE i.property_id=t.property_id
+          AND (i.applies_to_tenancy_start_date=t.tenancy_start_date OR (i.applies_to_tenancy_start_date IS NULL AND i.inspection_date>=t.tenancy_start_date))
+          AND (i.tenant_id=t.id OR i.tenant_id IN(SELECT id FROM tenants j WHERE j.id=t.linked_tenant_id AND j.property_id=t.property_id AND j.tenancy_start_date=t.tenancy_start_date))
+          AND (i.signed_date IS NOT NULL OR i.signed_document))`,[before.entity_id,before.due_date]);
+      if(missing)return res.status(409).json({error:'A signed inventory for this tenancy is still missing. Open the property’s Inventory section and attach the signed inventory to this tenancy; the reminder will then complete automatically.',property_id:missing.property_id});
+    }
+    if(d.status==='completed'&&before.task_type==='property_inspection'){
+      await syncTenantLifecycle();const current=await queryOne('SELECT status FROM tasks WHERE id=$1',[before.id]);
+      if(current.status!=='completed')return res.status(409).json({error:'Record the completed inspection in the property’s Inspections section. This reminder completes automatically when its inspection is recorded.'});
+    }
     const allowed = ['title', 'description', 'priority', 'status', 'assigned_to', 'due_date', 'notes', 'entity_type', 'entity_id', 'follow_up_date', 'task_type'];
     const fields: string[] = [];
     const values: any[] = [];
@@ -4430,7 +4445,7 @@ const DOC_TYPES: Record<string, string[]> = {
   tenant: [
     'Primary Identification', 'Secondary Identification', 'Address Identification',
     'Application Form(s)', 'Bank Statements', 'Proof of Income', 'Credit Report',
-    'Employment Reference', 'Holding Deposit', 'Guarantor Documents',
+    'Employment Reference', 'Holding Deposit', 'Guarantor Documents', 'Guarantor Credit Report', 'Guarantor Secondary Identification',
     'guarantor_primary_id', 'guarantor_secondary_id',
     'Tenant Deposit Certificate', 'Tenant Deposit Prescribed Information',
     'Signed Tenancy Agreement', 'Other',
@@ -4653,7 +4668,8 @@ app.get('/api/financial-summary', authMiddleware, async (_req, res) => {
       ORDER BY LEAST(e.id,COALESCE(e.joint_partner_id,e.id)),e.id
     ) SELECT COUNT(*)::int AS let_only_fee_count,COALESCE(SUM(fee),0) AS let_only_fee_total,
       COALESCE(SUM(fee) FILTER(WHERE balance_payment_received_at>=date_trunc('month',NOW() AT TIME ZONE 'Europe/London') AND balance_payment_received_at<date_trunc('month',NOW() AT TIME ZONE 'Europe/London')+INTERVAL '1 month'),0) AS let_only_fee_month FROM completed`);
-    res.json({...summary,...fees});
+    const [vacancyProperties,vacancyTenants,vacancyExpenses]=await Promise.all([query('SELECT id,address,rent_amount,archived_at,status FROM properties WHERE archived_at IS NULL'),query('SELECT property_id,tenancy_start_date,tenancy_end_date,monthly_rent,status,has_end_date FROM tenants WHERE property_id IS NOT NULL'),query('SELECT property_id,amount,category,expense_date,coverage_start,coverage_end,is_estimate,excluded_from_costs FROM property_expenses')]);
+    res.json({...summary,...fees,vacancy_loss:vacancyLoss(vacancyProperties,vacancyTenants,vacancyExpenses,new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date()))});
   } catch (error) {
     res.status(500).json({ error: 'Financial summary could not be loaded' });
   }
@@ -5229,7 +5245,7 @@ app.patch('/api/tenants/:id/notes', authMiddleware, async (req: AuthRequest, res
 
 app.get('/api/property-expenses/:propertyId', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const expenses = await query(`SELECT expense.*, document.original_name AS receipt_name
+    const expenses = await query(`SELECT expense.*, document.original_name AS receipt_name, (SELECT a.bank_transaction_id FROM bank_feed_allocations a WHERE a.expense_id=expense.id ORDER BY a.id DESC LIMIT 1) AS bank_transaction_id
       FROM property_expenses expense
       LEFT JOIN documents document ON document.id=expense.receipt_document_id
       WHERE expense.property_id = $1 AND NOT expense.excluded_from_costs
@@ -7163,14 +7179,14 @@ app.get('/api/bank-feed/transactions', authMiddleware, async (req, res) => {
     const rows = await query(`
       SELECT b.id, b.booked_at, b.description, b.display_name, b.amount, b.currency, b.transaction_type,
         b.transaction_category, b.merchant_name, b.match_status, p.address AS property_address,
-        (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount,'tenant_id',a.tenant_id,'property_id',a.property_id,'rent_payment_id',a.rent_payment_id,'expense_id',a.expense_id,'category',a.category,'notes',a.notes)) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL) AS allocations,
+        (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount,'tenant_id',a.tenant_id,'property_id',a.property_id,'rent_payment_id',a.rent_payment_id,'expense_id',a.expense_id,'category',a.category,'notes',a.notes,'tenant_name',(SELECT name FROM tenants WHERE id=a.tenant_id),'property_address',(SELECT address FROM properties WHERE id=a.property_id))) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL) AS allocations,
         COALESCE(NULLIF(CONCAT_WS(' & ',t.name,(SELECT name FROM tenants jt WHERE jt.id=t.linked_tenant_id AND jt.property_id=t.property_id AND jt.tenancy_start_date=t.tenancy_start_date)),''), TRIM(te.first_name_1 || ' ' || te.last_name_1)) AS tenant_name
       FROM bank_feed_transactions b
       LEFT JOIN properties p ON p.id=b.property_id LEFT JOIN tenants t ON t.id=b.tenant_id
       LEFT JOIN tenant_enquiries te ON te.id=b.enquiry_id
-      WHERE b.match_status='unmatched' OR b.id IN (SELECT id FROM bank_feed_transactions WHERE booked_at >= (NOW() AT TIME ZONE 'Europe/London')::date - 29 ORDER BY booked_at DESC,id DESC LIMIT $1 OFFSET $2)
+      WHERE b.id=$3 OR b.match_status='unmatched' OR b.id IN (SELECT id FROM bank_feed_transactions WHERE booked_at >= (NOW() AT TIME ZONE 'Europe/London')::date - 29 ORDER BY booked_at DESC,id DESC LIMIT $1 OFFSET $2)
       ORDER BY b.booked_at DESC, b.id DESC
-    `, [limit, offset]);
+    `, [limit, offset, /^\d+$/.test(String(req.query.transaction||''))?Number(req.query.transaction):null]);
     res.json(rows);
   } catch (error) {
     console.error(error);

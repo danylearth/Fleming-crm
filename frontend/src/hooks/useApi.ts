@@ -1,7 +1,7 @@
+import {apiUrl,readApiResponse} from '../utils/apiResponse';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = import.meta.env.VITE_API_URL || '';
 
 // Mutation invalidation is retained for multipart callers. Normal GETs are
 // deliberately fresh: CRM users expect a navigation/action to show saved data.
@@ -60,7 +60,7 @@ export function useApi() {
       logout();
       throw new Error('Session expired — please sign in again');
     }
-    const res = await fetch(`${API_URL}${endpoint}`, {
+    const res = await fetch(apiUrl(endpoint), {
       ...options,
       signal: options.signal || AbortSignal.timeout((endpoint.endsWith('/tenancy-agreement') || endpoint==='/api/ai/chat') ? 120000 : 45000),
       headers: {
@@ -75,9 +75,7 @@ export function useApi() {
       logout();
       throw new Error('Session expired — please sign in again');
     }
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Request failed');
-    return data;
+    return readApiResponse(res);
   };
 
   const get = async (endpoint: string) => {
