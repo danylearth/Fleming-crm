@@ -112,6 +112,35 @@ export function formatClientContractLayout(xml:string):string {
   });
 }
 
+/** Presentation shared by owned and client APTs, before personal fields are filled. */
+export function formatAptPresentation(xml:string,hasGas:boolean):string {
+  const text=(part:string)=>[...part.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m=>m[1]).join('').trim();
+  if(!hasGas)xml=xml.replace(/<w:tr\b(?:(?!<w:tr\b)[\s\S])*?<\/w:tr>/g,row=>{
+    const label=text(row.match(/<w:tc\b[\s\S]*?<\/w:tc>/)?.[0]||row);
+    return ['Gas Safety Certificate','{{GAS_ACKNOWLEDGEMENT}}'].includes(label)?'':row;
+  });
+  const subheadings=new Set(['Rent and other payments','Utilities','Use of the property','Leaving the property empty','Condition of the property','Letters and notices','Access to the property','Keys and alarm codes']);
+  const minor=new Set(['a','an','the','and','or','but','of','in','on','at','by','for','to','as','if']);
+  const titleCase=(s:string)=>s.replace(/[A-Za-z]+/g,(word,offset)=>minor.has(word.toLowerCase())&&offset>s.search(/[A-Za-z]/)?word.toLowerCase():word[0].toUpperCase()+word.slice(1));
+  xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{
+    const value=text(p),heading=/^\d+\.\s+[A-Za-z]/.test(value)||subheadings.has(value),sectionC=value==='Section C - Terms and Conditions';
+    // The stored last-rendered break is stale after repagination.
+    p=p.replace(/<w:lastRenderedPageBreak\s*\/>/g,'');
+    if(!heading&&!sectionC&&!/^[•\s]*\d+\.\d+\s/.test(value))return p;
+    p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');
+    if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
+    p=p.replace(/<w:keepLines[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:keepLines/>');
+    if(heading){
+      p=p.replace(/<w:u\b[^>]*\/>/g,'').replace(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g,(whole,content)=>whole.replace(content,titleCase(content)));
+    }
+    if(heading||sectionC)p=p.replace(/<w:keepNext[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:keepNext/>');
+    if(sectionC)p=p.replace(/<w:pageBreakBefore[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:pageBreakBefore/>');
+    return p;
+  });
+  const title='<w:p><w:pPr><w:keepNext/><w:keepLines/><w:jc w:val="center"/><w:spacing w:before="0" w:after="240"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/></w:rPr><w:t>Assured Periodic Tenancy Agreement</w:t></w:r></w:p>';
+  return xml.replace('<w:body>','<w:body>'+title);
+}
+
 /** Preserve the supplied contract's clauses, tables, headers and page settings. */
 export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput): Promise<Buffer> {
   if (pending >= 1) throw new Error('Other agreements are being prepared. Please try again shortly.');
@@ -147,7 +176,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
       };
       let xml = zip.file('word/document.xml')!.asText();
       xml=isClient?formatClientContractLayout(xml):formatContractLayout(xml);
-      if(!input.hasGas)xml=xml.replace(/<w:tr\b[\s\S]*?<\/w:tr>/g,row=>row.includes('{{GAS_ACKNOWLEDGEMENT}}')?'':row);
+      xml=formatAptPresentation(xml,input.hasGas);
       xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,paragraph=>paragraph.replace(/<[^>]+>/g,'').includes('The electronic signature certificate records each named tenant')?'':paragraph);
       xml = xml.replace(/\{\{([A-Z_]+)\}\}/g, (_match, key) => {
         if (!(key in values)) throw new Error(`Unfilled agreement field: ${key}`);
