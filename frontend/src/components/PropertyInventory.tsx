@@ -13,7 +13,7 @@ export default function PropertyInventory({propertyId,tenants,onSaved}:{onSaved?
  const effectiveTenantId=(showPrevious?tenantId:'')||String(currentTenancy?.id||'');
  const selected=tenants.find(t=>String(t.id)===effectiveTenantId);
  const partner=tenants.find(t=>t.id===selected?.linked_tenant_id&&t.tenancy_start_date===selected?.tenancy_start_date);
- const completed=rows.find(row=>(String(row.tenant_id)===effectiveTenantId||row.tenant_id===partner?.id) && (showPrevious||!selected?.tenancy_start_date||(row.applies_to_tenancy_start_date?row.applies_to_tenancy_start_date.slice(0,10)===selected.tenancy_start_date.slice(0,10):row.inspection_date.slice(0,10)>=selected.tenancy_start_date.slice(0,10))) && (row.signed_date||row.signed_document));
+ const completed=rows.find(row=>(String(row.tenant_id)===effectiveTenantId||row.tenant_id===partner?.id) && (!selected?.tenancy_start_date||(row.applies_to_tenancy_start_date?row.applies_to_tenancy_start_date.slice(0,10)===selected.tenancy_start_date.slice(0,10):row.inspection_date.slice(0,10)>=selected.tenancy_start_date.slice(0,10))) && (row.signed_date||row.signed_document));
  const locked=!!completed&&!editing;
  const [reviewDetails,setReviewDetails]=useState<Record<number,ReviewDetails>>({});
  const load=()=>api.get(`/api/properties/${propertyId}/inventory-records`).then(setRows);

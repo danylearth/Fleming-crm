@@ -245,7 +245,7 @@ export default function TenantDetail() {
       proof_of_income: t.proof_of_income || '',
       income_amount: t.income_amount || '', income_employer: t.income_employer || '', income_contract_type: t.income_contract_type || '',
       income_frequency: t.income_frequency || 'monthly',
-      deposit_scheme: t.deposit_scheme || '',
+      deposit_scheme: (t.deposit_scheme || '').trim().toLowerCase(),
       property_id: t.property_id, tenancy_start_date: (t.tenancy_start_date || t.move_in_date || '').slice(0, 10),
       tenancy_type: t.tenancy_type || 'Assured Periodic Tenancy', has_end_date: !!t.has_end_date, tenancy_end_date: (t.tenancy_end_date || '').slice(0, 10),
       monthly_rent: t.monthly_rent || '', status: t.status || 'active',
