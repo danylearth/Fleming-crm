@@ -2110,27 +2110,17 @@
                 return;
             }
 
-            // Show loading spinner while properties load
-            if (loadedProperties.length === 0) {
-                section.innerHTML = '<div class="property-loading"><div class="property-loading-spinner"></div>Loading available properties...</div>';
+            section.innerHTML = '<div class="property-loading">Loading available properties…</div>';
+            try {
                 await loadProperties();
-                // Restore the select element after loading
-                section.innerHTML = '';
-                const sel = document.createElement('select');
-                sel.name = 'property_id';
-                sel.id = 'propertySelect';
-                if (loadedProperties.length === 0) {
-                    sel.innerHTML = '<option value="">No properties available</option>';
-                } else {
-                    sel.innerHTML = '<option value="">Select a property</option>';
-                    loadedProperties.forEach(p => {
-                        const option = document.createElement('option');
-                        option.value = p.id;
-                        option.textContent = `${p.address}${p.postcode ? ', ' + p.postcode : ''} - ${p.bedrooms} bed ${p.property_type} - £${p.rent_amount}/mo`;
-                        sel.appendChild(option);
-                    });
-                }
+                section.replaceChildren();
+                const sel = document.createElement('select'); sel.name='property_id'; sel.id='propertySelect';
+                sel.add(new Option(loadedProperties.length ? 'Select a property' : 'No properties currently available', ''));
+                loadedProperties.forEach(p=>sel.add(new Option(`${p.address}${p.postcode?', '+p.postcode:''} - £${p.rent_amount}/mo`,p.id)));
                 section.appendChild(sel);
+            } catch {
+                section.innerHTML='<p role="alert">Properties could not be loaded. Please try again.</p><button type="button" class="btn btn-secondary" onclick="togglePropertySearch(true)">Retry</button>';
+                return;
             }
 
             // Remove any existing custom select wrapper
@@ -2292,7 +2282,8 @@
             if (loadPropertiesPromise) return loadPropertiesPromise;
             loadPropertiesPromise = (async () => {
                 try {
-                    const response = await fetch(`${API_BASE_URL}/api/public/properties`);
+                    const response = await fetch(`${API_BASE_URL}/api/public/properties`, {cache:'no-store'});
+                    if(!response.ok)throw new Error('Properties could not be loaded');
                     loadedProperties = await response.json();
 
                     // Populate the property select dropdown if it exists and hasn't been replaced by loading UI
@@ -2308,7 +2299,9 @@
                         });
                     }
                 } catch (error) {
-                    console.error('Failed to load properties:', error);
+                    throw error;
+                } finally {
+                    loadPropertiesPromise = null;
                 }
             })();
             return loadPropertiesPromise;
@@ -2430,7 +2423,7 @@
         setupEmploymentToggle('employmentStatus', 'employmentDetails');
         setupEmploymentToggle('employmentStatus2', 'employmentDetails2');
         updateProgress();
-        loadProperties();
+        loadProperties().catch(()=>{});
     </script>
 </body>
 </html>

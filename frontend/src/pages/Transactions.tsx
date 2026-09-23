@@ -1,3 +1,4 @@
+import MakingTaxDigital from '../components/MakingTaxDigital';
 import DocumentsSection from '../components/DocumentsSection';
 import { rentServiceGroups } from '../utils/rentServices';
 import {useSearchParams} from 'react-router-dom';
@@ -185,6 +186,7 @@ export default function Transactions() {
         {bankMessage&&<p role="alert" className="text-red-500">{bankMessage}</p>}<div className="flex justify-end gap-3"><Button disabled={bankBusy} variant="ghost" onClick={()=>setSelectedBank(null)}>Cancel</Button>{selectedBank.match_status==='unmatched'&&<Button disabled={bankBusy} onClick={()=>void reconcile(selectedBank,'assign')}>Save Assignment</Button>}</div>
       </div></div>}
       <div className="p-4 md:p-8">
+        <MakingTaxDigital/>
         {loadError ? <p role="alert" className="text-red-400 py-8">{loadError}</p> : loading ? (
           <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
         ) : (

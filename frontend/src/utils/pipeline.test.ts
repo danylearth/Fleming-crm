@@ -17,3 +17,11 @@ it('matches workflow agent IDs and legacy names without partial-name matches',()
  for(const agent of [3,'3','Sam Fleming',' sam fleming '])expect(matchesPipelineAgent(agent,'3',members)).toBe(true);
  for(const agent of ['',null,undefined,'Sam','Sam Fleming 2'])expect(matchesPipelineAgent(agent,'3',members)).toBe(false);
 });
+
+it('hides future follow-ups until due but resurfaces completed agreements',()=>{
+ const enquiry={status:'awaiting_response',follow_up_date:'2026-09-25'};
+ expect(pipelineVisible(enquiry,'2026-09-23')).toBe(false);
+ expect(pipelineVisible(enquiry,'2026-09-25')).toBe(true);
+ expect(pipelineVisible({...enquiry,tenancy_agreement_status:'completed'},'2026-09-23')).toBe(true);
+ expect(pipelineStage({...enquiry,tenancy_agreement_status:'completed'},'2026-09-23')).toBe('Agreement Signed');
+});

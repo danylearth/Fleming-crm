@@ -122,7 +122,7 @@ try {
   });
   await test('balance request, receipt and handover advance both records',async()=>{
     await ok(`/api/tenant-enquiries/${b}/request-balance`,{method:'POST',token:auth.staff,body:{follow_up_date:today,send_email:false,send_sms:false}});
-    await ok(`/api/tenant-enquiries/${b}/confirm-balance`,{method:'POST',token:auth.staff,body:{}});
+    await ok(`/api/tenant-enquiries/${b}/confirm-balance`,{method:'POST',token:auth.staff,body:{received_date:today}});
     await ok(`/api/tenant-enquiries/${b}/schedule-handover`,{method:'POST',token:auth.staff,body:{handover_date:today,handover_time:'10:30',assigned_to:'Test staff'}});
     for(const x of await sql('SELECT balance_payment_received,handover_date FROM tenant_enquiries WHERE id=ANY($1::int[])',[[a,b]])){assert.equal(x.balance_payment_received,1);assert(x.handover_date);}
   });
@@ -400,6 +400,7 @@ try {
   await test('client landlord signs before applicant; completed APT converts with its contract attached',async()=>{
     const owner=await one("INSERT INTO landlords(name,email,address,phone,landlord_type) VALUES('Client Owner','owner@example.test','2 Test Street','01902123456','external') RETURNING id");
     const home=await one("INSERT INTO properties(address,postcode,landlord_id,has_gas,rent_amount,epc_expiry_date,eicr_expiry_date,service_type) VALUES('Client Test Home','WV1 1AA',$1,0,850,'2030-01-01','2030-01-01','full_management') RETURNING id",[owner.id]);
+    await db.query("INSERT INTO landlord_service_agreements(property_id,landlord_id,service_type,setup_fee,monthly_fee,payment_route,status,token,details,bank_details,filename,signed_at) VALUES($1,$2,'full_management',50,10,'fleming_client_money','signed',$3,'{}','{}','fixture.pdf',NOW())",[home.id,owner.id,'service-fixture-'+home.id]);
     for(const type of ['EPC','EICR']) await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('property',$1,$2,'sample.pdf',$3,'application/pdf','approved')",[home.id,type,type+'.pdf']);
     const applicant=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,phone_1,linked_property_id,holding_deposit_received,application_form_completed,application_review_status,credit_check_completed,monthly_rent_agreed,current_address_1) VALUES('Client','Applicant','client@example.test','07700900009',$1,1,1,'approved',1,850,'Previous Test Home') RETURNING id",[home.id]);
     await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('tenant_enquiry',$1,'Credit Check Report','sample.pdf','Client credit.pdf','application/pdf','approved')",[applicant.id]);
@@ -415,7 +416,7 @@ try {
     assert.equal((await sign(tenantToken)).status,409);assert.equal((await sign(ownerToken)).status,200);assert.equal((await sign(tenantToken)).status,200);
     assert.equal((await one('SELECT status FROM tenancy_agreements WHERE id=$1',[apt.agreement_id])).status,'completed');
     await ok(`/api/tenant-enquiries/${applicant.id}/request-balance`,{method:'POST',token:auth.staff,body:{follow_up_date:today,send_email:false,send_sms:false}});
-    await ok(`/api/tenant-enquiries/${applicant.id}/confirm-balance`,{method:'POST',token:auth.staff,body:{}});
+    await ok(`/api/tenant-enquiries/${applicant.id}/confirm-balance`,{method:'POST',token:auth.staff,body:{received_date:today}});
     await ok(`/api/tenant-enquiries/${applicant.id}/schedule-handover`,{method:'POST',token:auth.staff,body:{handover_date:today,handover_time:'10:00',assigned_to:'Test staff'}});
     await ok(`/api/tenant-enquiries/${applicant.id}/convert`,{method:'POST',token:auth.staff,body:{property_id:home.id,tenancy_start_date:today}});
     const tenant=await one('SELECT id FROM tenants WHERE source_enquiry_id=$1',[applicant.id]);
@@ -426,6 +427,7 @@ try {
       await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('tenant_enquiry',$1,'Credit Check Report','sample.pdf','Credit.pdf','application/pdf','approved')",[e.id]);
       const defaults=await ok(`/api/tenant-enquiries/${e.id}/tenancy-agreement-compliance`,{token:auth.staff});assert.match(defaults.defaults.paymentReference,/TEST$/);
       const input={...issueBody,rent:850,deposit:850,payment_reference:'MY CUSTOM REFERENCE',landlord_bank_sort_code:'123456',landlord_bank_account_number:'12345678',landlord_bank_account_name:'Client Owner',landlord_bank_name:'Test Bank'};
+      await sql('UPDATE landlord_service_agreements SET service_type=$1,setup_fee=100 WHERE property_id=$2',[service,home.id]);
       await prepareClient(e.id);
       if(service==='let_only'){
         await ok(`/api/landlords/${owner.id}/bank-details`,{method:'PUT',token:auth.staff,body:{...bankBody,account_number:'87654321',details_approved:false}});
@@ -456,6 +458,7 @@ try {
     const owner=await one("INSERT INTO landlords(name,email,home_address,phone,landlord_type,entity_type,company_number) VALUES('Example Property Holdings Ltd','director@example.test','20 Registered Road, Birmingham, B1 1AA','01902123456','external','company','01234567') RETURNING id");
     await sql("INSERT INTO directors(landlord_id,name,email) VALUES($1,'Alex Director','director@example.test')",[owner.id]);
     const home=await one("INSERT INTO properties(address,postcode,landlord_id,has_gas,rent_amount,epc_expiry_date,eicr_expiry_date,service_type) VALUES('30 Client Road','WV1 1AA',$1,0,850,'2030-01-01','2030-01-01','rent_collection') RETURNING id",[owner.id]);
+    await db.query("INSERT INTO landlord_service_agreements(property_id,landlord_id,service_type,setup_fee,monthly_fee,payment_route,status,token,details,bank_details,filename,signed_at) VALUES($1,$2,'rent_collection',50,10,'fleming_client_money','signed',$3,'{}','{}','fixture.pdf',NOW())",[home.id,owner.id,'service-fixture-'+home.id]);
     for(const type of ['EPC','EICR'])await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('property',$1,$2,'sample.pdf',$3,'application/pdf','approved')",[home.id,type,type+'.pdf']);
     const e=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,phone_1,first_name_2,last_name_2,email_2,linked_property_id,holding_deposit_received,application_form_completed,application_review_status,credit_check_completed,monthly_rent_agreed,current_address_1,current_address_2) VALUES('Morgan','Applicant','morgan@example.test','07700900001','Taylor','Applicant','taylor@example.test',$1,1,1,'approved',1,850,'Old Street','Other Street') RETURNING id",[home.id]);
     const route=`/api/tenant-enquiries/${e.id}/client-agreement-details`,context=await ok(route,{token:auth.staff});assert.equal(context.details.companyNumber,'01234567');assert.equal(context.details.directorName,'Alex Director');assert.equal(context.details.landlordAddress,'20 Registered Road, Birmingham, B1 1AA');
@@ -883,10 +886,11 @@ try {
   });
   await test('only unlinked current tenants can be assigned, and closed client properties must reopen first',async()=>{
     const owner=await one("INSERT INTO landlords(name,landlord_type) VALUES('Closed test owner','external') RETURNING id");
-    const home=await one("INSERT INTO properties(address,postcode,landlord_id,status) VALUES('Closed test property','WV1 1AA',$1,'closed') RETURNING id",[owner.id]);
+    const home=await one("INSERT INTO properties(address,postcode,landlord_id,status,service_type) VALUES('Closed test property','WV1 1AA',$1,'closed','let_only') RETURNING id",[owner.id]);
     const t=await one("INSERT INTO tenants(name,first_name_1,last_name_1,status) VALUES('Unlinked test','Unlinked','Test','active') RETURNING id");
     const route=`/api/properties/${home.id}/assign-tenant`,body={tenant_id:t.id};
     assert.equal((await request(route,{method:'POST',token:auth.viewer,body})).status,403);assert.equal((await request(route,{method:'POST',token:auth.staff,body})).status,409);
+    await db.query("INSERT INTO landlord_service_agreements(property_id,landlord_id,service_type,setup_fee,monthly_fee,payment_route,status,token,details,bank_details,filename,signed_at) VALUES($1,$2,'let_only',50,0,'landlord','signed','closed-service-fixture','{}','{}','fixture.pdf',NOW())",[home.id,owner.id]);
     await ok(`/api/properties/${home.id}`,{method:'PUT',token:auth.staff,body:{status:'to_let'}});await ok(route,{method:'POST',token:auth.staff,body});
     assert.equal((await one('SELECT property_id FROM tenants WHERE id=$1',[t.id])).property_id,home.id);assert.equal((await request(route,{method:'POST',token:auth.staff,body})).status,409);
     assert.equal((await request(`/api/properties/${home.id}`,{method:'PUT',token:auth.staff,body:{status:'closed'}})).status,409);

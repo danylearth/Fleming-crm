@@ -1,3 +1,4 @@
+import {prepareEmailHtml} from './email-presentation';
 import fs from 'fs';
 import path from 'path';
 const assetBase='https://crm.fleminglettings.co.uk/email-assets/';
@@ -11,7 +12,7 @@ export function templateAssets(html:string):string {
 }
 export function emailTemplateLibrary(){
  return fs.readdirSync(path.join(__dirname,'email-templates')).filter(f=>f.endsWith('.html')).sort().map(filename=>{
-  const html=templateAssets(fs.readFileSync(path.join(__dirname,'email-templates',filename),'utf8'));
+  const html=prepareEmailHtml(templateAssets(fs.readFileSync(path.join(__dirname,'email-templates',filename),'utf8')));
   const label=filename.replace(/^\d+-/,'').replace(/\.html$/,'').replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
   const subject=html.match(/<title>([^<]+)<\/title>/i)?.[1]||label;
   return {id:filename,label,subject,html,fields:[...new Set(html.match(/\{\{[A-Z_]+\}\}/g)||[])].map(k=>k.slice(2,-2))};

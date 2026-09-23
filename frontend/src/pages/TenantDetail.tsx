@@ -951,7 +951,7 @@ export default function TenantDetail() {
                   Property ({propertyNotes.length})
                 </button>}
               </div>
-              <div className="space-y-3 max-h-64 overflow-y-auto">
+              <div className="space-y-3 max-h-64 overflow-y-auto !pr-0 [scrollbar-gutter:auto]">
                 {displayedNotes.length === 0 && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
                 {displayedNotes.map(note => (
                   <div key={note.id} className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24">

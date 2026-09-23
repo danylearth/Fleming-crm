@@ -92,7 +92,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
       switch (mode) {
         case 'viewing':
           await onAction(enquiry.id, 'viewing_booked', {
-            linked_property_id: propertyId ? Number(propertyId) : enquiry.linked_property_id || null,
+            linked_property_id: propertyId && propertyId!=='other' ? Number(propertyId) : null,
             viewing_location: customLocation.trim() || null,
             viewing_date: date,
             viewing_time: time,
@@ -188,17 +188,16 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
 
             {mode === 'viewing' && (
               <>
-                <Select label="Link to Property (optional)" value={propertyId} onChange={(value) => {
+                <Select label="Property *" value={propertyId} onChange={(value) => {
                   setPropertyId(value);
-                  if (value) setCustomLocation('');
+                  if (value!=='other') setCustomLocation('');
                 }}
-                  options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({
+                  options={[{ value: '', label: 'Select property...' }, {value:'other',label:'Other'}, ...properties.map(p => ({
                     value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}${p.rent_amount ? ` — £${p.rent_amount}/mo` : ''}`
                   }))]} />
-                <Input label="Or enter another location" value={customLocation} onChange={(value) => {
+                {propertyId==='other'&&<Input label="Other Address *" value={customLocation} onChange={(value) => {
                   setCustomLocation(value);
-                  if (value.trim()) setPropertyId('');
-                }} placeholder="e.g. Fleming Lettings office" />
+                }} placeholder="e.g. Fleming Lettings office" />}
                 <DatePicker label="Viewing Date" value={date} onChange={setDate} />
                 <TimePicker label="Viewing Time" value={time} onChange={setTime} />
                 <p className="text-xs text-[var(--text-muted)]">
@@ -244,7 +243,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
               <Button
                 variant={mode === 'reject' ? 'outline' : 'gradient'}
                 onClick={handleSubmit}
-                disabled={loading || (mode === 'viewing' && (!date || (!propertyId && !customLocation.trim()))) || (mode === 'awaiting' && !date)}
+                disabled={loading || (mode === 'viewing' && (!date || (!propertyId || (propertyId==='other'&&!customLocation.trim())))) || (mode === 'awaiting' && !date)}
                 className={mode === 'reject' ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : ''}
               >
                 {loading ? 'Saving...' : mode === 'reject' ? 'Reject & Archive' : 'Confirm'}

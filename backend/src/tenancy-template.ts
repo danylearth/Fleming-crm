@@ -61,6 +61,57 @@ export function formatContractLayout(xml:string):string {
   return pieces.join('')+xml.slice(cursor);
 }
 
+/** Client templates use paragraphs instead of the owned-property layout tables. */
+export function formatClientContractLayout(xml:string):string {
+  xml=xml.replace(/w:top="2160"/g,'w:top="2280"')
+    .replace(/<w:br\b[^>]*w:type="page"[^>]*\/>/g,'')
+    .replace(/<w:pageBreakBefore[^>]*\/>/g,'');
+  const pageBreak='<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr><w:r><w:br w:type="page"/></w:r></w:p>';
+  const paragraphs=(part:string)=>(part.match(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g)||[]).join('');
+  // The definitions table's final row contains the whole terms section, including
+  // a nested heading table. Unwrap that row so paragraph pagination takes effect.
+  const ranges:{start:number;end:number}[]=[];let depth=0,start=0;
+  for(const tag of xml.matchAll(/<w:tbl(?=[\s>])[^>]*>|<\/w:tbl>/g)){
+    if(tag[0].startsWith('</')){if(--depth===0)ranges.push({start,end:tag.index!+tag[0].length});}
+    else if(depth++===0)start=tag.index!;
+  }
+  for(let index=ranges.length-1;index>=0;index--){
+    const range=ranges[index];let table=xml.slice(range.start,range.end);
+    if(index===1){
+      let rowDepth=0,rowStart=0,lastStart=0,lastEnd=0;
+      for(const tag of table.matchAll(/<w:tr(?=[\s>])[^>]*>|<\/w:tr>/g)){
+        if(tag[0].startsWith('</')){if(--rowDepth===0){lastStart=rowStart;lastEnd=tag.index!+tag[0].length;}}
+        else if(rowDepth++===0)rowStart=tag.index!;
+      }
+      table=pageBreak+table.slice(0,lastStart)+'</w:tbl>'+paragraphs(table.slice(lastStart,lastEnd));
+    }
+    if(index===2)table=paragraphs(table);
+    if(index===3)table=pageBreak+table;
+    xml=xml.slice(0,range.start)+table+xml.slice(range.end);
+  }
+  let signing=false;
+  xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{
+    const text=p.replace(/<[^>]+>/g,'').trim();
+    if(text==='Signed as an agreement')signing=true;
+    if(text.startsWith('In addition to you/yourselves'))p=p.replace(/<w:br\s*\/>/g,'');
+    if(!text){
+      if(signing||/<w:br|<w:drawing|<w:sectPr/.test(p))return p;
+      return '<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr></w:p>';
+    }
+    p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');
+    if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
+    p=p.replace(/<w:keepLines[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:keepLines/>');
+    const heading=text.length<100&&!text.endsWith(':')&&/<w:b(?:\s[^>]*)?\/>/.test(p);
+    if(heading)p=p.replace(/<w:keepNext[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:keepNext/>');
+    if(/^Section C -|^Addendum to Tenancy Agreement$/.test(text))p=p.replace('<w:pPr>','<w:pPr><w:pageBreakBefore/>');
+    return p;
+  });
+  return xml.replace(/<w:tr(?:\s[^>]*)?>[\s\S]*?<\/w:tr>/g,row=>{
+    row=row.replace(/<w:trPr\s*\/>/,'<w:trPr></w:trPr>').replace(/<w:cantSplit[^>]*\/>/g,'');
+    return row.includes('<w:trPr>')?row.replace('<w:trPr>','<w:trPr><w:cantSplit/>'):row.replace(/(<w:tr(?:\s[^>]*)?>)/,'$1<w:trPr><w:cantSplit/></w:trPr>');
+  });
+}
+
 /** Preserve the supplied contract's clauses, tables, headers and page settings. */
 export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput): Promise<Buffer> {
   if (pending >= 1) throw new Error('Other agreements are being prepared. Please try again shortly.');
@@ -82,7 +133,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         CLIENT_SORT_CODE:FLEMING_CLIENT_MONEY_ACCOUNT.sortCode,CLIENT_ACCOUNT_NUMBER:FLEMING_CLIENT_MONEY_ACCOUNT.accountNumber,BANK_ACCOUNT_NAME:input.bankDetails.accountName,BANK_NAME:input.bankDetails.bankName||'Not supplied',
         BANK_SORT_CODE:input.bankDetails.sortCode,BANK_ACCOUNT_NUMBER:input.bankDetails.accountNumber,
         HOLDING_DEPOSIT:Number(input.holdingDeposit||0).toLocaleString('en-GB',{minimumFractionDigits:2}),DEPOSIT_SCHEME:input.depositScheme||'',
-        AGREEMENT_DATE: date(input.agreementDate), START_DATE: date(input.tenancyStartDate),
+        AGREEMENT_DATE: date(input.tenancyStartDate), START_DATE: date(input.tenancyStartDate),
         RENT_DAY: isClient ? date(input.tenancyStartDate).split(' ')[0] : input.tenancyStartDate.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'Europe/London' }),
         TENANT_NAMES: names, PROPERTY_ADDRESS: input.propertyAddress,
         RENT: input.rent.toLocaleString('en-GB',{minimumFractionDigits:2}), DEPOSIT: input.deposit.toLocaleString('en-GB',{minimumFractionDigits:2}), PAYMENT_REFERENCE: input.paymentReference,
@@ -95,7 +146,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         GAS_ACKNOWLEDGEMENT: input.hasGas ? 'Gas Safety Certificate' : 'Gas Safety Certificate: not applicable (no gas connection)',
       };
       let xml = zip.file('word/document.xml')!.asText();
-      if(!isClient)xml=formatContractLayout(xml);
+      xml=isClient?formatClientContractLayout(xml):formatContractLayout(xml);
       if(!input.hasGas)xml=xml.replace(/<w:tr\b[\s\S]*?<\/w:tr>/g,row=>row.includes('{{GAS_ACKNOWLEDGEMENT}}')?'':row);
       xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,paragraph=>paragraph.replace(/<[^>]+>/g,'').includes('The electronic signature certificate records each named tenant')?'':paragraph);
       xml = xml.replace(/\{\{([A-Z_]+)\}\}/g, (_match, key) => {

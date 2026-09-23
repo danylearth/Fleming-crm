@@ -15,7 +15,7 @@ export function validateClientDetails(details:ClientDetails,isCompany:boolean):s
  return null;
 }
 export async function clientAgreementContext(enquiryId:number){
- const enquiry=await queryOne(`SELECT te.id,te.joint_partner_id,te.client_agreement_details,p.landlord_id,p.service_type,l.* FROM tenant_enquiries te JOIN properties p ON p.id=te.linked_property_id JOIN landlords l ON l.id=p.landlord_id WHERE te.id=$1`,[enquiryId]);
+ const enquiry=await queryOne(`SELECT te.id,te.joint_partner_id,te.client_agreement_details,p.id AS service_property_id,p.landlord_id,p.service_type,l.* FROM tenant_enquiries te JOIN properties p ON p.id=te.linked_property_id JOIN landlords l ON l.id=p.landlord_id WHERE te.id=$1`,[enquiryId]);
  if(!enquiry)return null;
  const canonicalId=enquiry.joint_partner_id?Math.min(enquiryId,enquiry.joint_partner_id):enquiryId;
  const saved=await queryOne('SELECT client_agreement_details FROM tenant_enquiries WHERE id=$1',[canonicalId]);
@@ -27,9 +27,11 @@ export async function clientAgreementContext(enquiryId:number){
  const stored=saved?.client_agreement_details;
  const details:ClientDetails=stored?.landlordId===enquiry.landlord_id?{...defaults,...stored.details}:defaults;
  if(!isCompany){details.companyNumber='';details.directorName='';}
+ const service=await queryOne("SELECT bank_details,signed_at,signer_name,bank_changed,payment_route,setup_fee,monthly_fee FROM landlord_service_agreements WHERE property_id=$1 AND landlord_id=$2 AND service_type=$3 AND status='signed'",[enquiry.service_property_id,enquiry.landlord_id,enquiry.service_type]);
+ const serviceBank=service?.bank_details?.account_number?{...service.bank_details,approved_at:service.signed_at,landlord_approved_at:service.signed_at,landlord_approved_name:service.signer_name}:null;
  const hasOverride=!!details.bankAccountName;
- const bank=hasOverride?{account_name:details.bankAccountName,sort_code:details.bankSortCode,account_number:details.bankAccountNumber,bank_name:'',approved_at:stored?.bankOverrideApprovedAt||null}:masterBank;
- return {bankOverride:hasOverride,enquiryId:canonicalId,landlordId:enquiry.landlord_id,enabled:enquiry.landlord_type!=='internal',serviceType:enquiry.service_type,isCompany,defaults,details,directors,bank:bank||null,saved:stored?.landlordId===enquiry.landlord_id,ready:!validateClientDetails(details,isCompany)&&!!bank?.approved_at};
+ const bank=hasOverride?{account_name:details.bankAccountName,sort_code:details.bankSortCode,account_number:details.bankAccountNumber,bank_name:'',approved_at:stored?.bankOverrideApprovedAt||null}:serviceBank||masterBank;
+ return {propertyId:enquiry.service_property_id,serviceAgreementSigned:!!service,servicePaymentRoute:service?.payment_route,serviceSetupFee:service?.setup_fee,serviceMonthlyFee:service?.monthly_fee,bankOverride:hasOverride,enquiryId:canonicalId,landlordId:enquiry.landlord_id,enabled:enquiry.landlord_type!=='internal',serviceType:enquiry.service_type,isCompany,defaults,details,directors,bank:bank||null,saved:stored?.landlordId===enquiry.landlord_id,ready:!validateClientDetails(details,isCompany)&&!!bank?.approved_at};
 }
 export function registerClientAgreementDetails(app:Express){
  app.get('/api/landlords/:id/bank-details',authMiddleware,requirePermission('staff'),async(req,res)=>{
@@ -43,7 +45,7 @@ export function registerClientAgreementDetails(app:Express){
   if(approved&&req.user.role!=='admin')return res.status(403).json({error:'An administrator must approve bank details'});
   const client=await pool.connect();try{await client.query('BEGIN');
    if(!(await client.query('SELECT id FROM landlords WHERE id=$1 FOR UPDATE',[req.params.id])).rows.length){await client.query('ROLLBACK');return res.sendStatus(404);}
-   const result=await client.query(`INSERT INTO landlord_bank_details(landlord_id,account_name,sort_code,account_number,bank_name,approved_at,approved_by) VALUES($1,$2,$3,$4,$5,CASE WHEN $6 THEN NOW() END,CASE WHEN $6 THEN $7::integer END) ON CONFLICT(landlord_id) DO UPDATE SET account_name=$2,sort_code=$3,account_number=$4,bank_name=$5,approved_at=CASE WHEN $6 THEN NOW() END,approved_by=CASE WHEN $6 THEN $7::integer END,updated_at=NOW() RETURNING *`,[req.params.id,accountName,sortCode.replace(/(\d{2})(\d{2})(\d{2})/,'$1-$2-$3'),accountNumber,bankName,approved,req.user.id]);
+   const result=await client.query(`INSERT INTO landlord_bank_details(landlord_id,account_name,sort_code,account_number,bank_name,approved_at,approved_by) VALUES($1,$2,$3,$4,$5,CASE WHEN $6 THEN NOW() END,CASE WHEN $6 THEN $7::integer END) ON CONFLICT(landlord_id) DO UPDATE SET account_name=$2,sort_code=$3,account_number=$4,bank_name=$5,approved_at=CASE WHEN $6 THEN NOW() END,approved_by=CASE WHEN $6 THEN $7::integer END,landlord_approved_at=CASE WHEN landlord_bank_details.account_name=$2 AND landlord_bank_details.sort_code=$3 AND landlord_bank_details.account_number=$4 AND landlord_bank_details.bank_name=$5 THEN landlord_bank_details.landlord_approved_at END,landlord_approved_name=CASE WHEN landlord_bank_details.account_name=$2 AND landlord_bank_details.sort_code=$3 AND landlord_bank_details.account_number=$4 AND landlord_bank_details.bank_name=$5 THEN landlord_bank_details.landlord_approved_name END,updated_at=NOW() RETURNING *`,[req.params.id,accountName,sortCode.replace(/(\d{2})(\d{2})(\d{2})/,'$1-$2-$3'),accountNumber,bankName,approved,req.user.id]);
    await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'bank_details_updated','landlord',$3,$4)",[req.user.id,req.user.email,req.params.id,JSON.stringify({details_approved:approved,account_ending:accountNumber.slice(-4)})]);await client.query('COMMIT');res.json(result.rows[0]);
   }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
  });

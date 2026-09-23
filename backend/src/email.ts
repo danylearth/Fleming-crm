@@ -1,3 +1,4 @@
+import {prepareEmailHtml} from './email-presentation';
 import { Resend } from 'resend';
 import fs from 'fs';
 import path from 'path';
@@ -22,7 +23,7 @@ function renderFinalEmailTemplate(filename: string, values: Record<string, strin
   if (unresolved) throw new Error(`Missing values for ${filename}: ${[...new Set(unresolved)].join(', ')}`);
   // Email clients need absolute, publicly reachable image URLs.
   html = html.replace(/src="assets\//g, 'src="https://crm.fleminglettings.co.uk/email-assets/');
-  return html.replace('</head>', '<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><style>:root{color-scheme:light only}body{color-scheme:light only}</style></head>');
+  return prepareEmailHtml(html);
 }
 
 function addressParts(address: string): { full: string; short: string; remainder: string } {
@@ -66,7 +67,7 @@ function emailDisclaimer(): string {
 }
 
 export function brandedEmailHtml(title: string, content: string): string {
-  return `<!doctype html><html><body style="margin:0;background:#EEEEEE;font-family:Helvetica,Arial,sans-serif;color:#1E1E1E">
+  return prepareEmailHtml(`<!doctype html><html><body style="margin:0;background:#EEEEEE;font-family:Helvetica,Arial,sans-serif;color:#1E1E1E">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#EEEEEE"><tr><td align="center" style="padding:24px 12px">
       <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;background:#ffffff">
         <tr><td style="padding:30px 40px;background:#27083D">
@@ -78,7 +79,7 @@ export function brandedEmailHtml(title: string, content: string): string {
         <tr><td style="background:#27083D;padding:24px 40px;color:#ffffff;font-size:13px;line-height:1.65"><strong>Lettings Support Team | fleminglettings.co.uk</strong><br><a href="mailto:${OUTBOUND_EMAIL_ADDRESS}" style="color:#ffffff">${OUTBOUND_EMAIL_ADDRESS}</a><br>01902 212 415</td></tr>
         <tr><td style="background:#1E1E1E">${emailDisclaimer()}</td></tr>
       </table>
-    </td></tr></table></body></html>`;
+    </td></tr></table></body></html>`);
 }
 
 function emailMoney(value: number): string {
@@ -281,7 +282,7 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
   }
 
   try {
-    const inline = inlineEmailImages(params.html);
+    const inline = inlineEmailImages(prepareEmailHtml(params.html));
     const { data, error } = await resend.emails.send({
       from: params.fromEmail ? `Fleming Lettings <${params.fromEmail}>` : EMAIL_FROM,
       to: params.to,

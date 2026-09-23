@@ -36,3 +36,15 @@ p, .intro, .form-description, .step p.step-description { font-size: 16px; line-h
 .dp-year-grid{overscroll-behavior:contain;}
 @media(max-width:768px){.date-picker-dropdown{width:100%!important;max-height:85dvh;padding:16px 16px calc(16px + env(safe-area-inset-bottom));}.dp-day{min-height:40px;}.dp-footer button{min-height:44px;}}
 @media(max-width:480px){.header{padding:12px 15px;gap:8px;}.header .back-button{font-size:13px;padding:8px 12px;}.form-wrapper{padding:24px 16px;}.button-group{margin-top:24px;}.radio-option label{padding:16px 18px;}}
+
+/* Keep checkbox labels aligned independently of text-input styling. */
+input[type="checkbox"]{box-sizing:border-box!important;width:20px!important;height:20px!important;min-width:20px;min-height:20px!important;max-height:20px!important;flex:0 0 20px;padding:0!important;accent-color:#dc006d;vertical-align:middle;}
+.checkbox-group{align-items:start!important;margin-bottom:12px;}
+.checkbox-group label{padding:0!important;align-self:center;}
+.marketing-prefs{display:flex;flex-wrap:wrap;gap:12px 20px;}
+.marketing-prefs .checkbox-group{display:flex!important;align-items:center!important;gap:8px;margin:0;}
+.marketing-prefs .checkbox-group input{margin:0!important;}
+.header-inner{width:100%;display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap;gap:12px;}
+.header-inner img{max-width:40%;}
+.header-inner .back-button{font-size:14px;line-height:20px;font-weight:700;padding:8px 16px;min-height:44px;}
+@media(max-width:480px){.header-inner{padding:12px 15px;gap:8px;}.header-inner .back-button{font-size:13px;padding:8px 12px;}.header-inner img{width:120px;}.shell .content{padding:24px 16px;}}

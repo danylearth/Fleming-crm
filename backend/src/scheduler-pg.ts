@@ -1,3 +1,4 @@
+import {refreshOnsRents} from './rent-comparisons';
 import {runFinanceSchedule} from './finance-scheduler';
 import { syncTenantLifecycle } from './tenant-lifecycle-db';
 import { query, queryOne, run, insert } from './db-pg';
@@ -285,6 +286,8 @@ async function runAllChecks() {
 }
 
 export function startScheduler() {
+  const refreshRents=()=>refreshOnsRents().catch(e=>console.error('[ONS rent refresh]',e.message));
+  if(process.env.NODE_ENV!=='test'){void refreshRents();setInterval(refreshRents,24*60*60*1000);}
   const financeCheck=()=>runFinanceSchedule().catch(error=>console.error('[Finance scheduler]',error));
   void financeCheck();
   setInterval(financeCheck,60_000);

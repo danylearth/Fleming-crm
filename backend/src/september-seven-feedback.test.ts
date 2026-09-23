@@ -22,7 +22,7 @@ describe('7 September CRM feedback', () => {
     expect(backend).toContain('SET ${role}_opened_at = NOW()');
     expect(wizard).toContain('Reissue New Agreement');
     expect(wizard).toContain('Last opened:');
-    expect(wizard).toContain('Waiting on ${outstandingAgreementSigners.join');
+    expect(wizard).toContain('Waiting for ${outstandingAgreementSigners.join');
   });
 
   it('renders the supplied letterhead, Robert signature and one signing row per tenant', () => {
@@ -48,7 +48,7 @@ describe('7 September CRM feedback', () => {
     expect(signingForm).toContain("value=d.today||new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date())");
     expect(signingForm).toContain('@media(max-width:820px)');
     expect(signingForm).not.toContain('Privacy Policy');
-    expect(signingForm).toContain('#toolbar=0&navpanes=0');
+    expect(signingForm).toContain('pdfjsLib.getDocument');
   });
 
   it('keeps both applicants linked and advances the shared onboarding workflow', () => {

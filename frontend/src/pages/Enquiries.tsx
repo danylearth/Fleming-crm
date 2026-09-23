@@ -431,7 +431,7 @@ export default function Enquiries() {
           if ((wfPropId || wfCustomLocation.trim()) && wfDate) {
             const name = workflowEnquiry.name;
             const viewingResult = await api.post('/api/property-viewings', {
-              property_id: wfPropId ? Number(wfPropId) : null,
+              property_id: wfPropId && wfPropId!=='other' ? Number(wfPropId) : null,
               viewing_location: wfCustomLocation.trim() || null,
               enquiry_id: workflowEnquiry.id,
               viewer_name: name, viewer_email: workflowEnquiry.email,
@@ -448,7 +448,7 @@ export default function Enquiries() {
             }
             await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`, {
               ...raw, status: 'viewing_booked',
-              ...(wfPropId ? { linked_property_id: Number(wfPropId) } : {}),
+              linked_property_id: wfPropId && wfPropId!=='other' ? Number(wfPropId) : null,
               viewing_date: wfDate, viewing_with: wfViewingWith || null,
             });
           }
@@ -999,17 +999,16 @@ export default function Enquiries() {
                     <>
                       <Select label="Assign To (Agent)" value={wfAssignedTo} onChange={setWfAssignedTo} searchable
                         options={[{ value: '', label: 'Unassigned' }, ...allUsers.map(u => ({ value: u.name, label: u.name }))]} />
-                      <Select label="Property (optional)" searchable value={wfPropId} onChange={(v) => {
+                      <Select label="Property *" searchable value={wfPropId} onChange={(v) => {
                         setWfPropId(v);
-                        if (v) setWfCustomLocation('');
+                        if (v!=='other') setWfCustomLocation('');
                         setSmsBody(generateViewingSms(firstName, v, wfDate, wfTime, ''));
                       }}
-                        options={[{ value: '', label: 'Select property...' }, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
-                      <Input label="Or enter another location" value={wfCustomLocation} onChange={(value) => {
+                        options={[{ value: '', label: 'Select property...' }, {value:'other',label:'Other'}, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
+                      {wfPropId==='other'&&<Input label="Other Address *" value={wfCustomLocation} onChange={(value) => {
                         setWfCustomLocation(value);
-                        if (value.trim()) setWfPropId('');
                         setSmsBody(generateViewingSms(firstName, '', wfDate, wfTime, value));
-                      }} placeholder="e.g. Fleming Lettings office" />
+                      }} placeholder="e.g. Fleming Lettings office" />}
                       <div className="grid grid-cols-2 gap-3">
                         <DatePicker label="Viewing Date *" value={wfDate} onChange={(v) => {
                           setWfDate(v);
@@ -1035,7 +1034,7 @@ export default function Enquiries() {
                             </div>
                           </label>
                           {emailEnabled && (
-                            <textarea readOnly rows={7} value={viewingEmailPreview(workflowEnquiry.name, viewingLocation(wfPropId, wfCustomLocation), wfDate, wfTime)}
+                            <textarea readOnly ref={el=>{if(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}}} rows={7} value={viewingEmailPreview(workflowEnquiry.name, viewingLocation(wfPropId, wfCustomLocation), wfDate, wfTime)}
                               className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] resize-none" />
                           )}
                         </div>
@@ -1057,7 +1056,7 @@ export default function Enquiries() {
                           {smsEnabled && (
                             <div>
                               <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Message Preview</label>
-                              <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={4}
+                              <textarea ref={el=>{if(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}}} value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={4}
                                 className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-none transition-colors" />
                               <p className="text-[10px] text-[var(--text-muted)] mt-1">{(() => { const s = calculateSmsSegments(smsBody); return `${s.charCount} chars · ${s.segments} segment${s.segments !== 1 ? 's' : ''} · ${s.encoding}`; })()}</p>
                             </div>
@@ -1099,7 +1098,7 @@ export default function Enquiries() {
                           {smsEnabled && (
                             <div>
                               <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Message Preview</label>
-                              <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={3}
+                              <textarea ref={el=>{if(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}}} value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={3}
                                 className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-none transition-colors" />
                               <p className="text-[10px] text-[var(--text-muted)] mt-1">{(() => { const s = calculateSmsSegments(smsBody); return `${s.charCount} chars · ${s.segments} segment${s.segments !== 1 ? 's' : ''} · ${s.encoding}`; })()}</p>
                             </div>
@@ -1176,7 +1175,7 @@ export default function Enquiries() {
                           {smsEnabled && (
                             <div>
                               <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Message Preview</label>
-                              <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={4}
+                              <textarea ref={el=>{if(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}}} value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={4}
                                 className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-none transition-colors" />
                               <p className="text-[10px] text-[var(--text-muted)] mt-1">{(() => { const s = calculateSmsSegments(smsBody); return `${s.charCount} chars · ${s.segments} segment${s.segments !== 1 ? 's' : ''} · ${s.encoding}`; })()}</p>
                             </div>
@@ -1214,7 +1213,7 @@ export default function Enquiries() {
                   <Button
                     variant={workflowMode === 'reject' ? 'outline' : 'gradient'}
                     onClick={doWorkflowAction}
-                    disabled={wfLoading || (workflowMode === 'viewing' && (!wfDate || (!wfPropId && !wfCustomLocation.trim()))) || (workflowMode === 'follow_up' && !wfDate)}
+                    disabled={wfLoading || (workflowMode === 'viewing' && (!wfDate || (!wfPropId || (wfPropId==='other'&&!wfCustomLocation.trim())))) || (workflowMode === 'follow_up' && !wfDate)}
                     className={workflowMode === 'reject' ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : ''}
                   >
                     {wfLoading ? 'Saving...' : workflowMode === 'reject' ? 'Reject & Archive' : 'Confirm'}

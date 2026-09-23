@@ -4,6 +4,8 @@ export function pipelineVisible(e:PipelineEnquiry,today:string,time='00:00'){
  if(e.balance_payment_received&&!e.handover_not_required&&e.handover_date)return e.handover_date.slice(0,10)<=today;
  if(e.status==='viewing_booked'&&e.viewing_date){const day=e.viewing_date.slice(0,10);return day<today||(day===today&&(!e.viewing_time||e.viewing_time.slice(0,5)<=time));}
  if(e.balance_payment_requested&&!e.balance_payment_received)return !!e.balance_follow_up_date&&e.balance_follow_up_date.slice(0,10)<=today;
+ if(e.tenancy_agreement_status==='completed')return true;
+ if(e.follow_up_date&&e.follow_up_date.slice(0,10)>today)return false;
  return !e.tenancy_agreement_status||e.tenancy_agreement_status==='completed'||!!(e.follow_up_date&&e.follow_up_date.slice(0,10)<=today);
 }
 export function pipelineStage(e:PipelineEnquiry,today:string){

@@ -1,3 +1,5 @@
+import RentComparisons from '../components/RentComparisons';
+import ServiceAgreements from '../components/ServiceAgreements';
 import {Copy,Check} from 'lucide-react';
 import PropertyInspections from '../components/PropertyInspections';
 import { usePermissions } from '../hooks/usePermissions';
@@ -932,7 +934,7 @@ export default function PropertyDetail() {
                   {property.landlord_type !== 'internal' && <ReadField label="Charge" value={property.charge_percentage ? `${property.charge_percentage}%` : null} />}
                   {property.landlord_type !== 'internal' && <ReadField label="Total Charge" value={property.total_charge ? `£${property.total_charge}` : null} />}
 </div>}</GlassCard>
-
+            <RentComparisons propertyId={property.id}/>
 
             {/* Leasehold (conditional) */}
             {(editing ? form.is_leasehold : property.is_leasehold) ? (
@@ -1314,6 +1316,7 @@ export default function PropertyDetail() {
               )}
             </Card>
 
+            {user?.role!=='viewer'&&<ServiceAgreements propertyId={property.id}/>}
             {/* Land Registry Price Data */}
             {!!property.postcode && <PricePaidData postcode={property.postcode} />}
 

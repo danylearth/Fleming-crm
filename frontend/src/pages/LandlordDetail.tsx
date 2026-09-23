@@ -1,3 +1,4 @@
+import ServiceAgreements from '../components/ServiceAgreements';
 import {Check} from 'lucide-react';
 import LandlordBankDetails from '../components/LandlordBankDetails';
 import ContextualDocSlot from '../components/ui/ContextualDocSlot';
@@ -411,7 +412,7 @@ export default function LandlordDetail() {
               })()}
             </GlassCard>
 
-            {user?.role !== 'viewer' && <LandlordBankDetails landlordId={Number(id)}/>}
+            {user?.role !== 'viewer' && <><LandlordBankDetails landlordId={Number(id)}/><ServiceAgreements landlordId={Number(id)}/></>}
 
             {/* Properties */}
             <GlassCard className="p-6">
