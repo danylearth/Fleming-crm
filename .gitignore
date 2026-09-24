@@ -17,6 +17,7 @@ build/
 */.env *
 !.env.example
 !*/.env.example
+fleming-api-keys.env
 
 # Logs
 *.log
@@ -38,6 +39,7 @@ Thumbs.db
 
 # Uploaded files (runtime data, never commit)
 backend/uploads/
+backend/flemo-accounts/
 
 # Local CSV import fixtures (may contain applicant PII)
 frontend/public/__test-*.csv

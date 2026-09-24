@@ -15,10 +15,10 @@
     "resolveJsonModule": true,
     "paths": {
       "altcha-lib": [
-        "./node_modules/altcha-lib/dist/cjs/v2/index.d.ts"
+        "./node_modules/altcha-lib/dist/cjs/v2/index.js"
       ],
       "altcha-lib/algorithms/*": [
-        "./node_modules/altcha-lib/dist/cjs/v2/algorithms/*.d.ts"
+        "./node_modules/altcha-lib/dist/cjs/v2/algorithms/*.js"
       ]
     }
   },
