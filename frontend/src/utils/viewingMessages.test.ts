@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { viewingEmailPreview, viewingSmsPreview } from './viewingMessages';
+import { OFFICE_ADDRESS } from './meetingLocations';
+
+it('includes the office address in both tenant booking confirmations', () => {
+  expect(viewingEmailPreview('Sample', OFFICE_ADDRESS, '2026-10-01', '10:30')).toContain(OFFICE_ADDRESS);
+  expect(viewingSmsPreview('Sample', OFFICE_ADDRESS, '2026-10-01', '10:30')).toContain(OFFICE_ADDRESS);
+});
 
 describe('viewing communication previews', () => {
   it('shows a custom location, date, and time in the SMS preview', () => {

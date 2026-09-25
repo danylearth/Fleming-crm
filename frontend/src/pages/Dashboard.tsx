@@ -9,7 +9,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import {
   Building2, Users, Wrench, MessageSquare, AlertTriangle,
-  Clock, CheckCircle2, ArrowRight, CalendarDays, Trash2, X, ListChecks, Eye, KeyRound, Handshake
+  Clock, CheckCircle2, ArrowRight, CalendarDays, Trash2, X, ListChecks, Eye
 } from 'lucide-react';
 
 interface MaintenanceItem {
@@ -196,28 +196,28 @@ export default function Dashboard() {
           <Card className="p-6">
             <div className="flex flex-wrap justify-between items-center gap-3 mb-5"><h2 className="font-semibold flex items-center gap-2"><AlertTriangle size={16}/> Compliance Alerts & Maintenance Requests</h2><div className="flex flex-wrap items-center gap-2 ml-auto max-w-full"><Select hideLabel searchable className="w-64 max-w-full" label="Select User…" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'View All'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/></div></div>
             {dashboard?.complianceAlerts?.some(a=>matchesMaintenanceOwner(a.assigned_to)) || dashboard?.recentMaintenance?.some(m=>matchesMaintenanceOwner(m.assigned_to)) ? (
-              <div id="dashboard-alerts" className="space-y-3">
+              <div id="dashboard-alerts" className="space-y-2">
                 {dashboard!.complianceAlerts.filter(a=>matchesMaintenanceOwner(a.assigned_to)).map((alert, i) => (
-                  <button key={`compliance-${i}`} onClick={() => navigate(alert.task_id?`/tasks/${alert.task_id}`:`/properties/${alert.id}`)} className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
-                    <div className="flex items-center gap-3">
+                  <button key={`compliance-${i}`} onClick={() => navigate(alert.task_id?`/tasks/${alert.task_id}`:`/properties/${alert.id}`)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                    <div className="flex items-center gap-2 min-w-0">
                       <AlertTriangle size={16} className={urgencyColor(alert.expiry_date)} />
-                      <div>
-                        <p className="text-sm font-medium">{alert.property_address}</p>
-                        <p className="text-xs text-[var(--text-muted)]">{alert.type}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-medium ${urgencyColor(alert.expiry_date)}`}>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{alert.property_address}</p>
+                        <div className="flex flex-wrap items-center gap-x-2 text-xs">
+                          <span className="text-[var(--text-muted)]">{alert.type}</span>
+                          <span className={`font-medium ${urgencyColor(alert.expiry_date)}`}>
                         {daysUntil(alert.expiry_date) < 0
                           ? `${Math.abs(daysUntil(alert.expiry_date))}d overdue`
                           : `${daysUntil(alert.expiry_date)}d left`}
-                      </p>
-                      <div className="flex items-center justify-end gap-2 mt-1"><span className="text-xs text-[var(--text-muted)]">{new Date(alert.expiry_date).toLocaleDateString('en-GB')}</span><span aria-label="View alert" title="View alert" className="rounded-full bg-[var(--bg-hover)] p-2"><Eye size={14}/></span></div>
+                          </span>
+                        </div>
+                      </div>
                     </div>
+                    <div className="flex items-center gap-2 shrink-0"><span className="text-xs text-[var(--text-muted)]">{new Date(alert.expiry_date).toLocaleDateString('en-GB')}</span><span aria-label="View alert" title="View alert" className="rounded-full bg-[var(--bg-hover)] p-1.5"><Eye size={14}/></span></div>
                   </button>
                 ))}
                 {dashboard!.recentMaintenance.filter(m=>matchesMaintenanceOwner(m.assigned_to)).map(item => (
-                  <button key={`maintenance-${item.id}`} onClick={() => navigate(`/maintenance/${item.id}`)} className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                  <button key={`maintenance-${item.id}`} onClick={() => navigate(`/maintenance/${item.id}`)} className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                     <div className="flex items-center gap-3 min-w-0"><Wrench size={16} className="text-amber-400 shrink-0" /><div className="min-w-0"><p className="text-sm font-medium truncate">{item.property_address}</p><p className="text-xs text-[var(--text-muted)] truncate">{item.description}</p></div></div>
                     {item.assigned_name && <span title={item.assigned_name} className="rounded-full bg-amber-500/15 px-2 py-1 text-xs mx-2">{item.assigned_name?item.assigned_name.split(' ').map(n=>n[0]).join('').slice(0,2):''}</span>}<span className="text-[10px] font-semibold uppercase text-amber-400">{item.status.replace('_', ' ')}<span aria-label="View maintenance" title="View maintenance" className="inline-flex ml-2 rounded-full bg-[var(--bg-hover)] p-2"><Eye size={14}/></span></span>
                   </button>
@@ -239,32 +239,39 @@ export default function Dashboard() {
         <Card className="p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex items-center gap-2"><CalendarDays size={16}/>Team Calendar</h2><div className="flex flex-wrap items-center gap-2"><Select hideLabel searchable className="w-64 max-w-full" label="Filter calendar by user" value={calendarOwner} onChange={setCalendarOwner} options={[{value:'all',label:'All Users'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/><Button size="sm" className="h-11 w-28 shrink-0" variant="outline" onClick={()=>navigate('/tasks')}>Open Calendar</Button></div></div>
           <div className="overflow-x-auto"><div className="grid grid-cols-7 gap-2 min-w-[600px]">
-            {calendarDays.map(({ key, date, tasks: dayTasks }, index) => (
+            {calendarDays.map(({ key, date, tasks: dayTasks }, index) => {
+              const owners = new Map<string, { name: string; count: number }>();
+              dayTasks.forEach(task => {
+                const assignedTo = String(task.assigned_to || '');
+                const member = teamMembers.find(member => String(member.id) === assignedTo || member.name === assignedTo);
+                const owner = member ? String(member.id) : assignedTo || 'unassigned';
+                const summary = owners.get(owner);
+                if (summary) summary.count += 1;
+                else owners.set(owner, { name: member?.name || assignedTo || 'Unassigned', count: 1 });
+              });
+              return (
               <button
                 key={key}
                 onClick={() => navigate('/tasks')}
-                className={`min-h-24 rounded-xl border p-2 text-left transition-colors hover:bg-[var(--bg-hover)] ${index === 0 ? 'border-orange-500/40 bg-orange-500/5' : 'border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40'}`}
+                className={`min-h-24 flex flex-col items-stretch rounded-xl border p-2 text-left transition-colors hover:bg-[var(--bg-hover)] ${index === 0 ? 'border-orange-500/40 bg-orange-500/5' : 'border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40'}`}
               >
                 <span className="block text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
                   {date.toLocaleDateString('en-GB', { weekday: 'short' })}
                 </span>
                 <span className="block text-lg font-semibold mt-0.5">{date.getDate()}</span>
-                <div className="flex flex-wrap gap-1 mt-3" aria-label={`${dayTasks.length} open tasks`}>
-                  {dayTasks.slice(0, 6).map(task => (
-                    <span key={task.id} title={`${task.title}${task.assigned_to ? ` — ${teamMembers.find(member=>String(member.id)===task.assigned_to)?.name || task.assigned_to}` : ''}`} className={`w-2 h-2 rounded-full ${colorForMember(task.assigned_to)}`} />
+                <div className="space-y-2 mt-3" aria-label={`${dayTasks.length} open tasks and assignments`}>
+                  {[...owners].map(([owner, { name, count }]) => (
+                    <div key={owner} className="flex items-center gap-1.5 text-xs" title={`${name}: ${count} ${count === 1 ? 'task/assignment' : 'tasks/assignments'}`}>
+                      <span className={`w-2 h-2 shrink-0 rounded-full ${owner === 'unassigned' ? 'bg-slate-400' : colorForMember(owner)}`} />
+                      <span className="min-w-0 flex-1 break-words">{name}</span>
+                      <span className="shrink-0 rounded-full bg-[var(--bg-hover)] px-1.5 py-0.5 font-semibold tabular-nums">{count}</span>
+                    </div>
                   ))}
-                  {dayTasks.length > 6 && <span className="text-[9px] text-[var(--text-muted)]">+{dayTasks.length - 6}</span>}
                 </div>
               </button>
-            ))}
-          </div>
-          </div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 text-xs text-[var(--text-muted)]">
-            {[...new Set(calendarDays.flatMap(day => day.tasks.map(task => String(task.assigned_to || 'unassigned'))))].map(owner => {
-              const ownerTasks=calendarDays.flatMap(day=>day.tasks).filter(task=>String(task.assigned_to||'unassigned')===owner);
-              return <div key={owner} className="self-start min-w-0"><div className="flex items-center gap-1.5 font-medium min-h-6"><span className={`w-2 h-2 shrink-0 rounded-full ${owner==='unassigned'?'bg-slate-400':colorForMember(owner)}`} />{owner==='unassigned'?'Unassigned':teamMembers.find(member=>String(member.id)===owner)?.name||owner}</div>
-                <div className="flex flex-col gap-2 mt-2">{ownerTasks.map(task=>{const Icon=task.task_type==='viewing'?Eye:task.task_type==='handover'?KeyRound:task.task_type==='meeting'?Handshake:task.task_type==='reminder'?Clock:ListChecks;return <button key={task.id} className="flex items-start gap-1.5 text-left text-[11px]" onClick={()=>navigate('/tasks')}><Icon size={13} className="shrink-0 mt-0.5"/><span>{task.title}<span className="block text-[10px] opacity-70">{new Date(task.due_date).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span></span></button>;})}</div>
-              </div>;
+              );
             })}
+          </div>
           </div>
         </Card>
 
@@ -311,20 +318,20 @@ export default function Dashboard() {
           <SectionHeader title="My Properties" action={() => navigate('/properties')} actionLabel="View All" />
           {properties.length ? (
             <div className="flex gap-4 overflow-x-auto pb-4 -mx-2 px-2 scrollbar-hide">
-              {properties.map(prop => (
+              {properties.map((prop, index) => (
                 <GlassCard
                   key={prop.id}
                   onClick={() => navigate(`/properties/${prop.id}`)}
                   className="min-w-[280px] max-w-[280px] shrink-0 overflow-hidden"
                 >
                   <img
-                    src={getPropertyImage(prop.id, 400, 240, `${prop.address}, ${prop.postcode}`, prop.image_url, prop.landlord_name)}
+                    src={getPropertyImage(prop.id, 400, 240, `${prop.address}, ${prop.postcode}`, prop.image_url, prop.landlord_name, index)}
                     alt={prop.address}
                     className="h-36 w-full object-cover"
                     loading="lazy"
                     onError={event => {
                       event.currentTarget.onerror = null;
-                      event.currentTarget.src = getPropertyPlaceholder(prop.id, 400, 240, prop.landlord_name);
+                      event.currentTarget.src = getPropertyPlaceholder(prop.id, 400, 240, prop.landlord_name, index);
                     }}
                   />
                   <div className="p-4">

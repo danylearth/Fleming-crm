@@ -1,3 +1,4 @@
+import LandlordAppointmentForm from '../components/LandlordAppointmentForm';
 import CsvImport from '../components/ui/CsvImport';
 import {usePermissions} from '../hooks/usePermissions';
 import { useState, useEffect, useCallback } from 'react';
@@ -57,8 +58,7 @@ export default function BDM() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   const [workflowProspect, setWorkflowProspect] = useState<Prospect | null>(null);
-  const [workflowMode, setWorkflowMode] = useState<'choose' | 'follow_up' | 'reject' | 'confirm_drag'>('choose');
-  const [workflowDate, setWorkflowDate] = useState('');
+  const [workflowMode, setWorkflowMode] = useState<'choose' | 'follow_up' | 'meeting' | 'reject' | 'confirm_drag'>('choose');
   const [, setWorkflowReason] = useState('');
   const [workflowLoading, setWorkflowLoading] = useState(false);
   const [converting, setConverting] = useState(false);
@@ -84,7 +84,7 @@ export default function BDM() {
     const matchSearch = !search || [p.name, p.email, p.phone, p.address, p.source]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
     let matchStatus = true;
-    if (statusFilter === 'active') matchStatus = !['not_interested'].includes(p.status);
+    if (statusFilter === 'active') matchStatus = !['onboarded', 'not_interested'].includes(p.status) && (Boolean(search) || !p.follow_up_date || p.follow_up_date.slice(0,10) <= new Intl.DateTimeFormat('en-CA', {timeZone:'Europe/London'}).format(new Date()));
     else if (statusFilter !== 'all') matchStatus = p.status === statusFilter;
     return matchSearch && matchStatus;
   });
@@ -117,7 +117,6 @@ export default function BDM() {
     e.stopPropagation();
     setWorkflowProspect(p);
     setWorkflowMode('choose');
-    setWorkflowDate('');
     setWorkflowReason('');
     setDragTargetStatus('');
   };
@@ -145,7 +144,8 @@ export default function BDM() {
     if (!canConvert(workflowProspect)) return;
     setConverting(true);
     try {
-      await api.post(`/api/landlords-bdm/${workflowProspect.id}/convert`, {});
+      const result = await api.post(`/api/landlords-bdm/${workflowProspect.id}/convert`, {});
+      navigate(`/landlords/${result.landlord_id}`);
       setWorkflowProspect(null);
       await load();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -165,12 +165,13 @@ export default function BDM() {
     setDragTargetStatus(newStatus);
     if (newStatus === 'follow_up') {
       setWorkflowMode('follow_up');
+    } else if (newStatus === 'onboarded') {
+      setWorkflowMode('choose');
     } else if (newStatus === 'not_interested') {
       setWorkflowMode('reject');
     } else {
       setWorkflowMode('confirm_drag');
     }
-    setWorkflowDate('');
   };
 
   // Follow-up due count
@@ -533,6 +534,7 @@ export default function BDM() {
                   <div className="flex-1"><p className="text-sm font-medium">Mark as Contacted</p><p className="text-xs text-[var(--text-muted)]">Initial outreach made</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
+                <Button variant="outline" className="w-full justify-start" onClick={()=>setWorkflowMode('meeting')}><Calendar size={16} className="mr-2"/>Book a Meeting</Button>
                 <button onClick={() => setWorkflowMode('follow_up')}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
@@ -600,20 +602,8 @@ export default function BDM() {
                   </Button>
                 </div>
               </div>
-            ) : workflowMode === 'follow_up' ? (
-              <div className="space-y-4">
-                <p className="text-sm font-medium">Set Follow-up Date</p>
-                <DatePicker label="Follow-up Date" value={workflowDate} onChange={setWorkflowDate} />
-                <div className="flex gap-3">
-                  <Button variant="ghost" onClick={() => dragTargetStatus ? setWorkflowProspect(null) : setWorkflowMode('choose')}>
-                    {dragTargetStatus ? 'Cancel' : 'Back'}
-                  </Button>
-                  <Button variant="gradient" onClick={() => doWorkflowAction('follow_up', { follow_up_date: workflowDate })}
-                    disabled={workflowLoading || !workflowDate}>
-                    {workflowLoading ? 'Saving...' : 'Set Follow Up'}
-                  </Button>
-                </div>
-              </div>
+            ) : workflowMode === 'follow_up' || workflowMode === 'meeting' ? (
+              <LandlordAppointmentForm key={`${workflowProspect.id}-${workflowMode}`} prospect={workflowProspect} kind={workflowMode} onBack={()=>setWorkflowMode('choose')} onSaved={()=>{setWorkflowProspect(null);void load();}} />
             ) : (
               <div className="space-y-4">
                 <p className="text-sm font-medium text-red-400">Mark as Not Interested</p>

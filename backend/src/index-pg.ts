@@ -1,3 +1,6 @@
+import {landlordIntakePatch} from './landlord-intake';
+import {registerLandlordAppointments} from './landlord-appointments';
+import {depositParticipantsSql} from './deposit-participants';
 import {registerRentComparisons} from './rent-comparisons';
 import {registerServiceAgreements,serviceGate,signedServiceSql} from './service-agreements';
 import {vacancyLoss} from './vacancy-loss';
@@ -1296,18 +1299,32 @@ app.get('/api/landlords-bdm/:id', authMiddleware, async (req: AuthRequest, res) 
   }
 });
 
-app.put('/api/landlords-bdm/:id', authMiddleware, async (req: AuthRequest, res) => {
+app.put('/api/landlords-bdm/:id', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
   try {
     const d = {...req.body,status:req.body.status==='interested'?'follow_up':req.body.status};
     if(d.status===undefined)delete d.status;
-    const allowed = ['name', 'email', 'phone', 'address', 'status', 'follow_up_date', 'source', 'notes','entity_type','company_number'];
+    if(d.status==='onboarded')return res.status(400).json({error:'Use Convert to Landlord to complete onboarding'});
+    if(d.intake_data!==undefined){try{d.intake_data=landlordIntakePatch(d.intake_data);}catch(e){return res.status(400).json({error:(e as Error).message});}}
+    const current = await queryOne('SELECT * FROM landlords_bdm WHERE id=$1',[req.params.id]);
+    if(!current)return res.status(404).json({error:'Enquiry not found'});
+    if(d.intake_data){
+      const values={...(current.intake_data||{}),...d.intake_data};
+      const changed=(keys:string[])=>keys.some(key=>key in d.intake_data);
+      if(changed(['firstName','surname','company_name','registration_type']))d.name=values.registration_type==='Limited Company'?values.company_name:[values.firstName,values.surname].filter(Boolean).join(' ');
+      if(changed(['email']))d.email=values.email;
+      if(changed(['phone']))d.phone=values.phone;
+      if(changed(['registration_type']))d.entity_type=values.registration_type==='Limited Company'?'company':'individual';
+      if(changed(['company_number']))d.company_number=values.company_number;
+      if(changed(['address','address_line_2','city','postcode','company_address','companyCity','companyPostcode','registration_type']))d.address=values.registration_type==='Limited Company'?[values.company_address,values.companyCity,values.companyPostcode].filter(Boolean).join(', '):[values.address,values.address_line_2,values.city,values.postcode].filter(Boolean).join(', ');
+    }
+    const allowed = ['name', 'email', 'phone', 'address', 'status', 'follow_up_date', 'source', 'notes','entity_type','company_number','intake_data'];
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
     for (const key of allowed) {
       if (key in d) {
-        fields.push(`${key}=$${idx++}`);
-        values.push(d[key]);
+        fields.push(key==='intake_data'?`intake_data=COALESCE(intake_data,'{}'::jsonb) || $${idx++}::jsonb`:`${key}=$${idx++}`);
+        values.push(key==='intake_data'?JSON.stringify(d[key]):d[key]);
       }
     }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
@@ -1328,7 +1345,7 @@ app.put('/api/landlords-bdm/:id', authMiddleware, async (req: AuthRequest, res) 
   }
 });
 
-app.post('/api/landlords-bdm/:id/convert', authMiddleware, async (req: AuthRequest, res) => {
+app.post('/api/landlords-bdm/:id/convert', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
   try {
     const prospect = await queryOne('SELECT * FROM landlords_bdm WHERE id = $1', [req.params.id as string]);
     if (!prospect) return res.status(404).json({ error: 'Prospect not found' });
@@ -1341,9 +1358,14 @@ app.post('/api/landlords-bdm/:id/convert', authMiddleware, async (req: AuthReque
     let landlordId: number;
     try {
       await client.query('BEGIN');
+      const locked = (await client.query('SELECT * FROM landlords_bdm WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];
+      if(!locked || locked.status==='onboarded'){await client.query('ROLLBACK');return res.status(409).json({error:'This enquiry has already been converted'});}
+      if(!locked.name?.trim()){await client.query('ROLLBACK');return res.status(400).json({error:'Add the landlord name before converting'});}
+      Object.assign(prospect,locked);
+      const conversionNotes = [prospect.notes, prospect.intake_data && Object.keys(prospect.intake_data).length ? 'Landlord form details: '+JSON.stringify(prospect.intake_data) : null].filter(Boolean).join('\n\n');
       const insertResult = await client.query(
         'INSERT INTO landlords (name, email, phone, address, notes, landlord_type, referral_source,entity_type,company_number) VALUES ($1, $2, $3, $4, $5, $6, $7,$8,$9) RETURNING id',
-        [prospect.name, prospect.email, prospect.phone, prospect.address, prospect.notes, landlord_type || 'external', prospect.source,prospect.entity_type||'individual',prospect.company_number||null]
+        [prospect.name, prospect.email, prospect.phone, prospect.address, conversionNotes, landlord_type || 'external', prospect.source,prospect.entity_type||'individual',prospect.company_number||null]
       );
       landlordId = insertResult.rows[0].id;
       await client.query("UPDATE landlords_bdm SET status = 'onboarded', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id as string]);
@@ -1483,7 +1505,7 @@ app.post('/api/public/landlord-enquiries', publicSubmitLimiter, async (req, res)
       });
     }
 
-    if(!['Individual','Joint','Limited Company'].includes(registration_type)||!address||!req.body.city||!postcode||!propertyAddress||!req.body.propertyCity||!propertyPostcode) return res.status(400).json({error:'Complete the registration type, home and property addresses, including city/town and postcode'});
+    if(!['Sole','Individual','Joint','Limited Company'].includes(registration_type)||!address||!req.body.city||!postcode||!propertyAddress||!req.body.propertyCity||!propertyPostcode) return res.status(400).json({error:'Complete the registration type, home and property addresses, including city/town and postcode'});
     if(registration_type==='Joint'&&(!firstName2||!surname2||!email2||!phone2||!address2||!req.body.city2||!postcode2))return res.status(400).json({error:'Complete the joint owner’s name, contact details and address'});
     if(registration_type==='Limited Company'&&(!company_name||!company_number||!company_address||!req.body.companyCity||!req.body.companyPostcode||!req.body.beneficial_owners))return res.status(400).json({error:'Complete the company address, number and beneficial owners'});
 
@@ -2716,6 +2738,7 @@ registerMarketing(app);
 registerTenantReactivation(app);
 registerInventoryReviewRoutes(app);
 registerPropertyInspections(app);
+registerLandlordAppointments(app);
 registerClientAgreementDetails(app);
 registerTenantMessageTemplates(app);
 registerFlemoRoutes(app);
@@ -7238,7 +7261,7 @@ app.get('/api/bank-feed/transactions', authMiddleware, async (req, res) => {
     const rows = await query(`
       SELECT b.id, b.booked_at, b.description, b.display_name, b.amount, b.currency, b.transaction_type,
         b.transaction_category, b.merchant_name, b.match_status, p.address AS property_address,
-        (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount,'tenant_id',a.tenant_id,'property_id',a.property_id,'rent_payment_id',a.rent_payment_id,'expense_id',a.expense_id,'category',a.category,'notes',a.notes,'tenant_name',(SELECT name FROM tenants WHERE id=a.tenant_id),'property_address',(SELECT address FROM properties WHERE id=a.property_id))) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL) AS allocations,
+        (SELECT json_agg(json_build_object('kind',a.kind,'amount',a.amount,'tenant_id',a.tenant_id,'property_id',a.property_id,'rent_payment_id',a.rent_payment_id,'expense_id',a.expense_id,'category',a.category,'notes',a.notes,'participants',${depositParticipantsSql},'tenant_name',(SELECT name FROM tenants WHERE id=a.tenant_id),'property_address',(SELECT address FROM properties WHERE id=a.property_id))) FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL) AS allocations,
         COALESCE(NULLIF(CONCAT_WS(' & ',t.name,(SELECT name FROM tenants jt WHERE jt.id=t.linked_tenant_id AND jt.property_id=t.property_id AND jt.tenancy_start_date=t.tenancy_start_date)),''), TRIM(te.first_name_1 || ' ' || te.last_name_1)) AS tenant_name
       FROM bank_feed_transactions b
       LEFT JOIN properties p ON p.id=b.property_id LEFT JOIN tenants t ON t.id=b.tenant_id

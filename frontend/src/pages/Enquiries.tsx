@@ -1,3 +1,4 @@
+import { OFFICE_ADDRESS } from '../utils/meetingLocations';
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Avatar, SearchBar, Input, Select, Tag, EmptyState, DataTable, DatePicker, TimePicker } from '../components/ui';
@@ -431,7 +432,7 @@ export default function Enquiries() {
           if ((wfPropId || wfCustomLocation.trim()) && wfDate) {
             const name = workflowEnquiry.name;
             const viewingResult = await api.post('/api/property-viewings', {
-              property_id: wfPropId && wfPropId!=='other' ? Number(wfPropId) : null,
+              property_id: wfPropId && !['other','office'].includes(wfPropId) ? Number(wfPropId) : null,
               viewing_location: wfCustomLocation.trim() || null,
               enquiry_id: workflowEnquiry.id,
               viewer_name: name, viewer_email: workflowEnquiry.email,
@@ -448,7 +449,7 @@ export default function Enquiries() {
             }
             await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`, {
               ...raw, status: 'viewing_booked',
-              linked_property_id: wfPropId && wfPropId!=='other' ? Number(wfPropId) : null,
+              linked_property_id: wfPropId && !['other','office'].includes(wfPropId) ? Number(wfPropId) : null,
               viewing_date: wfDate, viewing_with: wfViewingWith || null,
             });
           }
@@ -999,12 +1000,14 @@ export default function Enquiries() {
                     <>
                       <Select label="Assign To (Agent)" value={wfAssignedTo} onChange={setWfAssignedTo} searchable
                         options={[{ value: '', label: 'Unassigned' }, ...allUsers.map(u => ({ value: u.name, label: u.name }))]} />
-                      <Select label="Property *" searchable value={wfPropId} onChange={(v) => {
+                      <Select label="Meeting Location *" searchable value={wfPropId} onChange={(v) => {
                         setWfPropId(v);
-                        if (v!=='other') setWfCustomLocation('');
-                        setSmsBody(generateViewingSms(firstName, v, wfDate, wfTime, ''));
+                        const location = v === 'office' ? OFFICE_ADDRESS : '';
+                        setWfCustomLocation(location);
+                        setSmsBody(generateViewingSms(firstName, v, wfDate, wfTime, location));
                       }}
-                        options={[{ value: '', label: 'Select property...' }, {value:'other',label:'Other'}, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
+                        options={[{ value: '', label: 'Select property...' }, {value:'office',label:'Office Address'}, {value:'other',label:'Other'}, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
+                      {wfPropId==='office'&&<p className="text-sm text-[var(--text-secondary)]">{OFFICE_ADDRESS}</p>}
                       {wfPropId==='other'&&<Input label="Other Address *" value={wfCustomLocation} onChange={(value) => {
                         setWfCustomLocation(value);
                         setSmsBody(generateViewingSms(firstName, '', wfDate, wfTime, value));

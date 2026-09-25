@@ -94,6 +94,7 @@ export default function ActivityTimeline({ entityType, entityId }: { entityType:
                   <span className="font-medium">{config.label}</span>{' '}
                   <span className="text-[var(--text-secondary)]">{entityType}</span>
                 </p>
+                {entry.action === 'update' && entry.changes && <details className="text-xs text-[var(--text-secondary)] mt-1"><summary className="cursor-pointer">View changes</summary><dl className="mt-2 space-y-1">{(()=>{try{return Object.entries(JSON.parse(entry.changes)).filter(([key])=>!key.includes('password')&&!key.includes('token')).map(([key,value])=><div key={key}><dt className="font-medium">{key.replaceAll('_',' ')}</dt><dd className="break-words">{typeof value==='object'?JSON.stringify(value):String(value??'Cleared')}</dd></div>);}catch{return null;}})()}</dl></details>}
                 {entry.action === 'note_added' && entry.changes && (
                   <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-2">
                     {(() => { try { const c = JSON.parse(entry.changes); return c.text || ''; } catch { return ''; } })()}

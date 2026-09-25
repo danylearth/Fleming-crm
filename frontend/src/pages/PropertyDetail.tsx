@@ -1,3 +1,4 @@
+import SectionEditButton from '../components/ui/SectionEditButton';
 import RentComparisons from '../components/RentComparisons';
 import ServiceAgreements from '../components/ServiceAgreements';
 import {Copy,Check} from 'lucide-react';
@@ -22,9 +23,10 @@ import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import { activePropertyTenants, type PropertyTenant } from '../utils/propertyTenants';
+import { startPropertyTenantOnboarding } from '../utils/propertyTenantOnboarding';
 import {
   User, Building2, Briefcase, KeyRound, Landmark, Users, ShieldCheck, ListChecks, History,
-  CheckCircle2, Clock, ChevronRight, Pencil, Save, X,
+  CheckCircle2, Clock, ChevronRight, X,
   AlertTriangle, Plus, Wrench, Trash2, StickyNote, Eye
 } from 'lucide-react';
 
@@ -157,7 +159,10 @@ export default function PropertyDetail() {
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
+  const [editingSection,setEditingSection]=useState<string|null>(null);
+  const editing=editingSection!==null;
+  const formBeforeEdit=useRef<Record<string,unknown>>({});
+  const sectionActions=(section:string)=><SectionEditButton label={section} editing={editingSection===section} disabled={editing&&editingSection!==section} saving={saving} onEdit={()=>{formBeforeEdit.current={...form};setEditingSection(section);}} onSave={handleSave} onCancel={cancelEdit}/>;
   const editingRef = useRef(editing);
   editingRef.current = editing;
   const [saving, setSaving] = useState(false);
@@ -207,6 +212,9 @@ export default function PropertyDetail() {
   const [allTenants, setAllTenants] = useState<PropertyTenant[]>([]);
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [tenantModalMode, setTenantModalMode] = useState<'select' | 'create'>('select');
+  const [creatingApplicant, setCreatingApplicant] = useState(false);
+  const creatingApplicantRef = useRef(false);
+  const [applicantError, setApplicantError] = useState('');
   const [tenantSearch, setTenantSearch] = useState('');
   const [showPreviousTenancies, setShowPreviousTenancies] = useState(false);
   const [copiedPortal,setCopiedPortal]=useState('');
@@ -362,12 +370,13 @@ export default function PropertyDetail() {
       };
       if (form.leasehold_portal_password === '') delete payload.leasehold_portal_password;
       if (form.management_company_portal_password === '') delete payload.management_company_portal_password;
-      await api.put(`/api/properties/${id}`, payload);
+      const changed=Object.fromEntries(Object.entries(payload).filter(([key])=>JSON.stringify(form[key as keyof typeof form])!==JSON.stringify(formBeforeEdit.current[key])));
+      if(Object.keys(changed).length)await api.put(`/api/properties/${id}`, changed);
       const updated = await api.get(`/api/properties/${id}`);
       setProperty(updated);
       populateForm(updated);
       setRevealedPortalPasswords({});
-      setEditing(false);
+      setEditingSection(null);
     } catch (e: unknown) {
       console.error('Save error:', e);
       const err = e as { response?: { data?: { error?: string } }; message?: string };
@@ -376,7 +385,7 @@ export default function PropertyDetail() {
     setSaving(false);
   };
 
-  const cancelEdit = () => { setEditing(false); if (property) populateForm(property); };
+  const cancelEdit = () => { setEditingSection(null); if (property) populateForm(property); };
 
   const revealPortalPassword = async (kind: 'leasehold' | 'management-company') => {
     if (revealedPortalPasswords[kind]) {
@@ -581,10 +590,13 @@ export default function PropertyDetail() {
     }
   };
 
-  const handleCreateAndLinkTenant = async () => {
+  const handleStartTenantOnboarding = async () => {
+    if (creatingApplicantRef.current) return;
+    creatingApplicantRef.current = true;
+    setCreatingApplicant(true);
+    setApplicantError('');
     try {
-      await api.post('/api/tenants', {...newTenantForm,name:[newTenantForm.first_name_1,newTenantForm.last_name_1].filter(Boolean).join(' '),email:newTenantForm.email_1,phone:newTenantForm.phone_1,property_id:Number(id)});
-      await loadDetail();
+      const onboardingUrl = await startPropertyTenantOnboarding(api, property!.id, newTenantForm);
       setShowTenantModal(false);
       setNewTenantForm({
         first_name_1: '',
@@ -592,10 +604,12 @@ export default function PropertyDetail() {
         email_1: '',
         phone_1: '',
       });
+      navigate(onboardingUrl);
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } }; message?: string };
-      console.error('Failed to create tenant:', err);
-      alert(err.response?.data?.error || 'Failed to create tenant');
+      setApplicantError(e instanceof Error ? e.message : 'Failed to create applicant. Please try again.');
+    } finally {
+      creatingApplicantRef.current = false;
+      setCreatingApplicant(false);
     }
   };
 
@@ -680,20 +694,7 @@ export default function PropertyDetail() {
               if (!await confirmCrmAction(`Remove ${property.address}? Properties with tenancy or contract history will be archived; otherwise linked data will be permanently deleted.`, 'Delete / Archive Property')) return;
               try { await api.post(`/api/properties/${property.id}/remove`, {}); navigate('/properties'); } catch (e) { alert(e instanceof Error ? e.message : 'Could not delete property'); }
             }}>Delete / Archive</Button>}
-            {editing ? (
-              <>
-                <Button variant="ghost" size="sm" onClick={cancelEdit} className="bg-black/40 backdrop-blur-sm text-white text-xs sm:text-sm">
-                  <X size={14} className="mr-0 sm:mr-1" /> <span className="hidden sm:inline">Cancel</span>
-                </Button>
-                <Button variant="gradient" size="sm" onClick={handleSave} disabled={saving} className="text-xs sm:text-sm">
-                  <Save size={14} className="mr-0 sm:mr-1" /> <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save'}</span>
-                </Button>
-              </>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={() => setEditing(true)} className="bg-black/40 backdrop-blur-sm text-white text-xs sm:text-sm">
-                <Pencil size={14} className="mr-0 sm:mr-1" /> <span className="hidden sm:inline">Edit</span>
-              </Button>
-            )}
+
           </div>
         </div>
 
@@ -739,7 +740,7 @@ export default function PropertyDetail() {
                 ) : null)}
               </div>
             ) : (
-              <Button variant="gradient" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('select'); }}>
+              <Button variant="gradient" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('create'); setApplicantError(''); }}>
                 <Plus size={14} className="mr-1" /> Assign Tenant
               </Button>
             )}
@@ -751,8 +752,8 @@ export default function PropertyDetail() {
           <div className="lg:col-span-2 space-y-6">
             {/* Details */}
             <GlassCard className="p-4 sm:p-6">
-              <SectionHeader title="Details" icon={<Building2 size={16} />} />
-              {editing ? (
+              <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Details" icon={<Building2 size={16} />} />{sectionActions('details')}</div>
+              {(editingSection==='details') ? (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <Input label="Address line 1 *" value={form.address} onChange={address => setForm({...form,address})} />
@@ -835,9 +836,9 @@ export default function PropertyDetail() {
 
             {/* Management */}
             <GlassCard className="p-4 sm:p-6">
-              <SectionHeader title="Management" icon={<Briefcase size={16} />} />
-              {(editing?form.has_gas:property.has_gas)?<div className="mb-4">{editing?<DatePicker label="Gas Safety Commissioned Date" value={form.gas_safety_commissioned_date} onChange={v=>setForm(f=>({...f,gas_safety_commissioned_date:v}))}/>:<ReadField label="Gas Safety Commissioned" value={formatDate(property.gas_safety_commissioned_date || null)}/>}</div>:null}
-              {editing ? (
+              <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Management" icon={<Briefcase size={16} />} />{sectionActions('management')}</div>
+              {((editingSection==='management')?form.has_gas:property.has_gas)?<div className="mb-4">{(editingSection==='management')?<DatePicker label="Gas Safety Commissioned Date" value={form.gas_safety_commissioned_date} onChange={v=>setForm(f=>({...f,gas_safety_commissioned_date:v}))}/>:<ReadField label="Gas Safety Commissioned" value={formatDate(property.gas_safety_commissioned_date || null)}/>}</div>:null}
+              {(editingSection==='management') ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   <Select label="Council Tax Band" value={form.council_tax_band} onChange={(v: string) => setForm({ ...form, council_tax_band: v })}
                     options={[{ value: '', label: 'Select...' }, { value: 'TBC', label: 'TBC' }, ...['A','B','C','D','E','F','G','H'].map(b => ({ value: b, label: `Band ${b}` }))]} />
@@ -921,7 +922,7 @@ export default function PropertyDetail() {
                 </div>
               )}
             </GlassCard>
-            <GlassCard className="p-4 sm:p-6"><SectionHeader title="Property Financials" icon={<Briefcase size={16}/>}/>{editing?<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">                    <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />                  {property.landlord_type !== 'internal' && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v, ...(v==='let_only'&&form.service_type!==v?{charge_percentage:'100',total_charge:''}:{}) })}
+            <GlassCard className="p-4 sm:p-6"><div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Property Financials" icon={<Briefcase size={16}/>} />{sectionActions('financials')}</div>{(editingSection==='financials')?<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">                    <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />                  {property.landlord_type !== 'internal' && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v, ...(v==='let_only'&&form.service_type!==v?{charge_percentage:'100',total_charge:''}:{}) })}
                     options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
                   }
                   {property.landlord_type !== 'internal' && <Input label="Charge (%)" value={form.charge_percentage} onChange={(v: string) => setForm({ ...form, charge_percentage: v })} placeholder="e.g. 10" />}
@@ -934,13 +935,16 @@ export default function PropertyDetail() {
                   {property.landlord_type !== 'internal' && <ReadField label="Charge" value={property.charge_percentage ? `${property.charge_percentage}%` : null} />}
                   {property.landlord_type !== 'internal' && <ReadField label="Total Charge" value={property.total_charge ? `£${property.total_charge}` : null} />}
 </div>}</GlassCard>
-            <RentComparisons propertyId={property.id}/>
+            <div className={`grid grid-cols-1 gap-6 ${property.postcode ? 'xl:grid-cols-2' : ''}`}>
+              <RentComparisons propertyId={property.id}/>
+              {!!property.postcode && <PricePaidData postcode={property.postcode} />}
+            </div>
 
             {/* Leasehold (conditional) */}
-            {(editing ? form.is_leasehold : property.is_leasehold) ? (
+            <>
               <GlassCard className="p-4 sm:p-6">
-                <SectionHeader title="Leasehold" icon={<KeyRound size={16} />} />
-                {editing ? (
+                <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Leasehold" icon={<KeyRound size={16} />} />{sectionActions('leasehold')}</div>
+                {(editingSection==='leasehold') ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <Toggle label="Leasehold Property" checked={form.is_leasehold} onChange={v => setForm({ ...form, is_leasehold: v })} />
                     <DatePicker label="Lease Start" value={form.leasehold_start_date} onChange={(v: string) => setForm({ ...form, leasehold_start_date: v })} />
@@ -953,7 +957,7 @@ export default function PropertyDetail() {
                     <Input label="Portal Username" value={form.leasehold_portal_username} onChange={(v: string) => setForm({ ...form, leasehold_portal_username: v })} />
                     {user?.role === 'admin' && <div><Input label={form.leasehold_portal_password === null ? 'Portal Password (will be removed)' : property.leasehold_portal_password_set ? 'New Portal Password (leave blank to keep)' : 'Portal Password'} type="password" value={form.leasehold_portal_password || ''} onChange={(v: string) => setForm({ ...form, leasehold_portal_password: v })} />{property.leasehold_portal_password_set && <button type="button" className="text-xs text-red-600 mt-2 underline" onClick={()=>setForm({...form,leasehold_portal_password:null})}>Remove Stored Password</button>}</div>}
                   </div>
-                ) : (
+                ) : !property.is_leasehold ? <p className="text-sm text-[var(--text-secondary)]">Not a leasehold property</p> : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                     <ReadField label="Lease Start" value={formatDate(property.leasehold_start_date)} />
                     <ReadField label="Lease End" value={formatDate(property.leasehold_end_date)} />
@@ -974,16 +978,12 @@ export default function PropertyDetail() {
                   </div>
                 )}
               </GlassCard>
-            ) : editing ? (
-              <div className="flex">
-                <Toggle label="Mark as Leasehold" checked={false} onChange={v => setForm({ ...form, is_leasehold: v })} />
-              </div>
-            ) : null}
+            </>
 
-            {(editing || !!property.has_management_company || !!property.is_leasehold) && (
+            <>
               <GlassCard className="p-4 sm:p-6">
-                <SectionHeader title="Management Company" icon={<Landmark size={16} />} />
-                {editing ? (
+                <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Management Company" icon={<Landmark size={16} />} />{sectionActions('company')}</div>
+                {(editingSection==='company') ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <div className="col-span-full"><Toggle label="Management Company Appointed" checked={form.has_management_company} onChange={v => setForm({ ...form, has_management_company: v })} /></div>
                     {form.has_management_company && <>
@@ -1015,32 +1015,32 @@ export default function PropertyDetail() {
                   </div>
                 )}
               </GlassCard>
-            )}
+            </>
 
             {/* Tenancy information, including retained historic tenants */}
             {(!isToLet || linkedTenants.length > 0) && (
               <GlassCard className="p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
-                  <SectionHeader title="Tenancy Information" icon={<Users size={16} />} />
+                  <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Tenancy Information" icon={<Users size={16} />} />{sectionActions('tenancy')}</div>
                   <div className="flex flex-wrap gap-2 sm:ml-auto">
-                  {!editing && previousTenants.length > 0 && (
+                  {!(editingSection==='tenancy') && previousTenants.length > 0 && (
                     <Button variant="outline" className="!bg-amber-100 !text-amber-900 !border-amber-300" size="sm" onClick={() => setShowPreviousTenancies(value => !value)}>
                       Previous Tenancies ({previousTenants.length})
                     </Button>
                   )}
-                  {!editing && currentTenants.length === 0 && (
-                    <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('select'); }}>
+                  {!(editingSection==='tenancy') && currentTenants.length === 0 && (
+                    <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('create'); setApplicantError(''); }}>
                       <Plus size={14} className="mr-1.5" /> <span className="hidden sm:inline">Add Tenant</span><span className="sm:hidden">Add</span>
                     </Button>
                   )}
-                  {!editing && currentTenants.length > 0 && (
+                  {!(editingSection==='tenancy') && currentTenants.length > 0 && (
                     <Button variant="outline" size="sm" onClick={handleRemoveTenant} className="!bg-red-600 !text-white !border-red-600 rounded-full">
                       <Trash2 size={14} className="mr-1.5" /> <span className="hidden sm:inline">End Tenancy</span>
                     </Button>
                   )}
                 </div>
                 </div>
-                {currentTenants.length > 0 && !editing && (
+                {currentTenants.length > 0 && !(editingSection==='tenancy') && (
                   <div className="mb-4 space-y-2">
                     {currentTenants.map(tenant => (
                       <div key={tenant.id || tenant.name} className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
@@ -1060,8 +1060,8 @@ export default function PropertyDetail() {
                     ))}
                   </div>
                 )}
-                {!editing && scheduledTenants.length > 0 && <div className="mb-4 space-y-2">{scheduledTenants.map(tenant => <button key={tenant.id} onClick={() => navigate(`/tenants/${tenant.id}`)} className="w-full rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-left"><p className="text-sm font-medium">{tenant.name}</p><p className="text-xs text-[var(--text-muted)]">Scheduled · Starts {formatDate(tenant.tenancy_start_date || '')} · End date: {tenant.tenancy_end_date ? formatDate(tenant.tenancy_end_date) : 'Not scheduled'}</p></button>)}</div>}
-                {showPreviousTenancies && !editing && (
+                {!(editingSection==='tenancy') && scheduledTenants.length > 0 && <div className="mb-4 space-y-2">{scheduledTenants.map(tenant => <button key={tenant.id} onClick={() => navigate(`/tenants/${tenant.id}`)} className="w-full rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-left"><p className="text-sm font-medium">{tenant.name}</p><p className="text-xs text-[var(--text-muted)]">Scheduled · Starts {formatDate(tenant.tenancy_start_date || '')} · End date: {tenant.tenancy_end_date ? formatDate(tenant.tenancy_end_date) : 'Not scheduled'}</p></button>)}</div>}
+                {showPreviousTenancies && !(editingSection==='tenancy') && (
                   <div className="mb-4 space-y-2 border-t border-[var(--border-subtle)] pt-4">
                     {previousTenants.map(tenant => (
                       <button key={tenant.id} onClick={() => navigate(`/tenants/${tenant.id}`)} className="w-full text-left rounded-xl bg-[var(--bg-subtle)] p-3 hover:bg-[var(--bg-hover)]">
@@ -1071,7 +1071,7 @@ export default function PropertyDetail() {
                     ))}
                   </div>
                 )}
-                {editing ? (
+                {(editingSection==='tenancy') ? (
                   <>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                       <Toggle label="Live Tenancy" checked={form.has_live_tenancy} onChange={v => setForm({ ...form, has_live_tenancy: v })} />
@@ -1189,12 +1189,12 @@ export default function PropertyDetail() {
           <div className="lg:col-span-1 space-y-4 sm:space-y-6">
             {/* Compliance Overview */}
             <Card className="p-4 sm:p-6">
-              <SectionHeader title="Compliance" icon={<ShieldCheck size={16} />} />
+              <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Compliance" icon={<ShieldCheck size={16} />} />{sectionActions('compliance')}</div>
               <div className="flex justify-center mb-4">
                 <ProgressRing value={overallCompliance()} size={90} strokeWidth={7} />
               </div>
               <div className="space-y-3">
-                {editing ? <div className="space-y-4"><DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={v=>setForm(f=>({...f,eicr_expiry_date:v}))}/><DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={v=>setForm(f=>({...f,epc_expiry_date:v}))}/>{form.has_gas&&<><DatePicker label="Gas Safety Expiry Date" value={form.gas_safety_expiry_date} onChange={v=>setForm(f=>({...f,gas_safety_expiry_date:v}))}/></>}</div>:<>
+                {(editingSection==='compliance') ? <div className="space-y-4"><DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={v=>setForm(f=>({...f,eicr_expiry_date:v}))}/><DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={v=>setForm(f=>({...f,epc_expiry_date:v}))}/>{form.has_gas&&<><DatePicker label="Gas Safety Expiry Date" value={form.gas_safety_expiry_date} onChange={v=>setForm(f=>({...f,gas_safety_expiry_date:v}))}/></>}</div>:<>
                 <ComplianceRow label="EICR" expiry={property.compliance?.items.some(i=>i.docType==='EICR'&&i.hasDocument)?property.eicr_expiry_date:null} />{property.compliance?.items.filter(i=>i.docType==='EICR'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}
                 <ComplianceRow label="EPC" expiry={property.compliance?.items.some(i=>i.docType==='EPC'&&i.hasDocument)?property.epc_expiry_date:null} grade={property.epc_grade} />{property.compliance?.items.filter(i=>i.docType==='EPC'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}
                 {property.has_gas ? <><ComplianceRow label="Gas Safety" expiry={property.compliance?.items.some(i=>i.docType==='Gas Safety Certificate'&&i.hasDocument)?property.gas_safety_expiry_date:null} />{property.compliance?.items.filter(i=>i.docType==='Gas Safety Certificate'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}</> : null}</>}
@@ -1317,8 +1317,6 @@ export default function PropertyDetail() {
             </Card>
 
             {user?.role!=='viewer'&&<ServiceAgreements propertyId={property.id}/>}
-            {/* Land Registry Price Data */}
-            {!!property.postcode && <PricePaidData postcode={property.postcode} />}
 
             {/* Documents */}
             <DocumentUpload refreshKey={inventoryRefresh} entityType="property" entityId={property.id} onChange={loadDetail} />
@@ -1727,11 +1725,11 @@ export default function PropertyDetail() {
         {/* Add/Select Tenant Modal */}
         {showEndTenancy && currentTenants[0]?.id && <TenancyEndModal tenantId={currentTenants[0].id} linkedName={currentTenants[1]?.name} initialDate={currentTenants[0].tenancy_end_date || undefined} onClose={()=>setShowEndTenancy(false)} onSaved={loadDetail} />}
       {showTenantModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setShowTenantModal(false)}>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => { if (!creatingApplicant) setShowTenantModal(false); }}>
             <div className="bg-[var(--bg-elevated)] rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="sticky top-0 bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)] px-4 sm:px-6 py-4 flex items-center justify-between">
                 <h2 className="text-base sm:text-lg font-semibold">Add Tenant to Property</h2>
-                <button onClick={() => setShowTenantModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                <button onClick={() => { if (!creatingApplicant) setShowTenantModal(false); }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                   <X size={20} />
                 </button>
               </div>
@@ -1741,6 +1739,7 @@ export default function PropertyDetail() {
                   <div className="flex items-center gap-1 bg-[var(--bg-input)] rounded-xl p-1 border border-[var(--border-input)]">
                     <button
                       type="button"
+                      disabled={creatingApplicant}
                       onClick={() => setTenantModalMode('select')}
                       className={`flex-1 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                         tenantModalMode === 'select'
@@ -1751,7 +1750,8 @@ export default function PropertyDetail() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setTenantModalMode('create')}
+                      disabled={creatingApplicant}
+                      onClick={() => { setTenantModalMode('create'); setApplicantError(''); }}
                       className={`flex-1 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                         tenantModalMode === 'create'
                           ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
@@ -1803,8 +1803,9 @@ export default function PropertyDetail() {
                     </div>
                   </>
                 ) : (
-                  <>
-                    <div className="space-y-3">
+                  <form onSubmit={event => { event.preventDefault(); void handleStartTenantOnboarding(); }}>
+                    <p className="text-sm text-[var(--text-muted)] mb-4">Create an enquiry for {property.address} and continue to tenant onboarding. The tenant record is created once onboarding is complete.</p>
+                    <fieldset disabled={creatingApplicant} className="space-y-3">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Input
                           label="First Name *"
@@ -1832,21 +1833,22 @@ export default function PropertyDetail() {
                         onChange={(v: string) => setNewTenantForm(f => ({ ...f, phone_1: v }))}
                         placeholder="07123 456789"
                       />
-                    </div>
+                    </fieldset>
+                    {applicantError && <p role="alert" className="text-sm text-red-600 mt-3">{applicantError}</p>}
                     <div className="flex gap-3 mt-4">
-                      <Button variant="ghost" onClick={() => setShowTenantModal(false)} className="flex-1">
+                      <Button variant="ghost" onClick={() => { if (!creatingApplicant) setShowTenantModal(false); }} disabled={creatingApplicant} className="flex-1">
                         Cancel
                       </Button>
                       <Button
                         variant="gradient"
-                        onClick={handleCreateAndLinkTenant}
-                        disabled={!newTenantForm.first_name_1 || !newTenantForm.last_name_1}
+                        type="submit"
+                        disabled={creatingApplicant || Object.values(newTenantForm).some(value => !value.trim())}
                         className="flex-1"
                       >
-                        Create & Link
+                        {creatingApplicant ? 'Creating…' : 'Create & Start Onboarding'}
                       </Button>
                     </div>
-                  </>
+                  </form>
                 )}
               </div>
             </div>

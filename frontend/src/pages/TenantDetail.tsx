@@ -1,3 +1,4 @@
+import SectionEditButton from '../components/ui/SectionEditButton';
 import TenantSmsComposer from '../components/TenantSmsComposer';
 import { usePermissions } from '../hooks/usePermissions';
 import DeleteNoteButton from '../components/DeleteNoteButton';
@@ -21,7 +22,7 @@ import ActivityTimeline from '../components/ui/ActivityTimeline';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { Users,
-  Pencil, Mail, Phone, Building2, Calendar, MessageSquare, Clock,
+  Mail, Phone, Building2, Calendar, MessageSquare, Clock,
   AlertTriangle, ChevronRight, User, CheckCircle,
   ChevronDown, BadgePoundSterling, ShieldCheck, UsersRound
 } from 'lucide-react';
@@ -145,26 +146,6 @@ function CompletionRing({ percent, size = 48 }: { percent: number; size?: number
         {percent}%
       </span>
     </div>
-  );
-}
-
-function SectionEditButton({ editing, onEdit, onSave, onCancel, saving }: {
-  editing: boolean; onEdit: () => void; onSave: () => void; onCancel: () => void; saving?: boolean;
-}) {
-  if (editing) {
-    return (
-      <div className="flex gap-2">
-        <button onClick={onCancel} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--bg-hover)]">Cancel</button>
-        <button onClick={onSave} disabled={saving} className="text-xs text-[var(--accent-orange)] hover:text-[var(--accent-orange)] font-medium transition-colors px-2 py-1 rounded-lg hover:bg-[var(--accent-orange)]/10">
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-    );
-  }
-  return (
-    <button onClick={onEdit} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--bg-hover)]">
-      <Pencil size={12} />
-    </button>
   );
 }
 
@@ -368,7 +349,10 @@ export default function TenantDetail() {
         has_end_date: form.has_end_date ? 1 : 0,
         notes: JSON.stringify(notes),
       };
-      await api.put(`/api/tenants/${id}`, payload);
+      const before=tenantToForm(tenant!);
+      const changed=Object.fromEntries(Object.entries(payload).filter(([key])=>key!=='notes'&&JSON.stringify(form[key])!==JSON.stringify(before[key as keyof typeof before])));
+      if('first_name_1' in changed||'last_name_1' in changed)changed.name=payload.name;
+      if(Object.keys(changed).length)await api.put(`/api/tenants/${id}`, changed);
       const t = await api.get(`/api/tenants/${id}`);
       setTenant(t);
       setForm(tenantToForm(t));
@@ -496,7 +480,7 @@ export default function TenantDetail() {
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader title="Personal Information" icon={<User size={16} />} />
-                <SectionEditButton editing={isEditing('personal')} onEdit={() => setEditingSection('personal')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
+                <SectionEditButton label="personal" disabled={!!editingSection&&!isEditing('personal')} editing={isEditing('personal')} onEdit={() => setEditingSection('personal')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
               </div>
               {isEditing('personal') ? (
                 <div className="space-y-4">
@@ -580,7 +564,7 @@ export default function TenantDetail() {
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader title="Next of Kin" icon={<Users size={16} />} />
-                <SectionEditButton editing={isEditing('nok')} onEdit={() => setEditingSection('nok')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
+                <SectionEditButton label="nok" disabled={!!editingSection&&!isEditing('nok')} editing={isEditing('nok')} onEdit={() => setEditingSection('nok')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
               </div>
               {isEditing('nok') ? (
                 <div className="space-y-4">
@@ -686,7 +670,7 @@ export default function TenantDetail() {
             </GlassCard>
 
             {!!tenant.guarantor_required && <GlassCard className="p-6">
-              <div className="flex justify-between items-center mb-4"><SectionHeader title="Primary Guarantor" icon={<BadgePoundSterling size={16} />} /><SectionEditButton editing={isEditing('guarantor')} onEdit={() => setEditingSection('guarantor')} onSave={saveSection} onCancel={cancelSection} saving={saving} /></div>
+              <div className="flex justify-between items-center mb-4"><SectionHeader title="Primary Guarantor" icon={<BadgePoundSterling size={16} />} /><SectionEditButton label="guarantor" disabled={!!editingSection&&!isEditing('guarantor')} editing={isEditing('guarantor')} onEdit={() => setEditingSection('guarantor')} onSave={saveSection} onCancel={cancelSection} saving={saving} /></div>
               {isEditing('guarantor') ? <div className="space-y-3">
                 <label className="flex gap-2 text-sm"><input type="checkbox" checked={!!form.guarantor_required} onChange={e => setForm({ ...form, guarantor_required: e.target.checked })} />Guarantor required</label>
                 {(['guarantor_name', 'guarantor_address', 'guarantor_email', 'guarantor_phone', 'guarantor_employment_status', 'guarantor_employer', 'guarantor_annual_income'] as const).map(key => <Input key={key} label={key.replace('guarantor_', '').split('_').map(word => word.charAt(0).toUpperCase()+word.slice(1)).join(' ')} value={String(form[key] || '')} type={key.includes('email') ? 'email' : key.includes('income') ? 'currency' : 'text'} onChange={v => setForm({ ...form, [key]: v })} />)}
@@ -698,7 +682,6 @@ export default function TenantDetail() {
                 <ReadField label="Date of Birth" value={tenant.guarantor_date_of_birth ? formatDateDMY(tenant.guarantor_date_of_birth) : null} /><ReadField label="Employment" value={tenant.guarantor_employment_status} /><ReadField label="Employer" value={tenant.guarantor_employer} /><ReadField label="Annual income" value={tenant.guarantor_annual_income ? `£${Number(tenant.guarantor_annual_income).toLocaleString()}` : null} />
 
               </div>}
-              <div className="mt-4"><p className="text-xs font-medium mb-2">Authority to Contact</p><YesNo value={form.guarantor_authority_to_contact} onChange={v => setForm({ ...form, guarantor_authority_to_contact: v })} disabled={!isEditing('guarantor')} /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"><ContextualDocSlot entityType="tenant" entityId={tenant.id} docType="guarantor_primary_id" label="Primary ID" /><ContextualDocSlot entityType="tenant" entityId={tenant.id} docType="guarantor_secondary_id" label="Secondary ID" /></div>
               <AdditionalGuarantors key={tenant.id} tenantId={tenant.id} records={tenant.additional_guarantors||[]} onSaved={loadDetail} />
             </GlassCard>}
@@ -719,7 +702,7 @@ export default function TenantDetail() {
                 ) : (
                   <div className="flex flex-wrap justify-end gap-2">
                     {tenant.status==='inactive'&&<Button size="sm" disabled={saving} onClick={async()=>{if(!await confirmAction('Create a fresh enquiry for this returning tenant? Their previous tenancy history will be retained.','Reactivate Tenant'))return;setSaving(true);try{const result=await api.post(`/api/tenants/${tenant.id}/reactivate`,{});navigate(`/enquiries/${result.enquiry_id}`);}catch(e){notify(e instanceof Error?e.message:'Could not reactivate tenant','error');}finally{setSaving(false);}}}>Reactivate to Enquiry</Button>}
-                    <Button variant="outline" className="!bg-yellow-400 !text-yellow-950 !border-yellow-400" size="sm" onClick={() => setEditingSection('tenancy')}>Update Tenancy</Button>
+                    <SectionEditButton label="tenancy" editing={false} disabled={!!editingSection} onEdit={()=>setEditingSection('tenancy')} onSave={saveSection} onCancel={cancelSection}/>
                     {tenant.status !== 'inactive' && <Button variant="outline" className="!bg-red-600 !text-white !border-red-600" size="sm" onClick={() => setShowEndModal(true)}>Schedule Tenancy End</Button>}
                     <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => setShowRentReview(true)}>£ Rent Review</Button>
                     {user?.role === 'admin' && <Button variant="outline" size="sm" className="!bg-red-600 !text-white !border-red-600" onClick={async () => {
@@ -800,17 +783,11 @@ export default function TenantDetail() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-[var(--text-muted)]">{completedCount}/{checklistItems.length}</span>
                   <CompletionRing percent={completionPercent} size={36} />
-                  <SectionEditButton editing={isEditing('checklist')} onEdit={() => setEditingSection('checklist')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
+                  <SectionEditButton label="checklist" disabled={!!editingSection&&!isEditing('checklist')} editing={isEditing('checklist')} onEdit={() => setEditingSection('checklist')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
                 </div>
               </div>
 
               <div className="space-y-2">
-                {/* Authority to Contact */}
-                <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24 flex items-center justify-between">
-                  <span className="text-xs">Authority to Contact</span>
-                  <YesNo value={!!form.authority_to_contact} onChange={v => setForm({ ...form, authority_to_contact: v })} disabled={!isEditing('checklist')} />
-                </div>
-
                 {/* KYC Breakdown */}
                 <div className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24 flex items-center justify-between">
                   <span className="text-xs">Primary ID</span>

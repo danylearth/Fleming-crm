@@ -1,3 +1,4 @@
+import SectionEditButton from '../components/ui/SectionEditButton';
 import ServiceAgreements from '../components/ServiceAgreements';
 import {Check} from 'lucide-react';
 import LandlordBankDetails from '../components/LandlordBankDetails';
@@ -17,7 +18,7 @@ import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { calculateSmsSegments } from '../utils/sms';
-import { Pencil, Save, X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Briefcase, Trash2, RotateCcw, Send, Clock } from 'lucide-react';
+import { X, Mail, Phone, MapPin, Building2, Calendar, ShieldCheck, Megaphone, StickyNote, UserCircle, Plus, Briefcase, Trash2, RotateCcw, Send, Clock } from 'lucide-react';
 
 interface Landlord {
   kyc_approved_at?:string;
@@ -92,7 +93,10 @@ export default function LandlordDetail() {
   const [directorTab, setDirectorTab] = useState<'active' | 'archived'>('active');
   const [directorOf, setDirectorOf] = useState<DirectorOf[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
+  const [editingSection,setEditingSection]=useState<string|null>(null);
+  const editing=editingSection!==null;
+  const [formBeforeEdit,setFormBeforeEdit]=useState<Record<string,unknown>>({});
+  const sectionActions=(section:string)=><SectionEditButton label={section} editing={editingSection===section} disabled={editing&&editingSection!==section} saving={saving} onEdit={()=>{setFormBeforeEdit({...form});setEditingSection(section);}} onSave={handleSave} onCancel={()=>{setEditingSection(null);if(landlord)populateForm(landlord);}}/>;
   const [form, setForm] = useState({
     name: '', email: '', phone: '', notes: '',
     alt_email: '', date_of_birth: '', home_address: '', company_number: '', referral_source: '',
@@ -215,12 +219,13 @@ export default function LandlordDetail() {
         ...form,
         notes: JSON.stringify(notes),
       };
-      await api.put(`/api/landlords/${id}`, payload);
+      const changed=Object.fromEntries(Object.entries(payload).filter(([key])=>key!=='notes'&&JSON.stringify(form[key as keyof typeof form])!==JSON.stringify(formBeforeEdit[key])));
+      if(Object.keys(changed).length)await api.put(`/api/landlords/${id}`, changed);
       const updated = await api.get(`/api/landlords/${id}`);
       setLandlord(updated);
       populateForm(updated);
       setNotes(parseNotes(updated.notes));
-      setEditing(false);
+      setEditingSection(null);
     } catch (e) {
       console.error(e);
       alert(e instanceof Error ? e.message : 'Failed to save landlord');
@@ -348,19 +353,7 @@ export default function LandlordDetail() {
               </div>
               {/* Subtitle removed per client feedback */}
             </div>
-            <div className="flex gap-2">
-              <Button variant={editing ? 'ghost' : 'outline'} onClick={() => {
-                if (editing) { setEditing(false); populateForm(landlord); }
-                else setEditing(true);
-              }}>
-                {editing ? <><X size={14} className="mr-2" />Cancel</> : <><Pencil size={14} className="mr-2" />Edit</>}
-              </Button>
-              {editing && (
-                <Button variant="gradient" onClick={handleSave} disabled={saving}>
-                  <Save size={14} className="mr-2" />{saving ? 'Saving...' : 'Save'}
-                </Button>
-              )}
-            </div>
+
           </div>
         </div>
 
@@ -368,11 +361,11 @@ export default function LandlordDetail() {
           {/* Left column — 2/3 */}
           <div className="lg:col-span-2 space-y-6">
             {/* Contact Information */}
-            <GlassCard className={`p-6 ${editing ? 'relative z-10 overflow-visible' : ''}`}>
-              <SectionHeader title="Contact Information" icon={<UserCircle size={16}/>} />
+            <GlassCard className={`p-6 ${(editingSection==='contact') ? 'relative z-10 overflow-visible' : ''}`}>
+              <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Contact Information" icon={<UserCircle size={16}/>} />{sectionActions('contact')}</div>
               {(() => {
                 const isCompany = form.entity_type === 'company' || landlord.entity_type === 'company';
-                return editing ? (
+                return (editingSection==='contact') ? (
                   <div className="space-y-4">
                     <Select label="Entity Type" value={form.entity_type} onChange={v => setForm({ ...form, entity_type: v })}
                       options={[{ value: 'individual', label: 'Individual' }, { value: 'company', label: 'Limited Company' }, { value: 'trust', label: 'Trust' }]} />
@@ -659,18 +652,19 @@ export default function LandlordDetail() {
 
             {/* Marketing Preferences */}
             <GlassCard className="p-6">
-              <SectionHeader title="Marketing Preferences" icon={<Megaphone size={16}/>} />
+              <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Marketing Preferences" icon={<Megaphone size={16}/>} />{sectionActions('marketing')}</div>
               <div className="flex flex-wrap gap-3">
-                <Toggle label="Post" checked={editing ? form.marketing_post : !!landlord.marketing_post} onChange={v => setForm({ ...form, marketing_post: v })} disabled={!editing} />
-                <Toggle label="Email" checked={editing ? form.marketing_email : !!landlord.marketing_email} onChange={v => setForm({ ...form, marketing_email: v })} disabled={!editing} />
-                <Toggle label="Telephone" checked={editing ? form.marketing_phone : !!landlord.marketing_phone} onChange={v => setForm({ ...form, marketing_phone: v })} disabled={!editing} />
-                <Toggle label="SMS" checked={editing ? form.marketing_sms : !!landlord.marketing_sms} onChange={v => setForm({ ...form, marketing_sms: v })} disabled={!editing} />
+                <Toggle label="Post" checked={(editingSection==='marketing') ? form.marketing_post : !!landlord.marketing_post} onChange={v => setForm({ ...form, marketing_post: v })} disabled={!(editingSection==='marketing')} />
+                <Toggle label="Email" checked={(editingSection==='marketing') ? form.marketing_email : !!landlord.marketing_email} onChange={v => setForm({ ...form, marketing_email: v })} disabled={!(editingSection==='marketing')} />
+                <Toggle label="Telephone" checked={(editingSection==='marketing') ? form.marketing_phone : !!landlord.marketing_phone} onChange={v => setForm({ ...form, marketing_phone: v })} disabled={!(editingSection==='marketing')} />
+                <Toggle label="SMS" checked={(editingSection==='marketing') ? form.marketing_sms : !!landlord.marketing_sms} onChange={v => setForm({ ...form, marketing_sms: v })} disabled={!(editingSection==='marketing')} />
               </div>
             </GlassCard>
 
             {/* KYC */}
             <GlassCard className="p-6">
-              <SectionHeader title="KYC Compliance" icon={<ShieldCheck size={16}/>} />
+              <div className="flex items-center justify-between gap-3"><SectionHeader title="KYC Compliance" icon={<ShieldCheck size={16}/>} />{user?.role==='admin'&&sectionActions('kyc')}</div>
+              {editingSection==='kyc'&&<div className="my-3"><Toggle label="KYC Approved" checked={form.kyc_completed} onChange={v=>setForm({...form,kyc_completed:v})}/><p className="text-xs text-[var(--text-muted)] mt-2">Review the supporting documents before saving approval.</p></div>}
               <div className="space-y-4">
                 {/* Company KYC Status */}
                 {directors.length > 0 ? (
@@ -726,28 +720,7 @@ export default function LandlordDetail() {
                 <ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Address Identification" label="Secondary ID Document (Optional)" /></div><div className="rounded-xl border border-[var(--border-input)] p-3 flex flex-col justify-center gap-4">
                 <p className="text-xs text-[var(--text-muted)]">One primary identity document is required. Secondary ID is optional.</p>
                 {/* Admin approval button */}
-                {user?.role === 'admin' && !landlord.kyc_completed && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      if (!await confirmAction('Approve KYC for this landlord? This action will mark their identity as verified.')) return;
-                      try {
-                        await api.put(`/api/landlords/${id}`, { ...landlord, kyc_completed: true });
-                        const updated = await api.get(`/api/landlords/${id}`);
-                        setLandlord(updated);
-                        populateForm(updated);
-                      } catch (e) {
-                        console.error('Failed to approve KYC:', e);
-                        alert('Failed to approve KYC');
-                      }
-                    }}
-                    className="w-full"
-                  >
-                    <ShieldCheck size={14} className="mr-2" />
-                    Approve KYC (Admin)
-                  </Button>
-                )}{!!landlord.kyc_completed&&<div className="flex items-center gap-3"><span className="w-9 h-9 shrink-0 rounded-full bg-emerald-500/15 text-emerald-600 grid place-items-center"><Check size={20}/></span><div><p className="text-sm font-semibold">KYC Approved</p><p className="text-xs text-[var(--text-muted)]">{landlord.kyc_approved_at?new Date(landlord.kyc_approved_at).toLocaleDateString('en-GB'):'Approval recorded'}</p></div></div>}</div></div>
+                {!!landlord.kyc_completed&&<div className="flex items-center gap-3"><span className="w-9 h-9 shrink-0 rounded-full bg-emerald-500/15 text-emerald-600 grid place-items-center"><Check size={20}/></span><div><p className="text-sm font-semibold">KYC Approved</p><p className="text-xs text-[var(--text-muted)]">{landlord.kyc_approved_at?new Date(landlord.kyc_approved_at).toLocaleDateString('en-GB'):'Approval recorded'}</p></div></div>}</div></div>
               </div>
             </GlassCard>
 

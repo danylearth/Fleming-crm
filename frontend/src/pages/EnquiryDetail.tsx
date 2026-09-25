@@ -1,3 +1,5 @@
+import { OFFICE_ADDRESS } from '../utils/meetingLocations';
+import SectionEditButton from '../components/ui/SectionEditButton';
 import DeleteNoteButton from '../components/DeleteNoteButton';
 import CommunicationsHistory from '../components/ui/CommunicationsHistory';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -10,7 +12,7 @@ import ActivityTimeline from '../components/ui/ActivityTimeline';
 import { useApi } from '../hooks/useApi';
 import { usePermissions } from '../hooks/usePermissions';
 import {
-  Pencil, X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle,
+  X, User, Users, Briefcase, Home, Building2, ArrowRight, XCircle,
   Calendar, ExternalLink, CheckCircle, Circle, Clock, Mail, Phone, ChevronRight,
   MessageSquare, Plus, ShieldCheck, AlertTriangle, Send, Trash2
 } from 'lucide-react';
@@ -168,26 +170,6 @@ function CompletionRing({ percent, size = 48 }: { percent: number; size?: number
         {percent}%
       </span>
     </div>
-  );
-}
-
-function SectionEditButton({ editing, onEdit, onSave, onCancel, saving }: {
-  editing: boolean; onEdit: () => void; onSave: () => void; onCancel: () => void; saving?: boolean;
-}) {
-  if (editing) {
-    return (
-      <div className="flex gap-2">
-        <button onClick={onCancel} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--bg-hover)]">Cancel</button>
-        <button onClick={onSave} disabled={saving} className="text-xs text-[var(--accent-orange)] hover:text-[var(--accent-orange)] font-medium transition-colors px-2 py-1 rounded-lg hover:bg-[var(--accent-orange)]/10">
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-    );
-  }
-  return (
-    <button onClick={onEdit} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--bg-hover)]">
-      <Pencil size={12} />
-    </button>
   );
 }
 
@@ -367,7 +349,7 @@ export default function EnquiryDetail() {
         case 'viewing':
           if ((wfPropId || wfCustomLocation.trim()) && wfDate) {
             const viewingResult = await api.post('/api/property-viewings', {
-              property_id: wfPropId && wfPropId!=='other' ? Number(wfPropId) : null,
+              property_id: wfPropId && !['other','office'].includes(wfPropId) ? Number(wfPropId) : null,
               viewing_location: wfCustomLocation.trim() || null,
               enquiry_id: Number(id),
               viewer_name: name, viewer_email: form.email_1 || '',
@@ -384,7 +366,7 @@ export default function EnquiryDetail() {
             }
             await saveSection({
               status: 'viewing_booked',
-              linked_property_id: wfPropId && wfPropId!=='other' ? Number(wfPropId) : null,
+              linked_property_id: wfPropId && !['other','office'].includes(wfPropId) ? Number(wfPropId) : null,
               viewing_date: wfDate,
               viewing_with: wfViewingWith || null,
             });
@@ -598,7 +580,7 @@ export default function EnquiryDetail() {
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader title="Personal Information" icon={<User size={16} />} />
-                <SectionEditButton editing={isEditing('personal')} onEdit={() => setEditingSection('personal')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
+                <SectionEditButton label="personal" disabled={!!editingSection&&!isEditing('personal')} editing={isEditing('personal')} onEdit={() => setEditingSection('personal')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
               </div>
               {isEditing('personal') ? (
                 <div className="space-y-4">
@@ -712,21 +694,20 @@ export default function EnquiryDetail() {
             </GlassCard>
 
             <GlassCard className="p-6">
-              <SectionHeader title="Property Preferences" icon={<Home size={16}/>}/>
-              <div className="grid grid-cols-2 gap-4">
-                <ReadField label="Property types" value={form.preferred_property_type}/>
+              <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Property Preferences" icon={<Home size={16}/>}/><SectionEditButton label="preferences" disabled={!!editingSection&&!isEditing('preferences')} editing={isEditing('preferences')} onEdit={()=>setEditingSection('preferences')} onSave={()=>saveSection()} onCancel={cancelSection} saving={saving}/></div>
+              {isEditing('preferences')?<div className="grid grid-cols-2 gap-4">{[['preferred_property_type','Property types'],['preferred_bedrooms','Bedrooms'],['preferred_tenancy_type','Tenancy type'],['max_rent','Maximum monthly rent'],['preferred_parking','Parking']].map(([key,label])=><Input key={key} label={label} value={String(form[key]||'')} onChange={v=>setField(key,v)}/>)}</div>:<div className="grid grid-cols-2 gap-4"><ReadField label="Property types" value={form.preferred_property_type}/>
                 <ReadField label="Bedrooms" value={form.preferred_bedrooms}/>
                 <ReadField label="Tenancy type" value={form.preferred_tenancy_type}/>
                 <ReadField label="Maximum monthly rent" value={form.max_rent ? `£${Number(form.max_rent).toLocaleString('en-GB')}` : null}/>
                 <ReadField label="Parking" value={form.preferred_parking}/>
-              </div>
+              </div>}
             </GlassCard>
 
             {/* Employment & Address */}
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader title="Employment & Financial Details" icon={<Briefcase size={16} />} />
-                <SectionEditButton editing={isEditing('employment')} onEdit={() => setEditingSection('employment')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
+                <SectionEditButton label="employment" disabled={!!editingSection&&!isEditing('employment')} editing={isEditing('employment')} onEdit={() => setEditingSection('employment')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
               </div>
               {isEditing('employment') ? (
                 <div className="space-y-4">
@@ -758,9 +739,9 @@ export default function EnquiryDetail() {
             </GlassCard>
 
             {/* Next of Kin */}
-            {(data?.app_next_of_kin_name || data?.app_next_of_kin_phone || data?.app_next_of_kin_2_name) && (
+            {true && (
               <GlassCard className="p-6">
-                <SectionHeader title="Next of Kin" icon={<Users size={16} />} />
+                <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Next of Kin" icon={<Users size={16} />} /><SectionEditButton label="nok" disabled={!!editingSection&&!isEditing('nok')} editing={isEditing('nok')} onEdit={()=>setEditingSection('nok')} onSave={()=>saveSection()} onCancel={cancelSection} saving={saving}/></div>{isEditing('nok')?<div className="grid sm:grid-cols-2 gap-3">{[["app_next_of_kin_name","name"],["app_next_of_kin_relationship","relationship"],["app_next_of_kin_phone","phone"],["app_next_of_kin_address","address"],["app_next_of_kin_2_name","Second contact name"],["app_next_of_kin_2_relationship","Second contact relationship"],["app_next_of_kin_2_phone","Second contact phone"],["app_next_of_kin_2_address","Second contact address"]].map(([key,label])=><Input key={key} label={label} value={String(form[key]||'')} onChange={v=>setField(key,v)}/>)}</div>:<>
                 <div className="space-y-4 mt-4">
                   {(data?.app_next_of_kin_name || data?.app_next_of_kin_phone) && (
                     <div>
@@ -786,27 +767,27 @@ export default function EnquiryDetail() {
                     </div>
                   )}
                 </div>
-              </GlassCard>
+              </>}</GlassCard>
             )}
 
             {/* Guarantor */}
-            {(data?.app_guarantor_name || data?.app_guarantor_phone || data?.app_guarantor_email) && (
+            {true && (
               <GlassCard className="p-6">
-                <SectionHeader title="Guarantor" icon={<ShieldCheck size={16} />} />
+                <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Guarantor" icon={<ShieldCheck size={16} />} /><SectionEditButton label="guarantor" disabled={!!editingSection&&!isEditing('guarantor')} editing={isEditing('guarantor')} onEdit={()=>setEditingSection('guarantor')} onSave={()=>saveSection()} onCancel={cancelSection} saving={saving}/></div>{isEditing('guarantor')?<div className="grid sm:grid-cols-2 gap-3">{[["app_guarantor_name","name"],["app_guarantor_phone","phone"],["app_guarantor_email","email"],["app_guarantor_address","address"]].map(([key,label])=><Input key={key} label={label} value={String(form[key]||'')} onChange={v=>setField(key,v)}/>)}</div>:<>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
                   <ReadField label="Name" value={data?.app_guarantor_name} />
                   <ReadField label="Phone" value={data?.app_guarantor_phone} />
                   <ReadField label="Email" value={data?.app_guarantor_email} />
                   <ReadField label="Address" value={data?.app_guarantor_address} />
                 </div>
-              </GlassCard>
+              </>}</GlassCard>
             )}
 
             {/* Renting Requirements */}
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader title="Renting Requirements" icon={<Home size={16} />} />
-                <SectionEditButton editing={isEditing('requirements')} onEdit={() => setEditingSection('requirements')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
+                <SectionEditButton label="requirements" disabled={!!editingSection&&!isEditing('requirements')} editing={isEditing('requirements')} onEdit={() => setEditingSection('requirements')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
               </div>
               {isEditing('requirements') ? (
                 <div className="flex flex-wrap gap-2">
@@ -856,7 +837,7 @@ export default function EnquiryDetail() {
             <GlassCard className="p-6 overflow-visible relative z-10">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader title="Linked Property" icon={<Building2 size={16} />} />
-                <SectionEditButton editing={isEditing('property')} onEdit={() => setEditingSection('property')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
+                <SectionEditButton label="property" disabled={!!editingSection&&!isEditing('property')} editing={isEditing('property')} onEdit={() => setEditingSection('property')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
               </div>
               {isEditing('property') ? (
                 <Select
@@ -893,7 +874,7 @@ export default function EnquiryDetail() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-[var(--text-muted)]">{completedCount}/{checklistItems.length}</span>
                   <CompletionRing percent={completionPercent} size={36} />
-                  <SectionEditButton editing={isEditing('checklist')} onEdit={() => setEditingSection('checklist')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
+                  <SectionEditButton label="checklist" disabled={!!editingSection&&!isEditing('checklist')} editing={isEditing('checklist')} onEdit={() => setEditingSection('checklist')} onSave={() => saveSection()} onCancel={cancelSection} saving={saving} />
                 </div>
               </div>
 
@@ -1233,12 +1214,14 @@ export default function EnquiryDetail() {
                     <>
                       <Select label="Assign To (Agent)" value={wfAssignedTo} onChange={setWfAssignedTo} searchable
                         options={[{ value: '', label: 'Unassigned' }, ...users.map(u => ({ value: u.name, label: u.name }))]} />
-                      <Select label="Property *" searchable value={wfPropId} onChange={(v) => {
+                      <Select label="Meeting Location *" searchable value={wfPropId} onChange={(v) => {
                         setWfPropId(v);
-                        if (v!=='other') setWfCustomLocation('');
-                        setSmsBody(genSms(v, wfDate, wfTime, ''));
+                        const location = v === 'office' ? OFFICE_ADDRESS : '';
+                        setWfCustomLocation(location);
+                        setSmsBody(genSms(v, wfDate, wfTime, location));
                       }}
-                        options={[{ value: '', label: 'Select property...' }, {value:'other',label:'Other'}, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
+                        options={[{ value: '', label: 'Select property...' }, {value:'office',label:'Office Address'}, {value:'other',label:'Other'}, ...properties.map(p => ({ value: String(p.id), label: `${p.address}${p.postcode ? `, ${p.postcode}` : ''}` }))]} />
+                      {wfPropId==='office'&&<p className="text-sm text-[var(--text-secondary)]">{OFFICE_ADDRESS}</p>}
                       {wfPropId==='other'&&<Input label="Other Address *" value={wfCustomLocation} onChange={(value) => {
                         setWfCustomLocation(value);
                         setSmsBody(genSms('', wfDate, wfTime, value));

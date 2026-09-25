@@ -11,6 +11,7 @@ import CsvImport from '../components/ui/CsvImport';
 import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { useNotifications } from '../context/NotificationContext';
+import { clientPropertyStats } from '../utils/clientPropertyStats';
 
 interface Landlord {
   id: number; name: string; email: string; phone: string;
@@ -20,6 +21,7 @@ interface Landlord {
 
 interface Property {
   id: number; address: string; postcode: string; landlord_id: number | null;
+  status?: string; service_type?: string | null; has_live_tenancy?: number | boolean;
 }
 
 interface TenantOption {
@@ -123,9 +125,9 @@ export default function Landlords() {
     return matchSearch;
   });
 
-  const activeCount = landlords.filter(l => (landlordProperties[l.id]?.length || 0) > 0).length;
-  const newCount = landlords.length - activeCount;
-  const totalProps = properties.length;
+  const activeCount = portfolioFiltered.filter(l => (landlordProperties[l.id]?.length || 0) > 0).length;
+  const newCount = portfolioFiltered.length - activeCount;
+  const clientStats = clientPropertyStats(properties, portfolioFiltered.map(landlord => landlord.id));
 
   const handleSave = async () => {
     // Validate required fields
@@ -261,16 +263,17 @@ export default function Landlords() {
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: 'Total Landlords', value: landlords.length, accent: true },
-            { label: 'Total Properties', value: totalProps },
-            { label: 'Active', value: activeCount },
-            { label: 'New', value: newCount },
+            { label: 'Live Let Only Projects', value: clientStats.letOnly, accent: true, detail: 'Open client properties' },
+            { label: 'Rent Collection', value: clientStats.rentCollection, detail: 'Open client properties' },
+            { label: 'Full Management', value: clientStats.fullManagement, detail: 'Open client properties' },
+            { label: 'Managed Occupancy', value: clientStats.occupancy == null ? '—' : `${clientStats.occupancy}%`, detail: `${clientStats.occupied} of ${clientStats.managed} rent collection / managed properties occupied` },
           ].map(s => (
             <GlassCard key={s.label} className="p-4">
               <p className="text-xs text-[var(--text-muted)]">{s.label}</p>
               <p className={`text-2xl font-bold mt-1 ${s.accent ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
                 {s.value}
               </p>
+              <p className="text-[11px] text-[var(--text-muted)] mt-1">{s.detail}</p>
             </GlassCard>
           ))}
         </div>
@@ -331,7 +334,7 @@ export default function Landlords() {
           <div className="h-5 w-px bg-[var(--border-subtle)] hidden sm:block" />
 
           {[
-            { key: 'all', label: `All (${landlords.length})` },
+            { key: 'all', label: `All (${portfolioFiltered.length})` },
             { key: 'active', label: `Active (${activeCount})` },
             { key: 'new', label: `New (${newCount})` },
           ].map(f => (

@@ -50,9 +50,9 @@ export default function PricePaidData({ postcode }: PricePaidDataProps) {
   if (!showData) {
     return (
       <Card>
-        <div className="flex items-center justify-between p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-6">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 flex items-center justify-center">
+            <div className="w-12 h-12 shrink-0 rounded-xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 flex items-center justify-center">
               <TrendingUp className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
@@ -103,9 +103,9 @@ export default function PricePaidData({ postcode }: PricePaidDataProps) {
       {/* Summary Card */}
       <Card>
         <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 flex items-center justify-center">
+              <div className="w-12 h-12 shrink-0 rounded-xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-emerald-600" />
               </div>
               <div>
@@ -119,7 +119,7 @@ export default function PricePaidData({ postcode }: PricePaidDataProps) {
           </div>
 
           {priceData.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] gap-4">
               <div className="bg-gradient-to-br from-navy-50 to-navy-100/50 rounded-xl p-4">
                 <div className="flex items-center gap-2 text-navy-600 mb-2">
                   <PoundSterling className="w-4 h-4" />

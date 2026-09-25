@@ -38,7 +38,7 @@ describe('4 September CRM feedback', () => {
   it('shows tenant addresses and maintenance and exposes clear tenancy actions', () => {
     expect(tenantDetail).toContain('Previous Address');
     expect(tenantDetail).toContain('Maintenance (');
-    expect(tenantDetail).toContain('Update Tenancy');
+    expect(tenantDetail).toContain('label="tenancy"');
     expect(tenantDetail).toContain('Schedule Tenancy End');
   });
 
@@ -49,8 +49,8 @@ describe('4 September CRM feedback', () => {
   });
 
   it('creates the confirmed internal Bridgemary test property with gas', () => {
-    expect(migration).toContain("'8 Bridgemary Close, Wolverhampton'");
-    expect(migration).toContain("'WV10 8UL'");
-    expect(migration).toContain("  1,\n  'to_let',\n  NULL");
+    expect(migration.replace(/\r\n/g,'\n')).toContain("'8 Bridgemary Close, Wolverhampton'");
+    expect(migration.replace(/\r\n/g,'\n')).toContain("'WV10 8UL'");
+    expect(migration.replace(/\r\n/g,'\n')).toContain("  1,\n  'to_let',\n  NULL");
   });
 });

@@ -1,3 +1,6 @@
+import LandlordIntakeSections from '../components/LandlordIntakeSections';
+import LandlordAppointmentForm from '../components/LandlordAppointmentForm';
+import SectionEditButton from '../components/ui/SectionEditButton';
 import DeleteNoteButton from '../components/DeleteNoteButton';
 import CommunicationsHistory from '../components/ui/CommunicationsHistory';
 import { useState, useEffect, useCallback } from 'react';
@@ -10,14 +13,14 @@ import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { calculateSmsSegments } from '../utils/sms';
 import {
-  Pencil, Save, X, Mail, Phone, MapPin, Calendar, MessageSquare, Clock,
+  X, Mail, Phone, MapPin, Calendar, MessageSquare, Clock,
   Plus, User, ArrowRight, UserPlus, XCircle, AlertTriangle, Send
 } from 'lucide-react';
 
 interface Prospect {
   id: number; name: string; email: string; phone: string; address: string;
   entity_type: string; company_number: string; status: string; follow_up_date: string; source: string; notes: string;
-  created_at: string; updated_at: string;
+  created_at: string; updated_at: string; intake_data?: Record<string, unknown>;
 }
 
 interface ProspectNote {
@@ -75,14 +78,11 @@ export default function BDMDetail() {
 
   // Workflow
   const [showWorkflow, setShowWorkflow] = useState(false);
-  const [workflowMode, setWorkflowMode] = useState<'choose' | 'follow_up' | 'not_interested'>('choose');
-  const [wfDate, setWfDate] = useState('');
+  const [workflowMode, setWorkflowMode] = useState<'choose' | 'follow_up' | 'meeting' | 'not_interested'>('choose');
   const [wfLoading, setWfLoading] = useState(false);
   const [converting, setConverting] = useState(false);
 
   // SMS
-  const [smsEnabled, setSmsEnabled] = useState(false);
-  const [smsBody, setSmsBody] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [smsHistory, setSmsHistory] = useState<any[]>([]);
   const [smsCompose, setSmsCompose] = useState('');
@@ -130,7 +130,8 @@ export default function BDMDetail() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put(`/api/landlords-bdm/${id}`, { ...form, notes: JSON.stringify(notes) });
+      const changed=Object.fromEntries(Object.entries(form).filter(([key,value])=>String(prospect?.[key as keyof Prospect]??'')!==value));
+      if(Object.keys(changed).length)await api.put(`/api/landlords-bdm/${id}`, changed);
       await loadDetail();
       setEditing(false);
     } catch (e) { console.error(e); }
@@ -143,7 +144,7 @@ export default function BDMDetail() {
     const note: ProspectNote = { id: Date.now().toString(), text: newNote.trim(), author: user?.email || 'You', created_at: new Date().toISOString() };
     const updated = [...notes, note];
     try {
-      await api.put(`/api/landlords-bdm/${id}`, { ...form, notes: JSON.stringify(updated) });
+      await api.put(`/api/landlords-bdm/${id}`, { notes: JSON.stringify(updated) });
       api.post('/api/activity', { action: 'note_added', entity_type: 'landlord_bdm', entity_id: Number(id), changes: { text: newNote.trim() } }).catch(() => {});
       setNotes(updated);
       setNewNote('');
@@ -155,16 +156,6 @@ export default function BDMDetail() {
     setWfLoading(true);
     try {
       switch (workflowMode) {
-        case 'follow_up':
-          if (wfDate) {
-            await api.put(`/api/landlords-bdm/${id}`, { ...form, status: 'follow_up', follow_up_date: wfDate, notes: JSON.stringify(notes) });
-            if (smsEnabled && prospect?.phone && smsBody) {
-              await api.post('/api/sms/send', { entity_type: 'landlord_bdm', entity_id: Number(id), to_phone: prospect.phone, message_body: smsBody }).catch(() => {});
-              await loadSmsHistory();
-            }
-            await loadDetail();
-          }
-          break;
         case 'not_interested':
           await api.put(`/api/landlords-bdm/${id}`, { ...form, status: 'not_interested', notes: JSON.stringify(notes) });
           await loadDetail();
@@ -207,7 +198,7 @@ export default function BDMDetail() {
 
   const cancelEdit = () => {
     setEditing(false);
-    if (prospect) setForm({ name: prospect.name || '', email: prospect.email || '', phone: prospect.phone || '', address: prospect.address || '', source: prospect.source || '', follow_up_date: prospect.follow_up_date || '', status: prospect.status || 'new' });
+    if (prospect) setForm({ entity_type:prospect.entity_type||'individual', company_number:prospect.company_number||'', name: prospect.name || '', email: prospect.email || '', phone: prospect.phone || '', address: prospect.address || '', source: prospect.source || '', follow_up_date: prospect.follow_up_date || '', status: prospect.status || 'new' });
   };
 
   if (loading) return <Layout title="Loading..."><div className="p-8 text-[var(--text-muted)] text-sm">Loading...</div></Layout>;
@@ -244,16 +235,8 @@ export default function BDMDetail() {
             </div>
             <div className="flex gap-2 shrink-0">
               {!isOnboarded && prospect.status !== 'not_interested' && (
-                <Button variant="outline" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setSmsEnabled(false); setSmsBody(''); }}>
+                <Button variant="outline" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); }}>
                   <ArrowRight size={14} className="mr-2" />Progress
-                </Button>
-              )}
-              <Button variant={editing ? 'ghost' : 'outline'} onClick={() => editing ? cancelEdit() : setEditing(true)}>
-                {editing ? <><X size={14} className="mr-2" />Cancel</> : <><Pencil size={14} className="mr-2" />Edit</>}
-              </Button>
-              {editing && (
-                <Button variant="gradient" onClick={handleSave} disabled={saving}>
-                  <Save size={14} className="mr-2" />{saving ? 'Saving...' : 'Save'}
                 </Button>
               )}
             </div>
@@ -265,7 +248,7 @@ export default function BDMDetail() {
           <div className="lg:col-span-3 space-y-6">
             {/* Contact Info */}
             <GlassCard className="p-6">
-              <SectionHeader title="Contact Information" icon={<User size={16} />} />
+              <div className="flex items-center justify-between gap-3"><SectionHeader title="Contact Information" icon={<User size={16} />} /><SectionEditButton label="contact information" editing={editing} saving={saving} onEdit={()=>setEditing(true)} onSave={handleSave} onCancel={cancelEdit}/></div>
               {editing ? (
                 <div className="space-y-3">
                   <Select label="Registration Type" value={form.entity_type} onChange={entity_type=>setForm({...form,entity_type})} options={[{value:"individual",label:"Individual"},{value:"company",label:"Limited Company"}]}/>{form.entity_type==='company'&&<Input label="Company Number" value={form.company_number} onChange={company_number=>setForm({...form,company_number})}/>}<Input label={form.entity_type==='company'?"Company Name":"Full Name"} value={form.name} onChange={v => setForm({ ...form, name: v })} />
@@ -306,6 +289,8 @@ export default function BDMDetail() {
                 </div>
               )}
             </GlassCard>
+
+            <LandlordIntakeSections id={prospect.id} data={prospect.intake_data} onSaved={loadDetail} />
 
             {/* Documents */}
             <DocumentUpload entityType="landlord_bdm" entityId={prospect.id} />
@@ -396,16 +381,17 @@ export default function BDMDetail() {
                   <div className="flex-1"><p className="text-sm font-medium">Mark as Contacted</p><p className="text-xs text-[var(--text-muted)]">Initial outreach made</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <button onClick={() => { setWorkflowMode('follow_up'); setSmsEnabled(false); setSmsBody(`Hi there! Just following up on your recent property enquiry with Fleming Lettings. When you get five, please call our team back on 01902 212 415. Speak soon, the team at Fleming's.`); }}
+                <Button variant="outline" className="w-full justify-start" onClick={()=>setWorkflowMode('meeting')}><Calendar size={16} className="mr-2"/>Book a Meeting</Button>
+                <button onClick={() => setWorkflowMode('follow_up')}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><Calendar size={14} className="text-white" /></div>
-                  <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p><p className="text-xs text-[var(--text-muted)]">Schedule a follow-up date with optional SMS</p></div>
+                  <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p><p className="text-xs text-[var(--text-muted)]">Schedule a follow-up with email and SMS options</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
 
 
                 {/* Convert to Landlord */}
-                {['follow_up', 'interested', 'contacted'].includes(prospect.status) && (
+                {!['onboarded', 'not_interested'].includes(prospect.status) && (
                   <>
                     <div className="h-px bg-[var(--border-subtle)] my-3" />
                     <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Onboard</p>
@@ -416,7 +402,7 @@ export default function BDMDetail() {
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-medium text-emerald-400">{converting ? 'Converting...' : 'Onboard — Convert to Landlord'}</p>
-                        <p className="text-xs text-[var(--text-muted)]">Copy all data, records, logs & activities to Landlord module</p>
+                        <p className="text-xs text-[var(--text-muted)]">Create the landlord record and retain the original enquiry history</p>
                       </div>
                       <ArrowRight size={14} className="text-[var(--text-muted)]" />
                     </button>
@@ -433,41 +419,11 @@ export default function BDMDetail() {
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
               </div>
+            ) : workflowMode === 'follow_up' || workflowMode === 'meeting' ? (
+              <LandlordAppointmentForm key={workflowMode} prospect={prospect} kind={workflowMode} onBack={()=>setWorkflowMode('choose')} onSaved={()=>{setShowWorkflow(false);void loadDetail();void loadSmsHistory();void loadEmailHistory();}}/>
             ) : (
               <div className="space-y-4">
                 <button onClick={() => setWorkflowMode('choose')} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">← Back</button>
-
-                {workflowMode === 'follow_up' && (
-                  <>
-                    <DatePicker label="Follow-up Date *" value={wfDate} onChange={setWfDate} />
-                    {/* SMS */}
-                    <div className="h-px bg-[var(--border-subtle)] my-1" />
-                    {prospect.phone ? (
-                      <div className="space-y-3">
-                        <label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
-                          <input type="checkbox" checked={smsEnabled} onChange={e => setSmsEnabled(e.target.checked)} className="w-4 h-4 rounded accent-orange-500" />
-                          <Phone size={14} className="text-teal-400" />
-                          <div className="flex-1">
-                            <span className="text-sm font-medium text-[var(--text-primary)]">Send follow-up SMS</span>
-                            <p className="text-[10px] text-[var(--text-muted)]">{prospect.phone}</p>
-                          </div>
-                        </label>
-                        {smsEnabled && (
-                          <div>
-                            <label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Message Preview</label>
-                            <textarea value={smsBody} onChange={e => setSmsBody(e.target.value)} rows={4}
-                              className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 resize-none transition-colors" />
-                            <p className="text-[10px] text-[var(--text-muted)] mt-1">{(() => { const s = calculateSmsSegments(smsBody); return `${s.charCount} chars · ${s.segments} segment${s.segments !== 1 ? 's' : ''} · ${s.encoding}`; })()}</p>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                        <p className="text-xs text-amber-400">No phone number on record — SMS cannot be sent</p>
-                      </div>
-                    )}
-                  </>
-                )}
 
                 {workflowMode === 'not_interested' && (
                   <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
@@ -481,7 +437,7 @@ export default function BDMDetail() {
                   <Button
                     variant={workflowMode === 'not_interested' ? 'outline' : 'gradient'}
                     onClick={handleWorkflow}
-                    disabled={wfLoading || (workflowMode === 'follow_up' && !wfDate)}
+                    disabled={wfLoading}
                     className={workflowMode === 'not_interested' ? 'border-red-500/50 text-red-400' : ''}>
                     {wfLoading ? 'Saving...' : workflowMode === 'not_interested' ? 'Archive' : 'Confirm'}
                   </Button>
