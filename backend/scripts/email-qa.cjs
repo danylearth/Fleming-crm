@@ -4,11 +4,13 @@ const path = require('node:path');
 const {emailTemplateLibrary, fillEmailTemplate} = require('../dist/message-template-library');
 const {emailSignatures} = require('../dist/marketing-files');
 const {prepareEmailHtml} = require('../dist/email-presentation');
-const {marketingEmailHtml} = require('../dist/marketing-html');
 const {sendEmail} = require('../dist/email');
 const recipient = process.argv.find(arg=>arg.startsWith('--to='))?.slice(5);
 if(process.argv.includes('--send')&&!recipient)throw Error('Supply an explicitly authorised --to=email address');
-const folder = path.resolve(__dirname, '../../docs/reviews/email-qa-2026-09-25');
+const revision = process.argv.find(arg=>arg.startsWith('--revision='))?.slice(11) || 'v1';
+if(!/^[a-z0-9-]+$/.test(revision))throw Error('Invalid QA revision');
+const only = process.argv.find(arg=>arg.startsWith('--only='))?.slice(7).split(',');
+const folder = path.resolve(__dirname, '../../docs/reviews/email-qa-2026-09-25'+(revision==='v1'?'':'-'+revision));
 fs.mkdirSync(folder, {recursive:true});
 const fixture = {
  FIRST_NAME:'Alex', NAME:'Alex Example', TENANT_NAME:'Alex Example', EMAIL:'alex@example.test',
@@ -29,15 +31,15 @@ const samples = emailTemplateLibrary().map(template => {
  return {id:template.id, label:template.label, html:prepareEmailHtml(html)};
 });
 for (const signature of emailSignatures([{id:1,name:'Alex Example — Sample Property Manager',email:'alex@example.test',department:'Lettings Team',phone:'07700 900000',office_extension:'123'}],1)) {
- samples.push({id:'signature-'+signature.id+'.html',label:'Signature — '+signature.label,html:marketingEmailHtml('<p style="font-family:Arial;color:#1e1e1e">Signature layout test. Fictional details; no action is required.</p>'+signature.html,'https://example.test/preferences')});
+ samples.push({id:'signature-'+signature.id+'.html',label:'Signature — '+signature.label,html:prepareEmailHtml('<p style="font-family:Arial;color:#1e1e1e">Signature layout test. Fictional details; no action is required.</p>'+signature.html)});
 }
 const receiptFile=path.join(folder,'receipts.json');
 const receipts=fs.existsSync(receiptFile)?JSON.parse(fs.readFileSync(receiptFile,'utf8')):[];
 (async()=>{
  for(const sample of samples){
   fs.writeFileSync(path.join(folder,sample.id),sample.html);
-  if(process.argv.includes('--send')&&!receipts.some(r=>r.template===sample.id&&r.success)){
-   const result=await sendEmail({to:recipient,subject:`[CRM HTML TEST ${samples.indexOf(sample)+1}/${samples.length}] ${sample.label}`,html:sample.html,idempotencyKey:'crm-html-qa-2026-09-25-v1-'+sample.id});
+  if(process.argv.includes('--send')&&(!only||only.includes(sample.id))&&!receipts.some(r=>r.template===sample.id&&r.recipient===recipient&&r.success)){
+   const result=await sendEmail({to:recipient,subject:`[CRM HTML TEST ${revision} ${samples.indexOf(sample)+1}/${samples.length}] ${sample.label}`,html:sample.html,idempotencyKey:'crm-html-qa-2026-09-25-'+revision+'-'+sample.id});
    receipts.push({template:sample.id,recipient,...result,submittedAt:new Date().toISOString()});
    fs.writeFileSync(receiptFile,JSON.stringify(receipts,null,2));
    if(!result.success)throw Error(`Sending failed for ${sample.id}: ${result.error}`);

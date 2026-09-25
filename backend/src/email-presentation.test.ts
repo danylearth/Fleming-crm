@@ -38,7 +38,27 @@ it('wraps standalone user and department signatures and keeps prepared content i
   const html=prepareEmailHtml('<p>Sample message</p>'+signature.html);
   expect(html,signature.id).toContain('<head>');expect(html,signature.id).toContain('name="color-scheme"');
   expect(html,signature.id).toContain('-webkit-text-fill-color:#ffffff');
-  expect(html,signature.id).not.toContain('width="130"');
+  expect(html,signature.id).toContain('width="130"');
+  expect(html,signature.id).toContain('width:600px; max-width:600px;');
   expect(prepareEmailHtml(html),signature.id).toBe(html);
  }
+});
+it('preserves original template dimensions and natural button widths through both send paths',()=>{
+ for(const template of emailTemplateLibrary()){
+  const original=fs.readFileSync(path.join(__dirname,'email-templates',template.id),'utf8');
+  const dimensions=(html:string)=>[...html.matchAll(/(?:font-size|line-height|padding|width|height)\s*:\s*[^;"}]+/g)].map(m=>m[0].replace(/\s+/g,""));
+  for(const rendered of [template.html,marketingEmailHtml(template.html,'https://example.test/preferences')]){
+   expect(rendered,template.id).not.toMatch(/table\s*\{[^}]*width:100%\s*!important/);
+   expect(rendered,template.id).not.toContain('table-layout:fixed');
+   expect(rendered,template.id).not.toContain('table[width="600"]');
+   for(const dimension of dimensions(original))expect(dimensions(rendered),template.id).toContain(dimension);
+  }
+ }
+});
+it('removes the earlier layout overrides from saved prepared drafts',()=>{
+ const old='<html><head><meta name="fleming-presentation" content="1"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><style>table[width="600"]{width:100%!important}@media(max-width:620px){table{width:100%!important;table-layout:fixed!important}}</style></head><body>Saved draft</body></html>';
+ const updated=prepareEmailHtml(old);
+ expect(updated).not.toContain('table-layout:fixed');
+ expect(updated).toContain('name="fleming-presentation" content="2"');
+ expect(prepareEmailHtml(updated)).toBe(updated);
 });
