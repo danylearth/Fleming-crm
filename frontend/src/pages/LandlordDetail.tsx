@@ -1,5 +1,5 @@
 import SectionEditButton from '../components/ui/SectionEditButton';
-import ServiceAgreements from '../components/ServiceAgreements';
+import PropertyContractStep from '../components/PropertyContractStep';
 import {Check} from 'lucide-react';
 import LandlordBankDetails from '../components/LandlordBankDetails';
 import ContextualDocSlot from '../components/ui/ContextualDocSlot';
@@ -110,6 +110,9 @@ export default function LandlordDetail() {
   const [notesFilter, setNotesFilter] = useState<'all' | 'landlord' | string>('all'); // 'all', 'landlord', or property ID
   const [propertyNotes, setPropertyNotes] = useState<Record<number, { id: string; text: string; author: string; created_at: string }[]>>({});
   const [showAddProp, setShowAddProp] = useState(false);
+  const [contractPropertyId, setContractPropertyId] = useState<number | null>(null);
+  const [manageContractId, setManageContractId] = useState<number | null>(null);
+  const [serviceContracts, setServiceContracts] = useState<{property_id:number;service_type:string;status:string;opened_at?:string;delivery_status?:string}[] | null>([]);
   const [propMode, setPropMode] = useState<'create' | 'link'>('create');
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
   const [allProperties, setAllProperties] = useState<Property[]>([]);
@@ -175,17 +178,19 @@ export default function LandlordDetail() {
 
   const loadDetail = async () => {
     try {
-      const [l, props, dirs, archivedDirs, dirOf] = await Promise.all([
+      const [l, props, dirs, archivedDirs, dirOf, contracts] = await Promise.all([
         api.get(`/api/landlords/${id}`),
         api.get(`/api/landlords/${id}/properties`),
         api.get(`/api/landlords/${id}/directors?archived=false`).catch(() => []),
         api.get(`/api/landlords/${id}/directors?archived=true`).catch(() => []),
         api.get(`/api/landlords/${id}/director-of`).catch(() => []),
+        user?.role === 'viewer' ? Promise.resolve([]) : api.get(`/api/landlords/${id}/service-agreements`).catch(() => null),
       ]);
       setLandlord(l);
       populateForm(l);
       setNotes(parseNotes(l.notes));
       setProperties(props);
+      setServiceContracts(contracts);
       setDirectors(dirs);
       setArchivedDirectors(archivedDirs);
       setDirectorOf(dirOf);
@@ -405,7 +410,7 @@ export default function LandlordDetail() {
               })()}
             </GlassCard>
 
-            {user?.role !== 'viewer' && <><LandlordBankDetails landlordId={Number(id)}/><ServiceAgreements landlordId={Number(id)}/></>}
+            {user?.role !== 'viewer' && <LandlordBankDetails landlordId={Number(id)}/>}
 
             {/* Properties */}
             <GlassCard className="p-6">
@@ -431,8 +436,9 @@ export default function LandlordDetail() {
                 <EmptyState message="No properties linked" />
               ) : (
                 <div className="divide-y divide-[var(--border-subtle)] rounded-xl border border-[var(--border-subtle)] overflow-hidden">
-                  {properties.map(p => (
-                    <div key={p.id} className="flex items-center gap-3 px-4 py-3 bg-[var(--bg-subtle)]/40 hover:bg-[var(--bg-hover)] transition-colors">
+                  {properties.map(p => {
+                    const contract = serviceContracts?.find(item => item.property_id === p.id && item.service_type === p.service_type && item.status !== 'void');
+                    return <div key={p.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 transition-colors ${contract?.status === 'signed' ? 'bg-emerald-500/5' : 'bg-[var(--bg-subtle)]/40 hover:bg-[var(--bg-hover)]'}`}>
                       <button onClick={() => navigate(`/properties/${p.id}`)} className="min-w-0 flex-1 text-left">
                         <p className="text-sm font-medium">{formatPropertyAddress(p.city && !p.address.toLowerCase().includes(p.city.toLowerCase()) ? `${p.address}, ${p.city}` : p.address,p.postcode)}</p>{p.tenant_names && <p className="text-xs mt-1 text-[var(--text-secondary)]">Tenants: {p.tenant_names}</p>}
                         <div className="flex items-center gap-2 mt-1">
@@ -444,6 +450,11 @@ export default function LandlordDetail() {
                         </div>
                       </button>
                       {p.service_type && <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs capitalize ${p.service_type==='full_management'?'bg-amber-500/15 text-amber-600':p.service_type==='rent_collection'?'bg-purple-500/15 text-purple-600':'bg-blue-500/15 text-blue-600'}`}><Briefcase size={12}/>{p.service_type.replaceAll('_',' ')}</span>}
+                      {landlord.landlord_type !== 'internal' && user?.role !== 'viewer' && <div className="order-last flex flex-wrap items-center gap-2 basis-full pl-0 sm:pl-1">
+                        <span className={`rounded-full px-2 py-1 text-xs ${contract?.status === 'signed' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-[var(--bg-hover)] text-[var(--text-secondary)]'}`}>{contract?.status === 'signed' ? '✓ Contract completed' : serviceContracts === null ? 'Contract status unavailable' : contract?.opened_at ? 'Contract viewed · Awaiting signature' : contract?.status === 'issued' ? 'Contract issued · Awaiting signature' : contract ? 'Contract draft' : 'Contract not issued'}</span>
+                        {contract?.delivery_status === 'failed' && <span className="text-xs text-red-600">Email delivery failed</span>}
+                        <Button variant="outline" size="sm" onClick={() => setManageContractId(p.id)}>{contract?.status === 'signed' ? 'View signed contract' : contract ? 'Manage / Issue Contract' : 'Prepare Contract'}</Button>
+                      </div>}
                       {p.link_id && (
                         <button
                           type="button"
@@ -462,8 +473,8 @@ export default function LandlordDetail() {
                           <Trash2 size={15} />
                         </button>
                       )}
-                    </div>
-                  ))}
+                    </div>;
+                  })}
                 </div>
               )}
             </GlassCard>
@@ -988,6 +999,7 @@ export default function LandlordDetail() {
                       });
                       setShowAddProp(false);
                       api.post('/api/activity', { action: 'create', entity_type: 'property', entity_id: res.id, changes: { landlord_id: Number(id), address: propForm.address } }).catch(() => {});
+                      if (landlord.landlord_type !== 'internal') setContractPropertyId(res.id);
                       await loadDetail();
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     } catch (e: any) {
@@ -996,13 +1008,16 @@ export default function LandlordDetail() {
                     }
                     setPropSaving(false);
                   }}>
-                    {propSaving ? 'Creating...' : 'Create Property'}
+                    {propSaving ? 'Creating...' : landlord.landlord_type === 'internal' ? 'Create Property' : 'Create & Prepare Contract'}
                   </Button>
                 )}
               </div>
             </div>
           </div>
         )}
+
+        {contractPropertyId && <PropertyContractStep propertyId={contractPropertyId} onClose={() => navigate(`/properties/${contractPropertyId}`)} />}
+        {manageContractId && <PropertyContractStep propertyId={manageContractId} existing onClose={() => {setManageContractId(null);void loadDetail();}} />}
 
         {/* Add Director Modal */}
         {showAddDirector && (

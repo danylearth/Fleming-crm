@@ -1045,14 +1045,17 @@ export default function EnquiryDetail() {
             {/* Notes */}
             <GlassCard className="p-6">
               <SectionHeader title="Notes" icon={<MessageSquare size={16} />} />
-              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-64 overflow-y-auto" style={{ paddingRight: 0, scrollbarGutter: 'auto' }}>
                 {notes.length === 0 && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
                 {notes.map(note => (
                   <div key={note.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
-                    <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="min-w-0 flex-1 break-words text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p>
+                      <DeleteNoteButton entity="tenant_enquiry" id={id!} note={note} onDeleted={loadDetail} />
+                    </div>
                     <div className="flex items-center justify-between mt-1.5">
                       <span className="text-[10px] text-[var(--text-muted)]">{note.author}</span>
-                      <TimeAgo date={note.created_at} /><DeleteNoteButton entity="tenant_enquiry" id={id!} note={note} onDeleted={loadDetail} />
+                      <TimeAgo date={note.created_at} />
                     </div>
                   </div>
                 ))}

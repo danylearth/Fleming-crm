@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
+import PropertyContractStep from '../components/PropertyContractStep';
 import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, SearchDropdown } from '../components/ui';
 
 import BulkActions from '../components/ui/BulkActions';
@@ -66,6 +67,7 @@ export default function Properties() {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [landlords, setLandlords] = useState<LandlordOption[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [contractPropertyId, setContractPropertyId] = useState<number | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<PropertyForm>({
@@ -434,11 +436,13 @@ export default function Properties() {
               if(res.epc_notice)alert(res.epc_notice);
               setShowAdd(false);
               resetForm();
-              navigate(`/properties/${res.id}`);
+              if (landlords.find(landlord => landlord.id === Number(form.landlord_id))?.landlord_type !== 'internal') setContractPropertyId(res.id);
+              else navigate(`/properties/${res.id}`);
             } catch (e) { alert(e instanceof Error ? e.message : 'Property could not be created'); }
             setSaving(false);
           }}
         />}
+        {contractPropertyId && <PropertyContractStep propertyId={contractPropertyId} onClose={() => navigate(`/properties/${contractPropertyId}`)} />}
       </div>
     </Layout>
   );
@@ -631,7 +635,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
         <div className="flex gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.landlord_id || !form.address.trim() || !form.city.trim() || !form.postcode.trim() || !form.status || form.has_gas === null || (form.is_leasehold && form.has_management_company === null) || (!isMyPortfolio && !form.service_type)}>
-            {saving ? 'Creating...' : 'Create Property'}
+            {saving ? 'Creating...' : isMyPortfolio ? 'Create Property' : 'Create & Prepare Contract'}
           </Button>
         </div>
       </div>

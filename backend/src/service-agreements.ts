@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import sharp from 'sharp';
 import pool,{query,queryOne,run} from './db-pg';
 import {authMiddleware,requirePermission,type AuthRequest} from './auth';
-import {sendEmail,OUTBOUND_EMAIL_ADDRESS} from './email';
+import {sendEmail,OUTBOUND_EMAIL_ADDRESS,normalizePropertyAddress} from './email';
 import {prepareEmailHtml} from './email-presentation';
 import {servicePdf,signedServicePdf,serviceNames} from './service-agreement-pdf';
 const root=()=>process.env.UPLOADS_PATH||path.join(__dirname,'../uploads');
@@ -42,8 +42,8 @@ export function registerServiceAgreements(app:Express){
   const p=ctx.property,d=req.body,service=p.service_type,setup=Number(d.setup_fee),monthly=service==='let_only'?0:Number(d.monthly_fee);
   if(!serviceNames[service]||d.setup_fee===''||d.setup_fee==null||(!['let_only'].includes(service)&&(d.monthly_fee===''||d.monthly_fee==null))||![setup,monthly].every(n=>Number.isFinite(n)&&n>=0&&n<=100))return res.status(400).json({error:'Enter agreed fees between 0 and 100 percent'});
   const bank={account_name:String(ctx.bank.account_name||''),sort_code:String(ctx.bank.sort_code||''),account_number:String(ctx.bank.account_number||''),bank_name:String(ctx.bank.bank_name||'')};
-  if(!ctx.bank.approved_at)return res.status(400).json({error:'An administrator must first approve the landlord bank details'});
-  const details={agreement_date:new Date().toISOString().slice(0,10),landlord_name:p.landlord_name,landlord_address:p.home_address||p.landlord_address,landlord_email:p.landlord_email,landlord_phone:p.landlord_phone,company_number:p.company_number||'',signatory_name:String(d.signatory_name||'').trim(),property_address:[p.address,p.postcode].filter(Boolean).join(', '),asking_rent:Number(p.rent_amount)};
+  // Bank details are proposed values; the landlord must complete and approve them at signing.
+  const details={agreement_date:new Date().toISOString().slice(0,10),landlord_name:p.landlord_name,landlord_address:p.home_address||p.landlord_address,landlord_email:p.landlord_email,landlord_phone:p.landlord_phone,company_number:p.company_number||'',signatory_name:String(d.signatory_name||'').trim(),property_address:normalizePropertyAddress(p.address,p.postcode,p.city),asking_rent:Number(p.rent_amount)};
   if(!details.landlord_address||!details.landlord_phone||!details.asking_rent||!details.landlord_email||!/^\S+@\S+\.\S+$/.test(details.landlord_email)||(p.entity_type==='company'&&(!details.company_number||!details.signatory_name)))return res.status(400).json({error:'Complete the landlord address, email, phone, asking rent and company signatory details first'});
   const a:any={property_id:p.id,landlord_id:p.landlord_id,service_type:service,setup_fee:setup,monthly_fee:monthly,payment_route:service==='let_only'?'landlord':'fleming_client_money',details,bank_details:bank};
   const c=await pool.connect();let file:string|undefined,sourceFile:string|undefined;
@@ -66,7 +66,7 @@ export function registerServiceAgreements(app:Express){
   }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
  });
  app.post('/api/service-agreements/:id/void',authMiddleware,requirePermission('manager'),async(req:AuthRequest,res)=>{const c=await pool.connect();try{await c.query('BEGIN');const a=(await c.query("UPDATE landlord_service_agreements SET status='void' WHERE id=$1 AND status<>'void' RETURNING *",[req.params.id])).rows[0];if(a)await audit(c,req.user,'service_agreement_voided',a);await c.query('COMMIT');res.json({success:true});}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}});
- app.get('/api/public/service-agreements/:token',publicLimit,async(req,res)=>{const a=await queryOne("SELECT * FROM landlord_service_agreements WHERE token=$1 AND status IN ('issued','signed')",[req.params.token]);if(!a)return res.status(404).json({error:'Agreement not found or not yet issued'});res.set('Cache-Control','no-store').json({id:a.id,status:a.status,service_name:serviceNames[a.service_type],service_type:a.service_type,details:a.details,bank_details:a.bank_details,payment_route:a.payment_route,setup_fee:a.setup_fee,monthly_fee:a.monthly_fee,signed_at:a.signed_at});});
+ app.get('/api/public/service-agreements/:token',publicLimit,async(req,res)=>{const a=await queryOne("UPDATE landlord_service_agreements SET opened_at=COALESCE(opened_at,NOW()) WHERE token=$1 AND status IN ('issued','signed') RETURNING *",[req.params.token]);if(!a)return res.status(404).json({error:'Agreement not found or not yet issued'});res.set('Cache-Control','no-store').json({id:a.id,status:a.status,service_name:serviceNames[a.service_type],service_type:a.service_type,details:a.details,bank_details:a.bank_details,payment_route:a.payment_route,setup_fee:a.setup_fee,monthly_fee:a.monthly_fee,signed_at:a.signed_at});});
  app.get('/api/public/service-agreements/:token/pdf',publicLimit,async(req,res)=>{const a=await queryOne("SELECT * FROM landlord_service_agreements WHERE token=$1 AND status IN ('issued','signed')",[req.params.token]);if(!a)return res.sendStatus(404);res.type('pdf').set('Cache-Control','no-store').send(await fs.readFile(path.join(root(),a.signed_filename||a.filename)));});
  app.post('/api/public/service-agreements/:token/preview',publicLimit,async(req,res)=>{
   const a=await queryOne("SELECT * FROM landlord_service_agreements WHERE token=$1 AND status='issued'",[req.params.token]);if(!a)return res.status(409).json({error:'Agreement is unavailable for signing'});
@@ -90,7 +90,7 @@ export function registerServiceAgreements(app:Express){
    await c.query('UPDATE properties SET charge_percentage=$2::numeric,total_charge=ROUND((rent_amount*$2::numeric/100)::numeric,2),updated_at=NOW() WHERE id=$1',[a.property_id,a.service_type==='let_only'?a.setup_fee:a.monthly_fee]);
    const master=(await c.query('SELECT * FROM landlord_bank_details WHERE landlord_id=$1 FOR UPDATE',[a.landlord_id])).rows[0];
    if(master&&Object.keys(bank).every(k=>String(master[k])===bank[k as keyof typeof bank]))await c.query('UPDATE landlord_bank_details SET landlord_approved_at=$2,landlord_approved_name=$3 WHERE landlord_id=$1',[a.landlord_id,a.signed_at,a.signer_name]);
-   const name=`${a.details.property_address} - ${serviceNames[a.service_type]} Service Agreement - ${a.signed_at.slice(0,10)}.pdf`;
+   const name=`Service Contract - ${serviceNames[a.service_type]} - ${a.details.property_address}.pdf`;
    for(const [type,id] of [['property',a.property_id],['landlord',a.landlord_id]])await c.query("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,size) VALUES($1,$2,'service_agreement',$3,$4,'application/pdf',$5)",[type,id,signedFile,name,signed.length]);
    await audit(c,null,'service_agreement_signed',a);await c.query('COMMIT');res.json({success:true,signed_at:a.signed_at});
   }catch(e){await c.query('ROLLBACK');if(signedFile)await fs.unlink(path.join(root(),signedFile)).catch(()=>{});throw e;}finally{c.release();}
