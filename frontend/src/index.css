@@ -220,6 +220,7 @@ body { font-family:var(--user-font,'Lufga'),sans-serif; }
 .onboarding-dialog select,
 .onboarding-dialog textarea { font-size: 1rem; min-height: 44px; }
 .onboarding-dialog button { min-height: 40px; font-family: inherit; font-weight: 600; }
+.onboarding-dialog button.company-account-details-button { min-height:32px; }
 .onboarding-dialog button.onboarding-progress-action { font-weight: 700; }
 .onboarding-dialog .onboarding-section-nav > button { height:52px; min-height:52px; padding-top:8px; padding-bottom:8px; }
 .onboarding-dialog input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; }
