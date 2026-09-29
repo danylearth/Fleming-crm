@@ -1,0 +1,450 @@
+[
+  {
+    "check": "CRM release",
+    "entry": "/assets/index-B0m7Bk10.js",
+    "status": 200
+  },
+  {
+    "check": "CRM asset AccountSetup-DMemrrFD.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset archive-Chv4bfPN.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset BDM-H7GgTDWA.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset BDMDetail-D7CV5J5y.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset briefcase-B64UwlW2.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset BulkActions-BEHrUch9.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset calendar-days-Chu58dxp.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset circle-0cQPaa95.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset circle-alert-ar0D25YC.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset circle-user-D6ZqWYat.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset circle-x-C-KjlMqi.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset clock-sf5eTLfQ.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset CommunicationsHistory-N8JkJgiK.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset ContextualDocSlot-CEJ9U1HL.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset CsvImport-Isi24Am-.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Dashboard-DKLUkDGZ.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset DataTable-Bxp_Nqom.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset DatePicker-CEzGQpIK.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset dnd.esm-MbFTv7Ah.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset emailTemplates-BFITU2W_.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Enquiries-DK9g2bMt.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset EnquiriesKanban-CrKmZ-NW.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset EnquiryDetail-D2Mz2RoE.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset FinancialDocuments-DXL0K4NJ.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset ForgotPassword-Biiciiy1.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset ForgotPassword-kOMV2puG.css",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset history-Cxmxp8Sa.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset house-Ci6mxpGR.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset inbox-CzzYSmm_.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset index-aaLgY7il.css",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset index-B0m7Bk10.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset LandlordAppointmentForm-BfZ1ON0D.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset LandlordDetail-BQ6oOBDZ.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Landlords-AbODPbr1.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset landmark-C2mmdvdF.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Layout-CiO8PL2w.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Layout-Cxm3YRxu.css",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset layout-grid-Dbof7MY6.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset leaflet-C2kYf7C_.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset leaflet-Dgihpmma.css",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset list-checks-CkFQLvPm.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset list-h7RXBaTB.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Login-BkLsuUiW.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Maintenance-BAO6IS3u.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset map-pin-BT9SVIMC.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Marketing-B8QqY-cq.css",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Marketing-Bv_C5u7i.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset meetingLocations-2olX95l-.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset message-square-CfUjXM-G.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset noteDisplay-C92xD-R5.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset PermissionRequests-7Z5LIVWX.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Properties-VBiwrS4r.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset propertyAddress-9ndol6JR.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset PropertyContractStep-BgGBCTxG.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset PropertyDetail-RDpcUXBc.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset propertyImages-Bx-DhB7R.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset RentPayments-B9GBj9m9.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset rotate-ccw-B0e6dnq0.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset save-Co8QtB1x.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset SearchDropdown-DmJSrmrL.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Settings-DS1IvTFW.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset shield-DxnJ7lzC.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset sms-dKJ2pPHK.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset TaskDetail-Dpx8r5mN.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Tasks-BA1JgYHY.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset TenantDetail-BlmG_idE.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset TenantMessageTemplates-DomZRs_A.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Tenants-BhJ38SX_.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Transactions-BZPmmQHj.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset trending-up-CoZVSbbM.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset useOnboardingStarted-B3Q6ksT4.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset user-CVNmTOkn.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset user-plus-DBv6aMjp.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset useRecordAddress-a5Q9NJsi.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset Users-BoLd6yix.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset users-round-D__6c6qA.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "CRM asset viewingMessages-DlxLPMZf.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "application.html",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "application-deadline.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "application-joint-applicant.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "signature-editor.js",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "signature-controls.css",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "service-agreement.html",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "agreement.html",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "Jamie onboarding",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "Casey onboarding",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "Landlord form",
+    "status": 200,
+    "exactMatch": true
+  },
+  {
+    "check": "API health",
+    "health": {
+      "status": "ok",
+      "time": "2026-09-29T21:31:07.924Z",
+      "release": "crm29-agreement-redesign-10"
+    }
+  }
+]

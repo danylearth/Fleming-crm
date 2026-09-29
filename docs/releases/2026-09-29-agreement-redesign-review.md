@@ -1,6 +1,6 @@
 # Agreement redesign review — 29 September 2026
 
-Status: implemented and previewed locally with fictional records. This agreement redesign has not been deployed. Earlier credit-check fixes were released as `crm29-credit-upload-9`; their release record is in `2026-09-29-onboarding-bank-layout.md`.
+Status: deployed to production on 29 September 2026 after user approval. API release: `crm29-agreement-redesign-10`. CRM: https://crm.fleminglettings.co.uk. Earlier credit-check fixes were released as `crm29-credit-upload-9`; their release record is in `2026-09-29-onboarding-bank-layout.md`.
 
 ## Implemented
 
@@ -20,7 +20,7 @@ Status: implemented and previewed locally with fictional records. This agreement
 - Full management and rent collection use the client money account for initial and ongoing payments.
 - Own-portfolio APTs use the company business account. The simplified onboarding view shows this advisory and omits landlord details and the landlord-first signing diagram.
 - Client APT bank-name/account-name fields now follow the confirmed account, including explicitly confirmed agreement-only overrides.
-- Own-portfolio and full-management previews requested for user review before publishing this redesign. No production deployment of this redesign has occurred yet.
+- Own-portfolio, full-management and let-only previews were reviewed by the user. The approved redesign is now live.
 
 ## Validation
 
@@ -39,3 +39,13 @@ All pending tracked application changes and new source modules, migrations, test
 - These PDF checks also confirmed client-money initial payments and landlord subsequent rent for let-only, and client-money payments for full management.
 - Browser checks confirmed the optional field appears, saves, survives reload, and disappears after switching back and saving; the home-address field retained its original value.
 - Let-only review screenshots show the corrected advisory and landlord future-payment account.
+
+## Final production release
+
+- CRM deployment: `fleming-portal-70i7uk6fy-danyls-projects-1551df91.vercel.app`, aliased to `crm.fleminglettings.co.uk`.
+- CRM entry: `/assets/index-B0m7Bk10.js`. API release: `crm29-agreement-redesign-10`.
+- Final full regression run: 102 frontend tests and 566 backend tests passed; both production builds passed. The remote production build also passed company-settings PDF, client-owned APT and signature-certificate checks.
+- Final responsive checks at 390px mobile and 820px tablet: no horizontal page overflow or overflowing input fields; compact company-account button is 32px high.
+- All 89 live asset/health checks passed. Additional read-only API checks passed for account routing, company settings, client agreement context and compliance transaction/audit support. The unauthenticated CRM correctly redirects to login.
+- Initial-payment account confirmation shows the company client-money account for let-only and the agreement payment account for rent collection/full management; future-rent fields are separately labelled. Own-portfolio confirmation shows the company business account supplied by the API.
+- Local Git recovery bundle: `tmp/crm-backup-2026-09-29-agreement.bundle`; verified with Git. GitHub push deliberately deferred at the user’s request.
