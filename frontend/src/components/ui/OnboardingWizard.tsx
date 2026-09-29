@@ -1203,7 +1203,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     {agreementCompliance?.agreementType==='internal'&&<p role="note" className="rounded-lg border border-purple-500/15 bg-purple-500/5 px-3 py-2.5 text-sm leading-relaxed">For Fleming Lettings’ own properties, the initial rental payment, holding deposit and future rent are paid directly into Fleming Lettings’ business bank account, not the client money account.</p>}
                     {!agreementServiceComplete&&<p className="text-sm text-[var(--onboarding-warning)]">Set the service type on the property before generating the agreement.</p>}
                   </section>
-                  <section aria-label="Agreement Particulars" className="rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 space-y-3"><h5 className="text-base font-semibold">Agreement Particulars</h5>
+                  <section aria-label="Agreement Particulars" className="agreement-particulars rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 space-y-3"><h5 className="text-base font-semibold">Agreement Particulars</h5>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
                     <DatePicker label="Tenancy Start *" value={agreementStartDate} onChange={v=>{agreementDirty.current=true;setAgreementStartDate(v);}} />
                     <div>

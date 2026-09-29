@@ -275,6 +275,7 @@ body { font-family:var(--user-font,'Lufga'),sans-serif; }
 .onboarding-dialog .credit-check-fields .credit-select > button { height:44px; min-height:44px; border-radius:8px; padding:8px 12px; font-size:16px; line-height:24px; font-weight:400; background:var(--bg-input); box-shadow:none; }
 .onboarding-dialog .agreement-compliance-documents button { font-weight:400; }
 .onboarding-dialog .agreement-compliance-documents label { display:block; font-size:14px; line-height:20px; font-weight:400; color:var(--text-primary); }
+.onboarding-dialog .agreement-particulars label { display:block; font-size:14px; line-height:20px; font-weight:400; color:var(--text-primary); }
 .onboarding-dialog .compliance-expiry > label { margin-bottom:4px; }
 .onboarding-dialog .compliance-expiry > div { height:44px; border-radius:8px; }
 .onboarding-dialog .compliance-expiry input { min-height:42px; height:42px; padding-top:8px; padding-bottom:8px; }
