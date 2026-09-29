@@ -7,7 +7,7 @@ Status: implemented and previewed locally with fictional records. This agreement
 - Yellow active tenancy agreement stage after both applicants' credit checks are complete; refresh joint compliance status on stage entry, focus and periodic refresh.
 - Contract & Tenancy Particulars summary with landlord, both tenants, service type, fees and landlord-to-tenants signing diagram.
 - Separate Agreement Particulars, Landlords Details and Payment Account Confirmation sections, with responsive layouts.
-- Optional separate service address; matching addresses use one field and a checkbox.
+- Address defaults from the company registered address or individual home address. “Is there a different correspondence address?” reveals an optional override, used in the generated APT without changing the landlord master record.
 - Read-only advisory payment wording selected automatically by agreement service type. Full-management/rent-collection text: “Initial rental payment and holding deposit is paid into Fleming Lettings client money account. Future payments continue to be paid into the client money account.”
 - Company account details pop-out shows the business and client-money accounts from company settings, with CMP number and Close control.
 - Suggested future-payment account comes from company settings for management/collection, and landlord records for let-only. Changing the account requires an extra confirmation; it applies to this agreement only and does not modify master bank records.
@@ -32,3 +32,10 @@ Status: implemented and previewed locally with fictional records. This agreement
 ## Git backup scope
 
 All pending tracked application changes and new source modules, migrations, tests, public forms, assets, release notes and selected review screenshots are included in the evening checkpoint. Private environment files, local database/runtime data, client uploads, temporary release snapshots and unreviewed generated documents remain local.
+
+## Correspondence-address verification
+
+- Generated and extracted text from six fictional PDFs: individual and company, each with default, override and reverted addresses. All six used the expected contract address and left source data unchanged.
+- These PDF checks also confirmed client-money initial payments and landlord subsequent rent for let-only, and client-money payments for full management.
+- Browser checks confirmed the optional field appears, saves, survives reload, and disappears after switching back and saving; the home-address field retained its original value.
+- Let-only review screenshots show the corrected advisory and landlord future-payment account.

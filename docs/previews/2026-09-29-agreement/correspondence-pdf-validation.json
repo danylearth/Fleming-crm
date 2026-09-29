@@ -1,0 +1,44 @@
+[
+  {
+    "kind": "individual",
+    "mode": "default",
+    "addressCorrect": true,
+    "sourceUnchanged": true,
+    "paymentAccountsCorrect": true
+  },
+  {
+    "kind": "individual",
+    "mode": "override",
+    "addressCorrect": true,
+    "sourceUnchanged": true,
+    "paymentAccountsCorrect": true
+  },
+  {
+    "kind": "individual",
+    "mode": "reverted",
+    "addressCorrect": true,
+    "sourceUnchanged": true,
+    "paymentAccountsCorrect": true
+  },
+  {
+    "kind": "company",
+    "mode": "default",
+    "addressCorrect": true,
+    "sourceUnchanged": true,
+    "paymentAccountsCorrect": true
+  },
+  {
+    "kind": "company",
+    "mode": "override",
+    "addressCorrect": true,
+    "sourceUnchanged": true,
+    "paymentAccountsCorrect": true
+  },
+  {
+    "kind": "company",
+    "mode": "reverted",
+    "addressCorrect": true,
+    "sourceUnchanged": true,
+    "paymentAccountsCorrect": true
+  }
+]

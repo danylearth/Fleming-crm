@@ -180,9 +180,10 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
       const date = formalAgreementDate;
       const names = input.tenants.map(t => t.name).join(' and ');
       const initialAccount=input.companySettings?.clientAccount||FLEMING_CLIENT_MONEY_ACCOUNT;
+      const landlordAddress=(isClient?input.landlord.serviceAddress?.trim():null)||input.landlord.address||'';
       const values: Record<string, string> = {
         LANDLORD_NAME:input.landlord.name,
-        LANDLORD_IDENTITY:`${input.landlord.name}, of ${input.landlord.address || ''}${input.landlord.companyNumber ? ', Company number: '+input.landlord.companyNumber : ''}`,
+        LANDLORD_IDENTITY:`${input.landlord.name}, of ${landlordAddress}${input.landlord.companyNumber ? ', Company number: '+input.landlord.companyNumber : ''}`,
         LANDLORD_SIGNATORY:input.landlord.signingName||input.landlord.name,
         LANDLORD_EMAIL:input.landlord.email||'',LANDLORD_PHONE:input.landlord.phone||'',
         SERVICE_ADDRESS:input.landlord.serviceAddress||input.landlord.address||'',EMERGENCY_CONTACT:input.landlord.emergencyContact||'',

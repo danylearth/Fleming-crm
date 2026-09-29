@@ -6131,7 +6131,7 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
       return res.status(409).json({error: clientContext ? validateClientDetails(clientContext.details,clientContext.isCompany) || 'Confirm the landlord details and payment account before issuing the agreement' : 'Complete the client landlord record first'});
     }
     const clientLandlord = clientContext?.details;
-    if (clientLandlord) Object.assign(enquiry,{landlord_name:clientLandlord.landlordName,landlord_email:clientLandlord.landlordEmail,landlord_phone:clientLandlord.landlordPhone,landlord_address:clientLandlord.landlordAddress});
+    if (clientLandlord) Object.assign(enquiry,{landlord_name:clientLandlord.landlordName,landlord_email:clientLandlord.landlordEmail,landlord_phone:clientLandlord.landlordPhone,landlord_address:clientLandlord.serviceAddress||clientLandlord.landlordAddress});
     const landlordSignatory = clientContext?.isCompany ? `${clientLandlord!.directorName} — Signing on behalf of ${clientLandlord!.landlordName}` : enquiry.landlord_name;
     const propertyOwners=requiresLandlord?await query(`SELECT DISTINCT l.id,l.name,l.email,l.phone FROM landlords l JOIN properties p ON p.id=$1 WHERE l.id=p.landlord_id OR EXISTS(SELECT 1 FROM property_landlords pl WHERE pl.property_id=p.id AND pl.landlord_id=l.id) ORDER BY l.id`,[enquiry.linked_property_id]):[];
     const primaryOwner=requiresLandlord?await queryOne('SELECT landlord_id FROM properties WHERE id=$1',[enquiry.linked_property_id]):null;
