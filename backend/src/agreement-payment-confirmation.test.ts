@@ -6,6 +6,9 @@ describe('agreement payment confirmation',()=>{
  it.each(['full_management','rent_collection'])('directs all %s payments to client money, with only agreed fees transferred to business',service=>{
   expect(defaultAgreementPaymentInstructions(service)).toBe('Initial rental payment and holding deposit is paid into Fleming Lettings client money account. Future payments continue to be paid into the client money account.');
  });
+ it('directs let-only initial payments to client money and future rent to the landlord',()=>{
+  expect(defaultAgreementPaymentInstructions('let_only')).toBe('Initial rental payment and holding deposit is paid into Fleming Lettings client money account. Future payments will then be paid directly to the Landlord’s nominated account below.');
+ });
  it('selects Fleming client money for rent collection and full management and landlord details for let only',()=>{
   expect(resolvePaymentRoute('client','full_management')).toBe('fleming_client_money');expect(resolvePaymentRoute('client','rent_collection')).toBe('fleming_client_money');
   expect(resolvePaymentRoute('client','let_only')).toBe('landlord');expect(bankDetailsForRoute('landlord',account)).toEqual(account);

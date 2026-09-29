@@ -3,6 +3,7 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 
 const read = (relative: string) => fs.readFileSync(path.resolve(__dirname, relative), 'utf8');
+const deliveryChoices = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/components/ui/DeliveryChoices.tsx'), 'utf8');
 const backend = read('index-pg.ts');
 const database = read('db-pg.ts') + read('../migrations/0010_existing_tenant_links_and_addresses.sql');
 const pdf = read('tenancy-agreement-pdf.ts');
@@ -100,7 +101,7 @@ describe('7 September CRM feedback', () => {
   });
 
   it('previews the real branded agreement and final-balance emails', () => {
-    expect(wizard).toContain('Preview Email');
+    expect(deliveryChoices).toContain('Preview Email');
     expect(wizard).toContain('previewOnly');
     expect(backend).toContain("tenancy-agreement/email-preview");
     expect(backend).toContain("request-balance/email-preview");

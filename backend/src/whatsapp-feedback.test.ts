@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 
+const creditPanel = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/components/CreditCheckPanel.tsx'), 'utf8');
 const apiSource = fs.readFileSync(path.resolve(__dirname, 'index-pg.ts'), 'utf8');
 const wizardSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/components/ui/OnboardingWizard.tsx'), 'utf8');
 const tenantDetailSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/TenantDetail.tsx'), 'utf8');
@@ -76,7 +77,7 @@ describe('31 August CRM feedback regressions', () => {
     expect(wizardSource).toContain('Tenancy Agreement for Fleming Lettings Properties');
     expect(wizardSource).not.toMatch(/\bAST\b/);
     expect(wizardSource).toContain('AgreementComplianceDocuments');
-    expect(wizardSource).toContain('Upload Credit Report *');
+    expect(creditPanel).toContain('Upload Credit Report *');
     expect(wizardSource).not.toContain('Editable tenant email preview');
     expect(wizardSource).toContain('<DatePicker label="Tenancy Start *"');
   });
@@ -101,8 +102,10 @@ describe('31 August CRM feedback regressions', () => {
 
   it('shows completed payment and credit report evidence without another upload prompt', () => {
     expect(wizardSource).toContain('balance_payment_received_at');
-    expect(wizardSource).toContain('creditReportDocument.original_name');
-    expect(wizardSource).toContain('downloadDocument(creditReportDocument.id');
+    expect(wizardSource).toContain('<CreditCheckPanel');
+    expect(creditPanel).toContain('report.original_name');
+    expect(creditPanel).toContain('const showForm=!completed||!report||replacing;');
+    expect(creditPanel).toContain('(download?onDownload:onView)(report.id,report.original_name)');
   });
 
   it('provides linked, scrollable notes and hides finished onboarding checklists', () => {

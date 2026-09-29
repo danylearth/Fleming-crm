@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {CheckCircle,FileText} from 'lucide-react';
+import {CheckCircle,FileText,Eye,Download,RefreshCw,Plus} from 'lucide-react';
 import {useAuth} from '../context/AuthContext';
 import {Button,DatePicker} from './ui';
 
@@ -32,8 +32,8 @@ export default function AgreementComplianceDocuments({propertyId,enquiryId,items
      <FileText size={18} className="shrink-0"/>
      <div className="min-w-0 flex-1"><h6 className="text-sm font-semibold">{item.label}</h6><p className={`text-xs ${item.ready?'text-[var(--onboarding-success)]':'text-[var(--onboarding-warning)]'}`}>{item.ready?(item.expiryDate?`Valid to ${new Date(`${item.expiryDate.slice(0,10)}T00:00:00`).toLocaleDateString('en-GB')}`:'Saved to property'):item.reason}</p></div>
      {!isEditing&&<div className="flex flex-wrap gap-2">
-      {item.document&&<><Button size="sm" variant="outline" onClick={()=>onView(item.document!.id,item.document!.original_name)}>View</Button><Button size="sm" variant="outline" onClick={()=>onDownload(item.document!.id,item.document!.original_name)}>Download</Button></>}
-      {user?.role!=='viewer'&&<Button size="sm" variant="outline" disabled={busy} onClick={()=>{setEditing(item.docType);setExpiry(item.expiryDate?.slice(0,10)||'');setFile(null);setError('');setNotice('');}}>{item.document?'Update':'Add'}</Button>}
+      {item.document&&<><Button size="sm" variant="outline" className="gap-1.5 !min-h-9 !text-[13px]" onClick={()=>onView(item.document!.id,item.document!.original_name)}><Eye size={14}/>View</Button><Button size="sm" variant="outline" className="gap-1.5 !min-h-9 !text-[13px]" onClick={()=>onDownload(item.document!.id,item.document!.original_name)}><Download size={14}/>Download</Button></>}
+      {user?.role!=='viewer'&&<Button size="sm" variant="outline" className="gap-1.5 !min-h-9 !text-[13px]" disabled={busy} onClick={()=>{setEditing(item.docType);setExpiry(item.expiryDate?.slice(0,10)||'');setFile(null);setError('');setNotice('');}}>{item.document?<RefreshCw size={14}/>:<Plus size={14}/>} {item.document?'Update':'Add'}</Button>}
      </div>}
     </div>
     {item.document&&<p className="mt-1 text-xs text-[var(--text-secondary)] break-words">{item.document.original_name}</p>}

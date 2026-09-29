@@ -8,22 +8,23 @@ Status: implemented and previewed locally with fictional records. This agreement
 - Contract & Tenancy Particulars summary with landlord, both tenants, service type, fees and landlord-to-tenants signing diagram.
 - Separate Agreement Particulars, Landlords Details and Payment Account Confirmation sections, with responsive layouts.
 - Optional separate service address; matching addresses use one field and a checkbox.
-- Editable payment instructions saved with the onboarding agreement details. Full-management/rent-collection text: “Initial rental payment and holding deposit is paid into Fleming Lettings client money account. Future payments continue to be paid into the client money account.”
+- Read-only advisory payment wording selected automatically by agreement service type. Full-management/rent-collection text: “Initial rental payment and holding deposit is paid into Fleming Lettings client money account. Future payments continue to be paid into the client money account.”
 - Company account details pop-out shows the business and client-money accounts from company settings, with CMP number and Close control.
 - Suggested future-payment account comes from company settings for management/collection, and landlord records for let-only. Changing the account requires an extra confirmation; it applies to this agreement only and does not modify master bank records.
 - Compliance upload/replacement and expiry update save directly to the property in one database transaction. Previous files remain in document history. Identical current uploads are reused. Expiry-only corrections are supported.
 - Property audit records staff identity, uploaded/replaced document, old/new expiry, linked enquiry, and Tenant onboarding / Tenancy Agreement origin. The enquiry/property relationship is validated before recording the origin.
 
-## Agreement wording follow-up
+## Payment routing and own-portfolio review
 
-- User asked to pause changes to generated agreement payment wording. No payment clauses in the APT templates were edited in this redesign.
-- Existing rent-collection/full-management APT clause was inspected: it already directs all rent, the initial payment with deposit, and the holding-deposit reference to the client money account, consistent with the user's correction.
-- Review **let-only** APT initial-payment wording later: the requested onboarding text describes the company account initially and the landlord account subsequently; the existing generated template still describes client money for the initial payment. Resolve this with the user before changing the contract wording.
-- Editable onboarding instructions are saved for review; they do not overwrite APT clauses while that review is paused.
+- Latest user correction: let-only initial rent and holding deposit go to Fleming Lettings client money; future rent goes directly to the confirmed landlord account. Both the advisory and generated APT use that route.
+- Full management and rent collection use the client money account for initial and ongoing payments.
+- Own-portfolio APTs use the company business account. The simplified onboarding view shows this advisory and omits landlord details and the landlord-first signing diagram.
+- Client APT bank-name/account-name fields now follow the confirmed account, including explicitly confirmed agreement-only overrides.
+- Own-portfolio and full-management previews requested for user review before publishing this redesign. No production deployment of this redesign has occurred yet.
 
 ## Validation
 
-- Frontend and backend production builds passed.
+- Frontend and backend production builds passed. Backend: 566 tests passed across 95 files. Frontend: 102 tests passed across 26 files.
 - Focused property compliance, payment confirmation, client details, credit submission and application review tests passed. Added regression coverage for audit attribution and rejecting an unrelated onboarding enquiry.
 - Fictional browser previews exercise upload/save feedback, separate-address toggle, account override confirmation, company-account pop-out, and mobile/tablet layout.
 - Screenshots use fictional people and example bank details. No agreement was issued, signed or emailed and no bank transaction was made during preview checks.

@@ -10,15 +10,15 @@ type State={landlordId:number;isCompany:boolean;defaults:Details;details:Details
 const emptyAccount:Account={accountName:'',sortCode:'',accountNumber:'',bankName:''};
 const accountsMatch=(a:Account,b:Account|null)=>!!b&&a.accountName.trim()===b.accountName.trim()&&a.sortCode.replace(/\D/g,'')===b.sortCode.replace(/\D/g,'')&&a.accountNumber===b.accountNumber;
 const validAccount=(account:Account)=>!!account.accountName.trim()&&/^\d{6}$/.test(account.sortCode.replace(/\D/g,''))&&/^\d{8}$/.test(account.accountNumber);
-const defaultInstructions=(serviceType:string)=>serviceType==='let_only'?'Initial rental payment and holding deposit is paid into Fleming Lettings company account — not our client money account. Future payments will then be paid directly to the Landlord’s nominated account below.':'Initial rental payment and holding deposit is paid into Fleming Lettings client money account. Future payments continue to be paid into the client money account.';
+const defaultInstructions=(serviceType:string)=>serviceType==='let_only'?'Initial rental payment and holding deposit is paid into Fleming Lettings client money account. Future payments will then be paid directly to the Landlord’s nominated account below.':'Initial rental payment and holding deposit is paid into Fleming Lettings client money account. Future payments continue to be paid into the client money account.';
 
 export default function ClientAgreementDetails({enquiryId,onReady}:{enquiryId:number;onReady:(ready:boolean)=>void}){
  const dirty=useRef(false),record=useRef(enquiryId),api=useApi();
  const [state,setState]=useState<State|null>(null),[details,setDetails]=useState<Details|null>(null),[saved,setSaved]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [account,setAccount]=useState<Account>(emptyAccount),[paymentConfirmed,setPaymentConfirmed]=useState(false),[editingAccount,setEditingAccount]=useState(false),[confirmOverride,setConfirmOverride]=useState(false),[overrideChecked,setOverrideChecked]=useState(false);
  const [sameServiceAddress,setSameServiceAddress]=useState(true);
- const [paymentInstructions,setPaymentInstructions]=useState(''),[showCompanyAccounts,setShowCompanyAccounts]=useState(false);
- const load=(value:State)=>{setState(value);setDetails({...value.details,bankAccountName:'',bankSortCode:'',bankAccountNumber:''});setSameServiceAddress(value.details.serviceAddress===value.details.landlordAddress);setAccount(value.paymentAccount||value.suggestedPaymentAccount||emptyAccount);setPaymentInstructions(value.paymentInstructions||defaultInstructions(value.serviceType));setPaymentConfirmed(value.paymentConfirmed);setEditingAccount(false);setSaved(value.saved);onReady(value.ready&&value.saved);};
+ const [showCompanyAccounts,setShowCompanyAccounts]=useState(false);
+ const load=(value:State)=>{setState(value);setDetails({...value.details,bankAccountName:'',bankSortCode:'',bankAccountNumber:''});setSameServiceAddress(value.details.serviceAddress===value.details.landlordAddress);setAccount(value.paymentAccount||value.suggestedPaymentAccount||emptyAccount);setPaymentConfirmed(value.paymentConfirmed);setEditingAccount(false);setSaved(value.saved);onReady(value.ready&&value.saved);};
  useEffect(()=>{let active=true;if(record.current!==enquiryId){dirty.current=false;record.current=enquiryId;}if(!dirty.current)onReady(false);api.get(`/api/tenant-enquiries/${enquiryId}/client-agreement-details`).then(value=>{if(active&&!dirty.current)load(value);}).catch(e=>{if(active)setError(String(e));});return()=>{active=false;};
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[api,enquiryId,onReady]);
@@ -27,7 +27,7 @@ export default function ClientAgreementDetails({enquiryId,onReady}:{enquiryId:nu
  const refresh=async()=>{setBusy(true);try{const value=await api.get(`/api/tenant-enquiries/${enquiryId}/client-agreement-details`);setState(value);setDetails(value.defaults);setSameServiceAddress(value.defaults.serviceAddress===value.defaults.landlordAddress);dirty.current=true;setSaved(false);onReady(false);setError('');}catch(e){setError(String(e));}finally{setBusy(false);}};
  const save=async(confirmPayment=paymentConfirmed,overrideApproved=false)=>{
   if(!details)return;setBusy(true);setError('');
-  try{const value=await api.put(`/api/tenant-enquiries/${enquiryId}/client-agreement-details`,{...details,payment_account:account,payment_instructions:paymentInstructions,payment_confirmed:confirmPayment,payment_override_approved:overrideApproved||(paymentConfirmed&&!accountsMatch(account,state?.suggestedPaymentAccount||null))});dirty.current=false;load(value);setConfirmOverride(false);}
+  try{const value=await api.put(`/api/tenant-enquiries/${enquiryId}/client-agreement-details`,{...details,payment_account:account,payment_confirmed:confirmPayment,payment_override_approved:overrideApproved||(paymentConfirmed&&!accountsMatch(account,state?.suggestedPaymentAccount||null))});dirty.current=false;load(value);setConfirmOverride(false);}
   catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
  };
  const confirmAccount=()=>{if(!state)return;if(!accountsMatch(account,state.suggestedPaymentAccount)){setOverrideChecked(false);setConfirmOverride(true);}else void save(true);};
@@ -48,9 +48,8 @@ export default function ClientAgreementDetails({enquiryId,onReady}:{enquiryId:nu
    </fieldset>}
   </section>
   <section aria-label="Payment Account Confirmation" className={`rounded-xl border p-3 space-y-3 ${paymentConfirmed?'border-emerald-500/25 bg-emerald-500/5':'border-[var(--border-input)] bg-[var(--bg-subtle)]'}`}>
-   <div className="flex items-center justify-between gap-2"><h5 className="text-base font-semibold">Payment Account Confirmation</h5>{paymentConfirmed&&<CheckCircle size={18} className="text-[var(--onboarding-success)]"/>}</div>
-   <label className="block text-sm">Payment Instructions<textarea aria-label="Payment Instructions" rows={4} maxLength={2000} disabled={busy||!state} value={paymentInstructions} onChange={e=>{dirty.current=true;setPaymentInstructions(e.target.value);setPaymentConfirmed(false);onReady(false);}} className="mt-1 block w-full resize-y rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm leading-relaxed"/></label>
-   <div className="flex justify-end"><Button size="sm" variant="outline" disabled={!state?.companyAccounts} onClick={()=>setShowCompanyAccounts(true)}>View Company Account Details</Button></div>
+   <div className="flex flex-wrap items-center justify-between gap-2"><h5 className="text-base font-semibold flex items-center gap-2">Payment Account Confirmation{paymentConfirmed&&<CheckCircle size={18} className="text-[var(--onboarding-success)]"/>}</h5><button type="button" className="ml-auto rounded-lg bg-[#742878] px-3 py-2 text-xs font-medium text-white hover:bg-[#632268] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-500 disabled:opacity-40" disabled={!state?.companyAccounts} onClick={()=>setShowCompanyAccounts(true)}>View Company Account Details</button></div>
+   {state&&<p role="note" className="rounded-lg border border-purple-500/15 bg-purple-500/5 px-3 py-2.5 text-sm leading-relaxed">{defaultInstructions(state.serviceType)}</p>}
    <fieldset disabled={busy||!editingAccount} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
     <Input label="Account Name *" value={account.accountName} onChange={v=>changeAccount('accountName',v)}/><Input label="Bank Name" value={account.bankName} onChange={v=>changeAccount('bankName',v)}/><Input label="Sort Code *" value={account.sortCode} onChange={v=>changeAccount('sortCode',v.replace(/\D/g,'').slice(0,6).match(/.{1,2}/g)?.join('-')||'')}/><Input label="Account Number *" value={account.accountNumber} onChange={v=>changeAccount('accountNumber',v.replace(/\D/g,'').slice(0,8))}/>
    </fieldset>

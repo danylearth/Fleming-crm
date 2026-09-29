@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 
+const deliveryChoices = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/components/ui/DeliveryChoices.tsx'), 'utf8');
 const backend = fs.readFileSync(path.resolve(__dirname, 'index-pg.ts'), 'utf8');
 const database = fs.readFileSync(path.resolve(__dirname, 'db-pg.ts'), 'utf8');
 const propertyDetail = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/PropertyDetail.tsx'), 'utf8');
@@ -116,8 +117,8 @@ describe('5 September CRM feedback', () => {
     expect(onboardingWizard).not.toContain('Editable email message');
     expect(onboardingWizard).not.toContain('Editable SMS preview');
     expect(onboardingWizard).toContain('previewHoldingEmail');
-    expect(onboardingWizard).toContain('Send Email');
-    expect(onboardingWizard).toContain('Send SMS');
+    expect(deliveryChoices).toContain('Send Email');
+    expect(deliveryChoices).toContain('Send SMS');
     expect(backend).toContain('req.body.email_message');
     expect(backend).toContain('req.body.sms_message');
   });

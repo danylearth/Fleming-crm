@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 
+const deliveryChoices = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/components/ui/DeliveryChoices.tsx'), 'utf8');
 const backend = fs.readFileSync(path.resolve(__dirname, 'index-pg.ts'), 'utf8');
 const wizard = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/components/ui/OnboardingWizard.tsx'), 'utf8');
 const tenantDetail = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/pages/TenantDetail.tsx'), 'utf8');
@@ -23,8 +24,8 @@ describe('4 September CRM feedback', () => {
   });
 
   it('supports holding-deposit SMS previews, the supplied wording, and stage progression', () => {
-    expect(wizard).toContain('Preview Email');
-    expect(wizard).toContain('Send SMS');
+    expect(deliveryChoices).toContain('Preview Email');
+    expect(deliveryChoices).toContain('Send SMS');
     expect(wizard).toContain('setActiveStep(2)');
     expect(backend).toContain('we are pleased to confirm receipt of your holding deposit payment');
   });

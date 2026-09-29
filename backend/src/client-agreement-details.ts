@@ -45,7 +45,7 @@ export async function clientAgreementContext(enquiryId:number){
  const paymentOverride=Boolean(paymentAccount&&stored?.paymentConfirmation?.override);
  const defaultAccountApproved=paymentRoute!=='landlord'||Boolean(sourceBank?.approved_at&&sourceBank?.landlord_approved_at);
  const paymentReady=Boolean(paymentAccount&&(paymentOverride||defaultAccountApproved));
- return {propertyId:enquiry.service_property_id,serviceAgreementSigned:!!service,serviceAgreementReady:!!enquiry.service_ready,servicePaymentRoute:service?.payment_route,serviceSetupFee:service?.setup_fee,serviceMonthlyFee:service?.monthly_fee,bankOverride:hasOverride,enquiryId:canonicalId,landlordId:enquiry.landlord_id,enabled:enquiry.landlord_type!=='internal',serviceType:enquiry.service_type,isCompany,defaults,details,directors,bank:bank||null,saved:matchingRecord,paymentRoute,suggestedPaymentAccount,paymentAccount:paymentAccount||suggestedPaymentAccount,paymentConfirmed:paymentReady,paymentOverride,defaultAccountApproved,paymentInstructions:matchingRecord&&stored?.paymentInstructions||defaultAgreementPaymentInstructions(enquiry.service_type),companyAccounts:{business:company.operatingAccount,clientMoney:company.clientAccount,cmpNumber:company.cmp.number},ready:matchingRecord&&!validateClientDetails(details,isCompany)&&paymentReady};
+ return {propertyId:enquiry.service_property_id,serviceAgreementSigned:!!service,serviceAgreementReady:!!enquiry.service_ready,servicePaymentRoute:service?.payment_route,serviceSetupFee:service?.setup_fee,serviceMonthlyFee:service?.monthly_fee,bankOverride:hasOverride,enquiryId:canonicalId,landlordId:enquiry.landlord_id,enabled:enquiry.landlord_type!=='internal',serviceType:enquiry.service_type,isCompany,defaults,details,directors,bank:bank||null,saved:matchingRecord,paymentRoute,suggestedPaymentAccount,paymentAccount:paymentAccount||suggestedPaymentAccount,paymentConfirmed:paymentReady,paymentOverride,defaultAccountApproved,paymentInstructions:defaultAgreementPaymentInstructions(enquiry.service_type),companyAccounts:{business:company.operatingAccount,clientMoney:company.clientAccount,cmpNumber:company.cmp.number},ready:matchingRecord&&!validateClientDetails(details,isCompany)&&paymentReady};
 }
 export function registerClientAgreementDetails(app:Express){
  app.get('/api/landlords/:id/bank-details',authMiddleware,requirePermission('staff'),async(req,res)=>{
@@ -72,8 +72,6 @@ export function registerClientAgreementDetails(app:Express){
   const state=await clientAgreementContext(Number(req.params.id));if(!state?.enabled)return res.status(409).json({error:'Client details require an external landlord'});
   const details=Object.fromEntries(Object.keys(state.defaults).map(key=>[key,String(req.body[key]??'').trim().slice(0,1000)])) as ClientDetails;
   const error=validateClientDetails(details,state.isCompany);if(error)return res.status(400).json({error});
-  const paymentInstructions=String(req.body.payment_instructions??state.paymentInstructions).trim();
-  if(!paymentInstructions||paymentInstructions.length>2000)return res.status(400).json({error:'Enter payment instructions of up to 2,000 characters'});
   if(details.bankAccountName&&req.body.bank_override_approved!==true)return res.status(400).json({error:'Confirm the alternative bank details for this tenancy'});
   let paymentConfirmation=null;
   if(req.body.payment_confirmed===true){
@@ -84,7 +82,7 @@ export function registerClientAgreementDetails(app:Express){
    paymentConfirmation={account,override,serviceType:state.serviceType,confirmedAt:new Date().toISOString(),confirmedBy:req.user.id};
   }
   const client=await pool.connect();try{await client.query('BEGIN');
-   await client.query('UPDATE tenant_enquiries SET client_agreement_details=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify({landlordId:state.landlordId,propertyId:state.propertyId,details,paymentConfirmation,paymentInstructions,bankOverrideApprovedAt:details.bankAccountName?new Date().toISOString():null,bankOverrideApprovedBy:details.bankAccountName?req.user.id:null}),state.enquiryId]);
+   await client.query('UPDATE tenant_enquiries SET client_agreement_details=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify({landlordId:state.landlordId,propertyId:state.propertyId,details,paymentConfirmation,bankOverrideApprovedAt:details.bankAccountName?new Date().toISOString():null,bankOverrideApprovedBy:details.bankAccountName?req.user.id:null}),state.enquiryId]);
    await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'client_agreement_details_saved','tenant_enquiry',$3,$4)",[req.user.id,req.user.email,state.enquiryId,JSON.stringify({landlord_id:state.landlordId,is_company:state.isCompany,payment_confirmed:!!paymentConfirmation,payment_override:paymentConfirmation?.override||false,account_ending:paymentConfirmation?.account.accountNumber.slice(-4)})]);await client.query('COMMIT');
   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
   res.json(await clientAgreementContext(state.enquiryId));

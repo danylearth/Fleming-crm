@@ -14,6 +14,26 @@ let queue: Promise<unknown> = Promise.resolve();
 let pending = 0;
 const xmlText = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;').replace(/\n/g, '</w:t><w:br/><w:t xml:space="preserve">');
 
+/** Keep account labels and numbers together, including agreement-only overrides. */
+export function prepareClientPaymentTemplate(xml:string,serviceType:string|null|undefined):string {
+ return xml.replace(/<w:tbl(?:\s[^>]*)?>[\s\S]*?<\/w:tbl>/g,table=>{
+  let initial=table.includes('{{CLIENT_SORT_CODE}}');
+  if(!initial&&!table.includes('{{BANK_SORT_CODE}}'))return table;
+  return table.replace(/<w:tr(?:\s[^>]*)?>[\s\S]*?<\/w:tr>/g,row=>{
+   if(row.includes('{{BANK_SORT_CODE}}'))initial=false;
+   if(row.includes('{{CLIENT_SORT_CODE}}'))initial=true;
+   const text=row.replace(/<[^>]+>/g,'');
+   const token=text.startsWith('Account Name:')?(initial?'INITIAL_ACCOUNT_NAME':'BANK_ACCOUNT_NAME'):text.startsWith('Bank Name:')?(initial?'INITIAL_BANK_NAME':'BANK_NAME'):null;
+   if(!token)return row;
+   let cell=0;
+   return row.replace(/<w:tc(?:\s[^>]*)?>[\s\S]*?<\/w:tc>/g,value=>{
+    if(cell++!==1)return value;let first=true;
+    return value.replace(/(<w:t(?:\s[^>]*)?>)[\s\S]*?(<\/w:t>)/g,(_whole,start,end)=>{const text=first?`{{${token}}}`:'';first=false;return start+text+end;});
+   });
+  });
+ });
+}
+
 export function formalAgreementDate(d:Date):string {
   const day=Number(new Intl.DateTimeFormat('en-GB',{day:'numeric',timeZone:'Europe/London'}).format(d));
   const suffix=day%100>=11&&day%100<=13?'th':({1:'st',2:'nd',3:'rd'} as Record<number,string>)[day%10]||'th';
@@ -159,13 +179,14 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
       const zip = new PizZip(template);
       const date = formalAgreementDate;
       const names = input.tenants.map(t => t.name).join(' and ');
+      const initialAccount=input.companySettings?.clientAccount||FLEMING_CLIENT_MONEY_ACCOUNT;
       const values: Record<string, string> = {
         LANDLORD_NAME:input.landlord.name,
         LANDLORD_IDENTITY:`${input.landlord.name}, of ${input.landlord.address || ''}${input.landlord.companyNumber ? ', Company number: '+input.landlord.companyNumber : ''}`,
         LANDLORD_SIGNATORY:input.landlord.signingName||input.landlord.name,
         LANDLORD_EMAIL:input.landlord.email||'',LANDLORD_PHONE:input.landlord.phone||'',
         SERVICE_ADDRESS:input.landlord.serviceAddress||input.landlord.address||'',EMERGENCY_CONTACT:input.landlord.emergencyContact||'',
-        CLIENT_SORT_CODE:(input.companySettings?.clientAccount||FLEMING_CLIENT_MONEY_ACCOUNT).sortCode,CLIENT_ACCOUNT_NUMBER:(input.companySettings?.clientAccount||FLEMING_CLIENT_MONEY_ACCOUNT).accountNumber,BANK_ACCOUNT_NAME:input.bankDetails.accountName,BANK_NAME:input.bankDetails.bankName||'Not supplied',
+        CLIENT_SORT_CODE:initialAccount.sortCode,CLIENT_ACCOUNT_NUMBER:initialAccount.accountNumber,INITIAL_ACCOUNT_NAME:initialAccount.accountName,INITIAL_BANK_NAME:initialAccount.bankName||'Not supplied',BANK_ACCOUNT_NAME:input.bankDetails.accountName,BANK_NAME:input.bankDetails.bankName||'Not supplied',
         BANK_SORT_CODE:input.bankDetails.sortCode,BANK_ACCOUNT_NUMBER:input.bankDetails.accountNumber,
         HOLDING_DEPOSIT:Number(input.holdingDeposit||0).toLocaleString('en-GB',{minimumFractionDigits:2}),DEPOSIT_SCHEME:input.depositScheme||'',
         AGREEMENT_DATE: date(input.tenancyStartDate), START_DATE: date(input.tenancyStartDate),
@@ -181,6 +202,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         GAS_ACKNOWLEDGEMENT: input.hasGas ? 'Gas Safety Certificate' : 'Gas Safety Certificate: not applicable (no gas connection)',
       };
       let xml = zip.file('word/document.xml')!.asText();
+      if(isClient)xml=prepareClientPaymentTemplate(xml,input.serviceType);
       xml=isClient?formatClientContractLayout(xml):formatContractLayout(xml);
       xml=formatAptPresentation(xml,input.hasGas);
       if(input.companySettings){xml=companyTemplateText(xml,input.companySettings,isClient?'client':'internal');await applyCompanyImages(zip,input.companySettings,!isClient);}

@@ -20,5 +20,5 @@ export function confirmedAgreementPayment(saved:any,serviceType:string,suggested
  }catch{return null;}
 }
 export function defaultAgreementPaymentInstructions(serviceType:string|null|undefined):string {
- return serviceType==='let_only'?'Initial rental payment and holding deposit is paid into Fleming Lettings company account — not our client money account. Future payments will then be paid directly to the Landlord’s nominated account below.':'Initial rental payment and holding deposit is paid into Fleming Lettings client money account. Future payments continue to be paid into the client money account.';
+ return serviceType==='let_only'?'Initial rental payment and holding deposit is paid into Fleming Lettings client money account. Future payments will then be paid directly to the Landlord’s nominated account below.':'Initial rental payment and holding deposit is paid into Fleming Lettings client money account. Future payments continue to be paid into the client money account.';
 }
