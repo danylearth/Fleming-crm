@@ -1,0 +1,16 @@
+const fs=require('fs'),os=require('os'),path=require('path'),{execFileSync}=require('child_process');
+const {PDFDocument}=require('pdf-lib');
+const {companySettingsPreview}=require('../dist/company-settings-preview');
+const {defaultCompanySettings}=require('../dist/company-settings-values');
+const {generateTenancyAgreementPdf}=require('../dist/tenancy-agreement-pdf');
+const {appendSigningCertificate}=require('../dist/signing-certificate');
+const {SIGNING_ACKNOWLEDGEMENTS,signingConsentSnapshot,SIGNING_CONSENT_VERSION}=require('../dist/signing-consent');
+(async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'release-settings-smoke-'));
+ try{
+ const c=defaultCompanySettings();c.legalName='Release Test Company Limited';c.companyNumber='12345678';c.signer.name='Sample Director';c.signer.title='Director';c.operatingAccount={accountName:'Example Operating Account',bankName:'Example Bank',sortCode:'11-22-33',accountNumber:'87654321'};c.clientAccount={...c.operatingAccount,accountName:'Example Client Account',accountNumber:'12345678'};
+ for(const kind of ['apt','service']){const bytes=await companySettingsPreview(c,kind);const file=path.join(dir,kind+'.pdf');fs.writeFileSync(file,bytes);const text=execFileSync('pdftotext',[file,'-'],{encoding:'utf8'});if(!text.includes('Release Test Company Limited')||!text.includes('Sample Director')||!text.includes(kind==='apt'?'87654321':'12345678'))throw Error('Company settings did not reach '+kind+' PDF');console.log('Company settings PDF check passed: '+kind);}
+ const client=await generateTenancyAgreementPdf({enquiryId:0,agreementType:'client',serviceType:'let_only',companySettings:c,agreementDate:new Date('2026-09-28T12:00:00Z'),tenancyStartDate:new Date('2026-10-01T12:00:00Z'),rent:800,deposit:900,propertyAddress:'1 Example Road, Wolverhampton, WV1 1AA',hasGas:false,landlord:{name:'Example Landlord',email:'landlord@example.test',phone:'07700 900000',address:'2 Sample Road'},tenants:[{name:'Alex Example',email:'alex@example.test',phone:'07700 900000',address:'2 Sample Road'}],bankDetails:{accountName:'Example Landlord',bankName:'Sample Bank',sortCode:'22-33-44',accountNumber:'11223344'},paymentRoute:'landlord',paymentReference:'TEST ONLY',complianceDocuments:[]});if((await PDFDocument.load(client)).getPageCount()<10)throw Error('Client agreement incomplete');console.log('Client-owned APT check passed');
+ const pdf=await PDFDocument.create();const signature=fs.readFileSync(path.join(__dirname,'../dist/agreement-assets/robert-fleming-signature.png'));await appendSigningCertificate(pdf,[{name:'Sample Signer',email:'sample@example.test',signed_at:'2026-09-28T12:00:00Z',signing_ip:'203.0.113.42',signature,consent_snapshot:signingConsentSnapshot({consentVersion:SIGNING_CONSENT_VERSION,acknowledgements:Object.fromEntries(SIGNING_ACKNOWLEDGEMENTS.map(([key])=>[key,true]))})}],'test-hash');const cert=path.join(dir,'certificate.pdf');fs.writeFileSync(cert,await pdf.save());const fonts=execFileSync('pdffonts',[cert],{encoding:'utf8'});if(!fonts.includes('Arial'))throw Error('Certificate Arial font missing');console.log('Arial certificate check passed');
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+})().catch(e=>{console.error(e);process.exitCode=1});

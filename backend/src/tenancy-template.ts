@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { PDFDocument } from 'pdf-lib';
 import PizZip from 'pizzip';
 import { FLEMING_CLIENT_MONEY_ACCOUNT, type TenancyAgreementPdfInput } from './tenancy-agreement-pdf';
+import {companyTemplateText,applyCompanyImages} from './company-document';
 
 const exec = promisify(execFile);
 let queue: Promise<unknown> = Promise.resolve();
@@ -126,6 +127,11 @@ export function formatAptPresentation(xml:string,hasGas:boolean):string {
     const value=text(p),heading=/^\d+\.\s+[A-Za-z]/.test(value)||subheadings.has(value),sectionC=value==='Section C - Terms and Conditions';
     // The stored last-rendered break is stale after repagination.
     p=p.replace(/<w:lastRenderedPageBreak\s*\/>/g,'');
+    if(value.includes('is not a party to this')&&value.includes('Fleming')){
+      p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');
+      if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
+      return p.replace(/<w:spacing[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:spacing w:before="480" w:after="120"/><w:keepLines/>');
+    }
     if(!heading&&!sectionC&&!/^[•\s]*\d+\.\d+\s/.test(value))return p;
     p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');
     if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
@@ -159,7 +165,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         LANDLORD_SIGNATORY:input.landlord.signingName||input.landlord.name,
         LANDLORD_EMAIL:input.landlord.email||'',LANDLORD_PHONE:input.landlord.phone||'',
         SERVICE_ADDRESS:input.landlord.serviceAddress||input.landlord.address||'',EMERGENCY_CONTACT:input.landlord.emergencyContact||'',
-        CLIENT_SORT_CODE:FLEMING_CLIENT_MONEY_ACCOUNT.sortCode,CLIENT_ACCOUNT_NUMBER:FLEMING_CLIENT_MONEY_ACCOUNT.accountNumber,BANK_ACCOUNT_NAME:input.bankDetails.accountName,BANK_NAME:input.bankDetails.bankName||'Not supplied',
+        CLIENT_SORT_CODE:(input.companySettings?.clientAccount||FLEMING_CLIENT_MONEY_ACCOUNT).sortCode,CLIENT_ACCOUNT_NUMBER:(input.companySettings?.clientAccount||FLEMING_CLIENT_MONEY_ACCOUNT).accountNumber,BANK_ACCOUNT_NAME:input.bankDetails.accountName,BANK_NAME:input.bankDetails.bankName||'Not supplied',
         BANK_SORT_CODE:input.bankDetails.sortCode,BANK_ACCOUNT_NUMBER:input.bankDetails.accountNumber,
         HOLDING_DEPOSIT:Number(input.holdingDeposit||0).toLocaleString('en-GB',{minimumFractionDigits:2}),DEPOSIT_SCHEME:input.depositScheme||'',
         AGREEMENT_DATE: date(input.tenancyStartDate), START_DATE: date(input.tenancyStartDate),
@@ -177,6 +183,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
       let xml = zip.file('word/document.xml')!.asText();
       xml=isClient?formatClientContractLayout(xml):formatContractLayout(xml);
       xml=formatAptPresentation(xml,input.hasGas);
+      if(input.companySettings){xml=companyTemplateText(xml,input.companySettings,isClient?'client':'internal');await applyCompanyImages(zip,input.companySettings,!isClient);}
       xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,paragraph=>paragraph.replace(/<[^>]+>/g,'').includes('The electronic signature certificate records each named tenant')?'':paragraph);
       xml = xml.replace(/\{\{([A-Z_]+)\}\}/g, (_match, key) => {
         if (!(key in values)) throw new Error(`Unfilled agreement field: ${key}`);

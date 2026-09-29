@@ -11,6 +11,15 @@ export default function LandlordIntakeSections({ id, data, onSaved }: { id: numb
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const supplied = (value: unknown) => value !== undefined && value !== null && String(value).trim() !== '';
+  const registration = String(data?.registration_type || '').toLowerCase();
+  const sections = landlordIntakeSections.filter(section => {
+    const hasData = section.fields.some(f => supplied(data?.[f.key]));
+    if (section.title === 'Joint Landlord') return registration === 'joint' || hasData;
+    if (section.title === 'Company Details') return registration.includes('company') || hasData;
+    if (section.title === 'Current Tenancy') return String(data?.alreadyLet).toLowerCase() === 'yes' || hasData;
+    return ['Registration', 'Landlord/Company Contact', 'Property Details'].includes(section.title) || hasData;
+  });
   async function save() {
     setSaving(true); setError('');
     try {
@@ -19,7 +28,7 @@ export default function LandlordIntakeSections({ id, data, onSaved }: { id: numb
     } catch (e) { setError(e instanceof Error ? e.message : 'Unable to save'); }
     finally { setSaving(false); }
   }
-  return <>{landlordIntakeSections.map(section => <GlassCard key={section.title} className="p-6">
+  return <>{sections.map(section => <GlassCard key={section.title} className="p-6">
     <div className="flex items-center justify-between gap-3 mb-3"><SectionHeader title={section.title} icon={<Building2 size={16}/>} />{!section.readonly && <SectionEditButton label={section.title} editing={editing === section.title} disabled={Boolean(editing) && editing !== section.title} saving={saving} onEdit={() => { setEditing(section.title); setDraft(Object.fromEntries(section.fields.map(f => [f.key, String(data?.[f.key] ?? '')]))); setError(''); }} onSave={save} onCancel={() => {setEditing('');setError('');}} />}</div>
     {section.readonly && <p className="text-xs text-[var(--text-muted)] mb-4">Original form submission. Current communication permissions are managed separately.</p>}
     {section.title === 'Certificates Reported by Landlord' && <p className="text-xs text-[var(--text-muted)] mb-4">These are the landlord’s answers. Uploaded evidence still needs to be checked.</p>}

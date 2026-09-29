@@ -1,4 +1,5 @@
 import fs from 'fs';
+import {addEmailFooter} from './email-footer';
 import path from 'path';
 import crypto from 'crypto';
 import multer from 'multer';
@@ -9,7 +10,7 @@ export const marketingRoot=()=>path.join(process.env.UPLOADS_PATH||path.join(__d
 export const allowedMarketingSender=(value:string)=>/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@(tenancies\.)?fleminglettings\.co\.uk$/i.test(value);
 const signatureEscape=(value:unknown)=>String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 export function emailSignatures(users:{id:number;name:string;email:string;department?:string;phone?:string;office_extension?:string;contact_email?:string}[]=[],currentUserId?:number){
- const read=(name:string)=>fs.readFileSync(path.join(__dirname,'email-signatures',name+'.html'),'utf8');
+ const read=(name:string)=>addEmailFooter(fs.readFileSync(path.join(__dirname,'email-signatures',name+'.html'),'utf8'));
  return [{id:'accounts',label:'Accounts Department',html:read('accounts')},{id:'office',label:'Office Support Team',html:read('office')},...users.filter(u=>u.id===currentUserId).map(u=>{
   const line='01902 212 415'+(u.office_extension?' ext. '+signatureEscape(u.office_extension):'')+(u.phone?'&nbsp; |&nbsp; <a href="tel:'+signatureEscape(u.phone.replace(/[ ()-]/g,''))+'" style="color:#ffffff;text-decoration:none;white-space:nowrap">'+signatureEscape(u.phone)+'</a>':'');
   const values:Record<string,string>={NAME:signatureEscape(u.name),DEPARTMENT:signatureEscape(u.department),EMAIL:signatureEscape(u.contact_email||u.email),PHONE_LINE:line};

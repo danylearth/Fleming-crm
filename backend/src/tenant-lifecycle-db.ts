@@ -29,12 +29,14 @@ export async function syncTenantLifecycle(): Promise<void> {
     ) THEN 1 ELSE 0 END`);
   await run(`UPDATE properties p SET status=CASE
     WHEN EXISTS (SELECT 1 FROM tenants t WHERE t.property_id=p.id AND COALESCE(t.status,'active')='active') THEN 'let'
-    WHEN EXISTS (SELECT 1 FROM tenants t WHERE t.property_id=p.id AND t.status='scheduled') THEN 'let_agreed'
-    WHEN p.status='let' THEN 'to_let' ELSE p.status END
+    WHEN EXISTS (SELECT 1 FROM tenants t WHERE t.property_id=p.id AND t.status='scheduled')
+      OR EXISTS (SELECT 1 FROM tenant_enquiries e WHERE e.linked_property_id=p.id AND e.status NOT IN ('rejected','converted') AND (e.status='onboarding' OR e.holding_deposit_requested=1 OR e.application_form_sent=1)) THEN 'let_agreed'
+    ELSE 'to_let' END
     WHERE p.status IN ('to_let','let_agreed','let') AND p.status IS DISTINCT FROM CASE
     WHEN EXISTS (SELECT 1 FROM tenants t WHERE t.property_id=p.id AND COALESCE(t.status,'active')='active') THEN 'let'
-    WHEN EXISTS (SELECT 1 FROM tenants t WHERE t.property_id=p.id AND t.status='scheduled') THEN 'let_agreed'
-    WHEN p.status='let' THEN 'to_let' ELSE p.status END`);
+    WHEN EXISTS (SELECT 1 FROM tenants t WHERE t.property_id=p.id AND t.status='scheduled')
+      OR EXISTS (SELECT 1 FROM tenant_enquiries e WHERE e.linked_property_id=p.id AND e.status NOT IN ('rejected','converted') AND (e.status='onboarding' OR e.holding_deposit_requested=1 OR e.application_form_sent=1)) THEN 'let_agreed'
+    ELSE 'to_let' END`);
   await run(`UPDATE properties p SET tenancy_start_date=t.tenancy_start_date, tenancy_end_date=t.tenancy_end_date,
     has_end_date=COALESCE(t.has_end_date,0), tenancy_type=t.tenancy_type
     FROM (SELECT DISTINCT ON (property_id) property_id, tenancy_start_date, tenancy_end_date, has_end_date, tenancy_type
@@ -52,7 +54,7 @@ export async function syncTenantLifecycle(): Promise<void> {
     ON CONFLICT DO NOTHING RETURNING id,task_type) INSERT INTO audit_log(action,entity_type,entity_id,changes) SELECT 'create','task',id,json_build_object('source','tenant lifecycle','task_type',task_type)::text FROM inserted`);
   await run(`UPDATE tasks task SET priority='high',dashboard_dismissed_at=NULL WHERE task_type='inventory_due' AND status IN ('pending','in_progress') AND due_date<=CURRENT_DATE-7 AND priority<>'high'`);
   await run(`UPDATE tasks task SET status='completed' WHERE task_type='inventory_due' AND status IN ('pending','in_progress') AND EXISTS(SELECT 1 FROM tenants t WHERE t.id=task.entity_id AND (t.status='inactive' OR task.due_date IS DISTINCT FROM t.tenancy_start_date OR EXISTS(SELECT 1 FROM inventories i WHERE i.property_id=t.property_id AND (i.applies_to_tenancy_start_date=t.tenancy_start_date OR (i.applies_to_tenancy_start_date IS NULL AND i.inspection_date>=t.tenancy_start_date)) AND (i.tenant_id=t.id OR i.tenant_id IN(SELECT id FROM tenants j WHERE j.id=t.linked_tenant_id AND j.property_id=t.property_id AND j.tenancy_start_date=t.tenancy_start_date)) AND (i.signed_date IS NOT NULL OR i.signed_document))))`);
-  await run(`UPDATE tasks task SET status='pending',dashboard_dismissed_at=NULL WHERE task_type='inventory_due' AND status='completed' AND EXISTS(SELECT 1 FROM tenants t WHERE t.id=task.entity_id AND t.status='active' AND task.due_date=t.tenancy_start_date AND NOT EXISTS(SELECT 1 FROM inventories i WHERE i.property_id=t.property_id AND (i.applies_to_tenancy_start_date=t.tenancy_start_date OR (i.applies_to_tenancy_start_date IS NULL AND i.inspection_date>=t.tenancy_start_date)) AND (i.tenant_id=t.id OR i.tenant_id IN(SELECT id FROM tenants j WHERE j.id=t.linked_tenant_id AND j.property_id=t.property_id AND j.tenancy_start_date=t.tenancy_start_date)) AND (i.signed_date IS NOT NULL OR i.signed_document)))`);
+  await run(`UPDATE tasks task SET status='pending',dashboard_dismissed_at=NULL WHERE task_type='inventory_due' AND status='completed' AND NULLIF(completion_override_reason,'') IS NULL AND EXISTS(SELECT 1 FROM tenants t WHERE t.id=task.entity_id AND t.status='active' AND task.due_date=t.tenancy_start_date AND NOT EXISTS(SELECT 1 FROM inventories i WHERE i.property_id=t.property_id AND (i.applies_to_tenancy_start_date=t.tenancy_start_date OR (i.applies_to_tenancy_start_date IS NULL AND i.inspection_date>=t.tenancy_start_date)) AND (i.tenant_id=t.id OR i.tenant_id IN(SELECT id FROM tenants j WHERE j.id=t.linked_tenant_id AND j.property_id=t.property_id AND j.tenancy_start_date=t.tenancy_start_date)) AND (i.signed_date IS NOT NULL OR i.signed_document)))`);
   await run(`WITH inserted AS (INSERT INTO tasks(title,priority,status,due_date,task_type,entity_type,entity_id)
     SELECT 'Insurance Renewal — ' || p.address || ' — obtain a new quote/policy',CASE WHEN MIN(pol.expiry_date)<=CURRENT_DATE THEN 'high' ELSE 'medium' END,'pending',MIN(pol.expiry_date),'insurance_renewal','property',p.id
     FROM property_policies pol JOIN property_policy_allocations a ON a.policy_id=pol.id JOIN properties p ON p.id=a.property_id

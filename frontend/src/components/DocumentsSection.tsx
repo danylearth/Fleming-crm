@@ -35,7 +35,7 @@ export default function DocumentsSection({ entityType, entityId, title, compact 
   const fetchDocuments = useCallback(async () => {
     try {
       const res = await fetch(`${API}/api/documents/${entityType}/${entityId}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) setDocuments(await res.json());
+      if (res.ok) setDocuments((await res.json()).filter((doc: Document) => doc.doc_type !== 'Service Agreement (Issued)'));
     } catch { /* Silently ignore */ } finally { setLoading(false); }
   }, [entityType, entityId, token]);
 

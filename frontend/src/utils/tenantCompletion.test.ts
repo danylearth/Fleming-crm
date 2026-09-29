@@ -1,6 +1,23 @@
 import { describe,it,expect } from 'vitest';
 import { tenantCompletion } from './tenantCompletion';
 describe('tenant completion',()=>{
+  it('counts existing imported documents without changing verification flags',()=>{
+    const form={application_forms_completed:1,income_amount:'45000',kyc_primary_id:0,kyc_secondary_id:0,kyc_address_verification:0};
+    const docs=[
+      {doc_type:'Primary Identification',original_name:'Passport.jpg',review_status:'pending'},
+      {doc_type:'Secondary Identification',original_name:'Driving Licence.pdf'},
+      {doc_type:'Secondary Identification',original_name:'Secondary Identification - Utility Bill.pdf'},
+    ];
+    const items=tenantCompletion(form,undefined,{},docs);
+    expect(items.every(item=>item.done)).toBe(true);
+    expect(items.find(item=>item.key==='kyc_address_verification')?.evidence).toContain('Utility Bill');
+    expect(form.kyc_primary_id).toBe(0);
+    expect(tenantCompletion(form,undefined,{},docs.slice(0,2)).filter(item=>item.done)).toHaveLength(4);
+  });
+  it('does not count rejected files, unrelated documents or guarantor ID as tenant ID',()=>{
+    const docs=[{doc_type:'Primary Identification',review_status:'rejected'},{doc_type:'guarantor_primary_id'},{doc_type:'Other',original_name:'Passport.pdf'}];
+    expect(tenantCompletion({},undefined,{},docs).some(item=>item.done)).toBe(false);
+  });
   it('excludes guarantors unless explicitly required and counts legacy joint only without a linked record',()=>{
     expect(tenantCompletion({guarantor_required:false}).length).toBe(5);
     expect(tenantCompletion({guarantor_required:1}).length).toBe(7);

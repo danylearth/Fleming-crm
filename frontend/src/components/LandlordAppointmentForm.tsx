@@ -1,22 +1,24 @@
 import { useState, useEffect } from 'react';
-import { Button, DatePicker, Input, Select } from './ui';
+import { Button, DatePicker, Input, Select, TimePicker } from './ui';
 import { useApi } from '../hooks/useApi';
 import { OFFICE_ADDRESS } from '../utils/meetingLocations';
+import { Mail, Phone } from 'lucide-react';
 
-export default function LandlordAppointmentForm({ prospect, kind, onBack, onSaved }: {
+export default function LandlordAppointmentForm({ prospect, kind, onBack, onSaved, contactMade=false }: {
   prospect: { id: number; name: string; email: string; phone: string; address: string };
-  kind: 'meeting' | 'follow_up'; onBack: () => void; onSaved: () => void;
+  contactMade?:boolean; kind: 'meeting' | 'follow_up'; onBack: () => void; onSaved: () => void;
 }) {
   const api = useApi();
   const [requestId] = useState(() => crypto.randomUUID());
+  const [contactNote,setContactNote]=useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('10:00');
   const [locationType, setLocationType] = useState('');
   const [otherAddress, setOtherAddress] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
   const [users, setUsers] = useState<{ id: number; name: string; role: string }[]>([]);
-  const [sendEmail, setSendEmail] = useState(Boolean(prospect.email));
-  const [sendSms, setSendSms] = useState(Boolean(prospect.phone));
+  const [sendEmail, setSendEmail] = useState(!contactMade&&Boolean(prospect.email));
+  const [sendSms, setSendSms] = useState(!contactMade&&Boolean(prospect.phone));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -26,7 +28,7 @@ export default function LandlordAppointmentForm({ prospect, kind, onBack, onSave
   async function save() {
     setSaving(true); setError('');
     try {
-      const result = await api.post(`/api/landlords-bdm/${prospect.id}/appointment`, { request_id: requestId, kind, date, time, location, assigned_to: assignedTo || null, send_email: sendEmail, send_sms: sendSms });
+      const result = await api.post(`/api/landlords-bdm/${prospect.id}/appointment`, { request_id: requestId, kind, contact_made:contactMade, contact_note:contactNote, date, time, location, assigned_to: assignedTo || null, send_email: sendEmail, send_sms: sendSms });
       setSaved(true);
       const failures = Object.entries(result.delivery || {}).filter(([key, value]) => ['email', 'sms'].includes(key) && !(value as { success?: boolean }).success).map(([key]) => key);
       if (failures.length || result.delivery?.warning || result.delivery?.pending) setError(result.delivery?.warning || `Booking saved. ${failures.length ? `${failures.join(' and ')} could not be sent.` : 'Communications are still being processed.'} Check the record’s communication history.`);
@@ -35,17 +37,17 @@ export default function LandlordAppointmentForm({ prospect, kind, onBack, onSave
     finally { setSaving(false); }
   }
   return <div className="space-y-4">
-    <h4 className="font-medium">{kind === 'meeting' ? 'Book a Meeting' : 'Set Follow Up'}</h4>
+    <button onClick={onBack} disabled={saving} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">← Back</button>
+    {contactMade&&<label className="block text-sm">Contact Note *<textarea aria-label="Contact Note" value={contactNote} onChange={e=>setContactNote(e.target.value)} maxLength={4000} rows={3} className="mt-1 p-3 w-full rounded-xl border bg-[var(--bg-input)]"/></label>}
     <Select label="Assign To (Agent)" value={assignedTo} onChange={setAssignedTo} options={[{ value: '', label: 'Unassigned' }, ...users.filter(u => ['admin', 'manager', 'staff'].includes(u.role)).map(u => ({ value: String(u.id), label: u.name }))]} />
-    <div className="grid grid-cols-2 gap-3"><DatePicker label="Date *" value={date} onChange={setDate} /><Input label={kind === 'meeting' ? 'Time *' : 'Time (optional)'} type="time" value={time} onChange={setTime} /></div>
     {kind === 'meeting' && <>
       <Select label="Meeting Location *" value={locationType} onChange={setLocationType} options={[{ value: '', label: 'Choose location...' }, { value: 'office', label: 'Office Address' }, ...(prospect.address ? [{ value: 'enquiry', label: 'Enquiry Address' }] : []), { value: 'other', label: 'Other Address' }]} />
       {locationType === 'other' ? <Input label="Address *" value={otherAddress} onChange={setOtherAddress} /> : location && <p className="text-sm text-[var(--text-secondary)]">{location}</p>}
     </>}
-    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={sendEmail} disabled={!prospect.email || saved} onChange={e => setSendEmail(e.target.checked)} />Send email confirmation {prospect.email && <span className="text-xs">({prospect.email})</span>}</label>
-    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={sendSms} disabled={!prospect.phone || saved} onChange={e => setSendSms(e.target.checked)} />Send SMS confirmation {prospect.phone && <span className="text-xs">({prospect.phone})</span>}</label>
-    {(sendEmail || sendSms) && <div className="rounded-xl bg-[var(--bg-subtle)] p-3 text-sm"><p className="font-medium mb-2">Message Preview</p>{message}</div>}
+    <div className="grid grid-cols-2 gap-3"><DatePicker label={kind==='meeting'?'Meeting Date *':'Follow-up Date *'} value={date} onChange={setDate}/><div><label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">{kind==='meeting'?'Meeting Time *':'Time (optional)'}</label><TimePicker value={time} onChange={setTime}/></div></div>
+    <div className="h-px bg-[var(--border-subtle)] my-1"/>
+    {[{channel:'email',value:sendEmail,set:setSendEmail,contact:prospect.email,Icon:Mail},{channel:'SMS',value:sendSms,set:setSendSms,contact:prospect.phone,Icon:Phone}].map(({channel,value,set,contact,Icon})=><div key={channel} className="space-y-3"><label className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]"><input className="w-4 h-4 rounded accent-orange-500" type="checkbox" checked={value} disabled={!contact||saved} onChange={event=>set(event.target.checked)}/><Icon size={14} className={channel==='email'?'text-sky-400':'text-teal-400'}/><div className="flex-1"><span className="text-sm font-medium">Send {channel} confirmation</span><p className="text-[10px] text-[var(--text-muted)]">{contact||`No ${channel==='email'?'email address':'phone number'} recorded`}</p></div></label>{value&&<div><label className="block text-[11px] text-[var(--text-muted)] font-medium mb-1.5 uppercase tracking-wider">Message Preview</label><textarea readOnly value={message} rows={5} className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-xs text-[var(--text-primary)] resize-none"/></div>}</div>)}
     {error && <p role="alert" className="text-sm text-amber-600">{error}</p>}
-    <div className="flex gap-3">{saved ? <Button onClick={onSaved}>Done</Button> : <><Button variant="ghost" disabled={saving} onClick={onBack}>Back</Button><Button variant="gradient" disabled={saving || !date || (kind === 'meeting' && (!time || !location))} onClick={save}>{saving ? 'Saving…' : kind === 'meeting' ? 'Book Meeting' : 'Set Follow Up'}</Button></>}</div>
+    <div className="flex justify-end gap-3 pt-2">{saved ? <Button onClick={onSaved}>Done</Button> : <><Button variant="ghost" disabled={saving} onClick={onBack}>Cancel</Button><Button variant="gradient" disabled={saving || !date || (contactMade&&!contactNote.trim()) || (kind === 'meeting' && (!time || !location))} onClick={save}>{saving ? 'Saving…' : kind === 'meeting' ? 'Book Meeting' : 'Set Follow Up'}</Button></>}</div>
   </div>;
 }

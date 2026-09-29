@@ -9,6 +9,7 @@ import {rateLimit} from 'express-rate-limit';
 import pool,{query,queryOne,run} from './db-pg';
 import {authMiddleware,requireRole,type AuthRequest} from './auth';
 import {accountEmail,sendEmail} from './email';
+import {loginOpen} from './login-security';
 
 const tokenHash=(token:string)=>crypto.createHash('sha256').update(token).digest('hex');
 export function accountInput(body:any){
@@ -20,6 +21,8 @@ async function audit(client:PoolClient,actor:AuthRequest['user']|undefined,actio
  await client.query('INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,$3,\'user\',$4,$5)',[actor?.id||null,actor?.email||null,action,id,JSON.stringify(changes)]);
 }
 async function issueLink(client:PoolClient,user:any,kind:'invite'|'reset'){
+ const current=(await client.query('SELECT * FROM users WHERE id=$1 FOR UPDATE',[user.id])).rows[0];
+ if(current)await loginOpen(client,current);
  const token=crypto.randomBytes(32).toString('base64url');
  await client.query('UPDATE account_tokens SET used_at=NOW() WHERE user_id=$1 AND used_at IS NULL',[user.id]);
  await client.query("INSERT INTO account_tokens(user_id,token_hash,kind,expires_at) VALUES($1,$2,$3,NOW()+INTERVAL '48 hours')",[user.id,tokenHash(token),kind]);
@@ -65,9 +68,11 @@ export function registerAccountRoutes(app:Express){
   if(!/^[A-Za-z0-9_-]{43}$/.test(token)||typeof password!=='string'||password.length<12||Buffer.byteLength(password)>72)return res.status(400).json({error:'Enter a password of at least 12 characters (maximum 72 bytes), using a valid account link'});
   const client=await pool.connect();let user:any;
   try{await client.query('BEGIN');
-   const row=(await client.query('SELECT t.id,t.user_id FROM account_tokens t JOIN users u ON u.id=t.user_id WHERE t.token_hash=$1 AND t.used_at IS NULL AND t.expires_at>NOW() AND u.is_active=1 FOR UPDATE OF t,u',[tokenHash(token)])).rows[0];
+   const row=(await client.query('SELECT t.id,t.user_id FROM account_tokens t JOIN users u ON u.id=t.user_id WHERE t.token_hash=$1 AND t.used_at IS NULL AND t.expires_at>NOW() AND u.is_active=1 AND (u.login_locked_at IS NOT NULL OR u.login_2fa_lock_after IS NULL OR u.login_2fa_lock_after>NOW()) FOR UPDATE OF t,u',[tokenHash(token)])).rows[0];
    if(!row){await client.query('ROLLBACK');return res.status(400).json({error:'This link has expired or has already been used. Ask an administrator to send another.'});}
-   user=(await client.query('UPDATE users SET password=$1,password_setup_required=FALSE,last_password_change=NOW() WHERE id=$2 RETURNING id,name,email',[await bcrypt.hash(password,12),row.user_id])).rows[0];
+   user=(await client.query('UPDATE users SET password=$1,password_setup_required=FALSE,last_password_change=NOW(),login_password_failures=0,login_2fa_failures=0,login_2fa_sent_count=0,login_2fa_lock_after=NULL,login_locked_at=NULL,login_lock_reason=NULL WHERE id=$2 RETURNING id,name,email',[await bcrypt.hash(password,12),row.user_id])).rows[0];
+   await client.query('DELETE FROM trusted_login_devices WHERE user_id=$1',[user.id]);
+   await client.query('UPDATE settings_phone_challenges SET consumed_at=NOW() WHERE user_id=$1 AND consumed_at IS NULL',[user.id]);
    await client.query('UPDATE account_tokens SET used_at=NOW() WHERE user_id=$1 AND used_at IS NULL',[user.id]);
    await audit(client,undefined,'update',user.id,{action:'password_set_by_account_link'});await client.query('COMMIT');
   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}

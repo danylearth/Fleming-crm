@@ -1,5 +1,26 @@
 import sanitizeHtml from 'sanitize-html';
 import {prepareEmailHtml} from './email-presentation';
+import {addEmailFooter,emailPreferencesPreviewUrl,emailSocialLinks} from './email-footer';
+import {fillEmailTemplate} from './message-template-library';
+export function normaliseMarketingTemplate(html:string):string {
+ html=html.replace(/(\bHi(?: there)?\s+)LANDLORD NAME\b/g,'$1{{FIRST_NAME}}');
+ for(const [placeholder,name] of [['X_LINK','X'],['LINKEDIN_LINK','LinkedIn'],['YOUTUBE_LINK','YouTube']]){
+  const url=emailSocialLinks.find(link=>link.name===name)!.url;
+  html=html.replace(new RegExp(`(href=["'])${placeholder}(["'])`,'g'),`$1${url}$2`);
+ }
+ // Reuse the uploaded opt-out row, allowing the standard footer to insert the
+ // recipient-specific link instead of adding a second unsubscribe section.
+ const marker=html.search(/href=["']UNSUBSCRIBE_LINK["']/i);
+ if(marker>=0){
+  const start=html.lastIndexOf('<tr',marker),end=html.indexOf('</tr>',marker);
+  if(start>=0&&end>=0&&!html.slice(start,marker).includes('<tr',3)){
+   const row=html.slice(start,end+5).replace(/^<tr\b[^>]*>/i,'<tr id="fleming-email-opt-out">');
+   html=html.slice(0,start)+row+html.slice(end+5);
+  }
+  html=html.replace(/(href=["'])UNSUBSCRIBE_LINK(["'])/gi,`$1${emailPreferencesPreviewUrl}$2`);
+ }
+ return html;
+}
 export function cleanMarketingHtml(html:string):string {
  return sanitizeHtml(html,{
   allowedTags:[...sanitizeHtml.defaults.allowedTags,'html','head','title','meta','body','style','img','font','center'],
@@ -7,8 +28,11 @@ export function cleanMarketingHtml(html:string):string {
   allowedSchemes:['http','https','mailto','tel'],allowProtocolRelative:false,allowVulnerableTags:true,
  });
 }
+export function marketingRecipientHtml(message:string,name:string,unsubscribeUrl:string):string {
+ const firstName=name.trim().replace(/^(?:(?:mr|mrs|ms|miss|dr|prof)\.?\s+)+/i,'').split(/\s+/)[0]||'there';
+ return marketingEmailHtml(fillEmailTemplate(normaliseMarketingTemplate(message),{FIRST_NAME:firstName}),unsubscribeUrl);
+}
 export function marketingEmailHtml(message:string,unsubscribeUrl:string):string {
- const footer=`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eeeeee"><tr><td align="center" style="padding:18px 16px;font-family:Arial;font-size:12px;line-height:18px;color:#555555"><a href="${unsubscribeUrl}" style="color:#555555;text-decoration:underline">Unsubscribe from Fleming Lettings marketing emails</a></td></tr></table>`;
  const html=cleanMarketingHtml(message);
- return prepareEmailHtml(/<\/body>/i.test(html)?html.replace(/<\/body>/i,footer+'</body>'):html+footer);
+ return prepareEmailHtml(addEmailFooter(html,unsubscribeUrl));
 }

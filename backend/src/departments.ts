@@ -11,19 +11,21 @@ export function contactDetails(body:any){
  return {phone,office_extension,contact_email};
 }
 export function registerDepartments(app:Express){
- app.get('/api/departments',authMiddleware,async(_req,res)=>res.json(await query('SELECT id,name FROM departments ORDER BY name')));
+ app.get('/api/departments',authMiddleware,async(_req,res)=>res.json(await query('SELECT id,name,office_address FROM departments ORDER BY name')));
  const save=async(req:AuthRequest,res:any)=>{
   const name=String(req.body.name||'').trim(),ids=req.body.user_ids;
+  const officeAddress=req.body.office_address===undefined?undefined:String(req.body.office_address||'').trim();
+  if(officeAddress&&officeAddress.length>1000)return res.status(400).json({error:'Office address must be under 1,000 characters'});
   if(!name||name.length>100||!Array.isArray(ids)||ids.length>500||ids.some(id=>!Number.isSafeInteger(id)||id<1)||new Set(ids).size!==ids.length)return res.status(400).json({error:'Enter a team name and choose existing users'});
   const c=await pool.connect();try{await c.query('BEGIN');await c.query("SELECT pg_advisory_xact_lock(hashtext('department-membership'))");
    const before=req.params.id?(await c.query('SELECT * FROM departments WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0]:null;
    if(req.params.id&&!before)throw Error('Team not found');
    if((await c.query('SELECT id FROM users WHERE id=ANY($1::int[])',[ids])).rows.length!==ids.length)throw Error('Choose existing users');
    const changed=(await c.query('SELECT id,department FROM users WHERE id=ANY($1::int[]) OR department=$2 FOR UPDATE',[ids,before?.name||name])).rows;
-   const team=before?(await c.query('UPDATE departments SET name=$1 WHERE id=$2 RETURNING id,name',[name,before.id])).rows[0]:(await c.query('INSERT INTO departments(name,created_by) VALUES($1,$2) RETURNING id,name',[name,req.user.id])).rows[0];
+   const team=before?(await c.query('UPDATE departments SET name=$1,office_address=$3 WHERE id=$2 RETURNING id,name,office_address',[name,before.id,officeAddress??before.office_address])).rows[0]:(await c.query('INSERT INTO departments(name,created_by,office_address) VALUES($1,$2,$3) RETURNING id,name,office_address',[name,req.user.id,officeAddress||''])).rows[0];
    if(before)await c.query("UPDATE users SET department='' WHERE department=$1",[before.name]);
    await c.query('UPDATE users SET department=$1 WHERE id=ANY($2::int[])',[name,ids]);
-   await c.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,$3,'department',$4,$5)",[req.user.id,req.user.email,before?'update':'create',team.id,JSON.stringify({before,previous_memberships:changed,name,user_ids:ids})]);
+   await c.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,$3,'department',$4,$5)",[req.user.id,req.user.email,before?'update':'create',team.id,JSON.stringify({before,previous_memberships:changed,name,office_address:team.office_address,user_ids:ids})]);
    await c.query('COMMIT');res.json(team);
   }catch(e:any){await c.query('ROLLBACK');res.status(400).json({error:e.code==='23505'?'A team with that name already exists':e.message});}finally{c.release();}
  };

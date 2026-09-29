@@ -1,3 +1,9 @@
+import {noteDisplayText} from '../utils/noteDisplay';
+import {showDocumentTab} from '../utils/documentViewer';
+import SignatureRequests from '../components/SignatureRequests';
+import FinancialDocuments from '../components/FinancialDocuments';
+import {ToolbarButton} from '../components/ui';
+import ServiceFeeFields,{validServiceFees} from '../components/ServiceFeeFields';
 import SectionEditButton from '../components/ui/SectionEditButton';
 import PropertyContractStep from '../components/PropertyContractStep';
 import {Check} from 'lucide-react';
@@ -83,7 +89,7 @@ export default function LandlordDetail() {
 
   const navigate = useNavigate();
   const api = useApi();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { confirmAction } = useNotifications();
   const [landlord, setLandlord] = useState<Landlord | null>(null);
   const id = useRecordAddress('landlords', landlord?.name);
@@ -112,14 +118,14 @@ export default function LandlordDetail() {
   const [showAddProp, setShowAddProp] = useState(false);
   const [contractPropertyId, setContractPropertyId] = useState<number | null>(null);
   const [manageContractId, setManageContractId] = useState<number | null>(null);
-  const [serviceContracts, setServiceContracts] = useState<{property_id:number;service_type:string;status:string;opened_at?:string;delivery_status?:string}[] | null>([]);
+  const [serviceContracts, setServiceContracts] = useState<{id:number;property_id:number;service_type:string;status:string;opened_at?:string;delivery_status?:string}[] | null>([]);
   const [propMode, setPropMode] = useState<'create' | 'link'>('create');
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
   const [allProperties, setAllProperties] = useState<Property[]>([]);
   const [propSaving, setPropSaving] = useState(false);
   const [propForm, setPropForm] = useState({
     landlord_id: '', address: '', address_line_2: '', city: '', postcode: '', property_type: 'house', bedrooms: '1', status: 'to_let', has_gas: '',
-    rent_amount: '', service_type: '',
+    rent_amount: '', service_type: '', service_setup_fee:'',service_monthly_fee:'',
   });
   const [showAddDirector, setShowAddDirector] = useState(false);
   const [directorForm, setDirectorForm] = useState({
@@ -416,7 +422,7 @@ export default function LandlordDetail() {
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader title="Properties" icon={<Building2 size={16}/>} />
-                <Button variant="outline" size="sm" onClick={async () => {
+                <ToolbarButton variant="outline" size="sm" onClick={async () => {
                   setPropForm(f => ({ ...f, landlord_id: String(id) }));
                   setPropMode('create');
                   setSelectedPropertyId('');
@@ -430,7 +436,7 @@ export default function LandlordDetail() {
                   setShowAddProp(true);
                 }}>
                   <Plus size={14} className="mr-1.5" /> Add Property
-                </Button>
+                </ToolbarButton>
               </div>
               {properties.length === 0 ? (
                 <EmptyState message="No properties linked" />
@@ -438,10 +444,10 @@ export default function LandlordDetail() {
                 <div className="divide-y divide-[var(--border-subtle)] rounded-xl border border-[var(--border-subtle)] overflow-hidden">
                   {properties.map(p => {
                     const contract = serviceContracts?.find(item => item.property_id === p.id && item.service_type === p.service_type && item.status !== 'void');
-                    return <div key={p.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 transition-colors ${contract?.status === 'signed' ? 'bg-emerald-500/5' : 'bg-[var(--bg-subtle)]/40 hover:bg-[var(--bg-hover)]'}`}>
+                    return <div key={p.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 transition-colors ${contract?.status === 'signed' ? 'bg-emerald-500/15' : contract && ['draft','issued'].includes(contract.status) ? 'bg-amber-400/15' : 'bg-[var(--bg-subtle)]/40 hover:bg-[var(--bg-hover)]'}`}>
                       <button onClick={() => navigate(`/properties/${p.id}`)} className="min-w-0 flex-1 text-left">
                         <p className="text-sm font-medium">{formatPropertyAddress(p.city && !p.address.toLowerCase().includes(p.city.toLowerCase()) ? `${p.address}, ${p.city}` : p.address,p.postcode)}</p>{p.tenant_names && <p className="text-xs mt-1 text-[var(--text-secondary)]">Tenants: {p.tenant_names}</p>}
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex flex-wrap items-center gap-2 mt-1">{p.service_type && <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs capitalize ${p.service_type==='full_management'?'bg-amber-500/15 text-amber-600':p.service_type==='rent_collection'?'bg-purple-500/15 text-purple-600':'bg-blue-500/15 text-blue-600'}`}><Briefcase size={12}/>{p.service_type.replaceAll('_',' ')}</span>}
                           {p.type && <span className="text-xs text-[var(--text-muted)]">{p.type}</span>}
 
                           {p.status && (
@@ -449,11 +455,18 @@ export default function LandlordDetail() {
                           )}
                         </div>
                       </button>
-                      {p.service_type && <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs capitalize ${p.service_type==='full_management'?'bg-amber-500/15 text-amber-600':p.service_type==='rent_collection'?'bg-purple-500/15 text-purple-600':'bg-blue-500/15 text-blue-600'}`}><Briefcase size={12}/>{p.service_type.replaceAll('_',' ')}</span>}
-                      {landlord.landlord_type !== 'internal' && user?.role !== 'viewer' && <div className="order-last flex flex-wrap items-center gap-2 basis-full pl-0 sm:pl-1">
-                        <span className={`rounded-full px-2 py-1 text-xs ${contract?.status === 'signed' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-[var(--bg-hover)] text-[var(--text-secondary)]'}`}>{contract?.status === 'signed' ? '✓ Contract completed' : serviceContracts === null ? 'Contract status unavailable' : contract?.opened_at ? 'Contract viewed · Awaiting signature' : contract?.status === 'issued' ? 'Contract issued · Awaiting signature' : contract ? 'Contract draft' : 'Contract not issued'}</span>
+
+                      {landlord.landlord_type !== 'internal' && user?.role !== 'viewer' && <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                        <span className={`inline-flex items-center gap-2 rounded-full px-2 py-1 text-xs ${contract?.status === 'signed' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/10 text-amber-700'}`}><span className={`w-2.5 h-2.5 rounded-full ${contract?.status==='signed'?'bg-emerald-500':'bg-amber-400'}`} aria-hidden="true"/>{contract?.status === 'signed' ? 'Contract Signed' : serviceContracts === null ? 'Contract status unavailable' : contract?.opened_at ? 'Waiting on Signature · Opened' : contract?.status === 'issued' ? 'Waiting on Signature' : contract ? 'Contract draft' : 'Contract not issued'}</span>
                         {contract?.delivery_status === 'failed' && <span className="text-xs text-red-600">Email delivery failed</span>}
-                        <Button variant="outline" size="sm" onClick={() => setManageContractId(p.id)}>{contract?.status === 'signed' ? 'View signed contract' : contract ? 'Manage / Issue Contract' : 'Prepare Contract'}</Button>
+                        {contract?.status==='signed'?<Button variant="outline" size="sm" onClick={async()=>{
+                          const tab=window.open('about:blank','_blank');
+                          try{if(!tab)throw Error('Allow a new tab to view the signed contract.');tab.opener=null;
+                            const response=await fetch(`${import.meta.env.VITE_API_URL||''}/api/service-agreements/${contract.id}/pdf`,{headers:{Authorization:`Bearer ${token}`}});
+                            if(!response.ok)throw Error('Could not load the signed contract.');
+                            const url=URL.createObjectURL(await response.blob());showDocumentTab(tab,url,'Signed Service Agreement');setTimeout(()=>URL.revokeObjectURL(url),60000);
+                          }catch(error){tab?.close();alert(error instanceof Error?error.message:'Could not load signed contract');}
+                        }}>View Signed Contract</Button>:<Button variant="outline" size="sm" onClick={() => setManageContractId(p.id)}>Manage Service Contract</Button>}
                       </div>}
                       {p.link_id && (
                         <button
@@ -735,6 +748,7 @@ export default function LandlordDetail() {
               </div>
             </GlassCard>
 
+            <FinancialDocuments entity="landlord" id={Number(id)}/>
             {/* Documents */}
             <DocumentUpload entityType="landlord" entityId={landlord.id} />
           </div>
@@ -790,7 +804,7 @@ export default function LandlordDetail() {
                       <StickyNote size={14} className="text-[var(--text-muted)]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2"><p className="text-sm whitespace-pre-wrap">{n.text}</p><DeleteNoteButton entity={n.source || 'landlord'} id={n.source==='property'?n.propertyId!:id!} note={n} onDeleted={loadDetail} /></div>
+                      <div className="flex items-start justify-between gap-2"><p className="min-w-0 flex-1 text-xs leading-5 whitespace-pre-wrap [overflow-wrap:anywhere]">{noteDisplayText(n.text)}</p><DeleteNoteButton entity={n.source || 'landlord'} id={n.source==='property'?n.propertyId!:id!} note={n} onDeleted={loadDetail} /></div>
                       <div className="flex items-center gap-2 flex-wrap mt-0.5">
                         <p className="text-[10px] text-[var(--text-muted)]">
                           {n.author}{n.created_at ? ` · ${new Date(n.created_at).toLocaleDateString()}` : ''}
@@ -847,25 +861,24 @@ export default function LandlordDetail() {
               <SectionHeader title="Send SMS" icon={<Phone size={16} />} />
               {landlord?.phone && (
                 <div className="mt-3">
-                  <div className="flex gap-2">
-                    <textarea value={smsCompose} onChange={e => setSmsCompose(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendStandaloneSms(); } }}
+                  <div>
+                    <textarea aria-label="SMS message" value={smsCompose} onChange={e => setSmsCompose(e.target.value)}
                       placeholder={`Send SMS to ${landlord.phone}...`}
-                      rows={1}
-                      className="flex-1 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors resize-none [field-sizing:content]" />
-                    <Button variant="gradient" onClick={sendStandaloneSms} disabled={smsSending || !smsCompose.trim()} className="gap-1.5">
-                      <Send size={14} />
-                      <span>Send SMS</span>
-                    </Button>
+                      rows={4}
+                      className="block w-full min-h-28 bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-3 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors resize-y" />
                   </div>
                   {smsCompose.trim() && (
                     <p className="text-[10px] text-[var(--text-muted)] mt-1">{(() => { const s = calculateSmsSegments(smsCompose); return `${s.charCount} chars · ${s.segments} segment${s.segments !== 1 ? 's' : ''} · ${s.encoding}`; })()}</p>
                   )}
+                  <div className="flex justify-end mt-4"><Button variant="gradient" onClick={sendStandaloneSms} disabled={smsSending || !smsCompose.trim()} className="gap-1.5 h-11 min-w-36"><Send size={14} /><span>{smsSending?'Sending…':'Send SMS'}</span></Button></div>
                 </div>
               )}
-            </GlassCard>
+            {!landlord?.phone&&<p className="text-sm text-[var(--text-muted)]">Add a phone number to this record to send SMS.</p>}
+</GlassCard>
 
 
+
+            <SignatureRequests entity="landlord" id={Number(id)}/>
 
             {/* Activity Timeline */}
             <GlassCard className="p-6">
@@ -956,6 +969,7 @@ export default function LandlordDetail() {
                   <Select label="Has Gas? *" value={propForm.has_gas} onChange={has_gas=>setPropForm(f=>({...f,has_gas}))} options={[{value:"",label:"Choose Yes or No"},{value:"yes",label:"Yes"},{value:"no",label:"No"}]}/>
                   <Select label="Service Type" value={propForm.service_type} onChange={(v: string) => setPropForm(f => ({ ...f, service_type: v }))}
                     options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
+                  {landlord.landlord_type!=='internal'&&<ServiceFeeFields service={propForm.service_type} setup={propForm.service_setup_fee} monthly={propForm.service_monthly_fee} onChange={fees=>setPropForm(f=>({...f,...fees}))}/>}
                 </div>
               )}
 
@@ -985,7 +999,7 @@ export default function LandlordDetail() {
                     {propSaving ? 'Linking...' : 'Link Property'}
                   </Button>
                 ) : (
-                  <Button variant="gradient" disabled={propSaving || !propForm.address || !propForm.city || !propForm.postcode || !propForm.has_gas || (landlord.landlord_type!=='internal'&&!propForm.service_type)} onClick={async () => {
+                  <Button variant="gradient" disabled={propSaving || !propForm.address || !propForm.city || !propForm.postcode || !propForm.has_gas || (landlord.landlord_type!=='internal'&&(!propForm.service_type||!validServiceFees(propForm.service_type,propForm.service_setup_fee,propForm.service_monthly_fee)))} onClick={async () => {
                     setPropSaving(true);
                     try {
                       const res = await api.post('/api/properties', {

@@ -44,6 +44,14 @@
       "destination": "/report.html"
     },
     {
+      "source": "/:slug(.*-contract[0-9]+-[A-Za-z0-9_-]{22})/signed",
+      "destination": "/service-agreement-signed.html"
+    },
+    {
+      "source": "/:slug(.*-contract[0-9]+-[A-Za-z0-9_-]{22})",
+      "destination": "/service-agreement.html"
+    },
+    {
       "source": "/:applicationSlug",
       "destination": "/application.html"
     },
@@ -74,5 +82,9 @@
         }
       ]
     }
-  ]
+  ],
+  "framework": null,
+  "buildCommand": null,
+  "installCommand": null,
+  "outputDirectory": null
 }

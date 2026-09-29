@@ -1,0 +1,44 @@
+/* Match the existing CRM onboarding proportions and typography. Preview only. */
+:root{--text:#292929;--muted:#858585;--line:#e3e3e3;--purple:#8e2f72}
+body{color:var(--text);font-family:Helvetica,Arial,sans-serif}
+button,.btn{font-family:inherit;font-size:14px;font-weight:600;min-height:38px;padding:8px 16px}
+input,select,textarea{font-family:inherit;font-weight:400;background:#f5f5f5}
+h1,h2,h3{font-weight:600;letter-spacing:0}
+h2{font-size:20px}h3{font-size:16px}.muted{color:var(--muted)}
+.preview{font-size:11px;padding:6px 20px;background:#fff8e7}
+.preview nav{gap:15px}.preview a{font-weight:500}
+.top{height:64px;padding:0 28px}.brand{font-size:19px}.brand svg{width:34px;height:34px}
+.office-page{background:#e8e8e8}
+.onboarding-preview{width:calc(100% - 48px);max-width:1200px;height:min(732px,calc(100dvh - 136px));min-height:420px;margin:20px auto;background:white;border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 40px #00000012;display:flex;flex-direction:column;overflow:hidden}
+.onboarding-header{display:flex;align-items:center;gap:12px;padding:18px 24px;border-bottom:1px solid #ededed;flex-shrink:0}
+.applicant-avatar{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;background:#56b598;color:white;font-size:16px;font-weight:600;flex-shrink:0}
+.applicant-title{flex:1;min-width:0}.applicant-title h1{font-size:20px;line-height:1.35}.applicant-title p{font-size:13px;color:#929292;margin-top:3px}
+.joint-label{font-size:12px;font-weight:400;color:#888;margin-left:14px}
+.onboarding-progress{text-align:right;font-size:12px;color:#999;margin-right:2px}.onboarding-progress strong{display:block;color:#37866b;font-size:14px}
+.onboarding-header .icon{height:38px;min-width:38px;padding:0;color:#888}
+.onboarding-preview .wizard{border:0;border-radius:0;grid-template-columns:228px minmax(0,1fr);flex:1;min-height:0}
+.onboarding-preview .steps{padding:16px;background:#f8f8f8;overflow-y:auto}
+.onboarding-preview .step{padding:10px 12px;margin-bottom:7px;min-height:45px;gap:12px;font-size:14px;line-height:1.35;border:1px solid transparent;color:#555;font-weight:400}
+.onboarding-preview .step svg{flex-shrink:0}
+.onboarding-preview .step.done{color:#347c62;background:#eaf3ef;border-color:#cce7d9}
+.onboarding-preview .step.current{background:#faf0df;border-color:#eab852;color:#39332b;font-weight:600}
+.onboarding-preview .step.current svg{color:#9b591d}
+.stage-note{padding:12px 8px;border-top:1px solid #ddd;margin-top:14px;font-size:11px}
+.onboarding-preview .workspace{padding:20px;overflow-y:auto;min-height:0}
+.onboarding-preview .workspace>.cardhead{margin-bottom:14px}.onboarding-preview .cardhead p{font-size:13px;margin-top:4px}
+.onboarding-preview .row>.field{min-width:0!important}.onboarding-preview select{min-height:40px;padding:8px 12px}
+.onboarding-preview .progresscards{margin:12px 0;gap:8px}.onboarding-preview .progresscards>div{padding:8px 11px;background:#f7f7f7;border:0;border-radius:10px}.onboarding-preview .progresscards strong{font-size:12px;margin-top:2px;font-weight:600}
+.onboarding-preview .tabs{margin:12px 0 14px;padding-bottom:12px;gap:8px}.onboarding-preview .tabs button{font-size:13px;min-height:34px;padding:6px 13px}.onboarding-preview .tabs button[aria-pressed=true]{background:var(--purple);border-color:var(--purple)}
+.onboarding-preview .grid2{gap:16px;grid-template-columns:1fr 1fr}.onboarding-preview .pane{padding:15px;border-color:var(--line);border-radius:12px}.onboarding-preview .pane>.cardhead{margin-bottom:8px;gap:5px;align-items:center}.onboarding-preview .pane h3{margin-bottom:8px}.onboarding-preview .pane>.cardhead h3{margin:0}
+.onboarding-preview .datarow{grid-template-columns:92px minmax(0,1fr);gap:10px;padding:5px 0;font-size:12px}.datarow span{overflow-wrap:anywhere}
+.onboarding-preview .spaced{margin-top:12px}.onboarding-preview .actions{margin-top:12px;gap:7px}.onboarding-preview .small{font-size:11px}.onboarding-preview .tag{font-size:11px;font-weight:500;padding:3px 9px}
+.onboarding-preview .notice{padding:9px 12px;margin:12px 0;font-size:12px;gap:8px}.onboarding-preview .pane .notice{margin-bottom:0}.onboarding-preview .pane p{font-size:12px}
+.onboarding-preview .workspace>.actions{justify-content:flex-end;margin-top:10px}.onboarding-preview .workspace>.actions .btn,.onboarding-preview .workspace>.actions button{border:0;background:transparent;padding:4px 8px;min-height:28px;color:#777;font-size:11px;font-weight:400}
+.publicwrap .hero{background:#f7f7f7;color:#292929;border:1px solid var(--line);border-bottom:0;border-radius:16px 16px 0 0}.publicwrap .hero:after{display:none}.publicwrap .hero p{color:#777}.publicbody{border-radius:0 0 16px 16px}.publicwrap h1{font-size:26px}
+.tabs button[aria-pressed=true]{background:var(--purple);border-color:var(--purple)}
+@media(max-width:850px){.joint-label{display:none}.onboarding-preview .wizard{grid-template-columns:195px minmax(0,1fr)}.onboarding-preview .grid2{grid-template-columns:1fr}.onboarding-preview .progresscards{grid-template-columns:1fr 1fr}.onboarding-preview .steps{padding:10px}.onboarding-preview .step{padding:9px;font-size:13px}.onboarding-preview{width:calc(100% - 24px);margin:12px auto;height:calc(100dvh - 154px)}}
+@media(max-width:600px){.top{height:55px;padding:0 14px}.top .brand{font-size:16px}.onboarding-preview{height:auto;min-height:0;margin:12px auto}.onboarding-header{padding:14px;gap:9px}.applicant-title h1{font-size:17px}.applicant-title p{font-size:11px}.onboarding-progress{display:none}.onboarding-preview .wizard{display:block}.onboarding-preview .steps{display:flex;overflow-x:auto;padding:8px;border-bottom:1px solid var(--line)}.onboarding-preview .step{min-width:170px;flex:0 0 170px;margin:0 6px 0 0;min-height:46px}.onboarding-preview .stage-note{display:none}.onboarding-preview .workspace{padding:14px;overflow:visible}.onboarding-preview .cardhead h2{font-size:18px}.onboarding-preview .grid2{grid-template-columns:1fr}.onboarding-preview .tabs{gap:6px}.onboarding-preview .tabs button{font-size:12px;padding:6px 10px}.preview{position:static}}
+/* Application Review owns the guarantor decision; the request is a nested section. */
+.review-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding-bottom:16px;border-bottom:1px solid #eee}.review-heading p{margin-top:5px;font-size:13px}.requirement-panel{display:flex;align-items:center;gap:24px;padding:16px 0;margin-bottom:15px;border-bottom:1px solid #eee}.requirement-panel>.field{flex:1;max-width:280px}.requirement-question{display:flex;align-items:center;gap:18px;flex:1;justify-content:space-between}.requirement-question h3{font-size:15px;font-weight:600}.requirement-question .row{gap:6px}.requirement-question button{min-width:66px}.nomination-summary{max-width:640px}.guarantor-section>.cardhead{margin-bottom:13px}.guarantor-section>.cardhead h2{font-size:17px}.guarantor-section>.cardhead p{display:none}.guarantor-section>.row{display:none}.guarantor-section .progresscards{margin:10px 0}.guarantor-section>.actions{justify-content:flex-end}.guarantor-section>.actions>*{font-size:11px;min-height:28px;padding:4px 8px}.guarantor-section .pane .notice.neutral{display:none}.guarantor-section .tabs{margin:10px 0;padding-bottom:10px}.guarantor-section .pane{padding:13px}.guarantor-section .pane>.cardhead{margin-bottom:6px}.guarantor-section>.notice{margin-bottom:6px}.guarantor-section .progresscards strong{text-transform:capitalize}
+@media(max-width:600px){.requirement-panel{align-items:stretch;flex-direction:column;gap:12px}.requirement-panel>.field{max-width:none}.requirement-question{gap:10px}.review-heading{gap:8px}.review-heading .tag{white-space:normal;text-align:center}.review-heading h2{font-size:18px}}
+.email-frame{display:block;width:100%;height:1900px;border:0;background:#eee;border-radius:0}.emailwrap{max-width:760px}.emailmeta .tag{vertical-align:middle}

@@ -1,5 +1,7 @@
+import {addEmailFooter} from './email-footer';
 /** Email clients may override colours; explicit backgrounds and light-mode metadata preserve branding where supported. */
 export function prepareEmailHtml(html:string):string {
+ html=addEmailFooter(html);
  // Replace our previous presentation block, including in saved composer drafts.
  // It forced every nested table to full width and changed the approved email proportions.
  html=html.replace(/<meta name="fleming-presentation" content="\d+"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><style>[\s\S]*?<\/style>/gi,'');
@@ -18,6 +20,7 @@ export function prepareEmailHtml(html:string):string {
   return `style="${style}${background&&!style.includes('background-image:')?`;background-image:linear-gradient(${background},${background})`:''}${colour&&!style.includes('-webkit-text-fill-color:')?`; -webkit-text-fill-color:${colour}`:''}"`;
  });
  // Keep the templates' original 600px canvas, natural button widths and typography.
+ if(!/rel=[\"'](?:shortcut )?icon[\"']/i.test(html))html=html.replace(/<\/head>/i,'<link rel="icon" href="https://crm.fleminglettings.co.uk/logo-icon.png"></head>');
  const meta='<meta name="fleming-presentation" content="2"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><style>:root{color-scheme:light only}body{color-scheme:light only;background:#eeeeee;color:#1e1e1e;-webkit-text-size-adjust:100%;text-size-adjust:100%}img{border:0;outline:none}</style>';
  return html.replace(/<\/head>/i,meta+'</head>');
 }

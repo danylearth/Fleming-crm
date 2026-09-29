@@ -143,7 +143,6 @@ export default function FeedbackPanel() {
   const shown=tickets.filter(t=>filter==='all'||(filter==='open'?t.status!=='completed':t.status==='completed'));
   const list=()=>{setSelected(null);setCreating(false);setError('');setBody('');setFiles([]);};
   return <>
-    {!open&&!picking&&<button data-feedback-ui className="feedback-launch" onClick={()=>{setOpen(true);void load().catch(e=>setError(e.message));}}><MessageCircle size={18}/><span>Feedback</span></button>}
     {!open&&pins.map(p=><button data-feedback-ui key={p.ticket.id} className="feedback-pin" style={{left:p.x,top:p.y}} title={p.ticket.title} aria-label={`Feedback ${p.ticket.id}: ${p.ticket.title}`} onClick={()=>void view(p.ticket.id)}>{p.ticket.id}</button>)}
     {picking&&<div data-feedback-ui className="feedback-pick-banner"><MousePointer2 size={18}/>Click the part of the page you want to comment on<button onClick={()=>{setPicking(false);setOpen(true);}} aria-label="Cancel pin"><X size={18}/></button></div>}
     {open&&<aside data-feedback-ui ref={drawer} tabIndex={-1} role="dialog" aria-modal="false" aria-label="Platform feedback" className="feedback-drawer" onKeyDown={e=>{if(e.key==='Escape'&&!busy)setOpen(false);}}>

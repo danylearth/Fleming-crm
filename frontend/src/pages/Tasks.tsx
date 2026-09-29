@@ -1,3 +1,4 @@
+import {ToolbarButton} from '../components/ui';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
@@ -363,7 +364,7 @@ export default function Tasks() {
               >
                 {editMode ? 'Cancel' : 'Edit'}
               </Button>
-              <Button variant="gradient" onClick={() => setShowAdd(true)}><Plus size={14} className="mr-1.5" /> Add Task</Button>
+              <ToolbarButton variant="gradient" onClick={() => setShowAdd(true)}><Plus size={14} className="mr-1.5" /> Add Task</ToolbarButton>
             </div>
           </div>
         ) : null /* calendar controls are rendered inline below */}
@@ -559,7 +560,7 @@ export default function Tasks() {
                   ))}
                 </div>
 
-                <Button variant="gradient" size="sm" onClick={() => setShowAdd(true)}><Plus size={13} className="mr-1" /> Add Task</Button>
+                <ToolbarButton variant="gradient" size="sm" onClick={() => setShowAdd(true)}><Plus size={13} className="mr-1" /> Add Task</ToolbarButton>
               </div>
 
               {/* ── MONTH VIEW ── */}
@@ -611,7 +612,7 @@ export default function Tasks() {
                 <Card className="p-0 overflow-x-auto">
                   <div className="min-w-[600px]">
                   {/* Week day headers */}
-                  <div className="grid grid-cols-[60px_repeat(7,1fr)] sm:grid-cols-[80px_repeat(7,1fr)] border-b border-[var(--border-subtle)]">
+                  <div className="grid grid-cols-[60px_repeat(7,minmax(0,1fr))] sm:grid-cols-[80px_repeat(7,minmax(0,1fr))] border-b border-[var(--border-subtle)] overflow-y-auto" style={{ scrollbarGutter: 'stable' }}>
                     <div className="py-3 px-2 text-[10px] text-[var(--text-muted)] text-center">GMT</div>
                     {weekDates.map((dateStr, i) => {
                       const d = new Date(dateStr + 'T00:00:00');
@@ -629,16 +630,16 @@ export default function Tasks() {
                     })}
                   </div>
                   {/* Time grid */}
-                  <div className="overflow-y-auto max-h-[600px]">
+                  <div className="overflow-y-auto max-h-[600px]" style={{ scrollbarGutter: 'stable' }}>
                     {HOURS.map(hour => {
                       const timeLabel = `${hour > 12 ? hour-12 : hour === 0 ? 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`;
                       return (
-                        <div key={hour} className="grid grid-cols-[60px_repeat(7,1fr)] sm:grid-cols-[80px_repeat(7,1fr)] border-b border-[var(--border-subtle)] border-dashed min-h-[72px]">
+                        <div key={hour} className="grid grid-cols-[60px_repeat(7,minmax(0,1fr))] sm:grid-cols-[80px_repeat(7,minmax(0,1fr))] border-b border-[var(--border-subtle)] border-dashed min-h-[72px]">
                           <div className="px-2 py-2 text-[10px] text-[var(--text-muted)] text-right border-r border-[var(--border-subtle)]">{timeLabel}</div>
                           {weekDates.map(dateStr => {
                             const dTasks = filtered.filter(t => t.due_date?.startsWith(dateStr) && (9 + (t.id % 8)) === hour);
                             return (
-                              <div key={dateStr} className="border-l border-[var(--border-subtle)] p-1 space-y-1">
+                              <div key={dateStr} className="min-w-0 border-l border-[var(--border-subtle)] p-1 space-y-1">
                                 {dTasks.map(t => <TaskCard key={t.id} task={t} />)}
                               </div>
                             );
@@ -898,7 +899,7 @@ export default function Tasks() {
 
                 <div className="flex gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
-                  <Button variant="gradient" onClick={addTask} disabled={!form.title}>Add Task</Button>
+                  <ToolbarButton variant="gradient" onClick={addTask} disabled={!form.title}>Add Task</ToolbarButton>
                 </div>
               </div>
             </div>

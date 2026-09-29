@@ -1,3 +1,5 @@
+import {registerFlemoDocumentRoutes} from './flemo-documents';
+import {fastComplianceAnswer} from './flemo-lookup';
 import {flemoActions,registerFlemoActions} from './flemo-actions';
 import {flemoAccount,flemoAccountStatus,registerFlemoOAuthRoutes,sharedFlemoOwner} from './flemo-oauth';
 import {flemoEvidence} from './flemo-records';
@@ -18,6 +20,7 @@ export function flemoIntent(message: string) {
 const money = (n: unknown) => Number(n || 0).toLocaleString('en-GB',{style:'currency',currency:'GBP'});
 export function registerFlemoRoutes(app: Express) {
   registerFlemoOAuthRoutes(app);
+  registerFlemoDocumentRoutes(app);
   registerFlemoActions(app);
   app.post('/api/ai/chat', authMiddleware, async (req: AuthRequest,res) => {
     const { message, context, history } = req.body || {};
@@ -25,6 +28,8 @@ export function registerFlemoRoutes(app: Express) {
     const portfolio = ['internal','external'].includes(context?.portfolio) ? context.portfolio : 'all';
     const scope = "($1='all' OR l.landlord_type=$1)";
     try {
+      const direct=await fastComplianceAnswer(message,portfolio,context);
+      if(direct)return res.json({...direct,as_of:new Date().toISOString()});
       await syncTenantLifecycle();
       let text = ''; let records: any[] = [];
       const intent = flemoIntent(message);
@@ -34,7 +39,9 @@ export function registerFlemoRoutes(app: Express) {
       const accountOwner=await sharedFlemoOwner().catch(()=>null);
       const accountStatus=accountOwner?await flemoAccountStatus(accountOwner).catch(()=>({connected:false})):{connected:false};
       if(accountOwner&&accountStatus.connected){
-        const evidence=await flemoEvidence([...previous.filter(item=>item.role==='user').slice(-2).map(item=>item.text),message].join(' '),portfolio,context,true,financeAllowed);
+        const followUp=/\b(it|that|this|their|them)\b/i.test(message)&&!/[0-9]/.test(message);
+        const lookup=followUp?[previous.filter(item=>item.role==='user').slice(-1)[0]?.text,message].filter(Boolean).join(' '):message;
+        const evidence=await flemoEvidence(lookup,portfolio,context,/\b(read|scan|analyse|analyze|summari[sz]e|document|report|certificate)\b/i.test(message),financeAllowed);
         const text=await(await flemoAccount(accountOwner)).answer(message,JSON.stringify({...evidence,conversation:previous}));
         const result=await flemoActions(req.user,message,text,evidence);
         return res.json({text:text+(result.note?'\n\n'+result.note:''),actions:result.actions,as_of:new Date().toISOString()});

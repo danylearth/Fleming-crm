@@ -1,0 +1,15 @@
+import {beforeEach,expect,it,vi} from 'vitest';
+const mocks=vi.hoisted(()=>({sql:vi.fn(),queryOne:vi.fn(),connect:vi.fn(),release:vi.fn()}));
+vi.mock('./db-pg',()=>({default:{connect:mocks.connect},query:vi.fn(),queryOne:mocks.queryOne,run:vi.fn()}));
+vi.mock('./auth',()=>({authMiddleware:vi.fn(),requirePermission:()=>vi.fn()}));
+import {registerClientAgreementDetails} from './client-agreement-details';
+const handlers=new Map<string,any>();
+registerClientAgreementDetails({get:vi.fn(),put:(path:string,...handlersForPath:any[])=>handlers.set(path,handlersForPath.at(-1))} as any);
+const bank={account_name:'Example Owner',sort_code:'12-34-56',account_number:'12345678',bank_name:'Example Bank'};
+const request=(extra={})=>({params:{id:'2'},user:{id:1,email:'office@example.test',role:'admin'},body:{...bank,details_approved:true,verification_method:'phone_call',verified_with:'Example Owner',verification_note:'Confirmed verbally',...extra}});
+const response=()=>{const res:any={statusCode:200};res.status=(code:number)=>{res.statusCode=code;return res;};res.json=vi.fn();return res;};
+beforeEach(()=>{vi.clearAllMocks();mocks.connect.mockResolvedValue({query:mocks.sql,release:mocks.release});mocks.queryOne.mockResolvedValue({name:'Office User'});mocks.sql.mockImplementation(async(sql:string)=>({rows:sql.startsWith('SELECT id FROM landlords')?[{id:2}]:sql.startsWith('SELECT * FROM landlord_bank')?[bank]:sql.startsWith('INSERT INTO landlord_bank')?[{...bank,approved_at:'2026-09-25'}]:[]}));});
+it('requires the person who verbally confirmed the account',async()=>{const res=response();await handlers.get('/api/landlords/:id/bank-details')(request({verified_with:''}),res);expect(res.statusCode).toBe(400);expect(mocks.connect).not.toHaveBeenCalled();});
+it('rejects an office approval made by non-admin staff',async()=>{const req=request(),res=response();req.user.role='staff';await handlers.get('/api/landlords/:id/bank-details')(req,res);expect(res.statusCode).toBe(403);});
+it('rejects approval of stale bank details',async()=>{const res=response();await handlers.get('/api/landlords/:id/bank-details')(request({account_number:'99999999'}),res);expect(res.statusCode).toBe(409);expect(mocks.sql.mock.calls.some(([sql])=>sql.startsWith('INSERT INTO landlord_bank'))).toBe(false);});
+it('records the phone verification with a masked account in the audit transaction',async()=>{const res=response();await handlers.get('/api/landlords/:id/bank-details')(request(),res);expect(res.statusCode).toBe(200);const audit=mocks.sql.mock.calls.find(([sql])=>sql.startsWith('INSERT INTO audit_log'));expect(audit?.[1][2]).toBe('bank_details_approved');expect(JSON.parse(audit?.[1][4])).toMatchObject({verification_method:'Phone call',verified_with:'Example Owner',account_ending:'5678'});expect(audit?.[1][4]).not.toContain('12345678');expect(mocks.sql).toHaveBeenCalledWith('COMMIT');});

@@ -1,0 +1,11 @@
+import {it,expect,vi} from 'vitest';
+vi.mock('./db-pg',()=>({query:vi.fn()}));
+import {matchFlemoRecords,complianceQuestion,fastComplianceAnswer} from './flemo-lookup';
+import {query} from './db-pg';
+const records=[{id:1,name:'99 Ringwood Road, Wolverhampton',entity:'properties',due_date:'2027-02-12'},{id:2,name:'9 Ringwood Road, Wolverhampton',entity:'properties'},{id:3,name:'101 Ringwood Road, Wolverhampton',entity:'properties'},{id:4,name:'99 Other Street, Wolverhampton',entity:'properties'}];
+it('keeps the house number and ignores nearby alternatives',()=>expect(matchFlemoRecords(records,'when is the eicr next due for 99 ringwood road?').map(r=>r.id)).toEqual([1]));
+it('does not fall back to another house number when the address is unknown',()=>expect(matchFlemoRecords(records,'EICR due for 98 Ringwood Road?')).toEqual([]));
+it('only offers real same-street ambiguity',()=>expect(matchFlemoRecords(records,'when is EICR due on Ringwood Road?').map(r=>r.id)).toEqual([1,2,3]));
+it('uses current record only for contextual questions, not a different named address',()=>{expect(matchFlemoRecords(records,'when is the EICR due here?',{entityType:'property',entityId:1}).map(r=>r.id)).toEqual([1]);expect(matchFlemoRecords(records,'EICR due for 98 Ringwood Road?',{entityType:'property',entityId:1})).toEqual([]);});
+it('does not replace an explicit request to read the report',()=>expect(complianceQuestion('Read the EICR report and expiry date for 99 Ringwood Road')).toBeNull());
+it('answers a due-date query with one database call and one property link',async()=>{vi.mocked(query).mockResolvedValue(records);const result=await fastComplianceAnswer('when is the eicr next due for 99 ringwood road?','internal');expect(query).toHaveBeenCalledTimes(1);expect(result?.text).toContain('12 February 2027');expect(result?.actions).toHaveLength(1);expect(vi.mocked(query).mock.calls[0][1]).toEqual(['internal']);});

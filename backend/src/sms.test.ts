@@ -78,6 +78,31 @@ describe('SMS templates', () => {
 });
 
 describe('SMS provider safety', () => {
+  it.each([
+    ['true', undefined],
+    ['', 'https://crm.example.test/api/sms/status'],
+  ])('honours the delivery callback opt-out (%s)', async (disabled, callback) => {
+    const twilio = (await import('twilio')).default;
+    const request = vi.spyOn(twilio.Twilio.prototype, 'request').mockResolvedValue({
+      body: { sid: 'SM-test' }, statusCode: 201, headers: {},
+    } as any);
+    vi.stubEnv('TWILIO_ACCOUNT_SID', 'AC' + '0'.repeat(32));
+    vi.stubEnv('TWILIO_AUTH_TOKEN', 'test-token');
+    vi.stubEnv('TWILIO_PHONE_NUMBER', '+447700900001');
+    vi.stubEnv('BASE_URL', 'https://crm.example.test');
+    vi.stubEnv('TWILIO_DISABLE_STATUS_CALLBACK', disabled);
+    vi.resetModules();
+    try {
+      const { sendSms } = await import('./sms');
+      expect((await sendSms({ to: '+447700900000', body: 'Mocked SMS' })).success).toBe(true);
+      expect(request).toHaveBeenCalledOnce();
+      expect(request.mock.calls[0][0].data.StatusCallback).toBe(callback);
+    } finally {
+      vi.restoreAllMocks();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('prefers the branded sender ID when configured', async () => {
     vi.stubEnv('TWILIO_SENDER_ID', 'FlemingLets');
     vi.stubEnv('TWILIO_PHONE_NUMBER', '+441902212415');

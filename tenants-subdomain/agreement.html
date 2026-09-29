@@ -1,11 +1,12 @@
 <!doctype html>
 <html lang="en">
 <head>
+<link rel="icon" type="image/png" href="https://crm.fleminglettings.co.uk/logo-icon.png">
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Tenancy Agreement | Fleming Lettings</title>
   <link rel="stylesheet" href="/signing-layout.css">
 <link rel="stylesheet" href="/form-typography.css">
-</head>
+<link rel="stylesheet" href="/signature-controls.css"></head>
 <body>
   <header class="top"><div class="top-inner"><img src="/logo-white.png" alt="Fleming Lettings"><a class="help" href="tel:+441902212415">Need help? ☎️</a></div></header>
   <main class="shell"><div class="card">
@@ -13,14 +14,14 @@
     <section id="error" class="state" hidden><h1>Unable to load agreement</h1><p id="error-message"></p></section>
     <section id="success" class="state" hidden><div class="tick">✓</div><h1>You&rsquo;re all signed up!</h1><p>Your signature has been recorded. A completed digital copy will be emailed after every required party has signed.</p><div class="outstanding" id="success-outstanding" hidden></div></section>
     <section id="already" class="state" hidden><div class="tick">✓</div><h1>Your agreement has already been signed</h1><p>Your signature is safely recorded and no further action is needed from you.</p><div class="outstanding" id="already-outstanding" hidden></div></section>
-    <section id="content" class="content" hidden>
+    <section id="content" class="content" hidden><h1 id="agreement-title" class="agreement-title">Assured Periodic Tenancy Agreement</h1>
       <div class="notice">Please read the tenancy agreement and the compliance documents that follow it carefully before signing. By signing, you confirm that you have read and understood the full agreement, including your obligations as a tenant, and that you agree to be bound by its terms. If anything is unclear, please contact us or seek independent advice before you sign. Your name, signature, date, IP address and browser details form part of the electronic signature record, which is legally binding in the same way as a handwritten signature.</div>
       <div class="grid">
-        <div><label class="meta" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">Document zoom<select id="pdf-zoom" style="padding:6px;border:1px solid #cdbdcc;border-radius:8px"><option value="100">Fit width</option><option value="150">150%</option><option value="200">200%</option></select></label><div class="document"><div id="agreement-pdf" aria-label="Tenancy agreement pages"><p>Loading document…</p></div></div></div>
-        <aside class="panel"><h1>Review &amp; Sign 📃</h1><a id="open-agreement" class="open-link" target="_blank" rel="noopener">Click here to open the agreement on a new tab</a>
+        <div><div class="document" id="tenancy-document"><div id="agreement-pdf" aria-label="Tenancy agreement pages"><p>Loading document…</p></div></div></div>
+        <aside class="panel"><h1>Review &amp; Sign 📃</h1><a id="open-agreement" class="open-link document-open" target="_blank" rel="noopener"><span>Click to open in a new tab</span><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg></a>
           <p class="pdf-status" id="pdf-status" role="status"></p><p id="signing-capacity" class="meta" hidden></p><div class="field"><label for="signature-name">Full Legal Name</label><input id="signature-name" autocomplete="name" readonly></div>
           <div class="field"><label for="signature-date">Date Signed</label><input id="signature-date" type="date" readonly></div>
-          <div class="field"><span class="label">Your Signature</span><div class="sig" id="sig"><canvas id="canvas"></canvas><span class="hint" id="hint">Sign here</span></div><div class="actions"><button class="button secondary" id="generate" type="button">Click to Generate Signature</button><button class="button secondary" id="clear" type="button">Clear</button></div></div>
+          <div class="field"><span class="label">Your Signature</span><div class="sig" id="sig"><canvas id="canvas"></canvas><span class="hint" id="hint">Sign here</span></div><div class="actions signature-actions"><button class="button secondary" id="generate" type="button">Click to Generate Signature</button><button class="button secondary" id="clear" type="button">Clear</button></div></div>
 
           <label class="meta confirm"><input type="checkbox" id="confirm"> <span>I confirm that I have read and agree to the tenancy agreement.</span></label>
           <label class="meta confirm"><input type="checkbox" id="binding"> <span>I intend my electronic signature to be legally binding for the agreement and its addendum.</span></label>
@@ -31,63 +32,71 @@
     </section>
   </div></main>
   <p id="validation-message" role="alert" style="display:none"></p>
+
   <script type="module">
     import * as pdfjsLib from '/vendor/pdfjs/pdf.mjs';
+    import {signatureEditor} from '/signature-editor.js';
     pdfjsLib.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/pdf.worker.mjs';
     const API=window.FLEMING_API_URL||(location.hostname==='localhost'?'http://localhost:3001':'https://fleming-crm-api.fly.dev'),token=location.pathname.split('/').filter(Boolean).pop();
     const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');let drawing=false,signed=false;
-    function sizeCanvas(){const r=document.getElementById('sig').getBoundingClientRect();if(r.width<1||r.height<1)return;const dpr=Math.max(1,window.devicePixelRatio||1),width=Math.round(r.width*dpr),height=Math.round(r.height*dpr);if(canvas.width===width&&canvas.height===height)return;let saved;if(signed){saved=document.createElement('canvas');saved.width=canvas.width;saved.height=canvas.height;saved.getContext('2d').drawImage(canvas,0,0)}canvas.width=width;canvas.height=height;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.strokeStyle='#25073b';ctx.lineWidth=2.5;ctx.lineCap='round';if(saved)ctx.drawImage(saved,0,0,r.width,r.height)}
+    function sizeCanvas(){if(signed)return;const r=document.getElementById('sig').getBoundingClientRect();if(r.width<1||r.height<1)return;const dpr=Math.max(1,window.devicePixelRatio||1),width=Math.round(r.width*dpr),height=Math.round(r.height*dpr);if(canvas.width===width&&canvas.height===height)return;let saved;if(signed){saved=document.createElement('canvas');saved.width=canvas.width;saved.height=canvas.height;saved.getContext('2d').drawImage(canvas,0,0)}canvas.width=width;canvas.height=height;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.strokeStyle='#25073b';ctx.lineWidth=2.5;ctx.lineCap='round';if(saved)ctx.drawImage(saved,0,0,r.width,r.height)}
     function pos(e){const r=canvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
     canvas.addEventListener('pointerdown',e=>{drawing=true;canvas.setPointerCapture(e.pointerId);const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);e.preventDefault()});canvas.addEventListener('pointermove',e=>{if(!drawing)return;const p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();signed=true;document.getElementById('hint').hidden=true;e.preventDefault()});['pointerup','pointercancel'].forEach(name=>canvas.addEventListener(name,()=>{drawing=false;if(signed)queuePreview()}));
-    document.getElementById('clear').onclick=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);signed=false;document.getElementById('hint').hidden=false;sizeCanvas();clearTimeout(previewTimer);previewVersion++;void renderPdf(`${API}/api/public/tenancy-agreements/${token}/pdf`)};
-    document.getElementById('generate').onclick=()=>{const n=document.getElementById('signature-name').value.trim();if(!n)return;const r=canvas.getBoundingClientRect();ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#25073b';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`italic ${Math.min(42,Math.max(24,r.width/Math.max(n.length*.7,8)))}px cursive`;ctx.fillText(n,r.width/2,r.height/2,r.width-24);signed=true;document.getElementById('hint').hidden=true;queuePreview()};
-    let pdfVersion=0,previewVersion=0,previewTimer,observer,pdfTask,pdfSource;
-    document.getElementById('pdf-zoom').onchange=e=>{document.getElementById('agreement-pdf').style.width=e.target.value+'%';if(pdfSource)void renderPdf(pdfSource);};
-    async function renderPdf(source){
-      pdfSource=typeof source==='string'?source:source.slice();
+    document.getElementById('clear').onclick=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);signed=false;editor.refresh(false);document.getElementById('hint').hidden=false;sizeCanvas();clearTimeout(previewTimer);previewVersion++;previewReady=false;updateSubmit();downloadPreview();document.getElementById('pdf-status').textContent='Signature cleared.';void renderPdf(`${API}/api/public/tenancy-agreements/${token}/pdf`)};
+    const editor=signatureEditor({canvas,name:()=>document.getElementById('signature-name').value,apply:(image)=>{canvas.width=image.width;canvas.height=image.height;ctx.drawImage(image,0,0);signed=true;editor.refresh(true);document.getElementById('hint').hidden=true;queuePreview();}});
+    document.getElementById('generate').onclick=()=>editor.open('type');
+    let pdfVersion=0,previewVersion=0,previewTimer,observer,pdfTask,previewReady=false,previewUrl;
+    function updateSubmit(){document.getElementById('submit').disabled=!previewReady||!signed||!['confirm','binding','payments'].every(id=>document.getElementById(id).checked)}
+    ['confirm','binding','payments'].forEach(id=>document.getElementById(id).addEventListener('change',updateSubmit));
+    function downloadPreview(bytes){if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=bytes?URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})):null;document.getElementById('open-agreement').href=previewUrl||`${API}/api/public/tenancy-agreements/${token}/pdf`}
+
+    async function renderPdf(source,previewExpected){
       const version=++pdfVersion,container=document.getElementById('agreement-pdf');
+      const current=()=>version===pdfVersion&&(previewExpected===undefined||previewExpected===previewVersion);
       try {
-        if(pdfTask)await pdfTask.destroy();
-        if(version!==pdfVersion)return;
+        if(pdfTask)await pdfTask.destroy();if(!current())return false;
         pdfTask=pdfjsLib.getDocument({...typeof source==='string'?{url:source}:{data:source.slice()},isEvalSupported:false,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'});
-        const pdf=await pdfTask.promise;if(version!==pdfVersion)return;
+        const pdf=await pdfTask.promise;if(!current())return false;
         observer?.disconnect();const scroll=container.parentElement,scrollTop=scroll.scrollTop;
+        const rendering=new Map();
+        function renderSlot(slot){if(rendering.has(slot))return rendering.get(slot);const promise=(async()=>{const page=await pdf.getPage(Number(slot.dataset.page));if(!current())return false;
+          const viewport=page.getViewport({scale:1}),width=Math.max(220,container.clientWidth),scaled=page.getViewport({scale:width/viewport.width}),dpr=Math.min(2,window.devicePixelRatio||1);
+          const output=document.createElement('canvas');output.setAttribute('aria-label','Agreement page '+slot.dataset.page);output.width=Math.floor(scaled.width*dpr);output.height=Math.floor(scaled.height*dpr);
+          await page.render({canvasContext:output.getContext('2d'),viewport:scaled,transform:[dpr,0,0,dpr,0,0]}).promise;
+          if(!current())return false;slot.replaceChildren(output);return true;
+        })();rendering.set(slot,promise);return promise;}
         container.replaceChildren();
-        observer=new IntersectionObserver(entries=>entries.forEach(async entry=>{
-          if(!entry.isIntersecting)return;observer.unobserve(entry.target);
-          try {const page=await pdf.getPage(Number(entry.target.dataset.page));if(version!==pdfVersion)return;
-            const viewport=page.getViewport({scale:1}),width=Math.max(260,container.clientWidth),scale=width/viewport.width,scaled=page.getViewport({scale}),dpr=Math.min(2,window.devicePixelRatio||1);
-            const pageCanvas=document.createElement('canvas');pageCanvas.setAttribute('aria-label',`Agreement page ${entry.target.dataset.page}`);pageCanvas.width=Math.floor(scaled.width*dpr);pageCanvas.height=Math.floor(scaled.height*dpr);
-            await page.render({canvasContext:pageCanvas.getContext('2d'),viewport:scaled,transform:[dpr,0,0,dpr,0,0]}).promise;
-            if(version===pdfVersion)entry.target.replaceChildren(pageCanvas);
-          }catch{if(version===pdfVersion)entry.target.textContent='This page could not be displayed. Open the PDF using the link.';}
-        }),{root:scroll,rootMargin:'600px'});
-        for(let n=1;n<=pdf.numPages;n++){const slot=document.createElement('div');slot.className='pdf-page';slot.dataset.page=String(n);slot.style.aspectRatio='595 / 842';slot.textContent=`Loading page ${n}…`;container.append(slot);observer.observe(slot);}
-        scroll.scrollTop=scrollTop;
-      }catch{if(version===pdfVersion){container.textContent='Document preview could not load. Use “Open agreement” to read the PDF.';document.getElementById('pdf-status').textContent='The download link remains available.';}}
+        observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){observer.unobserve(entry.target);void renderSlot(entry.target).catch(()=>{if(current())entry.target.textContent='This page could not be displayed. Open the PDF using the link.'})}}),{root:scroll,rootMargin:'600px'});
+        for(let n=1;n<=pdf.numPages;n++){const slot=document.createElement('div');slot.className='pdf-page';slot.dataset.page=String(n);slot.style.aspectRatio='595 / 842';slot.textContent='Loading page '+n+'…';container.append(slot);observer.observe(slot);}
+        let target=1;
+        if(previewExpected!==undefined){for(let n=1;n<=pdf.numPages;n++){const page=await pdf.getPage(n),text=await page.getTextContent();if(!current())return false;const words=text.items.map(item=>item.str||'').join(' ');if((words.includes('Tenant(s):')&&/Signature\s+and\s+date:/i.test(words))||(words.includes('Signed as an agreement')&&text.items.filter(item=>/signature\s*:/i.test(item.str||'')).length>=2)){target=n;break;}}}
+        const slot=container.children[target-1];if(!await renderSlot(slot))return false;
+        scroll.scrollTop=previewExpected===undefined?scrollTop:slot.offsetTop-container.offsetTop;return true;
+      }catch{if(current()){container.textContent='Document preview could not load. Use “Open Agreement” to read the PDF.';}return false;}
     }
     function queuePreview(){
-      clearTimeout(previewTimer);const version=++previewVersion;
+      clearTimeout(previewTimer);const version=++previewVersion;previewReady=false;updateSubmit();
+      const status=document.getElementById('pdf-status');status.textContent='Updating signature preview…';
       previewTimer=setTimeout(async()=>{
-        const status=document.getElementById('pdf-status');status.textContent='Updating signature preview…';
-        try{const response=await fetch(`${API}/api/public/tenancy-agreements/${token}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({signature:canvas.toDataURL('image/png')})});
+        try{const response=await fetch(API+'/api/public/tenancy-agreements/'+token+'/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({signature:canvas.toDataURL('image/png')})});
           if(!response.ok)throw new Error('Preview unavailable');const bytes=new Uint8Array(await response.arrayBuffer());
-          if(version!==previewVersion)return;await renderPdf(bytes);status.textContent='Draft signature shown in the agreement. It is recorded only when you press Sign & Attest.';
-        }catch{if(version===previewVersion)status.textContent='Signature preview could not update. Your signature is still in the signing box; try drawing or generating it again.';}
+          if(version!==previewVersion)return;if(!await renderPdf(bytes,version))throw new Error('Preview unavailable');if(version!==previewVersion)return;
+          downloadPreview(bytes);previewReady=true;updateSubmit();status.textContent='Draft signature shown in the agreement. It is recorded only when you press Sign & Attest.';
+        }catch{if(version===previewVersion)status.textContent='Signature preview could not update. Please apply your signature again to retry before submitting.';}
       },650);
     }
     function validation(message,target){const notice=document.getElementById('validation-message');notice.textContent=message;notice.style.cssText='display:block;color:#b42318;margin:10px 0;font-size:14px;line-height:1.5';const destination=target?.closest('.field,.confirm')||target||document.getElementById('submit');destination.insertAdjacentElement('afterend',notice);if(target){target.classList.add('field-error');target.setAttribute('tabindex','-1');target.scrollIntoView({behavior:'smooth',block:'center'});target.focus();}}
     document.addEventListener('change',e=>e.target.classList.remove('field-error'));canvas.addEventListener('pointerdown',()=>document.getElementById('sig').classList.remove('field-error'));document.getElementById('generate').addEventListener('click',()=>document.getElementById('sig').classList.remove('field-error'));
     function show(id){['loading','error','success','already','content'].forEach(x=>document.getElementById(x).hidden=x!==id)}
     function showOutstanding(id,names){const box=document.getElementById(id);if(names&&names.length){box.textContent=`Please note that we are still waiting on ${names.join(' and ')} to sign.`;box.hidden=false}}
-    async function load(){try{const r=await fetch(`${API}/api/public/tenancy-agreements/${token}`),d=await r.json();if(!r.ok)throw new Error(d.error);if(d.signer_signed||d.status==='completed'){showOutstanding('already-outstanding',d.outstanding_signers);return show('already')}document.getElementById('open-agreement').href=`${API}/api/public/tenancy-agreements/${token}/pdf`;void renderPdf(`${API}/api/public/tenancy-agreements/${token}/pdf`);if(d.signer_role==='landlord'){document.querySelector('.notice').textContent=document.querySelector('.notice').textContent.replace('your obligations as a tenant','your obligations as the landlord');}document.getElementById('signature-name').value=d.signer_name||'';const capacity=document.getElementById('signing-capacity');capacity.textContent=d.signing_on_behalf_of?'Signing on behalf of '+d.signing_on_behalf_of:'';capacity.hidden=!d.signing_on_behalf_of;document.getElementById('signature-date').value=d.today||new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date());show('content');requestAnimationFrame(sizeCanvas)}catch(e){document.getElementById('error-message').textContent=e.message||'This secure link is invalid.';show('error')}}
+    async function load(){try{const r=await fetch(`${API}/api/public/tenancy-agreements/${token}`),d=await r.json();if(!r.ok)throw new Error(d.error);document.getElementById('agreement-title').textContent='Assured Periodic Tenancy Agreement'+(d.property_address?' for '+d.property_address:'');if(d.signer_signed||d.status==='completed'){showOutstanding('already-outstanding',d.outstanding_signers);return show('already')}document.getElementById('open-agreement').href=`${API}/api/public/tenancy-agreements/${token}/pdf`;void renderPdf(`${API}/api/public/tenancy-agreements/${token}/pdf`);if(d.signer_role==='landlord'){document.querySelector('.notice').textContent=document.querySelector('.notice').textContent.replace('your obligations as a tenant','your obligations as the landlord');}document.getElementById('signature-name').value=d.signer_name||'';const capacity=document.getElementById('signing-capacity');capacity.textContent=d.signing_on_behalf_of?'Signing on behalf of '+d.signing_on_behalf_of:'';capacity.hidden=!d.signing_on_behalf_of;document.getElementById('signature-date').value=d.today||new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date());show('content');requestAnimationFrame(sizeCanvas)}catch(e){document.getElementById('error-message').textContent=e.message||'This secure link is invalid.';show('error')}}
     document.getElementById('submit').onclick=async()=>{
       const name=document.getElementById('signature-name').value.trim();
       const missing=!name?['Your legal name is missing. Contact the office to correct the agreement.',document.getElementById('signature-name')]:!signed?['Please add or generate your signature.',document.getElementById('sig')]:!document.getElementById('confirm').checked?['Please confirm you have read and agree to the tenancy agreement.',document.getElementById('confirm')]:!document.getElementById('binding').checked?['Please confirm you intend your electronic signature to be legally binding.',document.getElementById('binding')]:!document.getElementById('payments').checked?['Please confirm you agree to the rent, deposit and payment schedule.',document.getElementById('payments')]:null;
-      if(missing){validation(...missing);return;}
+      if(missing){validation(...missing);return;}if(!previewReady){validation('Please wait until your signature is shown in the agreement.',null);return;}
       const b=document.getElementById('submit');b.disabled=true;b.textContent='Signing…';
       try{const r=await fetch(`${API}/api/public/tenancy-agreements/${token}/sign`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({signature_name:name,signature:canvas.toDataURL('image/png'),accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true})}),d=await r.json();if(!r.ok)throw new Error(d.error);show('success');const refreshed=await fetch(`${API}/api/public/tenancy-agreements/${token}`).then(x=>x.json()).catch(()=>null);if(refreshed)showOutstanding('success-outstanding',refreshed.outstanding_signers)}catch(e){validation(e.message||'Agreement could not be signed.',null);b.disabled=false;b.textContent='Sign & Attest to Agreement ✅';}
     };
-    new ResizeObserver(sizeCanvas).observe(document.getElementById('sig'));load();
+    new ResizeObserver(sizeCanvas).observe(document.getElementById('sig'));updateSubmit();load();
   </script>
 </body></html>

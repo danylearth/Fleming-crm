@@ -1,11 +1,15 @@
 import {prepareEmailHtml} from './email-presentation';
+import {addEmailFooter} from './email-footer';
+import {emailPreferencesUrl} from './email-preferences';
 import { Resend } from 'resend';
+import {loginCodeEmail} from './login-code-email';
 import fs from 'fs';
 import path from 'path';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 export const OUTBOUND_EMAIL_ADDRESS = 'contact@tenancies.fleminglettings.co.uk';
 export const EMAIL_FROM = `Fleming Lettings <${OUTBOUND_EMAIL_ADDRESS}>`;
+export const SECURITY_EMAIL_ADDRESS = 'no-reply@fleminglettings.co.uk';
 const ALLOW_SIMULATED_MESSAGES = process.env.ALLOW_SIMULATED_MESSAGES === 'true' && process.env.NODE_ENV !== 'production';
 
 const escapeHtml = (value: unknown): string => String(value ?? '')
@@ -113,6 +117,10 @@ export interface TenancyAgreementEmailInput {
   customMessage?: string | null;
 }
 
+export function revisedAgreementNotice(firstName:string,propertyAddress:string,signingUrl:string,waitingForLandlord:boolean){
+ return {subject:'Your tenancy agreement has been updated — new signatures required',html:brandedEmailHtml('Updated tenancy agreement',`<p>Hi ${escapeHtml(firstName)},</p><p>The tenancy agreement for ${escapeHtml(propertyAddress)} has been edited. All parties must review and sign the revised version. Previous signatures do not apply to it.</p><p>${waitingForLandlord?'The landlord will sign first. We will send your signing invitation as soon as all landlords have signed.':'Please review the revised agreement and sign again.'}</p>${waitingForLandlord?'':`<p><a href="${escapeHtml(signingUrl)}">Review and sign the revised agreement</a></p>`}`)};
+}
+
 export function tenancyAgreementEmail(input: TenancyAgreementEmailInput): { subject: string; html: string } {
   const address = addressParts(input.propertyAddress);
   return {
@@ -145,6 +153,16 @@ export function completedTenancyAgreementEmail(firstName: string, propertyAddres
       PROPERTY_ADDRESS_REMAINDER: escapeHtml(address.remainder),
     }),
   };
+}
+
+export function completedDocumentEmail(name:string,title:string,signedAt:string|Date,propertyAddress=''){
+ const firstName=name.trim().replace(/^(mr|mrs|ms|miss|dr|prof)\.?\s+/i,'').split(/\s+/)[0]||'there';
+ const documentName=title.replace(/\.(pdf|docx?|html?)$/i,'');
+ const label=propertyAddress&&!documentName.toLowerCase().includes(propertyAddress.split(',')[0].toLowerCase())?`${documentName} - ${propertyAddress}`:documentName;
+ return {subject:'Your signed document - '+documentName,html:renderFinalEmailTemplate('signed-document.html',{
+  FIRST_NAME:escapeHtml(firstName),DOCUMENT_LABEL:escapeHtml(label),
+  DATE_SIGNED:escapeHtml(new Date(signedAt).toLocaleDateString('en-GB',{timeZone:'Europe/London'})),
+ })};
 }
 
 export interface FinalBalanceEmailInput {
@@ -197,6 +215,7 @@ export function maintenanceReportingEmail(
 }
 
 export interface HandoverAppointmentEmailInput {
+  appointmentLocation?: string;
   firstName: string;
   propertyAddress: string;
   appointmentDate: string | Date;
@@ -207,17 +226,19 @@ export interface HandoverAppointmentEmailInput {
 
 export function handoverAppointmentEmail(input: HandoverAppointmentEmailInput): { subject: string; html: string } {
   const address = addressParts(input.propertyAddress);
-  const mapQuery = encodeURIComponent(address.full);
+  const location = input.appointmentLocation || address.full;
+  const mapQuery = encodeURIComponent(location);
   const date = input.appointmentDate instanceof Date
     ? input.appointmentDate
     : new Date(`${String(input.appointmentDate).slice(0, 10)}T12:00:00Z`);
   const displayDate = Number.isNaN(date.getTime())
     ? escapeHtml(input.appointmentDate)
     : date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }).replace(',', '');
-  const intro = escapeHtml(input.customMessage || "Finally, we're nearly there! Your move in and handover appointment is confirmed. We will meet you at the property to conduct the inventory, handover the keys and be on hand to answer any final questions that you may have.").replace(/\r?\n/g, '<br>');
+  const intro = escapeHtml(input.customMessage || "Finally, we're nearly there! Your move in and handover appointment is confirmed. We will meet you at the location below to hand over the keys and answer any final questions that you may have.").replace(/\r?\n/g, '<br>');
   return {
     subject: 'Your move in and handover date',
     html: renderFinalEmailTemplate('09-move-in-date.html', {
+      APPOINTMENT_LOCATION: escapeHtml(location),
       FIRST_NAME: escapeHtml(input.firstName || 'there'),
       PROPERTY_ADDRESS: escapeHtml(address.full),
       PROPERTY_SHORT_ADDRESS: escapeHtml(address.short),
@@ -260,14 +281,34 @@ export function applicationChangesRequestedEmail(name: string, changes: string, 
 // Embed supplied branding assets in the message itself; saved previews retain public URLs.
 export function inlineEmailImages(html: string) {
   const assets = new Map<string, { filename: string; content: Buffer; contentType: string; contentId: string }>();
-  const rendered = html.replace(/src="https:\/\/crm\.fleminglettings\.co\.uk\/email-assets\/([a-zA-Z0-9_-]+\.(?:png|jpg))"/g, (original, filename: string) => {
+  let rendered = html.replace(/src="https:\/\/crm\.fleminglettings\.co\.uk\/email-assets\/([a-zA-Z0-9_-]+\.(?:png|jpg))"/g, (original, filename: string) => {
     const file = path.join(__dirname, 'email-assets', filename);
     if (!fs.existsSync(file)) return original;
     const contentId = `fleming-${filename}`;
     if (!assets.has(filename)) assets.set(filename, { filename, content: fs.readFileSync(file), contentType: filename.endsWith('.png') ? 'image/png' : 'image/jpeg', contentId });
     return `src="cid:${contentId}"`;
   });
+  rendered = rendered.replace(/https?:\/\/[^\s"'<>\)]+\/api\/public\/email-images\/([a-f0-9]{64}\.(?:png|webp))/g, (original, filename: string) => {
+    const allowed = ['https://fleming-crm-api.fly.dev', 'https://crm.fleminglettings.co.uk', process.env.BASE_URL].flatMap(value => { try { return value ? [new URL(value).origin] : []; } catch { return []; } });
+    if (!allowed.includes(new URL(original).origin)) return original;
+    const file = path.join(process.env.UPLOADS_PATH || path.join(__dirname, '../uploads'), 'email-images', filename);
+    if (!fs.existsSync(file)) throw Error('An email image is missing. Upload the email folder again.');
+    const contentId = 'fleming-upload-' + filename;
+    if (!assets.has(contentId)) assets.set(contentId, { filename, content: fs.readFileSync(file), contentType: filename.endsWith('.png') ? 'image/png' : 'image/webp', contentId });
+    return 'cid:' + contentId;
+  });
   return { html: rendered, attachments: [...assets.values()] };
+}
+
+// Transactional security mail must never simulate delivery or add marketing opt-out links.
+export async function sendLoginVerificationEmail(to:string,code:string,name='there'):Promise<boolean> {
+  if(!resend||process.env.ALLOW_SIMULATED_MESSAGES==='true'||!/^\d{6}$/.test(code))return false;
+  try {
+    const inline=inlineEmailImages(loginCodeEmail(name,code));
+    const {data,error}=await resend.emails.send({from:`Fleming Lettings <${SECURITY_EMAIL_ADDRESS}>`,to,subject:'Your Fleming Lettings sign-in verification code',html:inline.html,attachments:inline.attachments});
+    if(error||!data?.id){console.error('[2FA] Email verification delivery rejected');return false;}
+    return true;
+  }catch{console.error('[2FA] Email verification delivery failed');return false;}
 }
 
 export async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; id?: string; error?: string; simulated?: boolean }> {
@@ -282,22 +323,30 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
   }
 
   try {
-    const inline = inlineEmailImages(prepareEmailHtml(params.html));
+    const recipients = Array.isArray(params.to) ? params.to : [params.to];
+    if (!recipients.length) return {success:false,error:'Choose an email recipient'};
+    // Each recipient gets their own preferences link, including group messages.
+    const preferences = await Promise.all(recipients.map(emailPreferencesUrl));
+    let firstId: string | undefined;
+    for (const [index, recipient] of recipients.entries()) {
+    const inline = inlineEmailImages(prepareEmailHtml(addEmailFooter(params.html, preferences[index])));
     const { data, error } = await resend.emails.send({
       from: params.fromEmail ? `Fleming Lettings <${params.fromEmail}>` : EMAIL_FROM,
-      to: params.to,
+      to: recipient,
       subject: params.subject,
       html: inline.html,
       replyTo: params.fromEmail || OUTBOUND_EMAIL_ADDRESS,
       attachments: [...(params.attachments || []), ...inline.attachments],
-    }, params.idempotencyKey ? { idempotencyKey: params.idempotencyKey } : undefined);
+    }, params.idempotencyKey ? { idempotencyKey: recipients.length > 1 ? `${params.idempotencyKey}-${index}` : params.idempotencyKey } : undefined);
 
     if (error) {
       console.error('[EMAIL ERROR]', error);
-      return { success: false, error: error.message };
+      return { success: false, error: index ? `${index} recipient(s) sent; delivery to the next recipient failed: ${error.message}` : error.message };
     }
 
-    return { success: true, id: data?.id };
+    firstId ||= data?.id;
+    }
+    return { success: true, id: firstId };
   } catch (err: any) {
     console.error('[EMAIL ERROR]', err);
     return { success: false, error: err.message || 'Failed to send email' };
@@ -337,7 +386,7 @@ export function referenceChaseEmail(landlordName: string, tenantName: string, pr
 export function rentReminderEmail(tenantName: string, amount: number, address: string, dueDate: string): { subject: string; html: string } {
   return {
     subject: `Rent Payment Reminder - ${address}`,
-    html: renderFinalEmailTemplate('14-rent-overdue.html', { FIRST_NAME:escapeHtml(tenantName), AMOUNT:escapeHtml(amount.toFixed(2)), PROPERTY_ADDRESS:escapeHtml(address), DUE_DATE:escapeHtml(new Date(dueDate.slice(0,10)+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})), PROPERTY_SUBJECT:encodeURIComponent(address) }),
+    html: renderFinalEmailTemplate('14-rent-overdue.html', { FIRST_NAME:escapeHtml(tenantName), AMOUNT:escapeHtml(amount.toFixed(2)), PROPERTY_ADDRESS:escapeHtml(address), DUE_DATE:escapeHtml(new Date(dueDate.slice(0,10)+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})), PROPERTY_SUBJECT:encodeURIComponent(address) }).replace('your rent payment has not been received','your rent payment has an outstanding balance').replace(/overdue/gi, dueDate.slice(0,10)===new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date())?'due today':'overdue'),
   };
 }
 
@@ -545,7 +594,7 @@ export function applicationReminderEmail(name: string, link: string) {
 }
 
 export function accountEmail(kind:'invite'|'reset'|'updated',user:{name:string;email:string},link='') {
- return {subject:kind==='invite'?'Set up your Fleming CRM account':kind==='reset'?'Reset your Fleming CRM password':'Your Fleming CRM password has been updated',html:renderFinalEmailTemplate(`account-${kind}.html`,{NAME:escapeHtml(user.name.split(' ')[0]),EMAIL:escapeHtml(user.email),LINK:escapeHtml(link)})};
+ return {fromEmail:SECURITY_EMAIL_ADDRESS,subject:kind==='invite'?'Set up your Fleming CRM account':kind==='reset'?'Reset your Fleming CRM password':'Your Fleming CRM password has been updated',html:renderFinalEmailTemplate(`account-${kind}.html`,{NAME:escapeHtml(user.name.split(' ')[0]),EMAIL:escapeHtml(user.email),LINK:escapeHtml(link)})};
 }
 
 export function landlordSignatureEmail(name:string,address:string,signingUrl:string,automaticDelivery=true){
@@ -553,3 +602,21 @@ export function landlordSignatureEmail(name:string,address:string,signingUrl:str
 }
 
 export function finalBalanceReceiptEmail(name:string,amount:number,date:string,address:string){return {subject:'Your final tenancy balance has been received',html:brandedEmailHtml('Payment Received',`<p>Hi ${escapeHtml(name)},</p><p>We confirm receipt of your final tenancy balance of <strong>£${emailMoney(amount)}</strong> on <strong>${emailDate(date)}</strong> for ${escapeHtml(address)}.</p><p>Thank you. The office will confirm the handover arrangements with you.</p>`) };}
+
+export function completedLandlordAgreementEmail(name:string,propertyAddress:string,serviceName:string,signedAt:string){
+ const date=new Date(signedAt);if(Number.isNaN(date.getTime()))throw Error('Invalid signing date');
+ const day=Number(date.toLocaleString('en-GB',{day:'numeric',timeZone:'Europe/London'})),suffix=day%100>=11&&day%100<=13?'th':(['th','st','nd','rd'][day%10]||'th');
+ const fullDate=day+suffix+' '+date.toLocaleString('en-GB',{month:'long',year:'numeric',timeZone:'Europe/London'});
+ return {subject:'Your signed agreement - '+normalizePropertyAddress(propertyAddress),html:renderFinalEmailTemplate('landlord-signed-copy.html',{LANDLORD_NAME:escapeHtml(name),PROPERTY_ADDRESS:escapeHtml(normalizePropertyAddress(propertyAddress)),SERVICE_TYPE:escapeHtml(serviceName),DATE_SIGNED:escapeHtml(fullDate)})};
+}
+
+export function signatureRequestEmail(name:string,documentName:string,message:string,signingUrl:string){
+ const firstName=name.trim().replace(/^(mr|mrs|ms|miss|dr|prof)\.?\s+/i,'').split(/\s+/)[0]||'there';
+ return renderFinalEmailTemplate('signature-request.html',{RECIPIENT_NAME:escapeHtml(firstName),DOCUMENT_NAME:escapeHtml(documentName),MESSAGE:escapeHtml(message).replace(/\r?\n/g,'<br>'),SIGNING_URL:escapeHtml(signingUrl)});
+}
+export function signatureRequestPreview(name:string,documentName:string,message:string){
+ const inline=inlineEmailImages(signatureRequestEmail(name,documentName,message,'#preview-only'));
+ let html=inline.html;
+ for(const asset of inline.attachments)html=html.split('cid:'+asset.contentId).join('data:'+asset.contentType+';base64,'+asset.content.toString('base64'));
+ return html;
+}

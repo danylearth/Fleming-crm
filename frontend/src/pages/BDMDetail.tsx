@@ -4,7 +4,8 @@ import SectionEditButton from '../components/ui/SectionEditButton';
 import DeleteNoteButton from '../components/DeleteNoteButton';
 import CommunicationsHistory from '../components/ui/CommunicationsHistory';
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useRecordAddress } from '../hooks/useRecordAddress';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Select, Avatar, SectionHeader, DatePicker } from '../components/ui';
 import DocumentUpload from '../components/ui/DocumentUpload';
@@ -61,11 +62,11 @@ function TimeAgo({ date }: { date: string }) {
 }
 
 export default function BDMDetail() {
-  const { id } = useParams();
   const navigate = useNavigate();
   const api = useApi();
   const { user } = useAuth();
   const [prospect, setProspect] = useState<Prospect | null>(null);
+  const id = useRecordAddress('bdm', prospect?.name);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -78,7 +79,7 @@ export default function BDMDetail() {
 
   // Workflow
   const [showWorkflow, setShowWorkflow] = useState(false);
-  const [workflowMode, setWorkflowMode] = useState<'choose' | 'follow_up' | 'meeting' | 'not_interested'>('choose');
+  const [workflowMode, setWorkflowMode] = useState<'choose' | 'contacted' | 'follow_up' | 'meeting' | 'not_interested'>('choose');
   const [wfLoading, setWfLoading] = useState(false);
   const [converting, setConverting] = useState(false);
 
@@ -221,9 +222,6 @@ export default function BDMDetail() {
                   {STATUSES.find(s => s.value === prospect.status)?.label || prospect.status}
                 </span>
               </div>
-              {prospect.source && (
-                <p className="text-xs text-[var(--text-muted)] mt-1">Source: {prospect.source}</p>
-              )}
               {isOverdue && !isOnboarded && (
                 <div className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20 w-fit">
                   <AlertTriangle size={14} className="text-orange-400" />
@@ -290,7 +288,7 @@ export default function BDMDetail() {
               )}
             </GlassCard>
 
-            <LandlordIntakeSections id={prospect.id} data={prospect.intake_data} onSaved={loadDetail} />
+            {isOnboarded && <LandlordIntakeSections id={prospect.id} data={prospect.intake_data} onSaved={loadDetail} />}
 
             {/* Documents */}
             <DocumentUpload entityType="landlord_bdm" entityId={prospect.id} />
@@ -302,7 +300,7 @@ export default function BDMDetail() {
             <GlassCard className="p-6">
               <SectionHeader title="Notes" icon={<MessageSquare size={16} />} />
               <div className="space-y-3 max-h-64 overflow-y-auto" style={{ paddingRight: 0, scrollbarGutter: 'auto' }}>
-                {notes.length === 0 && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
+                {prospect.source && !notes.some(note=>note.text.includes(prospect.source)) && <div className="rounded-xl bg-[var(--bg-subtle)] p-3 text-sm"><p>{prospect.source}</p><p className="text-xs text-[var(--text-muted)] mt-1">Source</p></div>}{notes.length === 0 && !prospect.source && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
                 {notes.map(note => (
                   <div key={note.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
                     <div className="flex items-start justify-between gap-2">
@@ -319,10 +317,10 @@ export default function BDMDetail() {
               <div className="relative mt-3">
                 <textarea rows={2} aria-label="Add a note" value={newNote} onChange={e=>{setNewNote(e.target.value);e.currentTarget.style.height="auto";e.currentTarget.style.height=`${e.currentTarget.scrollHeight}px`;}}
                   placeholder="Add a note..."
-                  className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl pl-3 pr-20 pt-3 pb-10 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
-                <Button variant="gradient" size="sm" className="absolute right-2 bottom-2" onClick={addNote} disabled={addingNote || !newNote.trim()}>
-                  <Plus size={14} />
-                </Button>
+                  className="block w-full min-h-24 resize-y bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-orange)]/50 transition-colors" />
+                <div className="flex justify-end mt-2"><Button variant="gradient" size="sm" className="gap-1.5" onClick={addNote} disabled={addingNote || !newNote.trim()}>
+                  <Plus size={14} /> Add Note
+                </Button></div>
               </div>
             </GlassCard>
 
@@ -350,7 +348,8 @@ export default function BDMDetail() {
                   )}
                 </div>
               )}
-            </GlassCard>
+            {!prospect?.phone&&<p className="text-sm text-[var(--text-muted)]">Add a phone number to this record to send SMS.</p>}
+</GlassCard>
 
 
 
@@ -378,13 +377,13 @@ export default function BDMDetail() {
             {workflowMode === 'choose' ? (
               <div className="space-y-2">
                 <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-2">Progress</p>
-                <button onClick={() => updateStatus('contacted')}
+                <button onClick={() => setWorkflowMode('contacted')}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><Phone size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Mark as Contacted</p><p className="text-xs text-[var(--text-muted)]">Initial outreach made</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <Button variant="outline" className="w-full justify-start" onClick={()=>setWorkflowMode('meeting')}><Calendar size={16} className="mr-2"/>Book a Meeting</Button>
+                <button onClick={()=>setWorkflowMode('meeting')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left"><div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><Calendar size={14} className="text-white"/></div><div className="flex-1"><p className="text-sm font-medium">Book Meeting</p><p className="text-xs text-[var(--text-muted)]">Select date, time & location</p></div><ArrowRight size={14} className="text-[var(--text-muted)]"/></button>
                 <button onClick={() => setWorkflowMode('follow_up')}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><Calendar size={14} className="text-white" /></div>
@@ -422,8 +421,8 @@ export default function BDMDetail() {
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
               </div>
-            ) : workflowMode === 'follow_up' || workflowMode === 'meeting' ? (
-              <LandlordAppointmentForm key={workflowMode} prospect={prospect} kind={workflowMode} onBack={()=>setWorkflowMode('choose')} onSaved={()=>{setShowWorkflow(false);void loadDetail();void loadSmsHistory();void loadEmailHistory();}}/>
+            ) : workflowMode === 'follow_up' || workflowMode === 'meeting' || workflowMode === 'contacted' ? (
+              <LandlordAppointmentForm key={workflowMode} prospect={prospect} kind={workflowMode==='contacted'?'follow_up':workflowMode} contactMade={workflowMode==='contacted'} onBack={()=>setWorkflowMode('choose')} onSaved={()=>{setShowWorkflow(false);void loadDetail();void loadSmsHistory();void loadEmailHistory();}}/>
             ) : (
               <div className="space-y-4">
                 <button onClick={() => setWorkflowMode('choose')} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">← Back</button>

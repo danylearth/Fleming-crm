@@ -14,8 +14,9 @@ export function nextInspectionDate(start:string,after?:string|null):string {
  throw new Error('Inspection date is outside the supported schedule');
 }
 export const hasPropertyInspections=(property:{landlord_type?:string;service_type?:string})=>property.landlord_type==='internal'||property.service_type==='full_management';
+export const inspectionConditions=['bad','needs_repair','average','good','very_good','excellent'];
 export function inspectionAnswers(body:any){
- const conditions=['bad','needs_repair','good','excellent'];
+ const conditions=inspectionConditions;
  if(!conditions.includes(body.internal_condition))throw Error('Answer the internal condition question');
  if(![...conditions,'not_applicable'].includes(body.external_condition))throw Error('Answer the exterior and garden condition question');
  if(typeof body.damage_noticed!=='boolean')throw Error('Confirm whether any damage was noticed');
@@ -66,7 +67,7 @@ export function registerPropertyInspections(app:Express){
    const before=(await c.query('SELECT * FROM property_inspections WHERE id=$1 AND property_id=$2 FOR UPDATE',[req.params.inspectionId,req.params.id])).rows[0];if(!before)throw Error('Inspection not found');
    const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date());
    if(typeof inspection_date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(inspection_date)||!Number.isFinite(Date.parse(inspection_date))||new Date(inspection_date).toISOString().slice(0,10)!==inspection_date||inspection_date>today||inspection_date<String(before.tenancy_start_date).slice(0,10))throw Error('Enter an actual inspection date within its tenancy, no later than today');
-   if(!['bad','needs_repair','good','excellent'].includes(condition))throw Error('Choose a condition');
+   if(!inspectionConditions.includes(condition))throw Error('Choose a condition');
    const answers=inspectionAnswers(req.body);
    if(!(await c.query("SELECT id FROM users WHERE id=$1 AND role IN ('staff','manager','admin')",[Number(conducted_by)||0])).rows.length)throw Error('Choose an office staff member');
    if(document_id&&!(await c.query("SELECT id FROM documents WHERE id=$1 AND entity_type='property' AND entity_id=$2",[Number(document_id)||0,req.params.id])).rows.length)throw Error('Choose a report at this property');
@@ -92,7 +93,7 @@ export function registerPropertyInspections(app:Express){
   const {inspection_date,condition,conducted_by,notes}=req.body;const document_id=req.body.document_id||null;
   const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date());
   if(typeof inspection_date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(inspection_date)||!Number.isFinite(Date.parse(inspection_date))||new Date(inspection_date).toISOString().slice(0,10)!==inspection_date||inspection_date>today||inspection_date<String(state.tenant.tenancy_start_date).slice(0,10))return res.status(400).json({error:'Enter the actual inspection date within this tenancy, no later than today'});
-  if(!['bad','needs_repair','good','excellent'].includes(condition)||!Number.isInteger(Number(conducted_by))||Number(conducted_by)<=0)return res.status(400).json({error:'Choose the staff member and overall condition'});
+  if(!inspectionConditions.includes(condition)||!Number.isInteger(Number(conducted_by))||Number(conducted_by)<=0)return res.status(400).json({error:'Choose the staff member and overall condition'});
   let answers:ReturnType<typeof inspectionAnswers>;try{answers=inspectionAnswers(req.body);}catch(e){return res.status(400).json({error:(e as Error).message});}
   let savedId:number|undefined;const c=await pool.connect();try{await c.query('BEGIN');
    const staff=(await c.query("SELECT id FROM users WHERE id=$1 AND is_active=1 AND role IN ('staff','manager','admin')",[conducted_by])).rows[0];if(!staff)throw new Error('Choose an office staff member');

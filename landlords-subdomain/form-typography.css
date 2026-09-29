@@ -57,3 +57,8 @@ input[type="checkbox"]{box-sizing:border-box!important;width:20px!important;heig
 .header-inner img{max-width:40%;}
 .header-inner .back-button{font-size:14px;line-height:20px;font-weight:700;padding:8px 16px;min-height:44px;}
 @media(max-width:480px){.header-inner{padding:12px 15px;gap:8px;}.header-inner .back-button{font-size:13px;padding:8px 12px;}.header-inner img{width:120px;}.shell .content{padding:24px 16px;}}
+
+/* Shared registration dimensions at the same browser zoom. */
+.container{width:100%;max-width:700px}.container .header{padding:20px 30px}.container .logo{height:50px}.container .radio-option label{padding:18px 20px;line-height:26px}.container .btn{min-height:48px;padding:12px 24px;border-radius:12px}
+@media(max-width:768px){.container{max-width:100%}.container .header{padding:16px 20px}}
+@media(max-width:480px){.container .header{padding:12px 15px}.container .logo{height:40px}.container .radio-option label{padding:16px 18px}}

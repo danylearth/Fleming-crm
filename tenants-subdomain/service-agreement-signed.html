@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head>
+<link rel="icon" type="image/png" href="https://crm.fleminglettings.co.uk/logo-icon.png"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Contract signed | Fleming Lettings</title>
+<link rel="stylesheet" href="/signing-layout.css"><link rel="stylesheet" href="/form-typography.css">
+<style>.shell{max-width:640px;margin:40px auto;padding:0 16px}.confirmation{text-align:center;padding:40px 24px}.confirmation h1{color:#27083d}.confirmation .tick{margin:0 auto 20px}.confirmation p{line-height:1.6}.confirmation a{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:12px 22px;border-radius:24px;background:#8b2e72;color:white;text-decoration:none;margin-top:16px}.confirmation [hidden]{display:none}.confirmation p{overflow-wrap:anywhere}@media(max-width:480px){.confirmation{padding:28px 20px}.top-inner{padding:16px}.top img{height:40px}.help{font-size:12px}}</style></head>
+<body><header class="top"><div class="top-inner"><img src="/logo-white.png" alt="Fleming Lettings"><a class="help" href="tel:+441902212415">Need help? <span aria-hidden="true">☎️</span></a></div></header>
+<main class="shell"><section class="card confirmation" aria-live="polite"><div id="tick" class="tick" hidden aria-hidden="true">✓</div><h1 id="title">Checking your contract…</h1><p id="message"></p><p id="date" class="meta"></p><a id="download" class="button" hidden target="_blank" rel="noopener noreferrer"><span>Click to Download</span><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></a></section></main>
+<script type="module">
+const base=window.FLEMING_API_URL||'https://fleming-crm-api.fly.dev';
+const token=new URLSearchParams(location.search).get('token')||decodeURIComponent(location.pathname.replace(/\/signed\/?$/,'').slice(1));
+const url=base+'/api/public/service-agreements/'+encodeURIComponent(token);
+try{
+ const response=await fetch(url,{cache:'no-store'}),agreement=await response.json();
+ if(!response.ok)throw Error(agreement.error||'Could not load your contract.');
+ if(agreement.status!=='signed')throw Error('This contract has not been signed yet. Please return to your signing link.');
+ document.querySelector('#tick').hidden=false;document.querySelector('#title').textContent='Contract signed';
+ document.querySelector('#message').textContent='Thank you for signing your service contract with Fleming Lettings for '+agreement.details.property_address+'.';
+ document.querySelector('#date').textContent='Signed '+new Date(agreement.signed_at).toLocaleString('en-GB');
+ const download=document.querySelector('#download');download.href=url+'/pdf';download.hidden=false;
+}catch(error){document.querySelector('#title').textContent='Contract confirmation unavailable';document.querySelector('#message').textContent=error.message||'Please contact the office.';}
+</script></body></html>

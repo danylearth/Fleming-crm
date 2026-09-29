@@ -1134,8 +1134,26 @@
 .input-group input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),.input-group select,.custom-select-trigger {height:60px;min-height:60px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;}
 </style>
 <link rel="stylesheet" href="/form-typography.css">
-<style>.radio-option label{font-size:16px!important;font-weight:600!important}input,select{min-height:46px}select{max-width:100%;} .input-group{min-width:0}</style></head>
+<style>
+/* Keep the outer frame steady while conditional fields and validation change. */
+body { height:100svh; min-height:0; overflow:hidden; }
+.container { height:min(900px,calc(100svh - 40px)); min-height:0; display:flex; flex-direction:column; }
+.container > .header,.container > .progress-container { flex-shrink:0; }
+.container > .form-wrapper { flex:1; min-height:0; overflow-y:auto; scrollbar-gutter:stable; overscroll-behavior:contain; }
+.email-availability { height:36px; margin:4px 0 0; overflow:auto; font-size:13px; line-height:18px; color:#b42318; }
+#duplicateEmailDialog { margin:auto; width:min(440px,calc(100vw - 32px)); padding:24px; border:0; border-radius:16px; box-shadow:0 16px 60px #0004; }
+#duplicateEmailDialog::backdrop { background:#0006; }
+#duplicateEmailDialog h2 { color:#27083d; font-size:22px; margin-bottom:12px; }
+#duplicateEmailDialog p { margin-bottom:20px; }
+@media(max-width:768px) { .container { height:100svh; min-height:0; } }
+</style>
+<style>.radio-option label{font-size:16px!important;font-weight:600!important}input,select{min-height:46px}select{max-width:100%;} .input-group{min-width:0}</style><script src="/form-capitalisation.js" defer></script></head>
 <body>
+    <dialog id="duplicateEmailDialog" aria-labelledby="duplicateEmailTitle">
+        <h2 id="duplicateEmailTitle">Email Already in Use</h2>
+        <p>This email address is already in use. Please contact our office to update your existing record.</p>
+        <form method="dialog"><button class="btn btn-primary" autofocus>Close</button></form>
+    </dialog>
     <div class="container">
         <!-- Header -->
         <div class="header">
@@ -1943,7 +1961,7 @@
             document.querySelector(`[data-step="${stepNumber}"]`).classList.add('active');
             currentStep = stepNumber;
             updateProgress();
-            window.scrollTo(0, 0);
+            document.querySelector('.form-wrapper').scrollTop = 0;
         }
 
         // Auto-format date input as DD/MM/YYYY
@@ -1981,7 +1999,37 @@
             return age >= 16;
         }
 
-        function nextStep() {
+        let checkingStep=false;
+
+        document.querySelectorAll('[name="form_email"],[name="form_email2"]').forEach(input => {
+          const notice=document.createElement('p');
+          notice.className='email-availability'; notice.id=input.name+'-availability'; notice.setAttribute('role','status');
+          input.setAttribute('aria-describedby',notice.id); input.insertAdjacentElement('afterend',notice);
+          input.addEventListener('blur',()=>{if(input.value && input.checkValidity())void checkApplicantEmail(input);});
+          input.addEventListener('input',()=>{input.removeAttribute('aria-invalid'); notice.textContent='';});
+        });
+        async function checkApplicantEmail(input){
+          const email=input.value.trim().toLowerCase(), notice=input.parentElement.querySelector('.email-availability');
+          input.value=input.value.trim(); notice.textContent='';
+          if(!input.checkValidity()){notice.textContent='Enter a valid email address.';return false;}
+          const first=document.querySelector('[name="form_email"]').value.trim().toLowerCase();
+          if(input.name==='form_email2'&&email===first){notice.textContent='Each applicant must use their own email address.';return false;}
+          input.setAttribute('aria-busy','true');
+          try {
+            const response=await fetch(API_BASE_URL+'/api/public/check-duplicates?'+new URLSearchParams({email}));
+            if(!response.ok)throw Error();
+            const result=await response.json(); if(input.value.trim().toLowerCase()!==email)return false;
+            const duplicate=Boolean(result.duplicate||result.duplicates?.length);
+            input.setAttribute('aria-invalid',String(duplicate));
+            if(duplicate){const dialog=document.getElementById('duplicateEmailDialog');if(!dialog.open)dialog.showModal();}
+            return !duplicate;
+          } catch {
+            if(input.value.trim().toLowerCase()===email)notice.textContent='Unable to check this email. Please try Continue again.';
+            return false;
+          } finally { input.removeAttribute('aria-busy'); }
+        }
+        async function nextStep() {
+            if(checkingStep)return;
             const currentStepEl = document.querySelector(`[data-step="${currentStep}"]`);
             if (currentStep === 2) {
                 const email = document.querySelector('[name="form_email"]');
@@ -2055,6 +2103,11 @@
                 }
             }
 
+            if(currentStep===2||currentStep===5){
+                const step=currentStep,input=document.querySelector(currentStep===2?'[name="form_email"]':'[name="form_email2"]');
+                checkingStep=true;let allowed;try{allowed=await checkApplicantEmail(input);}finally{checkingStep=false;}
+                if(!allowed||currentStep!==step)return;
+            }
             hideError();
 
             // Check if joint application
@@ -2209,23 +2262,8 @@
             data.marketing_preferences = marketingPrefs.join(', ');
 
             try {
-                // Check for duplicates first (fail open if endpoint errors)
-                try {
-                    submitBtn.textContent = 'Checking...';
-                    const dupParams = new URLSearchParams({ email: data.form_email });
-                    const dupCheck = await fetch(`${API_BASE_URL}/api/public/check-duplicates?${dupParams}`);
-                    if (dupCheck.ok) {
-                        const dupResult = await dupCheck.json();
-                        if (dupResult.duplicates && dupResult.duplicates.length > 0) {
-                            showError('It looks like you may have already submitted an application with this email address. If this is a new enquiry, please contact us directly.');
-                            submitBtn.disabled = false;
-                            submitBtn.textContent = 'Submit Application ✓';
-                            return;
-                        }
-                    }
-                } catch (e) {
-                    console.log('Duplicate check skipped:', e);
-                }
+                const emailInputs=[document.querySelector('[name="form_email"]'),...(data.registration_type==='Joint'?[document.querySelector('[name="form_email2"]')]:[])];
+                for(const emailInput of emailInputs)if(!await checkApplicantEmail(emailInput)){showStep(emailInput.name==='form_email2'?5:2);submitBtn.disabled=false;submitBtn.textContent='Submit Application ✓';return;}
 
                 submitBtn.textContent = 'Submitting...';
                 const apiUrl = `${API_BASE_URL}/api/public/tenant-enquiries`;

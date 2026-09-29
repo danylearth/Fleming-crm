@@ -1,3 +1,5 @@
+import {useOnboardingStarted} from '../hooks/useOnboardingStarted';
+import {ToolbarButton} from '../components/ui';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
@@ -17,6 +19,7 @@ interface EnquiryRaw {
   id: number;
   first_name_1?: string; last_name_1?: string;
   email_1?: string; phone_1?: string;
+  holding_deposit_requested?:number;application_form_sent?:number;onboarding_step?:number;
   status: string; created_at: string; updated_at?: string;
   linked_property_id?: number; property_address?: string;
   income_1?: number; employment_status_1?: string;
@@ -78,6 +81,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
   onAction: (id: number, action: string, data: Record<string, string | number | null>) => Promise<void>;
 }) {
   const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ') || 'Unknown';
+  const onboardingStarted=useOnboardingStarted(enquiry.id,!!(enquiry.status==='onboarding'||enquiry.holding_deposit_requested||enquiry.application_form_sent||enquiry.onboarding_step));
   const [mode, setMode] = useState<'choose' | 'viewing' | 'awaiting' | 'onboarding' | 'reject'>('choose');
   const [propertyId, setPropertyId] = useState(enquiry.linked_property_id?.toString() || '');
   const [customLocation, setCustomLocation] = useState('');
@@ -159,7 +163,7 @@ function ActionModal({ enquiry, properties, onClose, onAction }: {
                 <OnboardingIcon size={14} className="text-white" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium">Start Onboarding</p>
+                <p className="text-sm font-medium">{onboardingStarted?'Continue Onboarding':'Start Onboarding'}</p>
                 <p className="text-xs text-[var(--text-muted)]">Optional follow-up date</p>
               </div>
               <ArrowRight size={14} className="text-[var(--text-muted)]" />
@@ -747,7 +751,7 @@ export default function EnquiriesKanban() {
                 <Input label="Phone" value={addForm.phone} onChange={v => setAddForm(p => ({ ...p, phone: v }))} placeholder="Phone number" />
                 <div className="flex gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
-                  <Button variant="gradient" onClick={addEnquiry} disabled={!addForm.name || !addForm.email}>Add Enquiry</Button>
+                  <ToolbarButton variant="gradient" onClick={addEnquiry} disabled={!addForm.name || !addForm.email}>Add Enquiry</ToolbarButton>
                 </div>
               </div>
             </div>

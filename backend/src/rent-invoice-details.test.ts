@@ -1,0 +1,4 @@
+import {it,expect} from 'vitest';import {rentInvoiceDates,rentPaymentReference,rentPropertyAddress} from './rent-invoice-details';
+it('covers the coming rental month without guessing invoice issue dates',()=>{expect(rentInvoiceDates('2026-11-02')).toEqual({due_date:'2026-11-02',period_start:'2026-11-02',period_end:'2026-12-01'});});
+it('keeps end-of-month rental anniversaries through shorter months',()=>{expect(rentInvoiceDates('2026-02-28',31).period_end).toBe('2026-03-30');expect(rentInvoiceDates('2026-01-31',31).period_end).toBe('2026-02-27');});
+it('matches the APT reference and avoids repeated postcodes',()=>{expect(rentPaymentReference('2A Cavalier Circus','WV10 8TR','Sturgess')).toBe('2A WV108TR - STURGESS');expect(rentPropertyAddress('2A Cavalier Circus, WV10 8TR','WV10 8TR')).toBe('2A Cavalier Circus, WV10 8TR');});

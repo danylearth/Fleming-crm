@@ -20,9 +20,9 @@ describe('7 September CRM feedback', () => {
     expect(backend).toContain("crypto.randomBytes(16).toString('hex')");
     expect(backend).toContain('agreement.tenant_slug || agreement.tenant_token');
     expect(backend).toContain('SET ${role}_opened_at = NOW()');
-    expect(wizard).toContain('Reissue New Agreement');
-    expect(wizard).toContain('Last opened:');
-    expect(wizard).toContain('Waiting for ${outstandingAgreementSigners.join');
+    expect(wizard).toContain('Edit Agreement');
+    expect(read('../../frontend/src/components/AgreementSigningProgress.tsx')).toContain('Last opened ');
+    expect(read('../../frontend/src/components/AgreementSigningProgress.tsx')).toContain('Waiting on ${waiting.map');
   });
 
   it('renders the supplied letterhead, Robert signature and one signing row per tenant', () => {
@@ -46,7 +46,8 @@ describe('7 September CRM feedback', () => {
     expect(signingForm).toContain('outstanding_signers');
     expect(signingForm).toContain("value=d.signer_name||''");
     expect(signingForm).toContain("value=d.today||new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date())");
-    expect(signingForm).toContain('@media(max-width:820px)');
+    expect(signingForm).toContain('/signing-layout.css');
+    expect(read('../../tenants-subdomain/signing-layout.css')).toMatch(/@media\s*\(max-width:\s*820px\)/);
     expect(signingForm).not.toContain('Privacy Policy');
     expect(signingForm).toContain('pdfjsLib.getDocument');
   });

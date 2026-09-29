@@ -1,0 +1,9 @@
+import {it,expect} from 'vitest';
+import {suggestRentMatches} from './rent-match-suggestions';
+const bank={description:'A Sturgess A STURGESS RENT BGC///',amount:640,currency:'GBP',match_status:'unmatched'};
+const history=[{...bank,tenant_id:1,property_id:2,created_by:4}];
+const charges=[{id:5,tenant_id:1,property_id:2,tenant_name:'Andrew Sturgess',address:'Example Road',due_date:'2026-09-21',amount_due:620,amount_paid:0,landlord_type:'internal'}];
+it('suggests previously confirmed payer references even when the payment amount differs',()=>{const result=suggestRentMatches(bank,history,charges);expect(result).toHaveLength(1);expect(result[0]).toMatchObject({rent_payment_id:5,outstanding:620,amount_matches:false,kind:'rent'});expect(bank.match_status).toBe('unmatched');});
+it('does not learn reversed, automated or unrelated allocations',()=>{expect(suggestRentMatches(bank,[{...history[0],reversed_at:'2026-09-29'}],charges)).toEqual([]);expect(suggestRentMatches(bank,[{...history[0],created_by:null}],charges)).toEqual([]);expect(suggestRentMatches(bank,history,[{...charges[0],tenant_id:2}])).toEqual([]);});
+it('ignores amount-only and generic matches and lists ambiguous matches for review',()=>{expect(suggestRentMatches({...bank,description:'RENT'},[{...history[0],description:'RENT'}],charges)).toEqual([]);expect(suggestRentMatches({...bank,description:'Another payer'},history,charges)).toEqual([]);expect(suggestRentMatches(bank,[...history,{...history[0],tenant_id:3}],[...charges,{...charges[0],id:6,tenant_id:3}])).toHaveLength(2);});
+it('handles casing and bank wording without accepting outgoing or allocated payments',()=>{expect(suggestRentMatches({...bank,description:'a sturgess rent FPI'},history,charges)).toHaveLength(1);expect(suggestRentMatches({...bank,amount:-640},history,charges)).toEqual([]);expect(suggestRentMatches({...bank,match_status:'matched_rent'},history,charges)).toEqual([]);});

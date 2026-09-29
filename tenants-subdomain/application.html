@@ -112,7 +112,7 @@
             line-height: 1.6;
         }
 
-        h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #555; }
+        h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #792b8b; }
         p { font-size: 14px; line-height: 1.6; color: #666; margin-bottom: 12px; }
 
         /* Deadline notice */
@@ -169,15 +169,17 @@
         }
 
         /* Input Groups */
-        .input-group {
-            margin-bottom: 18px;
+        .form-wrapper .input-group {
+            margin-bottom: 14px;
         }
 
         .two-col {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 15px;
+            gap: 14px 15px;
         }
+        .form-wrapper .two-col > .input-group { margin-bottom:0; }
+        .two-col { margin-bottom:14px; }
         .two-col.three { grid-template-columns: 1fr 1fr 1fr; }
         .full-width { grid-column: 1 / -1; }
 
@@ -429,49 +431,15 @@
         textarea { resize: vertical; min-height: 100px; }
 
         .pre-filled { background: #f0f0f0; color: #888; }
-
-        .input-group-editable {
-            position: relative;
-        }
-        .input-group-editable input {
-            padding-right: 44px;
-        }
-        .edit-toggle-btn {
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(2px);
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 6px;
-            border-radius: 6px;
-            color: #888;
-            transition: color 0.2s, background 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 44px;
-            min-height: 44px;
-        }
-        .edit-toggle-btn:hover {
-            color: #DC006D;
-            background: rgba(220, 0, 109, 0.08);
-        }
-        .edit-toggle-btn.editing {
-            color: #DC006D;
-        }
+        #f_rental_amount, #f_deposit_amount { background:#ededed; color:#6b6b6b; border-color:#d7d7d7; cursor:not-allowed; }
 
         .section-divider {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin: 28px 0 20px;
+            color:#792b8b;
+            font-size:15px;
+            line-height:1.4;
+            font-weight:600;
+            margin:20px 0 12px;
         }
-        .section-divider .dot {
-            width: 8px; height: 8px; border-radius: 50%; background: #DC006D;
-        }
-        .section-divider .line { flex: 1; height: 1px; background: #eee; }
 
         .terms-box {
             background: #f8f8f8;
@@ -485,6 +453,7 @@
             margin-bottom: 20px;
             border: 1px solid #eee;
         }
+        .terms-box > h4:first-child { margin-top: 0; }
         .terms-box h4 { font-size: 14px; font-weight: 600; color: #333; margin: 16px 0 8px; }
         .terms-box ul { padding-left: 20px; margin: 8px 0; }
         .terms-box li { margin-bottom: 6px; }
@@ -638,9 +607,9 @@
             display: flex; align-items: center; justify-content: space-between; gap: 12px;
             padding: 12px 40px; background: #fffafc; border-bottom: 1px solid #f2d9e6;
         }
-        .draft-toolbar span { color: #666; font-size: 13px; }
+        .draft-toolbar span { color: #666; font-size: 15px; }
         .draft-toolbar button { border: 1px solid #DC006D; color: #DC006D; background: #fff; border-radius: 8px; padding: 9px 14px; font-weight: 600; cursor: pointer; }
-        .phone-icon { color: #fff; font-size: 18px; font-weight: 700; line-height: 1; }
+        .phone-icon { font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; font-size: 18px; font-weight: 400; line-height: 1; }
         .document-card {
             border: 1px solid #e5e7eb;
             border-radius: 12px;
@@ -683,6 +652,14 @@
         .document-card.approved-locked .upload-button { display: none; }
         .document-card.needs-action { background: #fff7ed; border: 2px solid #f97316; }
         .revision-request { margin: 18px 20px 0; background: #fff7ed; border-color: #fdba74; color: #9a3412; }
+        .review-request-item { display:flex; align-items:center; gap:16px; border:1px solid #efd6e2; border-radius:14px; background:#fdf8fb; padding:18px; margin-bottom:14px; }
+        .review-request-copy { flex:1; min-width:0; }
+        .review-request-copy h3 { color:#25073B; margin:0 0 6px; font-size:16px; }
+        .review-request-copy p { color:#666; font-size:13px; line-height:1.6; margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+        .review-request-kind { display:block; color:#8e2877; font-size:11px; font-weight:600; margin-bottom:5px; }
+        .review-request-add { flex-shrink:0; min-height:44px; border:1px solid #d9bddf; border-radius:999px; background:#f3edf8; color:#7e2275; padding:10px 17px; font-size:13px; font-weight:600; cursor:pointer; }
+        .review-request-add:hover { background:#eaddf1; }
+        @media(max-width:480px) { .review-request-item { flex-wrap:wrap; gap:12px; padding:16px; } .review-request-copy { flex-basis:100%; } .review-request-add { width:100%; } }
         .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
 
         /* Responsive */
@@ -697,7 +674,7 @@
             .step p.step-description { font-size: 14px; margin-bottom: 20px; }
             .two-col, .two-col.three, .summary-grid { grid-template-columns: 1fr; }
             .two-col { gap: 12px; }
-            .section-divider { margin: 20px 0 14px; }
+            .section-divider { margin:20px 0 12px; }
             .signature-area { height: 120px; }
             .clear-sig { padding: 6px 14px; font-size: 12px; min-height: 36px; }
             .btn { width: 100%; padding: 16px 20px; font-size: 16px; }
@@ -745,15 +722,31 @@
         .uploaded-list li { flex-wrap:wrap; gap:8px; overflow-wrap:anywhere; }
         @media(max-width:480px){.header,.top-inner{justify-content:space-between;flex-wrap:nowrap}.header img{max-width:140px}.help{margin-left:auto;flex-shrink:0}.header a{font-family:Helvetica,Arial,'Apple Color Emoji','Segoe UI Emoji',sans-serif}}
     dialog.review-changes::backdrop{background:#25073b88}dialog.review-changes button:focus-visible{outline:2px solid #dc006d;outline-offset:2px}
+        .document-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:10px 16px; flex-wrap:wrap; margin-bottom:8px; }
+        .document-card .document-heading h3 { margin:0; }
+        .document-help { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid #dfc8e6; border-radius:999px; background:#f4edf8; color:#792b8b; font:600 12px/1.4 Arial,sans-serif; padding:8px 12px; min-height:36px; cursor:pointer; text-decoration:none; }
+        .document-help:hover { background:#eadcf1; }
+        .document-help:focus-visible { outline:3px solid #dc006d; outline-offset:3px; }
+        .document-guide { margin:auto; width:calc(100% - 32px); max-width:600px; max-height:85dvh; overflow:auto; padding:24px; border:1px solid #dfc8e6; border-radius:18px; color:#25073b; background:white; }
+        .document-guide::backdrop { background:#25073b99; }
+        .document-guide header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
+        .document-guide h2 { font-size:22px; margin:0; }
+        .document-guide p, .document-guide li { font-size:14px; line-height:1.6; }
+        .document-guide ul { padding-left:22px; margin:14px 0; }
+        .document-guide li + li { margin-top:8px; }
+        .document-guide-close { flex-shrink:0; width:40px; height:40px; border:0; border-radius:50%; color:#792b8b; background:#f4edf8; font-size:24px; cursor:pointer; }
+        .document-guide-note { padding:12px; border-radius:10px; background:#f7f3f9; }
+        #signature-controls .signature-label { display:block; margin:0 0 8px; }
+        #signature-controls .signature-actions { margin-top:12px; }
     </style>
 <link rel="stylesheet" href="/form-typography.css">
-</head>
+<link rel="stylesheet" href="/signature-controls.css"><script src="/form-capitalisation.js" defer></script></head>
 <body>
     <div class="container" id="app">
         <!-- Header -->
         <div class="header">
             <img src="/logo-white.png" alt="Fleming Lettings" class="logo" />
-            <a href="tel:+441902212415" class="back-button">Need help? <span class="phone-icon" aria-hidden="true">&#9742;</span></a>
+            <a href="tel:+441902212415" class="back-button">Need help? <span class="phone-icon" aria-hidden="true">&#9742;&#65039;</span></a>
         </div>
 
         <!-- Progress Bar -->
@@ -782,7 +775,7 @@
         <!-- Form -->
         <form id="application-form" style="display:none;" onsubmit="return false;">
             <div id="changes-request-banner" class="info-banner revision-request" style="display:none;"></div>
-            <div class="draft-toolbar">
+            <div class="draft-toolbar" id="draft-toolbar" style="display:none;">
                 <span id="draft-status">Your answers can be saved and resumed from this link.</span>
                 <button type="button" id="save-draft-btn" onclick="saveDraft()">Save &amp; finish later</button>
             </div>
@@ -795,7 +788,7 @@
 
                     <div class="deadline-notice">
                         <span class="icon">&#9200;</span>
-                        <p>Please complete this form within <strong>14 days</strong> of receiving it. Failure to do so may result in the property being re-marketed.</p>
+                        <p id="application-deadline-notice">Please complete this form within <strong>7 days</strong> of receiving it. Failure to do so may result in the property being re-marketed.</p>
                     </div>
 
                     <div class="property-badge" id="property-badge">
@@ -859,7 +852,7 @@
                 </div>
             </div>
 
-            <!-- STEP 2: Applicant and address details -->
+            <!-- STEP 2: Applicant and joint applicant details -->
             <div id="step-2" class="step" style="display:none;">
                 <div class="form-wrapper">
                     <h2>Your details</h2>
@@ -867,17 +860,34 @@
                     <div id="revision-banner" class="info-banner" style="display:none;">You have already submitted this application. You can update answers or replace documents; your changes will return to Fleming Lettings for review.</div>
 
                     <div class="two-col">
-                        <div class="input-group input-group-editable"><label>First Name *</label><input type="text" id="f_first_name" class="pre-filled" readonly required /><button type="button" class="edit-toggle-btn" onclick="toggleEdit(this)" aria-label="Edit first name">&#9998;</button></div>
-                        <div class="input-group input-group-editable"><label>Last Name *</label><input type="text" id="f_last_name" class="pre-filled" readonly required /><button type="button" class="edit-toggle-btn" onclick="toggleEdit(this)" aria-label="Edit last name">&#9998;</button></div>
-                        <div class="input-group input-group-editable"><label>Email *</label><input type="email" id="f_email" class="pre-filled" readonly required /><button type="button" class="edit-toggle-btn" onclick="toggleEdit(this)" aria-label="Edit email">&#9998;</button></div>
-                        <div class="input-group input-group-editable"><label>Phone *</label><input type="tel" id="f_phone" class="pre-filled" readonly required /><button type="button" class="edit-toggle-btn" onclick="toggleEdit(this)" aria-label="Edit phone">&#9998;</button></div>
+                        <div class="input-group"><label>First Name *</label><input type="text" id="f_first_name" required /></div>
+                        <div class="input-group"><label>Last Name *</label><input type="text" id="f_last_name" required /></div>
+                        <div class="input-group"><label>Email *</label><input type="email" id="f_email" required /></div>
+                        <div class="input-group"><label>Phone *</label><input type="tel" id="f_phone" required /></div>
                         <div class="input-group"><label>Date Of Birth *</label><div class="date-picker-wrapper"><input type="text" id="f_dob" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_dob')"><span class="calendar-icon">&#x1F4C5;</span></div></div>
                         <div class="input-group"><label>National Insurance Number *</label><input type="text" id="f_ni" placeholder="e.g. QQ 12 34 56 C" maxlength="13" pattern="[A-Za-z]{2} [0-9]{2} [0-9]{2} [0-9]{2} [A-Za-z]" oninput="formatNationalInsurance(this)" required /></div>
-                        <div class="input-group"><label>Marital Status *</label><select id="f_marital_status" required><option value="">Select...</option><option>Single</option><option>Married / Civil Partnership</option><option>Living with Partner</option><option>Separated</option><option>Divorced</option><option>Widowed</option><option>Prefer not to say</option></select></div>
-                        <div class="input-group"><label>Gross Annual Income (&pound;) *</label><input type="text" inputmode="decimal" id="f_gross_income" oninput="formatMoney(this)" required /></div>
+                        <div class="input-group"><label>Marital Status *</label><select id="f_marital_status" required><option value="">Select...</option><option>Single</option><option value="Married / Civil Partnership">Married/Civil Partnership</option><option>Living with Partner</option><option>Separated</option><option>Divorced</option><option>Widowed</option><option>Prefer not to say</option></select></div>
                     </div>
 
-                    <div class="section-divider"><div class="dot"></div><span>ADDRESS HISTORY</span><div class="line"></div></div>
+                    <div class="input-group"><label>Are you submitting this application with someone else? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_joint_applicants" data-value="yes" onclick="setYesNo('f_has_joint_applicants','yes'); toggleJointApplicants()">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_joint_applicants" data-value="no" onclick="setYesNo('f_has_joint_applicants','no'); toggleJointApplicants()">No</button></div><input type="hidden" id="f_has_joint_applicants" data-required-choice="true" /></div>
+                    <div id="joint-applicant-fields" class="conditional-panel" style="display:none;">
+                        <div class="input-group"><label>Co-Applicant(s) Full Name and Date of Birth *</label><textarea id="f_joint_applicants" placeholder="For example: Alex Smith - 15/06/1991"></textarea></div>
+                        <p class="info-banner">Each joint applicant must complete and submit a separate application form.</p>
+                    </div>
+
+                    <h3 class="section-divider">Next of Kin</h3>
+                    <div class="two-col"><div class="input-group"><label>Next of Kin Full Name *</label><input type="text" id="f_nok_name" required /></div><div class="input-group"><label>Relationship *</label><input type="text" id="f_nok_rel" required /></div><div class="input-group full-width"><label>Address *</label><input type="text" id="f_nok_address" required /></div><div class="input-group"><label>Postcode *</label><input type="text" id="f_nok_postcode" oninput="formatPostcode(this)" required /></div><div class="input-group"><label>Contact Number *</label><input type="tel" id="f_nok_phone" required /></div><div class="input-group full-width"><label>Email *</label><input type="email" id="f_nok_email" required /></div></div>
+
+                    <p id="step-2-error" class="error-text" style="display:none;"></p>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(1)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(3)">Continue</button></div>
+                </div>
+            </div>
+
+            <!-- STEP 3: Address history and residency -->
+            <div id="step-3" class="step" style="display:none;">
+                <div class="form-wrapper">
+                    <h2>Address history</h2>
+                    <p class="step-description">Tell us about your current and previous addresses and your residency status.</p>
                     <div class="two-col">
                         <div class="input-group full-width"><label>First Line Of Current Address *</label><input type="text" id="f_address_line_1" placeholder="Enter your address" required /></div>
                         <div class="input-group"><label>City *</label><input type="text" id="f_address_city" required /></div>
@@ -895,7 +905,7 @@
                         <button type="button" onclick="togglePrevAddress()" class="upload-button">Remove previous address</button>
                     </div>
 
-                    <div class="section-divider"><div class="dot"></div><span>RESIDENCY STATUS</span><div class="line"></div></div>
+                    <h3 class="section-divider">Residency Status</h3>
                     <div class="input-group"><label>Residency Status At Your Current Address *</label><select id="f_residency_status" required onchange="toggleCurrentLandlord()"><option value="">Select...</option><option>Private tenant</option><option>Lodger</option><option>Housing association tenant</option><option>Council tenant</option><option>Living with family</option><option>Owner with no mortgage</option><option>Owner with mortgage</option></select></div>
                     <div id="current-landlord-fields" class="conditional-panel" style="display:none;">
                         <h3>Current Landlord/Agents Details</h3>
@@ -907,24 +917,18 @@
                         </div>
                         <div class="input-group"><label>Do you authorise us to contact your current landlord / agent? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_landlord_contact_authority" data-value="yes" onclick="setYesNo('f_landlord_contact_authority','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_landlord_contact_authority" data-value="no" onclick="setYesNo('f_landlord_contact_authority','no')">No</button></div><input type="hidden" id="f_landlord_contact_authority" data-required-choice="true" /></div>
                     </div>
-                    <div class="input-group"><label>Are you submitting this application with someone else? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_joint_applicants" data-value="yes" onclick="setYesNo('f_has_joint_applicants','yes'); toggleJointApplicants()">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_joint_applicants" data-value="no" onclick="setYesNo('f_has_joint_applicants','no'); toggleJointApplicants()">No</button></div><input type="hidden" id="f_has_joint_applicants" data-required-choice="true" /></div>
-                    <div id="joint-applicant-fields" class="conditional-panel" style="display:none;">
-                        <div class="input-group"><label>Co-Applicant Full Name(S) And Date(S) Of Birth *</label><textarea id="f_joint_applicants" placeholder="For example: Alex Smith — 15/06/1991"></textarea></div>
-                        <p class="info-banner">Each joint applicant must complete and submit a separate application form.</p>
-                    </div>
-
-                    <p id="step-2-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(1)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(3)">Continue</button></div>
+                    <p id="step-3-error" class="error-text" style="display:none;"></p>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(2)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(4)">Continue</button></div>
                 </div>
             </div>
 
-            <!-- STEP 3: Employment, finances and tenancy -->
-            <div id="step-3" class="step" style="display:none;">
+            <!-- STEP 4: Employment and finances -->
+            <div id="step-4" class="step" style="display:none;">
                 <div class="form-wrapper">
-                    <h2>Employment, finances &amp; tenancy</h2>
+                    <h2>Employment and finances</h2>
                     <p class="step-description">These details allow us to complete referencing and affordability checks.</p>
 
-                    <div class="section-divider"><div class="dot"></div><span>EMPLOYMENT / OCCUPATION</span><div class="line"></div></div>
+                    <h3 class="section-divider">Employment and Occupation</h3>
                     <div class="input-group"><label>Employment Status *</label><select id="f_employment_status" required onchange="toggleEmploymentFields()"><option value="">Select...</option><option>Employed</option><option>Part-time Employed</option><option>Self-Employed</option><option>Student</option><option>Retired</option><option>Unemployed</option><option>Other</option></select></div>
                     <div id="employment-employed" class="conditional-panel" style="display:none;">
                         <div class="two-col">
@@ -962,7 +966,8 @@
                         </div>
                     </div>
 
-                    <div class="section-divider"><div class="dot"></div><span>ADDITIONAL FINANCIAL INFORMATION</span><div class="line"></div></div>
+                    <h3 class="section-divider">Financial Information</h3>
+                        <div class="input-group"><label>Gross Annual Income (&pound;) *</label><input type="text" inputmode="decimal" id="f_gross_income" oninput="formatMoney(this)" required /></div>
                     <div class="input-group"><label>Do you have any additional income? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_additional_income" data-value="yes" onclick="setYesNo('f_has_additional_income','yes'); togglePanelFromYesNo('f_has_additional_income','additional-income-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_additional_income" data-value="no" onclick="setYesNo('f_has_additional_income','no'); togglePanelFromYesNo('f_has_additional_income','additional-income-fields')">No</button></div><input type="hidden" id="f_has_additional_income" data-required-choice="true" /></div>
                     <div id="additional-income-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Amounts And Sources Of Additional Income *</label><textarea id="f_additional_income_details" placeholder="For example overtime, bonus, Universal Credit, housing benefit, pension, tax credits or other income"></textarea></div></div>
                     <div class="input-group"><label>Do you have any loans? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_loans" data-value="yes" onclick="setYesNo('f_has_loans','yes'); togglePanelFromYesNo('f_has_loans','loan-details-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_loans" data-value="no" onclick="setYesNo('f_has_loans','no'); togglePanelFromYesNo('f_has_loans','loan-details-fields')">No</button></div><input type="hidden" id="f_has_loans" data-required-choice="true" /></div>
@@ -972,7 +977,20 @@
                     <div class="input-group"><label>Have you or a joint applicant been insolvent, bankrupt, made arrangements with creditors, or been involved in criminal or civil court proceedings in the last six years? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_legal_proceedings" data-value="yes" onclick="setYesNo('f_legal_proceedings','yes'); togglePanelFromYesNo('f_legal_proceedings','legal-details-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_legal_proceedings" data-value="no" onclick="setYesNo('f_legal_proceedings','no'); togglePanelFromYesNo('f_legal_proceedings','legal-details-fields')">No</button></div><input type="hidden" id="f_legal_proceedings" data-required-choice="true" /></div>
                     <div id="legal-details-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Details *</label><textarea id="f_legal_details"></textarea></div></div>
 
-                    <div class="section-divider"><div class="dot"></div><span>REFERENCES</span><div class="line"></div></div>
+                    <h3 class="section-divider">Bank Details</h3>
+                    <p>The account below should be the main account into which your salary, pension or benefits are paid.</p>
+                    <div class="two-col three"><div class="input-group"><label>Account Name *</label><input type="text" id="f_bank_account_name" required /></div><div class="input-group"><label>Sort Code *</label><input type="text" id="f_bank_sort" placeholder="00-00-00" inputmode="numeric" maxlength="8" pattern="\d{2}-\d{2}-\d{2}" oninput="formatSortCode(this)" required /></div><div class="input-group"><label>Account Number *</label><input type="text" id="f_bank_account" placeholder="00000000" inputmode="numeric" maxlength="8" pattern="\d{8}" oninput="formatAccountNumber(this)" required /></div></div>
+
+                    <p id="step-4-error" class="error-text" style="display:none;"></p>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(3)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(5)">Continue →</button></div>
+                </div>
+            </div>
+            <!-- STEP 5: References and guarantors -->
+            <div id="step-5" class="step" style="display:none;">
+                <div class="form-wrapper">
+                    <h2>References and guarantor(s)</h2>
+                    <p class="step-description">Tell us who can provide a reference and whether you will have a guarantor.</p>
+                    <h3 class="section-divider">References</h3>
                     <div class="input-group"><label>Do you have an employer reference? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_employer_ref" data-value="yes" onclick="setYesNo('f_has_employer_ref','yes'); toggleRefSection('employer')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_employer_ref" data-value="no" onclick="setYesNo('f_has_employer_ref','no'); toggleRefSection('employer')">No</button></div><input type="hidden" id="f_has_employer_ref" data-required-choice="true" /></div>
                     <div id="employer-ref-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Name/Department *</label><input type="text" id="f_emp_ref_name" /></div><div class="input-group"><label>Contact Number *</label><input type="tel" id="f_emp_ref_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_emp_ref_email" /></div><div class="input-group"><label>Employee ID/Reference</label><input type="text" id="f_emp_ref_employee_id" /></div></div><div class="input-group"><label>May we contact this reference? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_emp_ref_consent" data-value="yes" onclick="setYesNo('f_emp_ref_consent','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_emp_ref_consent" data-value="no" onclick="setYesNo('f_emp_ref_consent','no')">No</button></div><input type="hidden" id="f_emp_ref_consent" data-required-choice="true" /></div></div>
                     <div class="input-group"><label>Do you have a previous landlord reference? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_landlord_ref" data-value="yes" onclick="setYesNo('f_has_landlord_ref','yes'); toggleRefSection('landlord')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_landlord_ref" data-value="no" onclick="setYesNo('f_has_landlord_ref','no'); toggleRefSection('landlord')">No</button></div><input type="hidden" id="f_has_landlord_ref" data-required-choice="true" /></div>
@@ -980,19 +998,19 @@
                     <div class="input-group"><label>Do you have a personal referee to support your application? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_personal_ref" data-value="yes" onclick="setYesNo('f_has_personal_ref','yes'); togglePersonalReference()">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_personal_ref" data-value="no" onclick="setYesNo('f_has_personal_ref','no'); togglePersonalReference()">No</button></div><input type="hidden" id="f_has_personal_ref" data-required-choice="true" /></div>
                     <div id="personal-ref-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Personal Referee Name *</label><input type="text" id="f_personal_ref_name" /></div><div class="input-group"><label>Personal Referee Phone *</label><input type="tel" id="f_personal_ref_phone" /></div><div class="input-group"><label>Personal Referee Email *</label><input type="email" id="f_personal_ref_email" /></div><div class="input-group"><label>Personal Referee Address *</label><input type="text" id="f_personal_ref_address" /></div></div></div>
 
-                    <div class="section-divider"><div class="dot"></div><span>BANK DETAILS</span><div class="line"></div></div>
-                    <p>The account below should be the main account into which your salary, pension or benefits are paid.</p>
-                    <div class="two-col three"><div class="input-group"><label>Account Name *</label><input type="text" id="f_bank_account_name" required /></div><div class="input-group"><label>Sort Code *</label><input type="text" id="f_bank_sort" placeholder="00-00-00" inputmode="numeric" maxlength="8" pattern="\d{2}-\d{2}-\d{2}" oninput="formatSortCode(this)" required /></div><div class="input-group"><label>Account Number *</label><input type="text" id="f_bank_account" placeholder="00000000" inputmode="numeric" maxlength="8" pattern="\d{8}" oninput="formatAccountNumber(this)" required /></div></div>
-
-                    <p id="step-3-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(2)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(4)">Continue →</button></div>
+                    <h3 class="section-divider">Guarantor(s)</h3>
+                    <div class="input-group"><label>Will you have a guarantor for this application? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_guarantor" data-value="yes" onclick="setYesNo('f_has_guarantor','yes'); toggleGuarantorSection()">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_guarantor" data-value="no" onclick="setYesNo('f_has_guarantor','no'); toggleGuarantorSection()">No</button></div><input type="hidden" id="f_has_guarantor" data-required-choice="true" /></div>
+                    <div id="guarantor-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Full Name *</label><input type="text" id="f_guarantor_name" /></div><div class="input-group"><label>Contact Number *</label><input type="tel" id="f_guarantor_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_guarantor_email" /></div><div class="input-group"><label>Address *</label><input type="text" id="f_guarantor_address" /></div><div class="input-group"><label>Annual Income (&pound;) *</label><input type="text" inputmode="decimal" id="f_guarantor_income" oninput="formatMoney(this)" /></div><div class="input-group"><label>Employment Type *</label><select id="f_guarantor_employment"><option value="">Select...</option><option>Employed</option><option>Part-time Employed</option><option>Self-Employed</option><option>Retired</option><option>Other</option></select></div></div><div class="input-group"><label>May we contact this guarantor? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="yes" onclick="setYesNo('f_guarantor_consent','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="no" onclick="setYesNo('f_guarantor_consent','no')">No</button></div><input type="hidden" id="f_guarantor_consent" data-required-choice="true" /></div></div>
+                    <p id="step-5-error" class="error-text" style="display:none;"></p>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(4)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(6)">Continue</button></div>
                 </div>
             </div>
-            <div id="step-4" class="step" style="display:none;">
+            <!-- STEP 6: Tenancy details -->
+            <div id="step-6" class="step" style="display:none;">
                 <div class="form-wrapper">
-                    <h2>Tenancy, guarantor and next of kin</h2>
-                    <p class="step-description">Tell us about your tenancy and the people supporting your application.</p>
-                    <div class="section-divider"><div class="dot"></div><span>TENANCY INFORMATION</span><div class="line"></div></div>
+                    <h2>Tenancy information</h2>
+                    <p class="step-description">Tell us about your proposed tenancy.</p>
+                    <h3 class="section-divider">Tenancy Information</h3>
                     <div class="two-col"><div class="input-group full-width"><label>Property Address *</label><input type="text" id="f_property_address" required /></div><div class="input-group"><label>Preferred Start Date *</label><div class="date-picker-wrapper"><input type="text" id="f_preferred_start" required placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" oninput="formatDateInput(this)" onclick="openDatePicker('f_preferred_start')" /><span class="calendar-icon">&#x1F4C5;</span></div></div><div class="input-group"><label>Rental Period *</label><select id="f_rental_period" required><option value="">Select...</option><option selected>Monthly</option><option>Quarterly</option><option>Other</option></select></div><div class="input-group"><label>Preferred Tenancy Duration *</label><input type="text" id="f_tenancy_duration" placeholder="e.g. 12 months" required /></div><div class="input-group"><label>Rental Amount (&pound;) *</label><input type="text" id="f_rental_amount" class="pre-filled" readonly aria-readonly="true" inputmode="decimal" oninput="formatMoney(this)" required /></div></div>
                     <div class="input-group"><label>Will there be any other occupants, including children or dependants? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_other_occupants" data-value="yes" onclick="setYesNo('f_has_other_occupants','yes'); togglePanelFromYesNo('f_has_other_occupants','other-occupants-fields')">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_other_occupants" data-value="no" onclick="setYesNo('f_has_other_occupants','no'); togglePanelFromYesNo('f_has_other_occupants','other-occupants-fields')">No</button></div><input type="hidden" id="f_has_other_occupants" data-required-choice="true" /></div>
                     <div id="other-occupants-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Other Occupant Details *</label><textarea id="f_other_occupants" placeholder="Names, ages and relationship to you"></textarea></div></div>
@@ -1002,34 +1020,29 @@
                     <div id="deposit-contributor-fields" class="conditional-panel" style="display:none;"><div class="input-group"><label>Contributor Names, Addresses And Amounts *</label><textarea id="f_deposit_contributor_details"></textarea></div></div>
                     <div class="input-group"><label>Forwarding Address for End of Tenancy Deposit Correspondence</label><input type="text" id="f_forwarding_address" placeholder="Leave blank if not relevant" /></div>
 
-                    <div class="section-divider"><div class="dot"></div><span>GUARANTOR &amp; NEXT OF KIN</span><div class="line"></div></div>
-                    <div class="input-group"><label>Will you have a guarantor for this application? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_guarantor" data-value="yes" onclick="setYesNo('f_has_guarantor','yes'); toggleGuarantorSection()">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_guarantor" data-value="no" onclick="setYesNo('f_has_guarantor','no'); toggleGuarantorSection()">No</button></div><input type="hidden" id="f_has_guarantor" data-required-choice="true" /></div>
-                    <div id="guarantor-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Full Name *</label><input type="text" id="f_guarantor_name" /></div><div class="input-group"><label>Contact Number *</label><input type="tel" id="f_guarantor_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_guarantor_email" /></div><div class="input-group"><label>Address *</label><input type="text" id="f_guarantor_address" /></div><div class="input-group"><label>Annual Income (&pound;) *</label><input type="text" inputmode="decimal" id="f_guarantor_income" oninput="formatMoney(this)" /></div><div class="input-group"><label>Employment Type *</label><select id="f_guarantor_employment"><option value="">Select...</option><option>Employed</option><option>Part-time Employed</option><option>Self-Employed</option><option>Retired</option><option>Other</option></select></div></div><div class="input-group"><label>May we contact this guarantor? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="yes" onclick="setYesNo('f_guarantor_consent','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="no" onclick="setYesNo('f_guarantor_consent','no')">No</button></div><input type="hidden" id="f_guarantor_consent" data-required-choice="true" /></div></div>
-                    <div class="two-col"><div class="input-group"><label>Next of Kin Full Name *</label><input type="text" id="f_nok_name" required /></div><div class="input-group"><label>Relationship *</label><input type="text" id="f_nok_rel" required /></div><div class="input-group full-width"><label>Address *</label><input type="text" id="f_nok_address" required /></div><div class="input-group"><label>Postcode *</label><input type="text" id="f_nok_postcode" oninput="formatPostcode(this)" required /></div><div class="input-group"><label>Contact Number *</label><input type="tel" id="f_nok_phone" required /></div><div class="input-group full-width"><label>Email *</label><input type="email" id="f_nok_email" required /></div></div>
-
-                    <p id="step-4-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(3)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(5)">Continue to Documents 📄</button></div>
+                    <p id="step-6-error" class="error-text" style="display:none;"></p>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(5)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(7)">Continue to Documents 📄</button></div>
                 </div>
             </div>
 
-            <!-- STEP 4: Supporting documents -->
-            <div id="step-5" class="step" style="display:none;">
+            <!-- STEP 7: Supporting documents -->
+            <div id="step-7" class="step" style="display:none;">
                 <div class="form-wrapper">
                     <h2>Supporting documents</h2>
                     <p class="step-description">Upload clear copies. PDF, JPG, PNG and Word files up to 10 MB are accepted; you can add more than one file to each category.</p>
-                    <div class="document-card"><h3>Primary Identification *</h3><p>Passport, UK driving licence, citizen card or birth certificate.</p><label class="upload-button" for="doc-primary">Choose files</label><input class="visually-hidden" type="file" id="doc-primary" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Primary Identification')"><ul class="uploaded-list" data-doc-list="Primary Identification"></ul></div>
-                    <div class="document-card"><h3>Secondary Identification/Proof of Address *</h3><p>UK driving licence, utility bill, council tax bill or another proof-of-address document.</p><label class="upload-button" for="doc-secondary">Choose files</label><input class="visually-hidden" type="file" id="doc-secondary" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Secondary Identification')"><ul class="uploaded-list" data-doc-list="Secondary Identification"></ul></div>
-                    <div class="document-card" id="income-document-card"><h3>Proof of Income or Employment *</h3><p>Three months of payslips, CIS statements, P60/P45, pension evidence, benefit entitlement or proof of savings.</p><label class="upload-button" for="doc-income">Choose files</label><input class="visually-hidden" type="file" id="doc-income" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Proof of Income or Employment')"><ul class="uploaded-list" data-doc-list="Proof of Income or Employment"></ul></div>
-                    <div class="document-card"><h3>Bank Statements *</h3><p>Three months of statements. Upload one combined file or several named files.</p><label class="upload-button" for="doc-bank">Choose files</label><input class="visually-hidden" type="file" id="doc-bank" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Bank Statements')"><ul class="uploaded-list" data-doc-list="Bank Statements"></ul></div>
-                    <div class="document-card"><h3>Other Financial Document</h3><p>Optional supporting evidence, such as benefit entitlement or savings.</p><label class="upload-button" for="doc-other">Choose files</label><input class="visually-hidden" type="file" id="doc-other" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Other Financial Document')"><ul class="uploaded-list" data-doc-list="Other Financial Document"></ul></div>
-                    <div class="document-card"><h3>Right-to-Rent Share Code(s)</h3><p>Optional GOV.UK right-to-rent certificate and/or share codes.</p><label class="upload-button" for="doc-right-to-rent">Choose files</label><input class="visually-hidden" type="file" id="doc-right-to-rent" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadDocuments(this,'Right to Rent Share Code')"><ul class="uploaded-list" data-doc-list="Right to Rent Share Code"></ul></div>
+                    <div class="document-card"><div class="document-heading"><h3>Primary Identification *</h3><button type="button" class="document-help" aria-haspopup="dialog" onclick="openDocumentGuide('identity')">View full list of acceptable documents <span aria-hidden="true">📄</span></button></div><p>A current passport, UK photocard driving licence or government-issued photo identity card. See the list for alternatives.</p><label class="upload-button" for="doc-primary">Choose files</label><input class="visually-hidden" type="file" id="doc-primary" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Primary Identification')"><ul class="uploaded-list" data-doc-list="Primary Identification"></ul></div>
+                    <div class="document-card"><div class="document-heading"><h3>Secondary Identification/Proof of Address *</h3><button type="button" class="document-help" aria-haspopup="dialog" onclick="openDocumentGuide('address')">View full list of acceptable documents <span aria-hidden="true">📄</span></button></div><p>UK driving licence, utility bill, council tax bill or another proof-of-address document.</p><label class="upload-button" for="doc-secondary">Choose files</label><input class="visually-hidden" type="file" id="doc-secondary" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Secondary Identification')"><ul class="uploaded-list" data-doc-list="Secondary Identification"></ul></div>
+                    <div class="document-card" id="income-document-card"><div class="document-heading"><h3>Proof of Income or Employment *</h3><button type="button" class="document-help" aria-haspopup="dialog" onclick="openDocumentGuide('income')">View full list of acceptable documents <span aria-hidden="true">📄</span></button></div><p>Evidence of your employment, self-employment, pension, benefits or savings. See the list for documents relevant to you.</p><label class="upload-button" for="doc-income">Choose files</label><input class="visually-hidden" type="file" id="doc-income" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Proof of Income or Employment')"><ul class="uploaded-list" data-doc-list="Proof of Income or Employment"></ul></div>
+                    <div class="document-card"><div class="document-heading"><h3>Bank Statements *</h3><button type="button" class="document-help" aria-haspopup="dialog" onclick="openDocumentGuide('bank')">View full list of acceptable documents <span aria-hidden="true">📄</span></button></div><p>Three months of statements. Upload one combined file or several named files.</p><label class="upload-button" for="doc-bank">Choose files</label><input class="visually-hidden" type="file" id="doc-bank" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Bank Statements')"><ul class="uploaded-list" data-doc-list="Bank Statements"></ul></div>
+                    <div class="document-card"><div class="document-heading"><h3>Right-to-Rent Share Code(s)</h3><a class="document-help" href="https://www.gov.uk/prove-right-to-rent/get-a-share-code-online" target="_blank" rel="noopener noreferrer">Click here to view .GOV page <span aria-hidden="true">🪪</span></a></div><p>Use GOV.UK to check eligibility and request your share code. If you cannot use this service, our team can explain the alternative document checks.</p><label class="upload-button" for="doc-right-to-rent">Choose files</label><input class="visually-hidden" type="file" id="doc-right-to-rent" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadDocuments(this,'Right to Rent Share Code')"><ul class="uploaded-list" data-doc-list="Right to Rent Share Code"></ul></div>
+                    <div class="document-card"><h3>Other Supporting Documentation</h3><p>Optional documents that support your application.</p><label class="upload-button" for="doc-other">Choose files</label><input class="visually-hidden" type="file" id="doc-other" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" onchange="uploadDocuments(this,'Other Financial Document')"><ul class="uploaded-list" data-doc-list="Other Financial Document"></ul></div>
                     <p id="document-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(4)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(6)">Continue to Declaration ✅</button></div>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(6)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(8)">Continue to Declaration ✅</button></div>
                 </div>
             </div>
 
-            <!-- STEP 5: Signature & Declaration -->
-            <div id="step-6" class="step" style="display:none;">
+            <!-- STEP 8: Signature & Declaration -->
+            <div id="step-8" class="step" style="display:none;">
                 <div class="form-wrapper">
                     <h2>Declaration &amp; signature</h2>
                     <p class="step-description">Review the statements below, type your legal name, then add or generate your signature.</p>
@@ -1046,14 +1059,15 @@
                     <p class="info-banner">Right to Rent checks are required for all adult occupiers in England. <a href="https://www.gov.uk/government/publications/right-to-rent-document-checks-a-user-guide" target="_blank" rel="noopener">Read the government guidance</a>.</p>
                     <div id="signature-controls">
                       <div class="input-group"><label>Typed Full Legal Name *</label><input type="text" id="f_typed_name" required oninput="formatLegalName(this); refreshGeneratedSignature()" /></div>
-                      <div class="input-group"><label>Do you want to generate a digital signature below? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_generate_signature" data-value="yes" onclick="setYesNo('f_generate_signature','yes'); generateSignature()">Yes</button><button type="button" class="choice-button" data-choice-for="f_generate_signature" data-value="no" onclick="setYesNo('f_generate_signature','no'); clearSignature()">No</button></div><input type="hidden" id="f_generate_signature" data-required-choice="true" /></div>
-                      <div class="input-group"><label>Signature *</label><p>Select Yes above to generate a signature, or select No and sign using a mouse or finger.</p></div>
-                      <div class="signature-area" id="sig-pad"><canvas id="sig-canvas"></canvas><span class="signature-hint">Sign here</span><button type="button" class="clear-sig" onclick="clearSignature()" style="display:none;" id="clear-btn">Clear</button></div>
+                      <input type="hidden" id="f_generate_signature" />
+                      <label class="signature-label" id="application-signature-label">Signature *</label>
+                      <div class="signature-area sig" id="sig-pad" role="group" aria-labelledby="application-signature-label"><canvas id="sig-canvas" aria-label="Your Signature"></canvas></div>
+                      <div class="signature-actions"><button type="button" class="button secondary" onclick="generateSignature()">Click to Generate Signature</button><button type="button" class="button secondary" onclick="clearSignature()" id="clear-btn">Clear</button></div>
                     </div>
                     <div id="signature-retained" class="info-banner" style="display:none;">Your original signature is retained. You do not need to sign the application again.</div>
                     <div class="input-group" style="margin-top:16px;"><label>Date</label><input type="text" id="f_date" readonly class="pre-filled" /></div>
                     <p id="submit-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(5)">👈 Back</button><button type="button" class="btn btn-primary" onclick="submitForm()" id="submit-btn">Submit Application 🏁</button></div>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(7)">👈 Back</button><button type="button" class="btn btn-primary" onclick="submitForm()" id="submit-btn">Submit Application 🏁</button></div>
                 </div>
             </div>
 
@@ -1068,6 +1082,14 @@
             </div>
         </form>
     </div>
+
+    <dialog id="document-guide" class="document-guide" aria-labelledby="document-guide-title">
+        <header><h2 id="document-guide-title"></h2><button type="button" class="document-guide-close" aria-label="Close document guidance" onclick="document.getElementById('document-guide').close()">&times;</button></header>
+        <p id="document-guide-intro"></p>
+        <ul id="document-guide-list"></ul>
+        <p id="document-guide-note" class="document-guide-note"></p>
+        <p>Documents are reviewed by our team. We may request additional evidence or original-document checks before verification is complete.</p>
+    </dialog>
 
     <!-- Date Picker Overlay (mobile) -->
     <div class="dp-overlay" id="dpOverlay" onclick="closeDatePicker()"></div>
@@ -1106,7 +1128,51 @@
         </div>
     </div>
 
+    <script src="/application-deadline.js"></script>
+    <script src="/application-joint-applicant.js"></script>
     <script>
+        const documentGuides = {
+            identity: {
+                title: '🪪 Primary identification',
+                intro: 'Upload one current, clear photo identity document showing your full name and date of birth:',
+                items: ['Passport: the photograph and personal-details page.', 'UK photocard driving licence: front and back.', 'Government-issued national photo identity card: front and back.'],
+                note: 'If you have none of these, contact us about an alternative combination, such as a full birth or adoption certificate with supporting official evidence. A birth certificate or CitizenCard alone does not complete identity verification.'
+            },
+            address: {
+                title: '🏠 Secondary identification/proof of address',
+                intro: 'Upload a document showing your full name and current residential address:',
+                items: ['Bank or building society statement issued within the last three months.', 'Utility bill, such as gas, electricity or water, issued within the last three months.', 'Council tax bill for the current billing year.', 'Recent official correspondence from HMRC, DWP or a local authority.', 'Current UK photocard driving licence showing your present address, if it was not used for primary identification.', 'Latest annual mortgage statement.'],
+                note: 'Use a separate document from your primary identification. Official PDF statements or clear copies are welcome. If bills are not in your name or you have recently moved, contact us about alternatives.'
+            },
+            income: {
+                title: '💼 Proof of income or employment',
+                intro: 'Provide the evidence relevant to your circumstances. These documents support affordability and source-of-funds checks, separately from identity verification:',
+                items: ['Employed: your latest three months of payslips; an employer letter or signed employment contract can support a new job.', 'Self-employed: latest HMRC tax calculation (SA302) and tax-year overview, accounts or an accountant’s income confirmation.', 'CIS workers: recent contractor payment and deduction statements.', 'Pension income: a current pension award letter or recent pension payment statements.', 'Benefits: a current entitlement or award letter, or recent benefit payment statements.', 'Savings: recent bank, building society or investment statements showing your name and available funds.', 'A P60 or P45 may be supplied as supporting evidence alongside proof of current income.'],
+                note: 'Upload evidence for each income source you rely on. You do not need every document in this list.'
+            },
+            bank: {
+                title: '🏦 Bank statements',
+                intro: 'Provide statements covering the latest three consecutive months:',
+                items: ['Official PDF statements downloaded from your bank or building society.', 'Clear scans or photographs of complete paper statements.', 'Joint-account statements are suitable when your name appears as an account holder.', 'One combined file or separate monthly files are both accepted.'],
+                note: 'Include all pages showing your name, account details, statement dates, balances and transactions. A balance-only screenshot or a spreadsheet of transactions does not replace a statement.'
+            }
+        };
+        function openDocumentGuide(category) {
+            const guide = documentGuides[category];
+            if (!guide) return;
+            document.getElementById('document-guide-title').textContent = guide.title;
+            document.getElementById('document-guide-intro').textContent = guide.intro;
+            document.getElementById('document-guide-note').textContent = guide.note;
+            const list = document.getElementById('document-guide-list');
+            list.replaceChildren(...guide.items.map(text => { const item = document.createElement('li'); item.textContent = text; return item; }));
+            document.getElementById('document-guide').showModal();
+        }
+        document.getElementById('document-guide').addEventListener('click', event => {
+            if (event.target !== event.currentTarget) return;
+            const bounds = event.currentTarget.getBoundingClientRect();
+            if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) event.currentTarget.close();
+        });
+
         // API Configuration — override by setting window.FLEMING_API_URL before this script
         const API_BASE_URL = window.FLEMING_API_URL || (
             window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -1115,9 +1181,18 @@
         );
 
         let formData = null;
+        let deadlineTimer;
+        function refreshApplicationDeadline() {
+            const notice = document.getElementById('application-deadline-notice');
+            const deadline = applicationDeadline(formData?.application_sent_at);
+            if (deadline.expired) {
+                notice.textContent = 'The 7-day completion period has ended. Please contact Fleming Lettings about your application.';
+            } else {
+                notice.innerHTML = 'Please complete this form within <strong>' + deadline.label + '</strong>. Failure to do so may result in the property being re-marketed.';
+            }
+        }
         let hasSigned = false;
         let sigCtx = null;
-        let isDrawing = false;
         let signatureInitialised = false;
         let retainedSignature = false;
         let currentStep = 1;
@@ -1129,7 +1204,7 @@
         let dpYear, dpMonth, dpTargetInput, dpSelectedDate;
 
         function openDatePicker(inputId) {
-            if(formData?.application_data_approved)return;
+            if(formData?.application_data_approved||document.getElementById(inputId)?.disabled)return;
             dpTargetInput = document.getElementById(inputId);
             const existing = parseDDMMYYYY(dpTargetInput.value);
             const now = new Date();
@@ -1345,7 +1420,7 @@
         }
 
         function formatLegalName(input) {
-            input.value = input.value.toLowerCase().replace(/(^|[\s'-])([a-z])/g, (_, separator, letter) => separator + letter.toUpperCase());
+            input.value = input.value.replace(/(^|[\s'-])([a-z])/g, (_, separator, letter) => separator + letter.toUpperCase());
         }
 
         function formatPostcode(input) {
@@ -1450,7 +1525,8 @@
         }
 
         function updateProgress(step) {
-            document.getElementById('progress-bar').style.width = Math.round(((step - 1) / 5) * 100) + '%';
+            document.getElementById('progress-bar').style.width = Math.round(((step - 1) / 7) * 100) + '%';
+            document.getElementById('draft-toolbar').style.display = step > 1 && document.getElementById('step-success').style.display !== 'block' ? 'flex' : 'none';
         }
 
         async function loadForm() {
@@ -1463,6 +1539,9 @@
                 }
                 if (!res.ok) throw new Error('Not found');
                 formData = await res.json();
+                refreshApplicationDeadline();
+                clearInterval(deadlineTimer);
+                deadlineTimer = setInterval(refreshApplicationDeadline, 60000);
                 applicationDocuments = Array.isArray(formData.documents) ? formData.documents : [];
                 populateForm();
                 document.getElementById('loading-state').style.display = 'none';
@@ -1574,41 +1653,58 @@
             setRequired(['f_guarantor_name', 'f_guarantor_phone', 'f_guarantor_email', 'f_guarantor_address', 'f_guarantor_income', 'f_guarantor_employment', 'f_guarantor_consent'], yes);
         }
 
-        function toggleEdit(btn) {
-            if(formData?.application_data_approved)return;
-            const input = btn.parentElement.querySelector('input');
-            if (input.hasAttribute('readonly')) {
-                input.removeAttribute('readonly'); input.classList.remove('pre-filled'); btn.classList.add('editing'); input.focus();
-            } else {
-                input.setAttribute('readonly', ''); input.classList.add('pre-filled'); btn.classList.remove('editing');
-            }
-        }
-
         function lockApprovedAnswers() {
-            if(!formData.application_data_approved)return;
-            Object.values(FIELD_MAP).forEach(id=>{const el=document.getElementById(id);if(el){el.disabled=true;el.setAttribute('aria-disabled','true');}});
-            document.querySelectorAll('.choice-button,.edit-toggle-btn,#step-6 input').forEach(el=>el.disabled=true);
-            const notice=document.getElementById('revision-banner');notice.textContent='Your application answers have been approved and are locked. You can still supply the documents requested below. Contact the office if an answer needs correcting.';notice.style.display='block';
+            const keys=new Set(formData.approved_answer_keys||[]);
+            const declarations={declaration_holding_deposit:'f_decl_holding_deposit',declaration_info_accurate:'f_decl_info_accurate',declaration_privacy:'f_decl_gdpr',declaration_enquiries:'f_decl_enquiries',declaration_documents:'f_decl_documents',declaration_credit_check:'f_decl_credit_check',declaration_terms:'f_decl_terms',marketing_consent:'f_decl_marketing'};
+            Object.entries({...FIELD_MAP,...declarations}).forEach(([key,id])=>{
+                if(!formData.application_data_approved&&!keys.has(key))return;
+                const el=document.getElementById(id);if(!el)return;
+                el.disabled=true;el.setAttribute('aria-disabled','true');
+                const group=el.closest('.input-group');
+                if(group){group.querySelectorAll('button').forEach(button=>button.disabled=true);el.style.backgroundColor='#eaf5ee';}
+            });
+            if(!formData.application_data_approved&&!keys.size)return;
+            const notice=document.getElementById('revision-banner');notice.textContent='Approved answers are locked. You can update the remaining answers and provide requested documents. Contact the office if an approved answer needs correcting.';notice.style.display='block';
+        }
+        function documentRequirementOverridden(type) {
+            return formData.application_document_overrides?.[type]?.status === 'overridden' && !applicationDocuments.some(doc => doc.doc_type === type);
         }
         function showReviewActions() {
             const sections=Object.entries(formData.application_section_reviews||{}).filter(([,r])=>r.status==='rejected');
             const docs=applicationDocuments.filter(d=>d.review_status==='rejected');
-            const required=['Primary Identification','Secondary Identification','Bank Statements',...(['Student','Unemployed'].includes(formData.app_form_data?.employment_status)?[]:['Proof of Income or Employment'])];
-            const missing=required.filter(type=>!applicationDocuments.some(d=>d.doc_type===type));
-            if(!isRevision||(!sections.length&&!docs.length&&!missing.length&&!formData.application_review_notes))return;
-            const banner=document.getElementById('changes-request-banner');banner.style.display='block';
-            const button=document.createElement('button');button.type='button';button.className='btn btn-secondary';button.textContent='Review requested changes';button.style.marginTop='12px';button.onclick=()=>dialog.showModal();banner.appendChild(button);
-            const dialog=document.createElement('dialog');dialog.className='review-changes';dialog.style.cssText='margin:auto;background:#fff;color:#27083d;border:1px solid #e5d7e2;border-radius:16px;padding:24px;max-width:560px;width:calc(100% - 32px);max-height:85vh;overflow:auto';dialog.setAttribute('aria-label','Changes requested');
-            const title=document.createElement('h2');title.textContent='Changes requested';dialog.appendChild(title);
-            const stepFor=section=>section==='Employment & Income'?3:['Tenancy Details','Bank Details','Next of Kin'].includes(section)?4:section==='Declaration'?6:2;
-            function item(label,reason,step,type){const box=document.createElement('div');box.style.cssText='padding:12px 0;border-bottom:1px solid #eee';const heading=document.createElement('strong');heading.style.display='block';heading.textContent=label;box.appendChild(heading);const text=document.createElement('p');text.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere';text.textContent=reason;box.appendChild(text);const link=document.createElement('button');link.type='button';link.className='btn btn-secondary';link.textContent=type?'Click here to update this document':'Click here to review application details';link.onclick=()=>{dialog.close();goToStep(step,true);if(type){const list=Array.from(document.querySelectorAll('[data-doc-list]')).find(el=>el.dataset.docList===type);const card=list?.closest('.document-card');card?.scrollIntoView({behavior:'smooth',block:'center'});card?.querySelector('input[type=file]')?.focus();}};box.appendChild(link);dialog.appendChild(box);}
-            sections.forEach(([section,r])=>item(section,r.reason||'Please check this information.',stepFor(section)));
-            docs.forEach(d=>item(d.doc_type+' — '+d.original_name,d.review_notes||'Please provide a replacement.',5,d.doc_type));
-            missing.forEach(type=>item(type,'Please upload this required document.',5,type));
-            if(!sections.length&&!docs.length&&!missing.length)item('Application',formData.application_review_notes,2);
-            const close=document.createElement('button');close.type='button';close.className='btn btn-secondary';close.textContent='Close';close.style.marginTop='16px';close.onclick=()=>dialog.close();dialog.appendChild(close);dialog.onclick=e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}};document.body.appendChild(dialog);dialog.showModal();
+            const missing=requiredDocumentTypes().filter(type=>!applicationDocuments.some(d=>d.doc_type===type)&&!documentRequirementOverridden(type));
+            if(!isRevision||(!sections.length&&!docs.length&&!missing.length&&formData.application_review_status!=='changes_requested'))return;
+            let page=document.getElementById('review-requests');
+            if(!page){page=document.createElement('section');page.id='review-requests';page.className='step';document.getElementById('application-form').appendChild(page);}
+            page.replaceChildren();
+            const content=document.createElement('div');content.className='form-wrapper';page.appendChild(content);
+            const title=document.createElement('h2');title.textContent='We require further information or documentation 📄';content.appendChild(title);
+            const intro=document.createElement('p');intro.className='step-description';intro.textContent='Please update the items below, then resubmit your application. Your approved sections remain saved and locked.';content.appendChild(intro);
+            const stepFor=section=>section==='Address & Landlord'?3:['Employment & Income','Bank Details','Financial Details'].includes(section)?4:['References','Guarantor'].includes(section)?5:section==='Tenancy Details'?6:section==='Declaration'?8:2;
+            function item(label,reason,step,type,rejected=false){
+                const box=document.createElement('div');box.className='review-request-item';
+                const copy=document.createElement('div');copy.className='review-request-copy';
+                const kind=document.createElement('span');kind.className='review-request-kind';kind.textContent=type?'Supporting document':'Application details';
+                const heading=document.createElement('h3');heading.textContent=label;
+                const text=document.createElement('p');
+                if(rejected){const reasonLabel=document.createElement('strong');reasonLabel.textContent='Reason for rejection: ';text.appendChild(reasonLabel);}
+                text.appendChild(document.createTextNode(reason));
+                copy.append(kind,heading,text);
+                const link=document.createElement('button');link.type='button';link.className='review-request-add';link.textContent='Click to Add';link.setAttribute('aria-label',`Click to Add: ${label}`);
+                link.onclick=()=>{goToStep(step,true);if(type){const list=Array.from(document.querySelectorAll('[data-doc-list]')).find(el=>el.dataset.docList===type);const card=list?.closest('.document-card');card?.scrollIntoView({behavior:'smooth',block:'center'});card?.querySelector('input[type=file]')?.focus();}else{const page=document.getElementById(`step-${step}`);const input=Array.from(page.querySelectorAll('input,select,textarea')).find(el=>!el.disabled&&!el.readOnly&&el.offsetParent!==null);input?.focus();}};
+                box.append(copy,link);content.appendChild(box);
+            }
+            sections.forEach(([section,r])=>item(section,r.reason||'Please check this information.',stepFor(section),undefined,true));
+            docs.forEach(d=>item(d.doc_type,d.review_notes||'Please provide a replacement.',7,d.doc_type,true));
+            missing.forEach(type=>item(type,'Please upload this required document.',7,type));
+            if(!sections.length&&!docs.length&&!missing.length)item('Application',formData.application_review_notes||'Please review and update your application.',2);
+            const actions=document.createElement('div');actions.className='button-group';
+            const submit=document.createElement('button');submit.type='button';submit.className='btn btn-primary';submit.textContent='Review and Submit ✅';submit.onclick=()=>goToStep(8,true);actions.appendChild(submit);content.appendChild(actions);
+            const banner=document.getElementById('changes-request-banner');banner.replaceChildren();
+            const back=document.createElement('button');back.type='button';back.className='review-request-add';back.textContent='View requested updates';back.onclick=()=>showReviewActions();banner.appendChild(back);banner.style.display='none';
+            for(let n=1;n<=8;n++){const step=document.getElementById(`step-${n}`);step.style.display='none';step.classList.remove('active');}
+            page.style.display='block';page.classList.add('active');currentStep=0;updateProgress(1);window.scrollTo({top:0,behavior:'smooth'});
         }
-
         function populateForm() {
             const stored = formData.app_form_data || {};
             Object.entries(FIELD_MAP).forEach(([key, id]) => {
@@ -1621,6 +1717,10 @@
                 else if (['date_of_birth', 'employment_start_date', 'preferred_start_date'].includes(key)) el.value = isoToDDMMYYYY(String(stored[key]));
                 else el.value = stored[key];
             });
+            if (formData.joint_applicant) {
+                document.getElementById('f_joint_applicants').value = jointApplicantText(stored.joint_applicants, formData.joint_applicant);
+                if (stored.has_joint_applicants === undefined || stored.has_joint_applicants === null || stored.has_joint_applicants === '') setYesNo('f_has_joint_applicants', 'yes');
+            }
             ['f_gross_income', 'f_current_rent', 'f_self_employed_income', 'f_contractor_income', 'f_guarantor_income', 'f_rental_amount', 'f_deposit_amount'].forEach(id => formatMoney(document.getElementById(id)));
             ['f_address_postcode', 'f_prev_address_postcode', 'f_nok_postcode'].forEach(id => formatPostcode(document.getElementById(id)));
             formatNationalInsurance(document.getElementById('f_ni'));
@@ -1630,11 +1730,11 @@
             document.getElementById('f_phone').value = stored.phone || formData.phone_1 || '';
             document.getElementById('f_dob').value = stored.date_of_birth ? isoToDDMMYYYY(String(stored.date_of_birth)) : isoToDDMMYYYY(formData.date_of_birth_1);
             document.getElementById('f_typed_name').value = formData.app_signature_name || '';
-            isRevision = !!formData.application_form_completed && (formData.application_review_status === 'changes_requested' || formData.application_data_approved);
+            isRevision = !!formData.application_form_completed && (formData.application_review_status === 'changes_requested' || formData.application_data_approved || formData.approved_answer_keys?.length > 0);
             if (isRevision) {
                 const requested = document.getElementById('changes-request-banner');
                 requested.replaceChildren();const heading=document.createElement('strong');heading.textContent='Changes requested by Fleming Lettings';requested.appendChild(heading);const explanation=document.createElement('p');explanation.textContent='Please review the items below and update those requested.';requested.appendChild(explanation);
-                requested.style.display = 'block';
+                requested.style.display = formData.application_review_status === 'changes_requested' ? 'block' : 'none';
                 retainedSignature = formData.signature_retained === true;
                 hasSigned = retainedSignature;
                 if (hasSigned) {
@@ -1712,69 +1812,43 @@
 
         function validateDocuments() {
             const uploaded = new Set(applicationDocuments.filter(doc => doc.review_status !== 'rejected').map(doc => doc.doc_type));
-            const missing = requiredDocumentTypes().filter(type => !uploaded.has(type));
+            const missing = requiredDocumentTypes().filter(type => !uploaded.has(type) && !documentRequirementOverridden(type));
             const error = document.getElementById('document-error');
             if (!missing.length) { error.style.display = 'none'; return true; }
             error.textContent = `Please upload: ${missing.join(', ')}.`; error.style.display = 'block'; return false;
         }
 
         function goToStep(n, reviewLink=false) {
+            const reviewPage=document.getElementById('review-requests');
+            if(n===1&&reviewPage){showReviewActions();return;}
             if (n > currentStep && !(reviewLink && isRevision)) {
-                if ((currentStep === 2 || currentStep === 3 || currentStep === 4) && !validateStep(currentStep)) return;
-                if (currentStep === 5 && !validateDocuments()) return;
+                if ([2, 3, 4, 5, 6].includes(currentStep) && !validateStep(currentStep)) return;
+                if (currentStep === 7 && !validateDocuments()) return;
             }
-            [1, 2, 3, 4, 5, 6].forEach(s => {
+            if(reviewPage){reviewPage.style.display='none';reviewPage.classList.remove('active');document.getElementById('changes-request-banner').style.display='block';}
+            [1, 2, 3, 4, 5, 6, 7, 8].forEach(s => {
                 const el = document.getElementById(`step-${s}`);
                 el.style.display = s === n ? 'block' : 'none';
                 el.classList.toggle('active', s === n);
             });
             currentStep = n; updateProgress(n); window.scrollTo({ top: 0, behavior: 'smooth' });
-            if (n === 6 && !retainedSignature) initSignature();
+            if (n === 8 && !retainedSignature) initSignature();
         }
 
-        function initSignature() {
-            if (signatureInitialised) return;
-            signatureInitialised = true;
-            const canvas = document.getElementById('sig-canvas');
-            const pad = document.getElementById('sig-pad');
-            canvas.width = pad.offsetWidth; canvas.height = pad.offsetHeight;
-            sigCtx = canvas.getContext('2d');
-            sigCtx.strokeStyle = '#1a1a2e'; sigCtx.lineWidth = 2.5; sigCtx.lineCap = 'round'; sigCtx.lineJoin = 'round';
-            const getPos = e => { const rect = canvas.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { x: t.clientX - rect.left, y: t.clientY - rect.top }; };
-            const start = e => { if(document.getElementById('f_generate_signature').value!=='no')setYesNo('f_generate_signature','no'); isDrawing = true; const p = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); e.preventDefault(); };
-            const move = e => { if (!isDrawing) return; const p = getPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); hasSigned = true; pad.classList.add('signed'); document.getElementById('clear-btn').style.display = 'block'; e.preventDefault(); };
-            const end = () => { isDrawing = false; };
-            canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move); canvas.addEventListener('mouseup', end); canvas.addEventListener('mouseleave', end);
-            canvas.addEventListener('touchstart', start, { passive: false }); canvas.addEventListener('touchmove', move, { passive: false }); canvas.addEventListener('touchend', end);
-            refreshGeneratedSignature();
+        let applicationSignatureEditor,signatureLoading;
+        async function initSignature() {
+            if(applicationSignatureEditor)return applicationSignatureEditor;
+            if(signatureLoading)return signatureLoading;
+            signatureLoading=import('/signature-editor.js').then(({signatureEditor})=>{
+              const canvas=document.getElementById('sig-canvas');canvas.width=700;canvas.height=290;sigCtx=canvas.getContext('2d');
+              applicationSignatureEditor=signatureEditor({canvas,name:()=>document.getElementById('f_typed_name').value,description:'Applying adds your signature to this application. Review it before submitting.',apply:(image,generated)=>{canvas.width=image.width;canvas.height=image.height;sigCtx.drawImage(image,0,0);hasSigned=true;document.getElementById('f_generate_signature').value=generated?'yes':'no';document.getElementById('sig-pad').classList.add('signed');applicationSignatureEditor.refresh(true);}});
+              signatureInitialised=true;return applicationSignatureEditor;
+            }).catch(()=>{signatureLoading=null;const error=document.getElementById('submit-error');error.textContent='Signature editor could not load. Please refresh and try again.';error.style.display='block';});
+            return signatureLoading;
         }
-
-        function clearSignature() {
-            const canvas = document.getElementById('sig-canvas');
-            if (sigCtx) sigCtx.clearRect(0, 0, canvas.width, canvas.height);
-            hasSigned = false; document.getElementById('sig-pad').classList.remove('signed'); document.getElementById('clear-btn').style.display = 'none';
-        }
-
-        function generateSignature() {
-            initSignature();
-            const name = document.getElementById('f_typed_name').value.trim();
-            if (!name) return;
-            const canvas = document.getElementById('sig-canvas');
-            sigCtx.clearRect(0, 0, canvas.width, canvas.height);
-            const fontSize = Math.min(48, Math.max(28, canvas.width / Math.max(name.length * 0.65, 8)));
-            sigCtx.fillStyle = '#1a1a2e';
-            sigCtx.textAlign = 'center';
-            sigCtx.textBaseline = 'middle';
-            sigCtx.font = `italic ${fontSize}px "Brush Script MT", "Segoe Script", cursive`;
-            sigCtx.fillText(name, canvas.width / 2, canvas.height / 2);
-            hasSigned = true;
-            document.getElementById('sig-pad').classList.add('signed');
-            document.getElementById('clear-btn').style.display = 'block';
-        }
-
-        function refreshGeneratedSignature() {
-            if (document.getElementById('f_generate_signature').value === 'yes' && signatureInitialised) generateSignature();
-        }
+        function clearSignature(){const canvas=document.getElementById('sig-canvas');sigCtx?.clearRect(0,0,canvas.width,canvas.height);hasSigned=false;applicationSignatureEditor?.refresh(false);document.getElementById('sig-pad').classList.remove('signed');document.getElementById('f_generate_signature').value='';}
+        async function generateSignature(){const editor=await initSignature();editor?.open('type');}
+        function refreshGeneratedSignature(){if(hasSigned&&!retainedSignature)clearSignature();}
 
         async function uploadDocuments(input, docType) {
             const error = document.getElementById('document-error');
@@ -1825,7 +1899,7 @@
                     list.append(item);
                 });
             });
-            const documentSection = document.querySelector('#step-5 .form-wrapper');
+            const documentSection = document.querySelector('#step-7 .form-wrapper');
             const firstCard = documentSection?.querySelector('.document-card');
             const needsAction = documentSection?.querySelector('.document-card.needs-action');
             if (documentSection && firstCard && needsAction && firstCard !== needsAction) {
@@ -1852,6 +1926,7 @@
             data.declaration_credit_check = document.getElementById('f_decl_credit_check').checked;
             data.declaration_terms = document.getElementById('f_decl_terms').checked;
             data.marketing_consent = document.getElementById('f_decl_marketing').checked;
+            for(const key of formData.approved_answer_keys||[])data[key]=structuredClone(formData.app_form_data[key]);
             return data;
         }
 
@@ -1881,7 +1956,7 @@
 
         async function submitForm() {
             const errEl = document.getElementById('submit-error'); errEl.style.display = 'none';
-            if (![2, 3, 4, 6].every(validateStep)) return;
+            if (![2, 3, 4, 5, 6, 8].every(validateStep)) return;
             const declarationIds = ['f_decl_holding_deposit', 'f_decl_info_accurate', 'f_decl_gdpr', 'f_decl_enquiries', 'f_decl_documents', 'f_decl_credit_check', 'f_decl_terms'];
             if (!declarationIds.every(id => document.getElementById(id).checked)) {
                 errEl.textContent = 'Please agree to every mandatory declaration.'; errEl.style.display = 'block'; return;
@@ -1889,7 +1964,7 @@
             if (!hasSigned && !retainedSignature) {
                 errEl.textContent = 'Please add or generate your signature.'; errEl.style.display = 'block'; return;
             }
-            if (!validateDocuments()) { goToStep(5); return; }
+            if (!validateDocuments()) { goToStep(7); return; }
             const btn = document.getElementById('submit-btn'); btn.disabled = true; btn.textContent = 'Submitting...';
             try {
                 const canvas = document.getElementById('sig-canvas');
@@ -1904,8 +1979,8 @@
                     const detail = result.missing_fields || result.missing_documents;
                     throw new Error(`${result.error || 'Submission failed'}${detail?.length ? `: ${detail.join(', ')}` : ''}`);
                 }
-                [1, 2, 3, 4, 5, 6].forEach(s => document.getElementById(`step-${s}`).style.display = 'none');
-                document.getElementById('step-success').style.display = 'block'; updateProgress(6); window.scrollTo({ top: 0, behavior: 'smooth' });
+                [1, 2, 3, 4, 5, 6, 7, 8].forEach(s => document.getElementById(`step-${s}`).style.display = 'none');
+                document.getElementById('step-success').style.display = 'block'; updateProgress(8); window.scrollTo({ top: 0, behavior: 'smooth' });
             } catch (err) {
                 errEl.textContent = err.message || 'Something went wrong. Please try again.'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Submit Application 🏁';
             }

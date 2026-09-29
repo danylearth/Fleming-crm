@@ -31,7 +31,7 @@ describe('tenant enquiry form feedback', () => {
   });
 
   it('checks duplicates using email only and uses the CRM favicon', () => {
-    expect(formHtml).toContain('new URLSearchParams({ email: data.form_email })');
+    expect(formHtml).toContain('new URLSearchParams({email})');
     expect(formHtml).not.toContain('new URLSearchParams({ email: data.form_email, phone:');
     expect(formHtml).toContain('crm.fleminglettings.co.uk/logo-icon.png');
   });

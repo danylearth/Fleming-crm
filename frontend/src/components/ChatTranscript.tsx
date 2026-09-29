@@ -1,0 +1,12 @@
+import {useEffect,useState} from 'react';
+import {createPortal} from 'react-dom';
+import {X,Download} from 'lucide-react';
+import {useApi} from '../hooks/useApi';
+import {useAuth} from '../context/AuthContext';
+import {apiUrl} from '../utils/apiResponse';
+export default function ChatTranscript({conversationId,onClose}:{conversationId:string;onClose:()=>void}){
+ const api=useApi(),{token}=useAuth();const [data,setData]=useState<{title:string;messages:{id:number;sender_name:string;body:string;created_at:string;files:{id:string;name:string}[]}[]}|null>(null),[error,setError]=useState('');
+ useEffect(()=>{void api.get(`/api/chat/conversations/${conversationId}/transcript`).then(setData).catch(e=>setError(e.message));},[api,conversationId]);
+ const download=async(id:string,name:string)=>{try{const r=await fetch(apiUrl(`/api/chat/files/${id}`),{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)throw Error('File could not be downloaded.');const url=URL.createObjectURL(await r.blob()),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}catch(e){setError((e as Error).message);}};
+ return createPortal(<div className="fixed inset-0 z-[120] bg-black/50 grid place-items-center p-4" onClick={onClose}><section role="dialog" aria-modal="true" aria-label="Chat transcript" onClick={e=>e.stopPropagation()} className="bg-[var(--bg-card)] text-[var(--text-primary)] rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"><header className="p-5 border-b border-[var(--border-subtle)] flex justify-between"><h2 className="font-semibold">{data?.title||'Chat transcript'}</h2><button autoFocus aria-label="Close transcript" onClick={onClose}><X size={20}/></button></header><div className="p-5 overflow-auto space-y-4">{error&&<p role="alert" className="text-red-600">{error}</p>}{data?.messages.map(m=><article key={m.id} className="p-3 bg-[var(--bg-input)] rounded-xl text-sm"><p className="font-medium">{m.sender_name}<span className="ml-3 font-normal text-xs text-[var(--text-secondary)]">{new Date(m.created_at).toLocaleString('en-GB')}</span></p><p className="whitespace-pre-wrap break-words mt-2">{m.body}</p>{m.files.map(f=><button key={f.id} className="flex items-center gap-2 mt-2 underline" onClick={()=>void download(f.id,f.name)}><Download size={14}/>{f.name}</button>)}</article>)}</div></section></div>,document.body);
+}

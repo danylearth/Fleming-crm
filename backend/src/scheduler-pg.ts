@@ -1,3 +1,4 @@
+import {deliverCompletedDocumentEmails} from './document-signing-email';
 import {refreshOnsRents} from './rent-comparisons';
 import {runFinanceSchedule} from './finance-scheduler';
 import { syncTenantLifecycle } from './tenant-lifecycle-db';
@@ -60,6 +61,18 @@ async function createTask(title: string, priority: string, dueDate: string, task
 async function runComplianceChecks(): Promise<number> {
   let tasksCreated = 0;
   const today = new Date();
+
+  // Retire the previous certificate cycle only once its replacement is held.
+  // Otherwise a still-pending old task blocks the next renewal's reminder.
+  await run(`WITH closed AS (UPDATE tasks t SET status='completed' FROM properties p
+    WHERE t.entity_type='property' AND t.entity_id=p.id AND t.status IN ('pending','in_progress')
+    AND t.task_type IN ('eicr_reminder','epc_reminder','gas_reminder')
+    AND CASE t.task_type WHEN 'eicr_reminder' THEN p.eicr_expiry_date WHEN 'epc_reminder' THEN p.epc_expiry_date ELSE p.gas_safety_expiry_date END > t.due_date
+    AND EXISTS(SELECT 1 FROM documents d WHERE d.entity_type='property' AND d.entity_id=p.id
+      AND d.doc_type=CASE t.task_type WHEN 'eicr_reminder' THEN 'EICR' WHEN 'epc_reminder' THEN 'EPC' ELSE 'Gas Safety Certificate' END
+      AND COALESCE(d.review_status,'approved')='approved' AND d.uploaded_at>=t.created_at)
+    RETURNING t.id) INSERT INTO audit_log(user_email,action,entity_type,entity_id,changes)
+    SELECT 'system@scheduler','update','task',id,'{"reason":"Certificate renewed and replacement document uploaded","status":"completed"}' FROM closed`);
 
   for (const check of COMPLIANCE_CHECKS) {
     for (const daysOut of REMINDER_WINDOWS) {
@@ -286,6 +299,8 @@ async function runAllChecks() {
 }
 
 export function startScheduler() {
+  const signingEmailCheck=()=>deliverCompletedDocumentEmails().catch(error=>console.error('[Signed document email]',error.message));
+  void signingEmailCheck();setInterval(signingEmailCheck,60_000);
   const refreshRents=()=>refreshOnsRents().catch(e=>console.error('[ONS rent refresh]',e.message));
   if(process.env.NODE_ENV!=='test'){void refreshRents();setInterval(refreshRents,24*60*60*1000);}
   const financeCheck=()=>runFinanceSchedule().catch(error=>console.error('[Finance scheduler]',error));

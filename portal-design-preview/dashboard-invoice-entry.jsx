@@ -1,0 +1,10 @@
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {MemoryRouter} from 'react-router-dom';
+import {PortfolioProvider} from '../frontend/src/context/PortfolioContext';
+import Dashboard from '../frontend/src/pages/Dashboard';
+import FinancialDocuments from '../frontend/src/components/FinancialDocuments';
+const invoice=new URLSearchParams(location.search).get('view')!=='dashboard';
+const nativeFetch=window.fetch.bind(window);
+window.fetch=(input,options)=>String(input).includes('/api/financial-documents/')?nativeFetch('/assets/invoice-ui-sample.pdf'):nativeFetch(input,options);
+createRoot(document.getElementById('root')).render(<MemoryRouter><PortfolioProvider>{invoice?<main style={{maxWidth:1000,margin:'40px auto',padding:24,background:'white',borderRadius:20}}><h1 className="text-2xl font-bold mb-5">Tenant record · Invoice layout test</h1><FinancialDocuments entity="tenant" id={1} embedded/></main>:<Dashboard/>}</PortfolioProvider></MemoryRouter>);

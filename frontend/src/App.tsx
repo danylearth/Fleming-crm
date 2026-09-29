@@ -1,3 +1,6 @@
+import SignatureRequest from './pages/SignatureRequest';
+import SignDocument from './pages/SignDocument';
+import ErrorBoundary from './components/ErrorBoundary';
 import {usePermissions} from './hooks/usePermissions';
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
@@ -79,6 +82,9 @@ function AppRoutes() {
       </div>
     }>
     <Routes>
+      <Route path="/request-signatures/:entity/:id" element={<ProtectedRoute><SignatureRequest/></ProtectedRoute>}/>
+      <Route path="/sign-document/:token" element={<SignDocument/>}/>
+      <Route path="/:signingSlug" element={<SignDocument/>}/>
       <Route path="/account-setup" element={<AccountSetup />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/password-reset" element={<AccountSetup />} />
@@ -120,9 +126,9 @@ export default function App() {
       <BrowserRouter>
         <NotificationProvider>
           <AuthProvider>
-            <PortfolioProvider>
+            <ErrorBoundary><PortfolioProvider>
               <AppRoutes />
-            </PortfolioProvider>
+            </PortfolioProvider></ErrorBoundary>
           </AuthProvider>
         </NotificationProvider>
       </BrowserRouter>

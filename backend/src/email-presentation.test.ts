@@ -18,7 +18,7 @@ it('preserves branded background colours and is idempotent',()=>{
  const html='<html><head></head><body><table style="background:#27083D;color:#ffffff"><tr><td>Visible white logo</td></tr></table></body></html>';
  const prepared=prepareEmailHtml(html);expect(prepared).toContain('background-image:linear-gradient(#27083D,#27083D)');expect(prepareEmailHtml(prepared)).toBe(prepared);
 });
-it('prepares every template after marketing sanitisation and keeps operational emails free of marketing footers',()=>{
+it('prepares every template after marketing sanitisation and includes the shared footer in operational emails',()=>{
  for(const template of emailTemplateLibrary()){
   const filled=template.html.replace(/\{\{[A-Z_]+\}\}/g,'Sample');
   const operational=prepareEmailHtml(filled);
@@ -28,7 +28,7 @@ it('prepares every template after marketing sanitisation and keeps operational e
   const sent=marketingEmailHtml(cleanMarketingHtml(filled),'https://example.test/preferences');
   expect(sent,template.id).toContain('name="color-scheme"');
   expect(sent,template.id).toContain('background-image:linear-gradient(#27083D,#27083D)');
-  expect(sent.match(/Unsubscribe from Fleming Lettings marketing emails/g),template.id).toHaveLength(1);
+  expect(sent.match(/id="fleming-email-opt-out"/g),template.id).toHaveLength(1);
   expect(sent,template.id).not.toContain('{{');
   expect(sent,template.id).toContain('<title>');
  }

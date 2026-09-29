@@ -94,7 +94,13 @@ export function DatePicker({ label, value, onChange, placeholder = 'DD/MM/YYYY',
   const updatePos = useCallback(() => {
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
-      setPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 280) });
+      const width = Math.min(300, window.innerWidth - 24);
+      const height = dropdownRef.current?.offsetHeight || 350;
+      const below = rect.bottom + 4;
+      const top = below + height <= window.innerHeight - 12
+        ? below
+        : Math.max(12, rect.top - height - 4);
+      setPos({ top, left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)), width });
     }
   }, []);
 
@@ -127,6 +133,20 @@ export function DatePicker({ label, value, onChange, placeholder = 'DD/MM/YYYY',
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    updatePos();
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    window.addEventListener('resize', updatePos);
+    window.addEventListener('scroll', updatePos, true);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      window.removeEventListener('resize', updatePos);
+      window.removeEventListener('scroll', updatePos, true);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open, yearPicker, updatePos]);
+
   const prevMonth = () => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
     else setViewMonth(m => m - 1);
@@ -142,7 +162,9 @@ export function DatePicker({ label, value, onChange, placeholder = 'DD/MM/YYYY',
     <div
       ref={dropdownRef}
       className="fixed bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-2xl p-3"
-      style={{ top: pos.top, left: pos.left, width: pos.width, minWidth: 280, zIndex: 9999 }}
+      role="dialog"
+      aria-label="Choose date"
+      style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: 'calc(100dvh - 24px)', overflowY: 'auto', zIndex: 9999 }}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
@@ -261,9 +283,9 @@ export function DatePicker({ label, value, onChange, placeholder = 'DD/MM/YYYY',
           onChange={e => handleTypedChange(e.target.value)}
           placeholder={placeholder}
           aria-label={label || placeholder}
-          className="min-w-0 flex-1 bg-transparent px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
+          className="min-w-0 flex-1 bg-transparent pl-3 pr-1 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
         />
-        <button type="button" onClick={handleToggleOpen} className="px-3 py-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Open calendar">
+        <button type="button" onClick={handleToggleOpen} className="shrink-0 px-2 py-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Open calendar">
           <Calendar size={16} />
         </button>
       </div>

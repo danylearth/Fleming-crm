@@ -26,6 +26,7 @@ export function useAIChat() {
   const { portfolioFilter } = usePortfolio();
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [typing, setTyping] = useState(false);
+  const [progress,setProgress]=useState('');
 
   const addMessage = (msg: AIMessage) => setMessages(prev => [...prev, msg]);
 
@@ -57,11 +58,23 @@ export function useAIChat() {
     }
   }, [api,token]);
 
-  const send = useCallback(async (text: string, context?: { page?: string; entityType?: string; entityId?: number }) => {
-    addMessage({ role: 'user', text });
+  const send = useCallback(async (text: string, context?: { page?: string; entityType?: string; entityId?: number },attachments?:{id:string;name:string}[]) => {
+    addMessage({ role: 'user', text:text+(attachments?.length?'\n'+attachments.map(a=>'📎 '+a.name).join('\n'):'') });
     setTyping(true);
 
     try {
+      if(attachments?.length){
+        setProgress('Reading attached documents…');
+        const request=await api.post('/api/ai/document-reviews',{message:text,attachment_ids:attachments.map(a=>a.id),portfolio:portfolioFilter});
+        for(let attempt=0;attempt<360;attempt++){
+          const review=await api.get(`/api/ai/document-reviews/${request.id}`);
+          setProgress(review.progress||'Preparing your document review…');
+          if(review.status==='error')throw Error(review.error||'The documents could not be read.');
+          if(review.status==='ready'){addMessage({role:'assistant',text:'Here is the filing proposal. Check the records and dates, then save.',data:{documentReview:review},status:'done'});return;}
+          await new Promise(resolve=>setTimeout(resolve,1500));
+        }
+        throw Error('Document recognition took too long. Please try again.');
+      }
       const result = await api.post('/api/ai/chat', { message: text, history:messages.slice(-8).map(({role,text})=>({role,text})), context: { ...context, portfolio: portfolioFilter } });
       setTyping(false);
       addMessage({
@@ -79,8 +92,8 @@ export function useAIChat() {
         text: `Something went wrong: ${message}`,
         status: 'error',
       });
-    }
+    }finally{setTyping(false);setProgress('');}
   }, [api, portfolioFilter,messages]);
 
-  return { messages, typing, send, executeAction, addMessage, setMessages };
+  return { messages, typing, progress, send, executeAction, addMessage, setMessages };
 }

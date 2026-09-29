@@ -1,3 +1,4 @@
+import {useOnboardingStarted} from '../hooks/useOnboardingStarted';
 import { OFFICE_ADDRESS } from '../utils/meetingLocations';
 import SectionEditButton from '../components/ui/SectionEditButton';
 import DeleteNoteButton from '../components/DeleteNoteButton';
@@ -200,6 +201,7 @@ export default function EnquiryDetail() {
 
   // Workflow
   const [showWorkflow, setShowWorkflow] = useState(false);
+  const onboardingStarted=useOnboardingStarted(showWorkflow?Number(id):undefined,!!(form.status==='onboarding'||form.holding_deposit_requested||form.application_form_sent||form.onboarding_step));
   const [followUpNote,setFollowUpNote]=useState('');
   const [workflowMode, setWorkflowMode] = useState<'choose' | 'viewing' | 'follow_up' | 'onboarding' | 'reject' | 'convert'>('choose');
   const [wfDate, setWfDate] = useState('');
@@ -342,6 +344,7 @@ export default function EnquiryDetail() {
   };
 
   const handleWorkflow = async () => {
+    if (['viewing','follow_up','onboarding'].includes(workflowMode) && !form.linked_property_id) { alert('Select a property first.'); return; }
     setWfLoading(true);
     try {
       const name = [form.first_name_1, form.last_name_1].filter(Boolean).join(' ');
@@ -366,7 +369,7 @@ export default function EnquiryDetail() {
             }
             await saveSection({
               status: 'viewing_booked',
-              linked_property_id: wfPropId && !['other','office'].includes(wfPropId) ? Number(wfPropId) : null,
+              linked_property_id: wfPropId && !['other','office'].includes(wfPropId) ? Number(wfPropId) : form.linked_property_id,
               viewing_date: wfDate,
               viewing_with: wfViewingWith || null,
             });
@@ -502,7 +505,7 @@ export default function EnquiryDetail() {
         {/* ==================== HEADER ==================== */}
         <GlassCard className="p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-            <Avatar name={name} size="xl" />
+            <Avatar name={name} initials={[data.first_name_1,data.last_name_1].filter(Boolean).map(part=>String(part).trim().charAt(0)).join('').toUpperCase()} size="xl" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-2xl font-bold">{name}</h1>
@@ -548,11 +551,11 @@ export default function EnquiryDetail() {
               <CompletionRing percent={completionPercent} />
               {(!['converted','rejected'].includes(form.status) && (form.status === 'onboarding' || !!form.holding_deposit_requested || !!form.application_form_sent)) && (
                 <Button variant="gradient" size="sm" onClick={() => setShowOnboardingWizard(true)}>
-                  <CheckCircle size={14} className="mr-1.5" /> Onboarding
+                  <CheckCircle size={14} className="mr-1.5" /> Continue Onboarding
                 </Button>
               )}
-              {!['converted', 'rejected'].includes(form.status) && (
-                <Button variant={form.status === 'onboarding' ? 'outline' : 'gradient'} size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfCustomLocation(''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); setSmsEnabled(false); setSmsBody(''); setViewingEmailEnabled(false); }}>
+              {!['converted', 'rejected','onboarding'].includes(form.status) && !form.holding_deposit_requested && !form.application_form_sent && (
+                <Button variant="gradient" size="sm" onClick={() => { setShowWorkflow(true); setWorkflowMode('choose'); setWfDate(''); setWfTime('10:00'); setWfPropId(form.linked_property_id?.toString() || ''); setWfCustomLocation(''); setWfReason(''); setWfViewingWith(''); setWfAssignedTo(''); setSmsEnabled(false); setSmsBody(''); setViewingEmailEnabled(false); }}>
                   <ArrowRight size={14} className="mr-1.5" /> Progress
                 </Button>
               )}
@@ -636,7 +639,7 @@ export default function EnquiryDetail() {
                       { icon: Home, label: 'Address', value: [data.current_address_1, data.postcode_1].filter(Boolean).join(', ') },
                       { icon: Clock, label: 'Years at this address', value: data.years_at_address_1 },
                       { icon: Home, label: 'Previous address', value: [data.app_form_data?.previous_address_line_1, data.app_form_data?.previous_address_city, data.app_form_data?.previous_address_postcode].filter(Boolean).join(', ') },
-                    ].map(({ icon: Icon, label, value }) => (
+                    ].filter(field => field.label !== 'Previous address' || String(field.value || '').trim()).map(({ icon: Icon, label, value }) => (
                       <div key={label} className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
                           <Icon size={16} className="text-[var(--text-muted)]" />
@@ -695,10 +698,10 @@ export default function EnquiryDetail() {
 
             <GlassCard className="p-6">
               <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Property Preferences" icon={<Home size={16}/>}/><SectionEditButton label="preferences" disabled={!!editingSection&&!isEditing('preferences')} editing={isEditing('preferences')} onEdit={()=>setEditingSection('preferences')} onSave={()=>saveSection()} onCancel={cancelSection} saving={saving}/></div>
-              {isEditing('preferences')?<div className="grid grid-cols-2 gap-4">{[['preferred_property_type','Property types'],['preferred_bedrooms','Bedrooms'],['preferred_tenancy_type','Tenancy type'],['max_rent','Maximum monthly rent'],['preferred_parking','Parking']].map(([key,label])=><Input key={key} label={label} value={String(form[key]||'')} onChange={v=>setField(key,v)}/>)}</div>:<div className="grid grid-cols-2 gap-4"><ReadField label="Property types" value={form.preferred_property_type}/>
+              {isEditing('preferences')?<div className="grid grid-cols-2 gap-4">{[['preferred_property_type','Property Types'],['preferred_bedrooms','Bedrooms'],['preferred_tenancy_type','Tenancy Type'],['max_rent','Maximum Monthly Rent'],['preferred_parking','Parking']].map(([key,label])=><Input key={key} label={label} value={String(form[key]||'')} onChange={v=>setField(key,v)}/>)}</div>:<div className="grid grid-cols-2 gap-4"><ReadField label="Property Types" value={form.preferred_property_type}/>
                 <ReadField label="Bedrooms" value={form.preferred_bedrooms}/>
-                <ReadField label="Tenancy type" value={form.preferred_tenancy_type}/>
-                <ReadField label="Maximum monthly rent" value={form.max_rent ? `£${Number(form.max_rent).toLocaleString('en-GB')}` : null}/>
+                <ReadField label="Tenancy Type" value={form.preferred_tenancy_type}/>
+                <ReadField label="Maximum Monthly Rent" value={form.max_rent ? `£${Number(form.max_rent).toLocaleString('en-GB')}` : null}/>
                 <ReadField label="Parking" value={form.preferred_parking}/>
               </div>}
             </GlassCard>
@@ -1094,7 +1097,8 @@ export default function EnquiryDetail() {
                   )}
                 </div>
               )}
-            </GlassCard>
+            {!data?.phone_1&&<p className="text-sm text-[var(--text-muted)]">Add a phone number to this record to send SMS.</p>}
+</GlassCard>
 
 
 
@@ -1153,7 +1157,7 @@ export default function EnquiryDetail() {
           <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
-                <Avatar name={name} size="md" />
+                <Avatar name={name} initials={[data.first_name_1,data.last_name_1].filter(Boolean).map(part=>String(part).trim().charAt(0)).join('').toUpperCase()} size="md" />
                 <div>
                   <h3 className="text-lg font-bold">{name}</h3>
                   <p className="text-xs text-[var(--text-muted)]">Update workflow</p>
@@ -1162,6 +1166,7 @@ export default function EnquiryDetail() {
               <button onClick={() => setShowWorkflow(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
             </div>
 
+            {!form.linked_property_id && <div className="mb-4 space-y-2 rounded-xl border border-amber-400/40 p-4"><p className="text-sm font-medium">Select a property before progressing this enquiry.</p><Select label="Property *" searchable value={wfPropId} onChange={setWfPropId} options={[{value:'',label:'Choose a property'},...properties.map(p=>({value:String(p.id),label:`${p.address}${p.postcode ? `, ${p.postcode}` : ''}`}))]}/><Button disabled={wfLoading||!properties.some(p=>String(p.id)===wfPropId)} onClick={async()=>{setWfLoading(true);try{await saveSection({linked_property_id:Number(wfPropId)});}catch(e){alert(e instanceof Error?e.message:'Property could not be linked');}finally{setWfLoading(false);}}}>Link Property</Button></div>}
             {workflowMode === 'choose' ? (
               <div className="space-y-2">
                 <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Progress</p>
@@ -1175,14 +1180,14 @@ export default function EnquiryDetail() {
                   <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <button onClick={() => { setWorkflowMode('follow_up'); setSmsEnabled(false); const fn = form.first_name_1 || '[name]'; setSmsBody(`Hi ${fn}, just following up on your recent property enquiry with Fleming Lettings. When you get five, please call our team back on 01902 212 415. Speak soon, the team at Fleming's.`); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                <button disabled={!form.linked_property_id} onClick={() => { setWorkflowMode('follow_up'); setSmsEnabled(false); const fn = form.first_name_1 || '[name]'; setSmsBody(`Hi ${fn}, just following up on your recent property enquiry with Fleming Lettings. When you get five, please call our team back on 01902 212 415. Speak soon, the team at Fleming's.`); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><AwaitingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <button onClick={() => { if (form.holding_deposit_requested || form.application_form_sent || form.onboarding_step) { setShowWorkflow(false); setShowOnboardingWizard(true); } else setWorkflowMode('onboarding'); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                <button disabled={!form.linked_property_id} onClick={() => { if (onboardingStarted) { setShowWorkflow(false); setShowOnboardingWizard(true); } else setWorkflowMode('onboarding'); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center"><OnboardingIcon size={14} className="text-white" /></div>
-                  <div className="flex-1"><p className="text-sm font-medium">{form.holding_deposit_requested || form.application_form_sent || form.onboarding_step ? 'Continue Onboarding' : 'Start Onboarding'}</p><p className="text-xs text-[var(--text-muted)]">{form.holding_deposit_requested || form.application_form_sent || form.onboarding_step ? 'Continue the tenant’s onboarding' : 'Begin tenant onboarding'}</p></div>
+                  <div className="flex-1"><p className="text-sm font-medium">{onboardingStarted ? 'Continue Onboarding' : 'Start Onboarding'}</p><p className="text-xs text-[var(--text-muted)]">{onboardingStarted ? 'Continue the tenant’s onboarding' : 'Begin tenant onboarding'}</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
                 {canConvert && (

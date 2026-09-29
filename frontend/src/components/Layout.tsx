@@ -1,8 +1,9 @@
 import {usePermissions} from '../hooks/usePermissions';
 import FeedbackPanel from './FeedbackPanel';
+import NotificationsBell from './NotificationsBell';
 import { useActivityTracking } from '../hooks/useActivityTracking';
 import { useEffect, useState } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Menu, LogOut, ChevronLeft, ChevronRight, X, Sun, Moon, Users, Megaphone } from 'lucide-react';
@@ -11,7 +12,7 @@ import {
   BdmIcon, MaintenanceIcon, TasksIcon, FinancialsIcon, SettingsIcon
 } from './ui/icons/FlemingIcons';
 
-import FloatingAI from './ui/FloatingAI';
+import ChatHub from './ChatHub';
 import { useTheme } from '../context/ThemeContext';
 
 const navItems = [
@@ -79,7 +80,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
         md:static md:translate-x-0 ${collapsed ? 'md:w-16' : 'md:w-64'} shrink-0
       `}>
         {/* Logo */}
-        <div className="flex items-center gap-3 px-4 h-16 border-b border-[var(--border-subtle)]">
+        <div className="flex items-center gap-3 px-4 h-[4.5rem] pb-2 shrink-0 border-b border-[var(--border-subtle)]">
           {(!collapsed || mobileOpen) ? (
             <img
               src={theme === 'dark' ? '/logo-light.png' : '/logo-dark.png'}
@@ -108,7 +109,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
         </button>
 
         {/* Nav */}
-        <nav className="flex-1 py-3 px-2 space-y-1.5 overflow-y-auto">
+        <nav className="sidebar-nav flex-1 min-h-0 py-2 px-2 grid gap-1 overflow-y-auto" style={{gridTemplateRows:`repeat(${visibleNavItems.length}, minmax(38px, 1fr))`}}>
           {visibleNavItems
             .map((item, index) => (
               <NavLink
@@ -117,20 +118,20 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
                 end={item.to === '/'}
                 onClick={() => setMobileOpen(false)}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${isActive
+                  `flex items-center gap-3 px-3 py-1 rounded-xl text-base transition-colors ${isActive
                     ? 'bg-[var(--bg-input)] text-[var(--text-primary)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]'
                   }`
                 }
               >
-                <span className="p-2 rounded-xl shrink-0" style={iconStyle(index)}><item.icon size={18} /></span>
-                {(!collapsed || mobileOpen) && <span className="whitespace-nowrap">{item.label}</span>}
+                <span className="p-1.5 rounded-lg shrink-0" style={iconStyle(index)}><item.icon size={18} /></span>
+                {(!collapsed || mobileOpen) && <span className="whitespace-nowrap font-normal">{item.label}</span>}
               </NavLink>
             ))}
         </nav>
 
         {/* User */}
-        <div className="p-3 border-t border-[var(--border-subtle)]">
+        <div className="p-3 shrink-0 border-t border-[var(--border-subtle)]">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
               {user?.avatar_url ? <img src={user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" /> : user?.name?.[0] || 'U'}
@@ -151,7 +152,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
         {!hideTopBar && (
-          <header className="flex flex-wrap items-center justify-between gap-2 px-4 md:px-8 py-2 min-h-14 md:min-h-16 border-b border-[var(--border-subtle)] shrink-0">
+          <header className="flex flex-wrap items-center justify-between gap-2 px-4 md:px-8 py-2 min-h-14 md:min-h-[4.5rem] border-b border-[var(--border-subtle)] shrink-0">
             <div className="flex items-center gap-3">
               {/* Hamburger on mobile */}
               <button onClick={() => setMobileOpen(true)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden mr-1">
@@ -160,6 +161,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
               {title && <><span className="rounded-xl p-2.5 shrink-0" style={iconStyle(headerIndex)}><HeaderIcon size={22}/></span><h1 className="text-xl md:text-2xl font-bold">{title}</h1></>}
             </div>
             <div className="flex items-center gap-2 sm:gap-3 max-w-full">
+              <NotificationsBell/>
               {/* Portfolio toggle - Admin only */}
               {user?.role === 'admin' && (
                 <div className="flex items-center gap-0.5 bg-[var(--bg-input)] rounded-xl p-0.5 border border-[var(--border-input)]">
@@ -167,7 +169,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
                     <button
                       key={opt.key}
                       onClick={() => setPortfolioFilter(opt.key)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap ${portfolioFilter === opt.key
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${portfolioFilter === opt.key
                           ? opt.key === 'internal'
                             ? 'bg-orange-500/20 text-orange-400 shadow-sm'
                             : opt.key === 'external'
@@ -188,8 +190,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
                 {user?.avatar_url ? <img src={user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" /> : user?.name?.[0] || 'U'}
               </div>
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium">{user?.role === 'admin' ? 'Administrator' : user?.name || 'User'}</p>
-                <p className="text-xs text-[var(--text-muted)]">{user?.email || ''}</p>
+                <Link to="/settings" title="My Account" className="inline-flex max-w-48 items-center justify-center rounded-full border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-1 text-sm font-medium hover:bg-[var(--bg-hover)] transition-colors"><span className="truncate">{user?.name?.trim() || 'My Account'}</span></Link>
               </div>
             </div>
           </header>
@@ -207,7 +208,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
         </main>
       </div>
 
-      <FloatingAI />
+      <ChatHub />
       <FeedbackPanel />
     </div>
   );

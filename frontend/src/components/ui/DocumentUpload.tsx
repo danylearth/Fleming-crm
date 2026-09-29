@@ -53,7 +53,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
       fetch(`${API_URL}/api/documents/${entityType}/${entityId}${appQuery}`, { headers }).then(r => r.json()),
       fetch(`${API_URL}/api/documents/types/${entityType}`, { headers }).then(r => r.json()),
     ]).then(([d, t]) => {
-      setDocs(Array.isArray(d) ? d.filter(doc => !group || (/^guarantor/i.test(doc.doc_type) === (group==='guarantor'))) : []);
+      setDocs(Array.isArray(d) ? d.filter(doc => doc.doc_type !== 'Service Agreement (Issued)' && (!group || (/^guarantor/i.test(doc.doc_type) === (group==='guarantor')))) : []);
       setDocTypes(Array.isArray(t) ? t.filter(type => !group || (/^guarantor/i.test(type) === (group==='guarantor'))) : []);
       setSelectedType('');
     }).catch(() => { })

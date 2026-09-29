@@ -1,3 +1,5 @@
+import {ToolbarButton} from '../components/ui';
+import ServiceFeeFields,{validServiceFees} from '../components/ServiceFeeFields';
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
@@ -16,7 +18,7 @@ import { useNotifications } from '../context/NotificationContext';
 interface Property {
   id: number; city?: string; address_line_2?: string; address: string; postcode: string; rent_amount: number;
   status: string; landlord_name: string; current_tenant: string | null;
-  bedrooms: number; property_type: string; landlord_type?: string;
+  bedrooms: number; property_type: string; landlord_type?: string; service_type?: string; service_contract_signed?: boolean;
 }
 
 interface LandlordOption {
@@ -29,7 +31,7 @@ interface TenantOption {
 
 interface PropertyForm {
   landlord_id: string; address: string; address_line_2: string; city: string; postcode: string; property_type: string;
-  bedrooms: string; rent_amount: string; status: string; service_type: string;
+  bedrooms: string; rent_amount: string; status: string; service_type: string; service_setup_fee:string; service_monthly_fee:string;
   council_tax_band: string; has_gas: boolean | null;
   is_leasehold: boolean; leasehold_issued_by: string; leasehold_email: string;
   leasehold_phone: string; leasehold_reference: string; leasehold_notes: string;
@@ -44,6 +46,7 @@ const STATUSES = [
   { key: 'let', label: 'Let', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
   { key: 'to_let', label: 'To Let', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
   { key: 'let_agreed', label: 'Let Agreed', color: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30' },
+  { key: 'let_only', label: 'Let Only', color: 'bg-blue-500/20 text-blue-500 border-blue-500/30' },
   { key: 'full_management', label: 'Full Management', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
   { key: 'rent_collection', label: 'Rent Collection', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
 ];
@@ -72,7 +75,7 @@ export default function Properties() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<PropertyForm>({
     landlord_id: '', address: '', address_line_2: '', city: '', postcode: '', property_type: 'house', bedrooms: '1',
-    rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: null,
+    rent_amount: '', status: 'to_let', service_type: '', service_setup_fee:'',service_monthly_fee:'', council_tax_band: '', has_gas: null,
     is_leasehold: false, leasehold_issued_by: '', leasehold_email: '', leasehold_phone: '', leasehold_reference: '', leasehold_notes: '',
     leasehold_portal_url: '', leasehold_portal_username: '',
     has_management_company: null, management_company_name: '', management_company_email: '', management_company_phone: '', management_company_reference: '', management_company_notes: '',
@@ -82,7 +85,6 @@ export default function Properties() {
   const [llSearch, setLlSearch] = useState('');
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   // Filter state
-  const [cityFilter,setCityFilter] = useState('');
   const [landlordFilter, setLandlordFilter] = useState<number | null>(null);
   const [tenantFilter, setTenantFilter] = useState<number | null>(null);
   const { portfolioFilter } = usePortfolio();
@@ -108,18 +110,17 @@ export default function Properties() {
 
   const portfolioFiltered = filterByPortfolio(properties, portfolioFilter);
   const visibleStatuses = portfolioFilter === 'internal'
-    ? STATUSES.filter(status => !['full_management', 'rent_collection'].includes(status.key))
+    ? STATUSES.filter(status => !['let_only', 'full_management', 'rent_collection'].includes(status.key))
     : STATUSES;
   useEffect(() => {
-    if (portfolioFilter === 'internal' && ['full_management', 'rent_collection'].includes(statusFilter)) {
+    if (portfolioFilter === 'internal' && ['let_only', 'full_management', 'rent_collection'].includes(statusFilter)) {
       setStatusFilter('all');
     }
   }, [portfolioFilter, statusFilter]);
   const filtered = portfolioFiltered.filter(p => {
-    if(cityFilter && p.city !== cityFilter) return false;
     const matchSearch = !search || [p.address, p.city, p.postcode, p.landlord_name, p.current_tenant]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
-    if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+    if (statusFilter !== 'all' && (['let_only','rent_collection','full_management'].includes(statusFilter)?p.service_type:p.status) !== statusFilter) return false;
     if (landlordFilter) {
       const ll = landlords.find(l => l.id === landlordFilter);
       if (ll && p.landlord_name !== ll.name) return false;
@@ -133,6 +134,7 @@ export default function Properties() {
 
   const statusCounts = portfolioFiltered.reduce((acc, p) => {
     acc[p.status] = (acc[p.status] || 0) + 1;
+    if(p.landlord_type!=='internal'&&p.service_type&&p.service_type!==p.status)acc[p.service_type]=(acc[p.service_type]||0)+1;
     return acc;
   }, {} as Record<string, number>);
 
@@ -177,7 +179,7 @@ export default function Properties() {
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: 'Total Properties', value: properties.length, accent: true },
+            { label: 'Total Properties', value: portfolioFiltered.length, accent: true },
             { label: 'To Let', value: statusCounts['to_let'] || 0 },
             { label: 'Let Agreed', value: statusCounts['let_agreed'] || 0 },
             { label: 'Managed', value: (statusCounts['full_management'] || 0) + (statusCounts['rent_collection'] || 0) },
@@ -214,13 +216,13 @@ export default function Properties() {
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
           {isManager() && (
-            <Button variant="outline" onClick={() => setShowImport(true)}>
-              <Upload size={16} className="mr-2" /> Import CSV
-            </Button>
+            <ToolbarButton variant="outline" size="sm" className="!h-9 !px-4" onClick={() => setShowImport(true)}>
+              <Upload size={14} className="mr-2" /> Import CSV
+            </ToolbarButton>
           )}
-          <Button variant="gradient" onClick={() => setShowAdd(true)}>
-            <Plus size={16} className="mr-2" /> Add Property
-          </Button>
+          <ToolbarButton variant="gradient" size="sm" className="!h-9 !px-4" onClick={() => setShowAdd(true)}>
+            <Plus size={14} className="mr-2" /> Add Property
+          </ToolbarButton>
         </div>
 
         {showImport && isManager() && <CsvImport entity="properties" onClose={() => setShowImport(false)} onDone={load} />}
@@ -247,7 +249,7 @@ export default function Properties() {
           <div className="h-5 w-px bg-[var(--border-subtle)] hidden sm:block" />
 
           {[
-            { key: 'all', label: `All (${properties.length})` },
+            { key: 'all', label: `All (${portfolioFiltered.length})` },
             ...visibleStatuses.map(s => ({ key: s.key, label: `${s.label} (${statusCounts[s.key] || 0})` })),
           ].map(f => (
             <Tag key={f.key} active={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>
@@ -343,19 +345,18 @@ export default function Properties() {
                 </span>
               </div>
             )}
-            <div className="max-w-xs mb-3"><Select label="Filter by City/Town" value={cityFilter} onChange={setCityFilter} options={[{value:'',label:'All Towns'},...[...new Set(properties.map(p=>p.city).filter((city):city is string=>!!city))].sort().map(city=>({value:city,label:city}))]} /></div>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
-                  {editMode && <th className="text-left py-3 px-4 font-medium w-12"></th>}
-                  <th className="text-left py-3 px-4 font-medium">Address</th>
-                  <th className="text-left py-3 px-4 font-medium">City/Town</th>
-                  <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Postcode</th>
-                  <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Landlord</th>
-                  <th className="text-left py-3 px-4 font-medium hidden lg:table-cell">Tenant</th>
-                  <th className="text-left py-3 px-4 font-medium">Status</th>
-                  <th className="text-right py-3 px-4 font-medium hidden sm:table-cell">Rent</th>
-                  <th className="text-left py-3 px-4 font-medium hidden md:table-cell">Type</th>
+                  {editMode && <th className="text-left py-2 px-3 font-medium w-12"></th>}
+                  <th className="text-left py-2 px-3 font-medium">Address</th>
+                  <th className="text-left py-2 px-3 font-medium">City/Town</th>
+                  <th className="text-left py-2 px-3 font-medium hidden md:table-cell">Postcode</th>
+                  <th className="text-left py-2 px-3 font-medium hidden lg:table-cell">Landlord</th>
+                  <th className="text-left py-2 px-3 font-medium hidden lg:table-cell">Tenant</th>
+                  <th className="text-left py-2 px-3 font-medium">Status</th>{portfolioFilter!=='internal'&&<><th className="text-left py-2 px-3 font-medium w-px whitespace-nowrap">Service Type</th><th className="text-center py-2 px-3 font-medium w-px whitespace-nowrap">Contract Signed</th></>}
+                  <th className="text-left py-2 px-3 font-medium w-px whitespace-nowrap hidden sm:table-cell">Rent</th>
+                  <th className="text-left py-2 px-3 font-medium w-px whitespace-nowrap hidden md:table-cell">Type</th>
                 </tr>
               </thead>
               <tbody>
@@ -364,7 +365,7 @@ export default function Properties() {
                     onClick={() => !editMode && navigate(`/properties/${p.id}`)}
                     className={`border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] transition-colors ${!editMode ? 'cursor-pointer' : ''}`}>
                     {editMode && (
-                      <td className="py-3 px-4">
+                      <td className="py-2 px-3">
                         <input
                           type="checkbox"
                           checked={selectedIds.includes(p.id)}
@@ -377,7 +378,7 @@ export default function Properties() {
                         />
                       </td>
                     )}
-                    <td className="py-3 px-4">
+                    <td className="py-2 px-3">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center shrink-0">
                           <Building2 size={15} className="text-[var(--text-muted)]" />
@@ -388,26 +389,27 @@ export default function Properties() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-xs">{p.city || '—'}</td>
-                    <td className="py-3 px-4 hidden md:table-cell">
+                    <td className="py-2 px-3 text-xs">{p.city || '—'}</td>
+                    <td className="py-2 px-3 hidden md:table-cell">
                       <span className="text-xs text-[var(--text-muted)]">{p.postcode}</span>
                     </td>
-                    <td className="py-3 px-4 hidden lg:table-cell">
+                    <td className="py-2 px-3 hidden lg:table-cell">
                       <span className="text-xs text-[var(--text-secondary)]">{p.landlord_name || '—'}</span>
                     </td>
-                    <td className="py-3 px-4 hidden lg:table-cell">
+                    <td className="py-2 px-3 hidden lg:table-cell">
                       <span className="text-xs text-[var(--text-secondary)]">{p.current_tenant || '—'}</span>
                     </td>
-                    <td className="py-3 px-4">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusStyle(p.status)}`}>
+                    <td className="py-2 px-3">
+                      <span className={`inline-flex items-center h-5 text-xs whitespace-nowrap px-2 rounded-full border font-medium ${statusStyle(p.status)}`}>
                         {statusLabel(p.status)}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right hidden sm:table-cell">
+                    {portfolioFilter!=='internal'&&<><td className="py-2 px-3 text-xs whitespace-nowrap">{p.landlord_type==='internal'?<span className="inline-flex items-center h-5 rounded-full border border-transparent px-2 text-xs font-medium bg-emerald-500/15 text-emerald-600">Own Portfolio</span>:p.service_type?<span className={`inline-flex items-center h-5 rounded-full border border-transparent px-2 text-xs font-medium ${p.service_type==='full_management'?'bg-amber-500/15 text-amber-600':p.service_type==='rent_collection'?'bg-purple-500/15 text-purple-600':'bg-blue-500/15 text-blue-600'}`}>{({let_only:'Let Only',rent_collection:'Rent Collection',full_management:'Full Management'} as Record<string,string>)[p.service_type]||p.service_type}</span>:'—'}</td><td className="py-2 px-3 text-xs text-center"><span className={`inline-flex items-center h-5 min-w-10 justify-center rounded-full border border-transparent px-2 text-xs font-medium ${p.service_contract_signed?'bg-emerald-500/15 text-emerald-600':'bg-amber-500/15 text-amber-600'}`}>{p.landlord_type==='internal'?'N/A':p.service_contract_signed?'Yes':'No'}</span></td></>}
+                    <td className="py-2 px-3 text-left whitespace-nowrap hidden sm:table-cell">
                       <span className="text-sm font-semibold">£{p.rent_amount?.toLocaleString()}</span>
                     </td>
-                    <td className="py-3 px-4 hidden md:table-cell">
-                      <span className="text-xs text-[var(--text-muted)] capitalize">{p.bedrooms} bed • {p.property_type}</span>
+                    <td className="py-2 px-3 hidden md:table-cell">
+                      <span className="text-xs text-[var(--text-muted)] capitalize whitespace-nowrap">{p.bedrooms} Bed – {p.property_type}</span>
                     </td>
                   </tr>
                 ))}
@@ -432,6 +434,7 @@ export default function Properties() {
                 bedrooms: Number(form.bedrooms),
                 rent_amount: Number(form.rent_amount) || 0,
                 has_gas: form.has_gas,
+                has_management_company: form.is_leasehold ? form.has_management_company : false,
               });
               if(res.epc_notice)alert(res.epc_notice);
               setShowAdd(false);
@@ -450,7 +453,7 @@ export default function Properties() {
   function resetForm() {
     setForm({
       landlord_id: '', address: '', address_line_2: '', city: '', postcode: '', property_type: 'house', bedrooms: '1',
-      rent_amount: '', status: 'to_let', service_type: '', council_tax_band: '', has_gas: null,
+      rent_amount: '', status: 'to_let', service_type: '', service_setup_fee:'',service_monthly_fee:'', council_tax_band: '', has_gas: null,
       is_leasehold: false, leasehold_issued_by: '', leasehold_email: '', leasehold_phone: '', leasehold_reference: '', leasehold_notes: '',
       leasehold_portal_url: '', leasehold_portal_username: '',
       has_management_company: null, management_company_name: '', management_company_email: '', management_company_phone: '', management_company_reference: '', management_company_notes: '',
@@ -579,6 +582,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
             options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />}
         </div>
 
+        {!isMyPortfolio&&<ServiceFeeFields service={form.service_type} setup={form.service_setup_fee} monthly={form.service_monthly_fee} onChange={fees=>setForm(f=>({...f,...fees}))}/>}
         <div>
           <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Is there a gas connection? *</label>
           <div className="grid grid-cols-2 gap-2">
@@ -634,7 +638,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
 
         <div className="flex gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.landlord_id || !form.address.trim() || !form.city.trim() || !form.postcode.trim() || !form.status || form.has_gas === null || (form.is_leasehold && form.has_management_company === null) || (!isMyPortfolio && !form.service_type)}>
+          <Button variant="gradient" onClick={onSubmit} disabled={saving || !form.landlord_id || !form.address.trim() || !form.city.trim() || !form.postcode.trim() || !form.status || form.has_gas === null || (form.is_leasehold && form.has_management_company === null) || (!isMyPortfolio && (!form.service_type||!validServiceFees(form.service_type,form.service_setup_fee,form.service_monthly_fee)))}>
             {saving ? 'Creating...' : isMyPortfolio ? 'Create Property' : 'Create & Prepare Contract'}
           </Button>
         </div>

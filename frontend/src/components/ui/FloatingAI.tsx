@@ -2,7 +2,8 @@ import {useAuth} from '../../context/AuthContext';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { X, Send, Sparkles, ChevronDown, Mic } from 'lucide-react';
+import { X, Send, Sparkles, ChevronDown, Mic, ArrowLeft, Paperclip } from 'lucide-react';
+import FlemoDocumentReview,{type DocumentReview} from './FlemoDocumentReview';
 import { useAIChat } from '../../hooks/useAIChat';
 import type { AIAction } from '../../hooks/useAIChat';
 
@@ -27,9 +28,13 @@ function getPageContext(pathname: string): { page: string; entityType?: string; 
   return context;
 }
 
-export default function FloatingAI() {
-  const {user}=useAuth();
-  const [open, setOpen] = useState(false);
+export default function FloatingAI({open:controlledOpen,onClose,onMenu,onMinimize}:{open?:boolean;onClose?:()=>void;onMenu?:()=>void;onMinimize?:()=>void}={}) {
+  const {user,token}=useAuth();
+  const [attachments,setAttachments]=useState<{id:string;name:string;size:number}[]>([]),[uploading,setUploading]=useState(false),[uploadError,setUploadError]=useState('');
+  const fileInput=useRef<HTMLInputElement>(null);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open=controlledOpen??localOpen;
+  const setOpen=(value:boolean)=>{setLocalOpen(value);if(!value)onClose?.();};
   const [input, setInput] = useState('');
   const voice = useVoiceInput(setInput);
   const [hasUnread, setHasUnread] = useState(true);
@@ -37,7 +42,7 @@ export default function FloatingAI() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const location = useLocation();
   const prevPath = useRef(location.pathname);
-  const { messages, typing, send, executeAction, setMessages } = useAIChat();
+  const { messages, typing, progress, send, executeAction, setMessages } = useAIChat();
 
   // Initial greeting
   useEffect(() => {
@@ -49,7 +54,7 @@ export default function FloatingAI() {
     if (location.pathname !== prevPath.current) {
       prevPath.current = location.pathname;
       // Only reset if chat has been idle (no user messages in last set)
-      setMessages([{ role: 'assistant', text: getGreeting(user?.name), status: 'done' }]);
+      setMessages(current=>current.some(m=>m.role==='user')?current:[{ role: 'assistant', text: getGreeting(user?.name), status: 'done' }]);
       if (!open) queueMicrotask(() => setHasUnread(true));
     }
   }, [location.pathname, open, setMessages,user?.name]);
@@ -65,12 +70,18 @@ export default function FloatingAI() {
   };
 
   const handleSend = (text?: string) => {
-    if (typing) return;
+    if (typing||uploading) return;
     const msg = (text || input).trim();
     if (!msg) return;
     setInput('');
     const context = getPageContext(location.pathname);
-    send(msg, context);
+    void send(msg, context,attachments);setAttachments([]);
+  };
+
+  const attach=async(files:File[])=>{
+    if(uploading||typing)return;
+    if(files.length+attachments.length>6||files.reduce((n,f)=>n+f.size,attachments.reduce((n,f)=>n+f.size,0))>40*1024*1024){setUploadError('Attach up to 6 documents, totalling 40 MB.');return;}
+    setUploading(true);setUploadError('');try{for(const file of files){if(file.size>15*1024*1024)throw Error('Each file must be 15 MB or smaller.');const data=new FormData();data.append('file',file);const r=await fetch(`${import.meta.env.VITE_API_URL||''}/api/ai/attachments`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:data});const value=await r.json();if(!r.ok)throw Error(value.error||'Upload failed.');setAttachments(current=>[...current,value]);}}catch(e){setUploadError((e as Error).message);}finally{setUploading(false);}
   };
 
   const handleAction = (action: AIAction) => {
@@ -86,7 +97,7 @@ export default function FloatingAI() {
   return (
     <>
       {/* Floating Button */}
-      {!open && (
+      {!open && controlledOpen===undefined && (
         <button
           aria-label="Open Flemo"
           onClick={handleOpen}
@@ -103,28 +114,27 @@ export default function FloatingAI() {
 
       {/* Chat Panel */}
       {open && (
-        <div className="fixed bottom-0 right-0 z-50 w-full h-[85vh] md:bottom-6 md:right-6 md:w-[380px] md:h-[560px] flex flex-col md:rounded-2xl rounded-t-2xl border border-[var(--border-input)] bg-[var(--chat-bg)] shadow-2xl shadow-black/50 overflow-hidden animate-in slide-in-from-bottom-4">
+        <div className={`fixed bottom-0 right-0 z-50 w-full h-[85vh] ${controlledOpen!==undefined?'!right-[92px] !bottom-[92px] max-h-[calc(100dvh-112px)] max-w-[calc(100vw-108px)]':''} md:bottom-6 md:right-6 md:w-[380px] md:h-[560px] flex flex-col md:rounded-2xl rounded-t-2xl border border-[var(--border-input)] bg-[var(--chat-bg)] shadow-2xl shadow-black/50 overflow-hidden animate-in slide-in-from-bottom-4`}>
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-color)] bg-[var(--bg-card)]">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center">
-                <Sparkles size={16} className="text-white" />
-              </div>
+              <button aria-label="Open communications menu" onClick={onMenu} className="w-9 h-9 rounded-full bg-white flex items-center justify-center"><img src="/logo-icon.png" alt="" className="w-6 h-6 object-contain"/></button>
               <div>
                 <p className="text-sm font-semibold text-[var(--text-primary)]">Flemo! Your AI helper</p>
 
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <button aria-label="Collapse Flemo" onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
+              <button aria-label="Collapse Flemo" onClick={() => onMinimize?onMinimize():setOpen(false)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
                 <ChevronDown size={18} />
               </button>
-              <button aria-label="Close Flemo" onClick={() => { setOpen(false); setMessages([{ role: 'assistant', text: getGreeting(user?.name), status: 'done' }]); }} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
+              <button aria-label="Close Flemo" onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
                 <X size={18} />
               </button>
             </div>
           </div>
 
+          {onMenu&&<div className="px-5 py-2 border-b border-[var(--border-subtle)]"><button onClick={onMenu} className="flex items-center gap-2 text-xs text-[var(--text-secondary)]"><ArrowLeft size={15}/>Back to menu</button></div>}
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 scrollbar-thin">
             {messages.map((msg, i) => (
@@ -148,6 +158,7 @@ export default function FloatingAI() {
                   {msg.role === 'user' && (
                     <p className="text-[11px] text-[var(--text-muted)] text-right mt-1">{now()}</p>
                   )}
+                  {msg.data?.documentReview?<FlemoDocumentReview review={msg.data.documentReview as unknown as DocumentReview} onComplete={text=>setMessages(current=>[...current.map((message,index)=>index===i?{...message,data:{...message.data,documentReview:{...(message.data?.documentReview as DocumentReview),status:'applied'}}}:message),{role:'assistant',text,status:'done'}])}/>:null}
                   {/* Action Buttons */}
                   {msg.actions && msg.actions.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
@@ -178,6 +189,7 @@ export default function FloatingAI() {
                   <Sparkles size={10} className="text-white" />
                 </div>
                 <div className="bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-2xl px-4 py-3">
+                  {progress&&<p role="status" className="text-xs text-[var(--text-secondary)] mb-2">{progress}</p>}
                   <div className="flex gap-1">
                     <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                     <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -190,20 +202,25 @@ export default function FloatingAI() {
           </div>
 
           {/* Input */}
-          <div className="px-4 py-3 border-t border-[var(--border-color)]">
+          <div className="px-4 py-3 border-t border-[var(--border-color)]" onDragOver={e=>{if(e.dataTransfer.types.includes('Files'))e.preventDefault();}} onDrop={e=>{e.preventDefault();void attach(Array.from(e.dataTransfer.files));}}>
+            <input ref={fileInput} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" onChange={e=>{void attach(Array.from(e.target.files||[]));e.target.value='';}}/>
+            {attachments.length>0&&<div className="mb-2 flex flex-wrap gap-1">{attachments.map(a=><span key={a.id} className="inline-flex items-center gap-1 rounded-lg bg-[var(--bg-input)] px-2 py-1 text-xs max-w-full"><span className="truncate">{a.name}</span><button aria-label={`Remove ${a.name}`} disabled={uploading||typing} onClick={()=>setAttachments(current=>current.filter(f=>f.id!==a.id))}><X size={12}/></button></span>)}</div>}
+            {(uploadError||uploading)&&<p role="status" className="text-xs mb-2">{uploading?'Uploading documents…':uploadError}</p>}
             {voice.error && <p role="status" className="text-xs text-red-400 mb-2">{voice.error}</p>}
             <div className="flex items-center gap-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl px-4 py-2.5">
+              {user?.role!=='viewer'&&<button aria-label="Attach documents" title="Attach PDF or images" disabled={typing||uploading} onClick={()=>fileInput.current?.click()}><Paperclip size={18}/></button>}
               <textarea
                 rows={Math.min(5,Math.max(2,input.split("\n").length,Math.ceil(input.length/34)))}
                 ref={inputRef}
                 value={input}
                 onChange={e => setInput(e.target.value)}
+                onPaste={e=>{if(e.clipboardData.files.length){e.preventDefault();void attach(Array.from(e.clipboardData.files));}}}
                 onKeyDown={e => {if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleSend();}}}
                 placeholder='Ask anything...'
                 className="flex-1 min-w-0 resize-none bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
               />
               {voice.supported && <button title="Dictate using your browser’s speech service, then review before sending" aria-label={voice.listening ? 'Stop dictation' : 'Dictate question'} onClick={voice.toggle} className={voice.listening ? 'text-red-500 animate-pulse' : 'text-[var(--text-muted)]'}><Mic size={18} /></button>}
-              <button disabled={typing} onClick={() => handleSend()}
+              <button aria-label="Send to Flemo" disabled={typing||uploading} onClick={() => handleSend()}
                 className={`p-1.5 rounded-lg transition-colors ${input.trim() ? 'text-orange-400 hover:text-orange-300' : 'text-[var(--text-faint)]'}`}>
                 <Send size={16} />
               </button>

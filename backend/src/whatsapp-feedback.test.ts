@@ -75,7 +75,7 @@ describe('31 August CRM feedback regressions', () => {
   it('provides the requested tenancy agreement controls and missing-document route', () => {
     expect(wizardSource).toContain('Tenancy Agreement for Fleming Lettings Properties');
     expect(wizardSource).not.toMatch(/\bAST\b/);
-    expect(wizardSource).toContain('Click to add document');
+    expect(wizardSource).toContain('AgreementComplianceDocuments');
     expect(wizardSource).toContain('Upload Credit Report *');
     expect(wizardSource).not.toContain('Editable tenant email preview');
     expect(wizardSource).toContain('<DatePicker label="Tenancy Start *"');
@@ -116,7 +116,7 @@ describe('31 August CRM feedback regressions', () => {
 
   it('allows dashboard reminders to be deleted and uploaded property photos to become thumbnails', () => {
     expect(dashboardSource).toContain("api.delete(`/api/tasks/${task.id}`)");
-    expect(dashboardSource).toContain('getPropertyPlaceholder(prop.id, 400, 240, prop.landlord_name, index)');
+    expect(dashboardSource).toContain('getPropertyPlaceholder(prop.id, 400, 240, prop.landlord_name, prop.landlord_id)');
     expect(propertyImagesSource).toContain('landlordInitials(landlordName)');
     expect(apiSource).toContain("doc_type='Property Photo'");
     expect(apiSource).toContain("app.get('/api/public/properties/:id/thumbnail'");

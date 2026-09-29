@@ -1,0 +1,24 @@
+import {useEffect,useRef,useState} from 'react';
+import {createPortal} from 'react-dom';
+import {useApi,invalidateCache} from '../hooks/useApi';
+import {usePermissions} from '../hooks/usePermissions';
+import {Button} from './ui';
+type Transaction={id:number;booked_at:string;description:string;display_name?:string;merchant_name?:string;amount:number;currency:string;allocations:{id:number;kind:string;amount:number;rent_payment_id?:number;category?:string;notes?:string;tenant_name?:string;property_address?:string}[]};
+const money=(value:number)=>Number(value).toLocaleString('en-GB',{style:'currency',currency:'GBP'});
+export default function RentBankTransactions({paymentId,onChanged}:{paymentId:number;onChanged:()=>Promise<void>}){
+ const api=useApi(),permissions=usePermissions(),ref=useRef<HTMLDialogElement>(null);
+ const [open,setOpen]=useState(false),[rows,setRows]=useState<Transaction[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState(''),[busy,setBusy]=useState(false),[confirm,setConfirm]=useState<number|null>(null);
+ useEffect(()=>{if(!open)return;const dialog=ref.current!;dialog.showModal();setLoading(true);setError('');let active=true;api.get(`/api/rent-payments/${paymentId}/bank-transactions`).then(result=>{if(active)setRows(result);}).catch(e=>{if(active)setError(String(e));}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;dialog.close();};},[open,paymentId,api]);
+ const unassign=async(row:Transaction)=>{setBusy(true);setError('');try{await api.post(`/api/bank-feed/transactions/${row.id}/reconcile`,{action:'unassign'});invalidateCache('/api/rent-payments');invalidateCache('/api/financial-summary');invalidateCache('/api/bank-feed');await onChanged();setRows(current=>current.filter(r=>r.id!==row.id));setConfirm(null);}catch(e){setError(e instanceof Error?e.message:'Could not unassign transaction');}finally{setBusy(false);}};
+ if(!permissions.canAccessFinance())return null;
+ return <><Button size="sm" variant="outline" onClick={()=>setOpen(true)}>View Transaction</Button>{open&&createPortal(<dialog ref={ref} aria-label="Linked bank transactions" onCancel={e=>{e.preventDefault();if(!busy)setOpen(false);}} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-2xl max-h-[85vh] rounded-2xl border border-[var(--border-input)] bg-[var(--bg-card)] text-[var(--text-primary)] p-0 backdrop:bg-black/50">
+  <header className="flex items-center justify-between gap-3 p-5 border-b border-[var(--border-subtle)]"><h2 className="font-semibold">Linked Bank Transactions</h2><Button size="sm" variant="outline" disabled={busy} onClick={()=>setOpen(false)}>Close</Button></header>
+  <div className="p-5 space-y-4 overflow-auto max-h-[65vh]">{loading?<p>Loading transactions…</p>:!rows.length?<p>No bank transactions are currently assigned to this rent payment.</p>:rows.map(row=><section key={row.id} className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
+   <div className="flex flex-wrap justify-between gap-2"><p className="font-medium">{row.display_name||row.description||row.merchant_name||'Bank transaction'}</p><p className="font-semibold">{money(row.amount)}</p></div>
+   <p className="text-sm text-[var(--text-secondary)]">{new Date(row.booked_at).toLocaleDateString('en-GB')} · {row.currency} · Transaction {row.id}</p>
+   {row.display_name&&row.description&&<p className="text-sm">Bank description: {row.description}</p>}
+   <div className="space-y-2">{row.allocations.map(a=><div key={a.id} className="rounded-lg bg-[var(--bg-subtle)] p-3 text-sm"><p className="font-medium">{a.rent_payment_id===paymentId?'This rent payment':a.category||a.kind.replaceAll('_',' ')} · {money(a.amount)}</p>{(a.tenant_name||a.property_address)&&<p>{[a.tenant_name,a.property_address].filter(Boolean).join(' · ')}</p>}{a.notes&&<p className="whitespace-pre-wrap text-[var(--text-secondary)]">{a.notes}</p>}</div>)}</div>
+   {permissions.canEdit()&&(confirm===row.id?<div className="space-y-2"><p className="text-sm">Unassign this transaction? {row.allocations.length>1?'All its listed allocations will be removed. ':''}Rent totals and payment dates will be recalculated. The bank entry stays available to assign again.</p><div className="flex justify-end gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={()=>setConfirm(null)}>Cancel</Button><Button size="sm" disabled={busy} onClick={()=>void unassign(row)}>{busy?'Unassigning…':'Confirm Unassign'}</Button></div></div>:<div className="flex justify-end"><Button size="sm" variant="outline" onClick={()=>setConfirm(row.id)}>Unassign Transaction</Button></div>)}
+  </section>)}{error&&<p role="alert" className="text-sm text-red-600">{error}</p>}</div>
+ </dialog>,document.body)}</>;
+}

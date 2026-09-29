@@ -99,7 +99,7 @@ describe('5 September CRM feedback', () => {
 
   it('hides client-only service filters from My Portfolio', () => {
     expect(properties).toContain("portfolioFilter === 'internal'");
-    expect(properties).toContain("!['full_management', 'rent_collection'].includes(status.key)");
+    expect(properties).toContain("!['let_only', 'full_management', 'rent_collection'].includes(status.key)");
     expect(properties).toContain('...visibleStatuses.map');
   });
 

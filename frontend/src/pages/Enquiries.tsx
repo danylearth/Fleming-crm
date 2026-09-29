@@ -1,3 +1,5 @@
+import {useOnboardingStarted} from '../hooks/useOnboardingStarted';
+import {ToolbarButton} from '../components/ui';
 import { OFFICE_ADDRESS } from '../utils/meetingLocations';
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
@@ -16,7 +18,7 @@ import { calculateSmsSegments } from '../utils/sms';
 import { rejectionSms } from '../utils/messages';
 import { usePermissions } from '../hooks/usePermissions';
 import { viewingEmailPreview, viewingSmsPreview } from '../utils/viewingMessages';
-import { formatPropertyAddress } from '../utils/propertyAddress';
+import { formatPropertyAddress, formatCardAddress } from '../utils/propertyAddress';
 import { useNotifications } from '../context/NotificationContext';
 
 interface EnquiryRaw {
@@ -37,6 +39,7 @@ interface Property {
 interface Enquiry {
   id: number;
   name: string;
+  initials: string;
   email: string;
   phone: string;
   status: string;
@@ -45,6 +48,7 @@ interface Enquiry {
   created_at: string;
   landlord_type?: string;
   address?: string;
+  cardAddress?: string;
   is_joint_application?: boolean;
   joint_partner_id?: number | null;
   onboarding_started?: boolean;
@@ -56,6 +60,7 @@ function mapEnquiry(raw: EnquiryRaw): Enquiry {
   return {
     id: raw.id,
     name: [raw.first_name_1, raw.last_name_1].filter(Boolean).join(' ') || 'Unknown',
+    initials: [raw.first_name_1, raw.last_name_1].map(value=>String(value||'').trim().charAt(0)).join('').toUpperCase(),
     email: raw.email_1 || '',
     phone: raw.phone_1 || '',
     status: raw.status || 'new',
@@ -63,10 +68,11 @@ function mapEnquiry(raw: EnquiryRaw): Enquiry {
     linked_property_id: raw.linked_property_id || null,
     created_at: raw.created_at,
     landlord_type: raw.landlord_type || undefined,
-    address: [raw.current_address_1, raw.postcode_1].filter(Boolean).join(', '),
+    address: formatPropertyAddress(raw.current_address_1, raw.postcode_1),
+    cardAddress: formatCardAddress(raw.current_address_1, raw.postcode_1),
     is_joint_application: !!raw.is_joint_application,
     joint_partner_id: raw.joint_partner_id || null,
-    onboarding_started: !!(raw.holding_deposit_requested || raw.application_form_sent || raw.onboarding_step),
+    onboarding_started: !!(raw.status==='onboarding' || raw.holding_deposit_requested || raw.application_form_sent || raw.onboarding_step),
     application_ready_for_review: !!raw.application_form_completed && raw.application_review_status === 'pending',
     agreement_ready_for_review: !!raw.tenancy_agreement_completed && !raw.balance_payment_received,
   };
@@ -291,6 +297,7 @@ export default function Enquiries() {
 
   // Workflow state
   const [workflowEnquiry, setWorkflowEnquiry] = useState<Enquiry | null>(null);
+  const onboardingStarted=useOnboardingStarted(workflowEnquiry?.id,!!workflowEnquiry?.onboarding_started);
   const [workflowMode, setWorkflowMode] = useState<'choose' | 'viewing' | 'follow_up' | 'onboarding' | 'reject'>('choose');
   const [wfDate, setWfDate] = useState('');
   const [wfTime, setWfTime] = useState('10:00');
@@ -407,6 +414,7 @@ export default function Enquiries() {
 
   const prepareWorkflowEmail = (mode: 'follow_up' | 'reject') => {
     if (!workflowEnquiry) return;
+    if (['viewing','follow_up','onboarding'].includes(workflowMode) && !workflowEnquiry.linked_property_id) { alert('Select a property first.'); return; }
     const names = applicantFirstNames(workflowEnquiry);
     const greeting = names.length > 1 ? names.join(' and ') : names[0] || 'there';
     setEmailEnabled(false);
@@ -421,6 +429,7 @@ export default function Enquiries() {
 
   const doWorkflowAction = async () => {
     if (!workflowEnquiry) return;
+    if (['viewing','follow_up','onboarding'].includes(workflowMode) && !workflowEnquiry.linked_property_id) { alert('Select a property first.'); return; }
     setWfLoading(true);
     let communicationWarning = '';
     try {
@@ -449,7 +458,7 @@ export default function Enquiries() {
             }
             await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`, {
               ...raw, status: 'viewing_booked',
-              linked_property_id: wfPropId && !['other','office'].includes(wfPropId) ? Number(wfPropId) : null,
+              linked_property_id: wfPropId && !['other','office'].includes(wfPropId) ? Number(wfPropId) : workflowEnquiry.linked_property_id,
               viewing_date: wfDate, viewing_with: wfViewingWith || null,
             });
           }
@@ -643,13 +652,13 @@ export default function Enquiries() {
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
           {isManager() && (
-            <Button variant="outline" onClick={() => setShowImport(true)}>
+            <ToolbarButton variant="outline" onClick={() => setShowImport(true)}>
               <Upload size={16} className="mr-2" /> Import CSV
-            </Button>
+            </ToolbarButton>
           )}
-          <Button variant="gradient" onClick={() => setShowAdd(true)}>
+          <ToolbarButton variant="gradient" onClick={() => setShowAdd(true)}>
             <Plus size={16} className="mr-2" /> Add Enquiry
-          </Button>
+          </ToolbarButton>
         </div>
 
         {showImport && isManager() && <CsvImport entity="tenant-enquiries" onClose={() => setShowImport(false)} onDone={load} />}
@@ -739,42 +748,49 @@ export default function Enquiries() {
                               {(provided, snapshot) => (
                                 <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
                                   style={provided.draggableProps.style}>
-                                  <GlassCard className={`p-4 ${editMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} hover:border-[var(--accent-orange)]/30 transition-colors ${selectedIds.includes(e.id) ? 'ring-2 ring-[var(--accent-orange)]/50' : ''} ${snapshot.isDragging ? 'ring-2 ring-[var(--accent-orange)]/40 shadow-lg' : ''}`}
+                                  <GlassCard className={`px-4 pt-4 pb-2 ${editMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} hover:border-[var(--accent-orange)]/30 transition-colors ${selectedIds.includes(e.id) ? 'ring-2 ring-[var(--accent-orange)]/50' : ''} ${snapshot.isDragging ? 'ring-2 ring-[var(--accent-orange)]/40 shadow-lg' : ''}`}
                                     onClick={() => {
                                       if (snapshot.isDragging) return;
                                       if (editMode) toggleSelectEnquiry(e.id);
                                       else navigate(`/enquiries/${e.id}`);
                                     }}>
-                                    <div className="flex items-start gap-3">
+                                    <div className="flex items-start gap-2">
                                       {editMode && e.status !== 'converted' && (
                                         <input type="checkbox" checked={selectedIds.includes(e.id)} onChange={() => toggleSelectEnquiry(e.id)} onClick={ev => ev.stopPropagation()} className="w-4 h-4 mt-1 rounded accent-orange-500" />
                                       )}
-                                      <Avatar name={e.name} size="sm" />
+                                      <Avatar name={e.name} initials={e.initials} size="sm" className="-ml-1 leading-none [&>span]:translate-y-px" />
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
-                                          <p className="text-sm font-medium truncate flex-1">{e.name}</p>
-                                          {e.is_joint_application && <span className="text-[10px] font-bold text-purple-400 shrink-0">Joint App</span>}
+                                          <p className="text-sm font-bold truncate flex-1">{e.name}</p>
+                                          {e.is_joint_application && <span className="rounded-full border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:text-purple-300 shrink-0">Joint App</span>}
                                         </div>
-                                        {e.agreement_ready_for_review&&<button className="block mt-2 text-xs font-semibold text-emerald-600 underline" onClick={event=>{event.stopPropagation();navigate(`/enquiries/${e.id}?onboarding=1`);}}>Agreement completed — Final Balance</button>}{e.application_ready_for_review && <span className="inline-flex mt-1 text-[10px] font-semibold text-amber-400">Application ready for review</span>}
-                                        {e.email && <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5"><Mail size={10} />{e.email}</p>}
-                                        {e.phone && <p className="text-xs text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5"><Phone size={10} />{e.phone}</p>}
-                                        {e.address && <p className="text-xs text-[var(--text-muted)] flex items-start gap-1 mt-0.5"><Home size={10} className="mt-0.5 shrink-0" /><span className="line-clamp-2">{e.address}</span></p>}
+                                        {e.application_ready_for_review && <span className="block mt-0.5 text-[10px] font-semibold text-amber-400">Application ready for review</span>}
                                       </div>
                                     </div>
-                                    <div className="flex items-center gap-2 mt-3 pt-2 border-t border-[var(--border-subtle)]">
+                                    <div className="mt-2 space-y-0.5">
+                                      {e.email && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Mail size={10} className="shrink-0"/><span className="truncate">{e.email}</span></p>}
+                                      {e.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} className="shrink-0"/>{e.phone}</p>}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <div className="min-w-0 flex-1">
+                                      {e.cardAddress && <p title={e.address} className="text-xs text-[var(--text-muted)] flex items-start gap-1"><Home size={10} className="mt-0.5 shrink-0"/><span>{e.cardAddress}</span></p>}
+                                      <div className="flex flex-col gap-1 mt-1 pt-1 border-t border-[var(--border-subtle)]">
                                       {e.follow_up_date && (
-                                        <span className={`text-[10px] flex items-center gap-1 ${isOverdue(e.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-muted)]'}`}>
-                                          <Calendar size={10} />{formatDate(e.follow_up_date)}
+                                        <span className={`text-xs flex items-center gap-1 ${isOverdue(e.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-secondary)]'}`}>
+                                          <Calendar size={12} className="shrink-0" />{formatDate(e.follow_up_date)}
                                         </span>
                                       )}
                                       {e.linked_property_id && propertyMap[e.linked_property_id] && (
-                                        <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
-                                          <Building2 size={10} />{propertyMap[e.linked_property_id].address.substring(0, 20)}...
+                                        <span className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
+                                          <Building2 size={12} className="shrink-0"/><span title={formatPropertyAddress(propertyMap[e.linked_property_id].address,propertyMap[e.linked_property_id].postcode)}>{formatCardAddress(propertyMap[e.linked_property_id].address,propertyMap[e.linked_property_id].postcode)}</span>
                                         </span>
                                       )}
+                                      {e.agreement_ready_for_review&&<button className="text-left text-xs font-semibold text-emerald-600 underline" onClick={event=>{event.stopPropagation();navigate(`/enquiries/${e.id}?onboarding=1`);}}>Agreement completed — Final Balance</button>}
+                                      </div>
+                                      </div>
                                       <button onClick={(ev) => openWorkflow(e, ev)} disabled={editMode}
-                                        className="ml-auto text-[10px] px-2.5 py-1 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-medium">
-                                        Progress / Reject
+                                        className="ml-auto -translate-y-2 shrink-0 whitespace-nowrap text-xs min-h-10 min-w-24 px-4 py-2 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-semibold">
+                                        {e.onboarding_started ? 'Continue' : 'Progress / Reject'}
                                       </button>
                                     </div>
                                   </GlassCard>
@@ -830,11 +846,11 @@ export default function Enquiries() {
                   key: 'name', header: 'Name',
                 render: (e) => (
                   <div className="flex items-center gap-3">
-                    <Avatar name={e.name} size="sm" />
+                    <Avatar name={e.name} initials={e.initials} size="sm" />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium truncate">{e.name}</p>
-                        {e.is_joint_application && <span className="text-[10px] font-bold text-purple-400 shrink-0">Joint App</span>}
+                        <p className="font-bold truncate">{e.name}</p>
+                        {e.is_joint_application && <span className="rounded-full border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:text-purple-300 shrink-0">Joint App</span>}
                         {e.agreement_ready_for_review&&<button className="block mt-2 text-xs font-semibold text-emerald-600 underline" onClick={event=>{event.stopPropagation();navigate(`/enquiries/${e.id}?onboarding=1`);}}>Agreement completed — Final Balance</button>}{e.application_ready_for_review && <span className="text-[10px] font-semibold text-amber-400 shrink-0">Review application</span>}
                       </div>
                       <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{e.email || e.phone}</p>
@@ -862,7 +878,7 @@ export default function Enquiries() {
                 render: (e) => e.linked_property_id && propertyMap[e.linked_property_id] ? (
                   <p className="text-xs text-[var(--text-secondary)] truncate max-w-[200px] flex items-center gap-1">
                     <Building2 size={10} className="text-[var(--text-muted)] shrink-0" />
-                    {propertyMap[e.linked_property_id].address}
+                    {formatPropertyAddress(propertyMap[e.linked_property_id].address,propertyMap[e.linked_property_id].postcode)}
                   </p>
                 ) : (
                   <span className="text-xs text-[var(--text-muted)]">—</span>
@@ -890,8 +906,8 @@ export default function Enquiries() {
                 key: 'action', header: '', align: 'right', width: 'w-20',
                 render: (e) => !['converted', 'rejected'].includes(e.status) ? (
                   <button onClick={(ev) => openWorkflow(e, ev)}
-                    className="text-[10px] px-2.5 py-1 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-medium whitespace-nowrap">
-                    Progress / Reject
+                    className="text-xs min-h-10 min-w-24 px-4 py-2 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-semibold whitespace-nowrap">
+                    {e.onboarding_started ? 'Continue' : 'Progress / Reject'}
                   </button>
                 ) : null,
               },
@@ -927,9 +943,9 @@ export default function Enquiries() {
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
-              <Button variant="gradient" onClick={addEnquiry} disabled={saving || !form.name.trim()}>
+              <ToolbarButton variant="gradient" onClick={addEnquiry} disabled={saving || !form.name.trim()}>
                 {saving ? 'Adding...' : 'Add Enquiry'}
-              </Button>
+              </ToolbarButton>
             </div>
           </div>
         </div>
@@ -952,22 +968,23 @@ export default function Enquiries() {
               <button onClick={() => setWorkflowEnquiry(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
             </div>
 
+            {!workflowEnquiry.linked_property_id && <div className="mb-4 space-y-2 rounded-xl border border-amber-400/40 p-4"><p className="text-sm font-medium">Select a property before progressing this enquiry.</p><Select label="Property *" searchable value={wfPropId} onChange={setWfPropId} options={[{value:'',label:'Choose a property'},...properties.map(p=>({value:String(p.id),label:`${p.address}${p.postcode ? `, ${p.postcode}` : ''}`}))]}/><Button disabled={wfLoading||!properties.some(p=>String(p.id)===wfPropId)} onClick={async()=>{setWfLoading(true);try{await api.put(`/api/tenant-enquiries/${workflowEnquiry.id}`,{linked_property_id:Number(wfPropId)});setWorkflowEnquiry({...workflowEnquiry,linked_property_id:Number(wfPropId)});await load();}catch(e){alert(e instanceof Error?e.message:'Property could not be linked');}finally{setWfLoading(false);}}}>Link Property</Button></div>}
             {workflowMode === 'choose' ? (
               <>
                 <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Progress</p>
-                <button onClick={() => { setWorkflowMode('viewing'); if (workflowEnquiry) { const fn = workflowEnquiry.name?.split(' ')[0] || ''; setSmsBody(generateViewingSms(fn, wfPropId, wfDate, wfTime, wfCustomLocation)); } }}
+                <button disabled={!workflowEnquiry.linked_property_id} onClick={() => { setWorkflowMode('viewing'); if (workflowEnquiry) { const fn = workflowEnquiry.name?.split(' ')[0] || ''; setSmsBody(generateViewingSms(fn, wfPropId, wfDate, wfTime, wfCustomLocation)); } }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><BookingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Book Viewing</p><p className="text-xs text-[var(--text-muted)]">Select date, time & property</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <button onClick={() => { setWorkflowMode('follow_up'); setWfViewingWith(''); setSmsEnabled(false); prepareWorkflowEmail('follow_up'); const fn = workflowEnquiry?.name?.split(' ')[0] || ''; setSmsBody(`Hi ${fn || '[name]'}, just following up on your property enquiry with Fleming Lettings. Are you still looking? Please let us know if you'd like to arrange a viewing or have any questions. Call us on 01902 212 415. - Fleming Lettings`); }}
+                <button disabled={!workflowEnquiry.linked_property_id} onClick={() => { setWorkflowMode('follow_up'); setWfViewingWith(''); setSmsEnabled(false); prepareWorkflowEmail('follow_up'); const fn = workflowEnquiry?.name?.split(' ')[0] || ''; setSmsBody(`Hi ${fn || '[name]'}, just following up on your property enquiry with Fleming Lettings. Are you still looking? Please let us know if you'd like to arrange a viewing or have any questions. Call us on 01902 212 415. - Fleming Lettings`); }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><AwaitingIcon size={14} className="text-white" /></div>
                   <div className="flex-1"><p className="text-sm font-medium">Set Follow Up</p><p className="text-xs text-[var(--text-muted)]">Schedule a follow-up date</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <button onClick={async () => {
+                <button disabled={!workflowEnquiry.linked_property_id} onClick={async () => {
                   if (workflowEnquiry) {
                     try {
                       const full = await api.get(`/api/tenant-enquiries/${workflowEnquiry.id}`);
@@ -979,7 +996,7 @@ export default function Enquiries() {
                 }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center"><OnboardingIcon size={14} className="text-white" /></div>
-                  <div className="flex-1"><p className="text-sm font-medium">{workflowEnquiry?.onboarding_started ? 'Continue Onboarding' : 'Start Onboarding'}</p><p className="text-xs text-[var(--text-muted)]">{workflowEnquiry?.onboarding_started ? 'Continue the tenant’s onboarding' : 'Begin tenant onboarding'}</p></div>
+                  <div className="flex-1"><p className="text-sm font-medium">{onboardingStarted ? 'Continue Onboarding' : 'Start Onboarding'}</p><p className="text-xs text-[var(--text-muted)]">{onboardingStarted ? 'Continue the tenant’s onboarding' : 'Begin tenant onboarding'}</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
                 <div className="h-px bg-[var(--border-subtle)] my-3" />

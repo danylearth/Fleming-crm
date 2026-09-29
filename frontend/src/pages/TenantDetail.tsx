@@ -1,3 +1,5 @@
+import SignatureRequests from '../components/SignatureRequests';
+import CreditReports from '../components/CreditReports';
 import SectionEditButton from '../components/ui/SectionEditButton';
 import TenantSmsComposer from '../components/TenantSmsComposer';
 import { usePermissions } from '../hooks/usePermissions';
@@ -8,7 +10,7 @@ import { useRecordAddress } from '../hooks/useRecordAddress';
 import ContextualDocSlot from '../components/ui/ContextualDocSlot';
 import RentReviewModal from '../components/ui/RentReviewModal';
 import CompletionModal from '../components/ui/CompletionModal';
-import { tenantCompletion, type CompletionOverride } from '../utils/tenantCompletion';
+import { tenantCompletion, type CompletionOverride, type CompletionDocument } from '../utils/tenantCompletion';
 import CommunicationsHistory from '../components/ui/CommunicationsHistory';
 import TenancyEndModal from '../components/ui/TenancyEndModal';
 import { useNotifications } from '../context/NotificationContext';
@@ -22,7 +24,7 @@ import ActivityTimeline from '../components/ui/ActivityTimeline';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { Users,
-  Mail, Phone, Building2, Calendar, MessageSquare, Clock,
+  Mail, Phone, Building2, Calendar, MessageSquare, Clock, StickyNote,
   AlertTriangle, ChevronRight, User, CheckCircle,
   ChevronDown, BadgePoundSterling, ShieldCheck, UsersRound
 } from 'lucide-react';
@@ -90,22 +92,6 @@ function formatDateDMY(dateStr: string): string {
   if (isNaN(d.getTime())) return dateStr;
   return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
 }
-function TimeAgo({ date }: { date: string }) {
-  const now = new Date();
-  const then = new Date(date);
-  const diff = now.getTime() - then.getTime();
-  const mins = Math.floor(diff / 60000);
-  const hrs = Math.floor(mins / 60);
-  const days = Math.floor(hrs / 24);
-  let label = '';
-  if (days > 30) label = formatDateDMY(date);
-  else if (days > 0) label = `${days}d ago`;
-  else if (hrs > 0) label = `${hrs}h ago`;
-  else if (mins > 0) label = `${mins}m ago`;
-  else label = 'Just now';
-  return <span className="text-[10px] text-[var(--text-muted)]">{label}</span>;
-}
-
 function YesNo({ value, onChange, disabled }: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <div className="flex gap-1">
@@ -161,6 +147,7 @@ export default function TenantDetail() {
   const [showCompletion, setShowCompletion] = useState(false);
   const [showRentReview, setShowRentReview] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [completionDocuments, setCompletionDocuments] = useState<CompletionDocument[]>([]);
   const id = useRecordAddress('tenants', tenant?.name);
   const [loading, setLoading] = useState(true);
   const editingRef = useRef<string | null>(null);
@@ -235,7 +222,10 @@ export default function TenantDetail() {
 
   const loadDetail = async () => {
     try {
-      const t = await api.get(`/api/tenants/${id}`);
+      const [t, documents] = await Promise.all([
+        api.get(`/api/tenants/${id}`),
+        api.get(`/api/documents/tenant/${id}?applicant_number=1`),
+      ]);
       if (Number(t.id) !== requestedTenantId.current) return;
       if (loadedTenantId.current !== Number(t.id)) {
         editingRef.current = null;
@@ -243,6 +233,7 @@ export default function TenantDetail() {
         loadedTenantId.current = Number(t.id);
       }
       setTenant(t);
+      setCompletionDocuments(Array.isArray(documents) ? documents : []);
       if (!editingRef.current) setForm(tenantToForm(t));
       if (t.property_id) {
         const linkedProperty = await api.get(`/api/properties/${t.property_id}`).catch(() => null);
@@ -309,7 +300,7 @@ export default function TenantDetail() {
     setSendingMaintenanceLink(null);
   };
 
-  const checklistItems = tenantCompletion(form, tenant?.linked_tenant_id, tenant?.completion_overrides);
+  const checklistItems = tenantCompletion(form, tenant?.linked_tenant_id, tenant?.completion_overrides, completionDocuments);
   const hasInlineJointApplicant = Boolean(form.is_joint_tenancy && !tenant?.linked_tenant_id && (form.first_name_2 || form.last_name_2 || form.email_2));
   const completedCount = checklistItems.filter(i => i.done).length;
   const completionPercent = checklistItems.length ? Math.round((completedCount / checklistItems.length) * 100) : 0;
@@ -352,6 +343,7 @@ export default function TenantDetail() {
       const before=tenantToForm(tenant!);
       const changed=Object.fromEntries(Object.entries(payload).filter(([key])=>key!=='notes'&&JSON.stringify(form[key])!==JSON.stringify(before[key as keyof typeof before])));
       if('first_name_1' in changed||'last_name_1' in changed)changed.name=payload.name;
+      if(editingSection==='deposit') { for(const key of Object.keys(changed)) if(key!=='deposit_scheme') delete changed[key]; }
       if(Object.keys(changed).length)await api.put(`/api/tenants/${id}`, changed);
       const t = await api.get(`/api/tenants/${id}`);
       setTenant(t);
@@ -529,7 +521,7 @@ export default function TenantDetail() {
                       { icon: Mail, label: 'Email', value: tenant.email },
                       { icon: Phone, label: 'Phone', value: tenant.phone },
                       { icon: Calendar, label: 'Date of Birth', value: tenant.date_of_birth_1 ? formatDateDMY(tenant.date_of_birth_1) : null },
-                    ].map(({ icon: Icon, label, value }) => (
+                    ].filter(({label,value}) => label !== 'Email' || String(value || '').trim()).map(({ icon: Icon, label, value }) => (
                       <div key={label} className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl bg-[var(--bg-hover)] flex items-center justify-center">
                           <Icon size={16} className="text-[var(--text-muted)]" />
@@ -541,8 +533,8 @@ export default function TenantDetail() {
                   <div className="h-px bg-[var(--border-subtle)] my-2" />
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <ReadField label="Current Address" value={tenant.current_address} />
-                    <ReadField label="Previous Address" value={tenant.previous_address} />
-                    <ReadField label="Address Before Previous" value={tenant.address_before_previous} />
+                    {tenant.previous_address?.trim() && <ReadField label="Previous Address" value={tenant.previous_address} />}
+                    {tenant.address_before_previous?.trim() && <ReadField label="Address Before Previous" value={tenant.address_before_previous} />}
                   </div>
                   {hasInlineJointApplicant && (
                     <>
@@ -550,7 +542,7 @@ export default function TenantDetail() {
                       <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Applicant 2</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <ReadField label="Name" value={[tenant.title_2, tenant.first_name_2, tenant.last_name_2].filter(Boolean).join(' ') || null} />
-                        <ReadField label="Email" value={tenant.email_2} />
+                        {tenant.email_2?.trim() && <ReadField label="Email" value={tenant.email_2} />}
                         <ReadField label="Phone" value={tenant.phone_2} />
                         <ReadField label="Date of Birth" value={tenant.date_of_birth_2 ? formatDateDMY(tenant.date_of_birth_2) : null} />
                       </div>
@@ -599,7 +591,7 @@ export default function TenantDetail() {
                         <ReadField label="Name" value={form.nok_name} />
                         <ReadField label="Relationship" value={form.nok_relationship} />
                         <ReadField label="Phone" value={form.nok_phone} />
-                        <ReadField label="Email" value={form.nok_email} />
+                        {form.nok_email?.trim() && <ReadField label="Email" value={form.nok_email} />}
                         <ReadField label="Address" value={form.nok_address} />
                       </div>
                     </div>
@@ -614,7 +606,7 @@ export default function TenantDetail() {
                         <ReadField label="Name" value={form.nok_2_name} />
                         <ReadField label="Relationship" value={form.nok_2_relationship} />
                         <ReadField label="Phone" value={form.nok_2_phone} />
-                        <ReadField label="Email" value={form.nok_2_email} />
+                        {form.nok_2_email?.trim() && <ReadField label="Email" value={form.nok_2_email} />}
                         <ReadField label="Address" value={form.nok_2_address} />
                       </div>
                     </div>
@@ -686,9 +678,11 @@ export default function TenantDetail() {
               <AdditionalGuarantors key={tenant.id} tenantId={tenant.id} records={tenant.additional_guarantors||[]} onSaved={loadDetail} />
             </GlassCard>}
 
+            <CreditReports tenantId={tenant.id} />
+
             {/* Documents */}
-            <DocumentUpload entityType="tenant" entityId={tenant.id} group="tenant" />
-            <DocumentUpload entityType="tenant" entityId={tenant.id} group="guarantor" title="Guarantor(s) Documentation" />
+            <DocumentUpload entityType="tenant" entityId={tenant.id} group="tenant" onChange={loadDetail} />
+            {(tenant.guarantor_name?.trim() || !!tenant.additional_guarantors?.length) && <DocumentUpload entityType="tenant" entityId={tenant.id} group="guarantor" title="Guarantor(s) Documentation" onChange={loadDetail} />}
           </div>
 
           {/* ==================== RIGHT COLUMN ==================== */}
@@ -697,14 +691,10 @@ export default function TenantDetail() {
             <GlassCard className="p-6">
               <div className="flex flex-col items-start gap-3 mb-4">
                 <SectionHeader title="Tenancy Details" icon={<Building2 size={16} />} />
-                {isEditing('tenancy') ? (
-                  <SectionEditButton editing onEdit={() => setEditingSection('tenancy')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
-                ) : (
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {tenant.status==='inactive'&&<Button size="sm" disabled={saving} onClick={async()=>{if(!await confirmAction('Create a fresh enquiry for this returning tenant? Their previous tenancy history will be retained.','Reactivate Tenant'))return;setSaving(true);try{const result=await api.post(`/api/tenants/${tenant.id}/reactivate`,{});navigate(`/enquiries/${result.enquiry_id}`);}catch(e){notify(e instanceof Error?e.message:'Could not reactivate tenant','error');}finally{setSaving(false);}}}>Reactivate to Enquiry</Button>}
-                    <SectionEditButton label="tenancy" editing={false} disabled={!!editingSection} onEdit={()=>setEditingSection('tenancy')} onSave={saveSection} onCancel={cancelSection}/>
-                    {tenant.status !== 'inactive' && <Button variant="outline" className="!bg-red-600 !text-white !border-red-600" size="sm" onClick={() => setShowEndModal(true)}>Schedule Tenancy End</Button>}
-                    <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => setShowRentReview(true)}>£ Rent Review</Button>
+                  <div className="flex w-full flex-nowrap justify-end gap-2 [&>button]:min-w-0 [&>button]:flex-1 [&>button]:whitespace-nowrap [&>button]:px-2 [&>button]:text-[11px]">
+                    {tenant.status==='inactive'&&<Button size="sm" disabled={saving} onClick={async()=>{if(!await confirmAction('Create a fresh enquiry for this returning tenant? Their previous tenancy history will be retained.','Reactivate Tenant'))return;setSaving(true);try{const result=await api.post(`/api/tenants/${tenant.id}/reactivate`,{});navigate(`/enquiries/${result.enquiry_id}`);}catch(e){notify(e instanceof Error?e.message:'Could not reactivate tenant','error');}finally{setSaving(false);}}}>Reactive Record</Button>}
+                    {tenant.status !== 'inactive' && <Button variant="outline" className="!bg-red-600 !text-white !border-red-600" size="sm" onClick={() => setShowEndModal(true)}>End Tenancy</Button>}
+                    <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => setShowRentReview(true)}>Rent Review</Button>
                     {user?.role === 'admin' && <Button variant="outline" size="sm" className="!bg-red-600 !text-white !border-red-600" onClick={async () => {
                       if (!await confirmAction(`Remove ${tenant.name}? Records with issued agreements will be archived; otherwise the record and its linked files will be permanently deleted.`, 'Delete / Archive Tenant')) return;
                       try { const result = await api.post(`/api/tenants/${tenant.id}/remove`, {}); if (result.archived) { await loadDetail(); notify('Tenant archived; history retained','success'); } else navigate('/tenants'); }
@@ -712,37 +702,7 @@ export default function TenantDetail() {
                     }}>Delete / Archive</Button>}
 
                   </div>
-                )}
               </div>
-              {isEditing('tenancy') ? (
-                <div className="space-y-3">
-                  <Select label="Property" value={form.property_id || ''} onChange={v => setForm({ ...form, property_id: v ? Number(v) : null })}
-                    options={[{ value: '', label: 'No property linked' }, ...allProperties.map((p) => ({ value: String(p.id), label: `${p.address}, ${p.postcode}` }))]} />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <DatePicker label="Last Rent Reviewed" value={form.rent_last_reviewed} onChange={v => setForm({ ...form, rent_last_reviewed: v })} />
-                    <Select label="Guarantor Required" value={form.guarantor_required ? "yes" : "no"} onChange={v => setForm({ ...form, guarantor_required: v === "yes" })} options={[{value:"no",label:"No guarantor required"},{value:"yes",label:"Yes — guarantor required"}]} />
-                    <DatePicker label="Tenancy Start Date" value={form.tenancy_start_date} onChange={v => setForm({ ...form, tenancy_start_date: v })} />
-                    <Select label="Tenancy Type" value={form.tenancy_type} onChange={v => setForm({
-                      ...form,
-                      tenancy_type: v,
-                    })}
-                      options={[
-                        { value: '', label: 'Select...' },
-                        ...(!['', 'Fixed Term', 'Assured Periodic Tenancy'].includes(form.tenancy_type) ? [{ value: form.tenancy_type, label: `${form.tenancy_type} (legacy)` }] : []),
-                        { value: 'Fixed Term', label: 'Fixed Term' },
-                        { value: 'Assured Periodic Tenancy', label: 'Assured Periodic Tenancy' },
-                      ]} />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <Input label="Monthly Rent (£)" value={form.monthly_rent} onChange={v => setForm({ ...form, monthly_rent: v })} placeholder="0.00" />
-                    <Input label="Deposit Held (£)" value={form.security_deposit_amount} onChange={v => setForm({ ...form, security_deposit_amount: v })} placeholder="0.00" />
-                    <Select label="Deposit Scheme" value={form.deposit_scheme} onChange={v => setForm({ ...form, deposit_scheme: v })}
-                      options={[{ value: '', label: 'Select...' }, { value: 'tds', label: 'Tenancy Deposit Scheme' }, { value: 'gov_back', label: 'Gov Back Scheme' }, { value: 'paid_to_landlord', label: 'Paid to Landlord' }, { value: 'other', label: 'Other/TBF' }]} />
-                  </div>
-                  <Select label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })}
-                    options={[{ value: 'active', label: 'Active' }, { value: 'scheduled', label: 'Scheduled' }, { value: 'inactive', label: 'Archived' }]} />
-                </div>
-              ) : (
                 <div className="divide-y divide-[var(--border-subtle)]">
                   {tenant?.property_id ? (
                     <div className="pb-3">
@@ -761,19 +721,29 @@ export default function TenantDetail() {
                     <ReadField label="Last Rent Reviewed" value={tenant.rent_last_reviewed ? formatDateDMY(tenant.rent_last_reviewed) : null} />
                     <ReadField label="Tenancy Type" value={form.tenancy_type} />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 py-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3">
                     <ReadField label="Monthly Rent" value={form.monthly_rent ? `£${Number(form.monthly_rent).toLocaleString()}` : null} />
-                    <ReadField label="Deposit Held" value={form.security_deposit_amount ? `£${Number(form.security_deposit_amount).toLocaleString()}` : null} />
-                    <ReadField label="Deposit Scheme" value={
-                      form.deposit_scheme === 'tds' ? 'Tenancy Deposit Scheme' :
-                        form.deposit_scheme === 'gov_back' ? 'Gov Back Scheme' :
-                          form.deposit_scheme === 'paid_to_landlord' ? 'Paid to Landlord' :
-                            form.deposit_scheme === 'other' ? 'Other/TBF' : null
-                    } />
+                    <ReadField label="Deposit Held" value={Number(form.security_deposit_amount) > 0 ? `£${Number(form.security_deposit_amount).toLocaleString()}` : 'No deposit held'} />
+                    {Number(form.security_deposit_amount) > 0 && <div className="sm:col-span-2 border-t border-[var(--border-subtle)] pt-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          {isEditing('deposit') ? (
+                            <Select label="Deposit Scheme" value={form.deposit_scheme} onChange={v => setForm({ ...form, deposit_scheme: v })}
+                              options={[{ value: '', label: 'Select...' }, { value: 'tds', label: 'Tenancy Deposit Scheme' }, { value: 'gov_back', label: 'Gov Back Scheme' }, { value: 'paid_to_landlord', label: 'Paid to Landlord' }, { value: 'other', label: 'Other/TBF' }]} />
+                          ) : <ReadField label="Deposit Scheme" value={
+                            form.deposit_scheme === 'tds' ? 'Tenancy Deposit Scheme' :
+                              form.deposit_scheme === 'gov_back' ? 'Gov Back Scheme' :
+                                form.deposit_scheme === 'paid_to_landlord' ? 'Paid to Landlord' :
+                                  form.deposit_scheme === 'other' ? 'Other/TBF' : null
+                          } />}
+                        </div>
+                        <SectionEditButton label="deposit scheme" editing={isEditing('deposit')} disabled={!!editingSection&&!isEditing('deposit')}
+                          onEdit={() => setEditingSection('deposit')} onSave={saveSection} onCancel={cancelSection} saving={saving} />
+                      </div>
+                    </div>}
                   </div>
 
                 </div>
-              )}
             </GlassCard>
 
             {/* Onboarding Checklist */}
@@ -931,12 +901,15 @@ export default function TenantDetail() {
               <div className="space-y-3 max-h-64 overflow-y-auto !pr-0 [scrollbar-gutter:auto]">
                 {displayedNotes.length === 0 && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
                 {displayedNotes.map(note => (
-                  <div key={note.id} className="bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl p-3 min-h-24">
-                    <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <span className="text-[10px] text-[var(--text-muted)]">{note.author}</span>
-                      <TimeAgo date={note.created_at} /><DeleteNoteButton entity={notesFilter} id={notesFilter==='property'?tenant.property_id!:tenant.id} note={note} onDeleted={loadDetail} />
+                  <div key={note.id} className="flex items-start gap-3 py-1">
+                    <span className="shrink-0 rounded-full bg-[var(--bg-input)] p-2 text-[var(--text-muted)]"><StickyNote size={14} /></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap break-words">{note.text}</p>
+                      <div className="flex flex-wrap items-center gap-1 mt-1 text-[10px] text-[var(--text-muted)]">
+                        <span>{note.author} · {formatDateDMY(note.created_at)}</span>
+                      </div>
                     </div>
+                    <div className="shrink-0 pt-1"><DeleteNoteButton entity={notesFilter} id={notesFilter==='property'?tenant.property_id!:tenant.id} note={note} onDeleted={loadDetail} /></div>
                   </div>
                 ))}
               </div>
@@ -951,8 +924,9 @@ export default function TenantDetail() {
               </div>
             </GlassCard>
 
-            <TenantSmsComposer tenantId={tenant.id} phone={tenant.phone} onSent={loadDetail}/>
             <CommunicationsHistory messages={communications} tenantId={Number(id)} onSent={()=>window.location.reload()} />
+            <TenantSmsComposer tenantId={tenant.id} phone={tenant.phone} onSent={loadDetail}/>
+            <SignatureRequests entity="tenant" id={Number(id)}/>
 
             {/* Activity Timeline */}
             <GlassCard className="p-6">
@@ -968,3 +942,4 @@ export default function TenantDetail() {
     </Layout>
   );
 }
+

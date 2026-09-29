@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS company_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  data JSONB NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  updated_by INTEGER REFERENCES users(id),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

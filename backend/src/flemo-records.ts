@@ -1,3 +1,4 @@
+import {matchFlemoRecords} from './flemo-lookup';
 import {query} from './db-pg';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -5,17 +6,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 const exec=promisify(execFile);
-const stop=new Set('what where when which who how is are was were the a an in on at for to of and with tell me show find about tenant tenants property properties street road drive avenue flat house please documents document information rent payment payments'.split(' '));
 export async function flemoEvidence(message:string,portfolio:string,context?:{entityType?:string;entityId?:number},readScans=false,includeFinance=true) {
   const tenants=await query(`SELECT t.id,t.name,t.email,t.phone,t.status,t.date_of_birth_1 AS date_of_birth,t.current_address,t.previous_address,t.nok_name,t.nok_phone,t.guarantor_name,t.guarantor_address,t.guarantor_email,t.additional_guarantors,t.income_amount,t.income_frequency,t.income_employer,t.notes,t.monthly_rent,t.tenancy_start_date,t.tenancy_end_date,t.property_id,p.address AS property_address,p.postcode AS property_postcode,'tenants' AS entity FROM tenants t LEFT JOIN properties p ON p.id=t.property_id LEFT JOIN landlords l ON l.id=p.landlord_id WHERE ($1='all' OR l.landlord_type=$1) AND p.archived_at IS NULL ORDER BY t.name LIMIT 500`,[portfolio]);
   const properties=await query(`SELECT p.id,p.address AS name,p.postcode,p.property_type,p.bedrooms,p.status,p.rent_amount,p.epc_expiry_date,p.eicr_expiry_date,p.gas_safety_expiry_date,'properties' AS entity FROM properties p LEFT JOIN landlords l ON l.id=p.landlord_id WHERE ($1='all' OR l.landlord_type=$1) AND p.archived_at IS NULL ORDER BY p.address LIMIT 500`,[portfolio]);
   const enquiries=await query(`SELECT te.id,concat_ws(' ',te.first_name_1,te.last_name_1) AS name,te.email_1 AS email,te.status,te.linked_property_id AS property_id,te.application_form_completed,te.application_review_status,te.credit_check_completed,'enquiries' AS entity FROM tenant_enquiries te LEFT JOIN properties p ON p.id=te.linked_property_id LEFT JOIN landlords l ON l.id=p.landlord_id WHERE ($1='all' OR l.landlord_type=$1) AND te.status NOT IN ('rejected','converted') ORDER BY te.id DESC LIMIT 200`,[portfolio]);
   const landlords=await query(`SELECT id,name,email,phone,entity_type,company_number,landlord_type,'landlords' AS entity FROM landlords WHERE ($1='all' OR landlord_type=$1) ORDER BY name LIMIT 200`,[portfolio]);
   const catalog=[...tenants,...properties,...enquiries,...landlords];
-  const words=message.toLowerCase().split(/[^a-z0-9]+/).filter(word=>word.length>2&&!stop.has(word));
-  const entityMap:Record<string,string>={tenant:'tenants',property:'properties',tenant_enquiry:'enquiries',landlord:'landlords',tenants:'tenants',properties:'properties',enquiries:'enquiries',landlords:'landlords'};
-  const exact=catalog.filter(record=>message.toLowerCase().includes(String(record.name).toLowerCase()));
-  let records=exact.length?exact:catalog.filter(record=>(record.id===Number(context?.entityId)&&record.entity===entityMap[context?.entityType||'']) || words.some(word=>String(record.name).toLowerCase().split(/[^a-z0-9]+/).includes(word)));
+  let records=matchFlemoRecords(catalog,message,context);
   if(!records.length && /\b(list|all|names)\b/i.test(message))records=/\bpropert/i.test(message)?properties:tenants;
   records=records.slice(0,30);
   const entities=records.map(record=>({entity_type:record.entity==='enquiries'?'tenant_enquiry':record.entity==='tenants'?'tenant':record.entity==='landlords'?'landlord':'property',entity_id:record.id}));
@@ -29,7 +26,7 @@ export async function flemoEvidence(message:string,portfolio:string,context?:{en
   for(const [index,document] of documents.entries()){let extracted='';let limitation='Only document metadata is available';
     const resolved=path.resolve(fileRoot,document.filename||'');
     const filename=resolved.startsWith(fileRoot+path.sep)?resolved:'';
-    if(index<5 && document.mime_type==='application/pdf' && Number(document.size||0)<=20*1024*1024 && fs.existsSync(filename)){
+    if(readScans && index<5 && document.mime_type==='application/pdf' && Number(document.size||0)<=20*1024*1024 && fs.existsSync(filename)){
       try{const result=await exec(process.env.PDFTOTEXT_PATH||'pdftotext',['-f','1','-l','12','-layout',filename,'-'],{timeout:5000,maxBuffer:256*1024});extracted=result.stdout.slice(0,10000);limitation=extracted.trim().length<30?'Scanned PDF: text could not be read. Office review is needed.':'Text from up to 12 pages; maximum 10,000 characters';}catch{limitation='PDF text could not be extracted. Office review is needed.';}
     }
     if(readScans && extracted.trim().length<30 && scannedDocuments<2 && Number(document.size||0)<=20*1024*1024 && fs.existsSync(filename) && ['application/pdf','image/jpeg','image/png'].includes(document.mime_type)){
@@ -52,5 +49,5 @@ export async function flemoEvidence(message:string,portfolio:string,context?:{en
     latestSms.push({tenant_id:record.id,name:record.name,message:rows[0]||null});
   }
   const summary=records.length?`Matching CRM records:\n${records.map(record=>`${record.name} — ${record.status || record.entity}`).join('\n')}${documentEvidence.length?`\n${documentEvidence.length} associated documents found.`:''}`:'No matching record found. Include the tenant’s full name or property address.';
-  return {records,summary,documents:documentEvidence,paymentHistory:includeFinance?paymentHistory:[],latestSms,portfolioSummary:{...(includeFinance?scheduled[0]:{}),chargesDueThisCalendarMonth:includeFinance?monthly[0]:undefined,currency:'GBP',jointTenantsCountOnce:true},catalog:catalog.map(record=>({id:record.id,name:record.name,entity:record.entity,status:record.status})),limitations:['Amounts come from recorded CRM charges and payments, not a bank balance.','No recorded payments means payment timeliness cannot be assessed.','Document uploads are evidence held, not verified identity or eligibility.']};
+  return {records,summary,documents:documentEvidence,paymentHistory:includeFinance?paymentHistory:[],latestSms,portfolioSummary:{...(includeFinance?scheduled[0]:{}),chargesDueThisCalendarMonth:includeFinance?monthly[0]:undefined,currency:'GBP',jointTenantsCountOnce:true},catalog:records.map(record=>({id:record.id,name:record.name,entity:record.entity,status:record.status})),limitations:['Amounts come from recorded CRM charges and payments, not a bank balance.','No recorded payments means payment timeliness cannot be assessed.','Document uploads are evidence held, not verified identity or eligibility.']};
 }

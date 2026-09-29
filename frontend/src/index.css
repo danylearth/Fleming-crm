@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+/* Sign-in starts at natural size; authenticated appearance is applied by AuthContext. */
+html { font-size: 100%; }
+
 /* Theme CSS Variables */
 :root {
   --bg-page: #f5f5f5;
@@ -204,3 +207,107 @@ body { font-family:var(--user-font,'Lufga'),sans-serif; }
 
 /* Reserve space so overlay scrollbars do not cover record text. */
 .overflow-auto, .overflow-y-auto, .overflow-y-scroll { scrollbar-gutter: stable; padding-right: max(0.75rem, env(safe-area-inset-right)); }
+
+/* Fit every navigation item on shorter desktop screens without clipping. */
+.sidebar-nav { scrollbar-gutter: auto; }
+@media (max-height: 800px) {
+  .sidebar-nav { gap: 0.125rem; padding-top: 0.375rem; padding-bottom: 0.375rem; }
+  .sidebar-nav > a { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+}
+
+/* Readable onboarding controls across desktop and touch screens. */
+.onboarding-dialog input:not([type="checkbox"]):not([type="radio"]),
+.onboarding-dialog select,
+.onboarding-dialog textarea { font-size: 1rem; min-height: 44px; }
+.onboarding-dialog button { min-height: 40px; font-family: inherit; font-weight: 600; }
+.onboarding-dialog button.onboarding-progress-action { font-weight: 700; }
+.onboarding-dialog .onboarding-section-nav > button { height:52px; min-height:52px; padding-top:8px; padding-bottom:8px; }
+.onboarding-dialog input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; }
+
+.onboarding-dialog { --onboarding-danger:#b91c1c; --onboarding-success:#047857; --onboarding-warning:#92400e; }
+[data-theme="dark"] .onboarding-dialog { --onboarding-danger:#fca5a5; --onboarding-success:#6ee7b7; --onboarding-warning:#fcd34d; }
+
+.onboarding-actions > .grid { grid-template-columns: minmax(0, 1fr); }
+.onboarding-actions button { width: 100%; white-space: normal; height: auto; min-height: 44px; justify-content: center; }
+.onboarding-actions > .flex { flex-direction: column; }
+
+.onboarding-dialog .delivery-preview { width: auto; min-height: 32px; height: 32px; white-space: nowrap; }
+
+/* Compact application evidence rows; preserve larger form controls elsewhere. */
+.onboarding-dialog .application-review-rows { font-size:13px; }
+.onboarding-dialog .application-review-rows .text-sm { font-size:13px; line-height:1.45; }
+.onboarding-dialog .application-review-rows button { min-height:32px; padding:5px 11px; font-size:12px; line-height:20px; }
+.onboarding-dialog .application-review-rows select { min-height:32px; height:32px; padding:4px 28px 4px 8px; font-size:12px; line-height:20px; }
+.onboarding-dialog .application-review-rows .delivery-preview { padding:6px 10px; font-size:14px; line-height:20px; font-weight:500; }
+.onboarding-dialog .application-review-rows .delivery-choices label { font-size:14px; line-height:20px; }
+.onboarding-dialog .application-review-actions .review-final-action { width:100%; min-height:40px; justify-content:center; }
+.onboarding-dialog .review-ready-actions { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; }
+.onboarding-dialog .review-ready-actions > h5 { grid-column:1 / -1; }
+.onboarding-dialog .review-ready-actions > * { margin:0; }
+.onboarding-dialog .review-ready-actions .review-final-actions { align-self:end; border:0; padding:0; }
+.onboarding-dialog .review-ready-actions .review-final-action { width:auto; white-space:nowrap; }
+@media (max-width:640px) {
+  .onboarding-dialog .review-ready-actions { grid-template-columns:minmax(0,1fr); }
+  .onboarding-dialog .review-ready-actions .review-final-actions { justify-self:end; }
+}
+.onboarding-dialog .review-approve { color:var(--onboarding-success); background:color-mix(in srgb,#10b981 13%,transparent); border-color:color-mix(in srgb,#10b981 35%,transparent); }
+.onboarding-dialog .review-reject { color:var(--onboarding-danger); background:color-mix(in srgb,#ef4444 10%,transparent); border-color:color-mix(in srgb,#ef4444 30%,transparent); }
+.application-review-modal .review-approve { color:white; background:#047857; border-color:#047857; }
+.application-review-modal .review-approve:hover:not(:disabled) { background:#065f46; }
+.application-review-modal .review-reject { color:white; background:#b91c1c; border-color:#b91c1c; }
+.application-review-modal .review-reject:hover:not(:disabled) { background:#991b1b; }
+.application-review-modal .review-section-actions button { width:88px; min-height:36px; justify-content:center; }
+@media(max-width:640px) {
+  .application-review-modal section { flex-direction:column; align-items:stretch; }
+  .application-review-modal .review-section-actions { flex-direction:row; justify-content:flex-end; }
+  .application-review-modal .review-section-actions button { min-height:44px; }
+}
+@media(pointer:coarse) { .onboarding-dialog .application-review-rows button,.onboarding-dialog .application-review-rows select { min-height:44px; } }
+
+
+/* Credit results use the same label, control height and surface throughout. */
+.onboarding-dialog .credit-check-fields input,
+.onboarding-dialog .credit-check-fields select { min-height:44px; height:44px; color:var(--text-primary); }
+.onboarding-dialog .credit-check-fields input[type="file"] { padding-top:6px; padding-bottom:6px; }
+.onboarding-dialog .credit-check-fields input::file-selector-button { height:30px; font:inherit; cursor:pointer; }
+.onboarding-dialog .credit-check-fields label { display:block; font-size:14px; line-height:20px; font-weight:400; color:var(--text-primary); }
+.onboarding-dialog .credit-check-fields .credit-select > label { margin-bottom:4px; }
+.onboarding-dialog .credit-check-fields .credit-select > button { height:44px; min-height:44px; border-radius:8px; padding:8px 12px; font-size:16px; line-height:24px; font-weight:400; background:var(--bg-input); box-shadow:none; }
+.onboarding-dialog .agreement-compliance-documents button { font-weight:400; }
+.onboarding-dialog .agreement-compliance-documents label { display:block; font-size:14px; line-height:20px; font-weight:400; color:var(--text-primary); }
+.onboarding-dialog .compliance-expiry > label { margin-bottom:4px; }
+.onboarding-dialog .compliance-expiry > div { height:44px; border-radius:8px; }
+.onboarding-dialog .compliance-expiry input { min-height:42px; height:42px; padding-top:8px; padding-bottom:8px; }
+
+@media (min-width: 768px) and (max-height: 650px) {
+  .onboarding-section-nav { display: none; }
+  .onboarding-section-select { display: block; }
+  .onboarding-dialog > .flex-1 { flex-direction: column; }
+}
+
+/* Keep the deposit page compact enough for both applicants at desktop height. */
+.onboarding-dialog .deposit-payment-fields label { display:block; font-size:13px; line-height:20px; font-weight:500; color:var(--text-secondary); margin:0 0 6px; }
+.onboarding-dialog .deposit-payment-fields input:not([type="checkbox"]):not([type="radio"]) { min-height:40px; height:40px; font-size:14px; line-height:20px; border-radius:10px; }
+.onboarding-dialog .deposit-payment-date > div { height:40px; border-radius:10px; }
+.onboarding-dialog .deposit-payment-fields .deposit-payment-date input:not([type="checkbox"]):not([type="radio"]) { min-height:38px; height:38px; }
+.onboarding-dialog .deposit-payment-date button { min-height:38px; height:38px; padding-top:0; padding-bottom:0; }
+.onboarding-dialog .application-link-card p { margin:0; font-size:12px; line-height:17px; }
+.onboarding-dialog .application-link-card button { padding:4px; }
+.onboarding-dialog .joint-application-panel p { margin-top:0; margin-bottom:0; font-size:12px; line-height:17px; }
+.onboarding-dialog .joint-application-panel h6 { margin:0; font-size:13px; line-height:19px; }
+.onboarding-dialog .joint-application-panel .rounded-full { padding-top:3px; padding-bottom:3px; }
+.onboarding-dialog .joint-application-panel { padding:8px; }
+.onboarding-dialog .joint-application-panel > :not(:last-child) { margin-bottom:4px; }
+.onboarding-dialog .joint-application-panel button { min-height:24px; padding-top:2px; padding-bottom:2px; }
+.onboarding-dialog .joint-application-panel .application-link-card button { min-height:20px; height:20px; padding:2px; }
+.onboarding-dialog .joint-application-panels > button { min-height:30px; padding-top:4px; padding-bottom:4px; font-size:12px; }
+.onboarding-dialog button.joint-application-resend { min-height:28px; padding:4px 10px; font-size:12px; }
+.onboarding-stage { padding:12px!important; border-radius:12px; border-width:1px; }
+.onboarding-stage > .shrink-0 { padding-bottom:10px; margin-bottom:10px; }
+@media (min-width:1024px) {
+ .onboarding-deposit-stage section[aria-label="Holding deposit"],
+ .onboarding-deposit-stage section[aria-label="Application form progress"] { padding:12px; }
+ .onboarding-deposit-stage section[aria-label="Application form progress"] > :not(:first-child) { margin-top:8px; }
+ .onboarding-deposit-stage .onboarding-actions { padding-top:10px; }
+ .onboarding-deposit-stage .onboarding-actions > :not(:first-child) { margin-top:8px; }
+}

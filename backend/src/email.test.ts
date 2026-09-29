@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+vi.mock('./email-preferences',()=>({emailPreferencesUrl:async(email:string)=>'https://example.test/preferences/'+encodeURIComponent(email)}));
 
 describe('email provider safety', () => {
   it('does not report a successful send when Resend is not configured', async () => {
@@ -31,11 +32,15 @@ describe('email provider safety', () => {
     expect(result.success).toBe(true);
     expect(sentPayload.from).toBe('Fleming Lettings <contact@tenancies.fleminglettings.co.uk>');
     expect(sentPayload.replyTo).toBe('contact@tenancies.fleminglettings.co.uk');
-    expect(sentPayload.attachments).toEqual(attachments);
+    expect(sentPayload.attachments).toEqual(expect.arrayContaining(attachments));
+    expect(sentPayload.html).toContain('https://example.test/preferences/applicant%40example.test');
+    expect(sentPayload.attachments.filter((a:any)=>a.filename.startsWith('social-'))).toHaveLength(5);
     await sendEmail({to:'applicant@example.test',subject:'Campaign',html:'<p>News</p>',attachments,fromEmail:'enquiries@fleminglettings.co.uk'});
     expect(sentPayload.from).toBe('Fleming Lettings <enquiries@fleminglettings.co.uk>');
     expect(sentPayload.replyTo).toBe('enquiries@fleminglettings.co.uk');
-    expect(sentPayload.attachments).toEqual(attachments);
+    expect(sentPayload.attachments).toEqual(expect.arrayContaining(attachments));
+    expect(sentPayload.html).toContain('https://example.test/preferences/applicant%40example.test');
+    expect(sentPayload.attachments.filter((a:any)=>a.filename.startsWith('social-'))).toHaveLength(5);
     vi.doUnmock('resend');
     vi.unstubAllEnvs();
     vi.resetModules();
@@ -192,7 +197,7 @@ it('embeds supplied logo, hero and map images once while retaining PDF attachmen
   expect(end.html).not.toContain('29 Wealden');
   const content = inlineEmailImages(end.html);
   expect(content.html).toContain('cid:fleming-fleming-logo-white.png');
-  expect(content.attachments).toHaveLength(2);
+  expect(content.attachments).toHaveLength(7);
   expect(content.attachments.every(a => a.content.length > 100)).toBe(true);
   const move = handoverAppointmentEmail({ firstName: 'Jamie', propertyAddress: '1 Test Street', appointmentDate: '2026-09-14', appointmentTime: '10:00', appointmentWith: 'Staff' });
   const images = inlineEmailImages(move.html);

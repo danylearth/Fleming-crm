@@ -1,7 +1,13 @@
+import {rentStatus} from '../../utils/rentStatus';
+import {RentInvoiceButton} from '../FinancialDocuments';
+import RentBankTransactions from '../RentBankTransactions';
+import TenantMessageTemplates from '../TenantMessageTemplates';
 import { useState, useEffect } from 'react';
 import { Card, Button, SectionHeader, EmptyState, Input, DatePicker, Select } from './index';
 import { useApi } from '../../hooks/useApi';
 import { PoundSterling, BadgePoundSterling, CheckCircle2, Clock, AlertCircle, Plus } from 'lucide-react';
+
+const money=(value:unknown)=>Number(value||0).toLocaleString('en-GB',{minimumFractionDigits:Number.isInteger(Number(value))?0:2,maximumFractionDigits:2});
 
 interface Payment {
   id: number;
@@ -12,8 +18,11 @@ interface Payment {
   amount_paid: number | null;
   payment_date: string | null;
   status: string;
+  notes?: string;
   address?: string;
   tenant_name?: string;
+  bank_received?: number;
+  bank_transaction_count?: number;
 }
 
 interface Props {
@@ -29,6 +38,10 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   const [year,setYear]=useState('all');
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ due_date: '', amount_due: '' });
+  const reloadPayments=async()=>{
+    const data=await api.get('/api/rent-payments');
+    setPayments((Array.isArray(data)?data:[]).filter((p:Payment)=>(!propertyId||p.property_id===propertyId)&&(!tenantId||p.tenant_id===tenantId||p.linked_tenant_id===tenantId)).map((p:Payment)=>({...p,status:rentStatus(p)})));
+  };
 
   useEffect(() => {
     api.get('/api/rent-payments')
@@ -36,7 +49,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
         let filtered = Array.isArray(data) ? data : [];
         if (propertyId) filtered = filtered.filter((p: Payment) => p.property_id === propertyId);
         if (tenantId) filtered = filtered.filter((p: Payment) => p.tenant_id === tenantId || p.linked_tenant_id === tenantId);
-        setPayments(filtered);
+        setPayments(filtered.map((p:Payment)=>({...p,status:rentStatus(p)})));
       })
       .catch(() => { })
       .finally(() => setLoading(false));
@@ -106,7 +119,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
     return 'text-amber-400';
   };
 
-  const filteredPayments=payments.filter(p=>year==='all'||p.due_date?.slice(0,4)===year);
+  const filteredPayments=payments.filter(p=>year==='all'||p.due_date?.slice(0,4)===year).sort((a,b)=>Number(a.status==='paid')-Number(b.status==='paid')||b.due_date.localeCompare(a.due_date));
   const displayPayments = compact ? filteredPayments.slice(0, 5) : filteredPayments;
 
   // Calculate summary
@@ -128,7 +141,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   return (
     <Card className="p-6">
       <SectionHeader
-        title="Rent Payments" icon={<BadgePoundSterling size={16} />}
+        title="Rent Payments & Invoices" icon={<BadgePoundSterling size={16} />}
         action={() => setShowAdd(!showAdd)}
         actionLabel={showAdd ? 'Cancel' : 'Add Payment'}
       />
@@ -139,11 +152,11 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           <div className="p-3 rounded-xl bg-[var(--bg-subtle)]">
             <p className="text-xs text-[var(--text-muted)]">Total Due</p>
-            <p className="text-lg font-bold">£{totalDue.toLocaleString()}</p>
+            <p className="text-lg font-bold">£{money(totalDue)}</p>
           </div>
           <div className="p-3 rounded-xl bg-[var(--bg-subtle)]">
             <p className="text-xs text-[var(--text-muted)]">Collected</p>
-            <p className="text-lg font-bold text-emerald-400">£{totalPaid.toLocaleString()}</p>
+            <p className="text-lg font-bold text-emerald-400">£{money(totalPaid)}</p>
           </div>
           <div className="p-3 rounded-xl bg-[var(--bg-subtle)]">
             <p className="text-xs text-[var(--text-muted)]">Pending</p>
@@ -177,23 +190,28 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
       ) : (
         <div className="space-y-2">
           {displayPayments.map(payment => (
-            <div key={payment.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-subtle)]">
+            <div key={payment.id} className={`flex flex-wrap items-center gap-3 p-3 rounded-xl border ${payment.status==='paid'?'bg-emerald-500/10 border-emerald-500/30':payment.status==='overdue'?'bg-red-500/5 border-red-500/30':'bg-amber-500/10 border-amber-500/30'}`}>
               {statusIcon(payment.status)}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">
-                  £{payment.amount_due?.toLocaleString()}
+                  £{money(payment.amount_due)}
+                  {payment.notes?.includes('Final scheduled monthly rent charge')&&<span className="ml-2 text-xs font-normal">Final invoice</span>}
                   {!compact && payment.address && <span className="text-[var(--text-muted)] ml-2">· {payment.address}</span>}
                 </p>
                 <p className="text-xs text-[var(--text-muted)]">
                   Due {(() => { const d = new Date(payment.due_date); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })()}
                   {payment.payment_date && ` · Paid ${(() => { const d = new Date(payment.payment_date); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })()}`}
                 </p>
+                {Number(payment.amount_paid)>0&&Number(payment.amount_paid)<Number(payment.amount_due)&&<p className="text-xs text-red-600">Paid £{money(payment.amount_paid)} · Outstanding £{money(Number(payment.amount_due)-Number(payment.amount_paid))}</p>}
               </div>
               <span className={`text-xs font-medium capitalize ${statusColor(payment.status)}`}>
-                {Number(payment.amount_paid)>Number(payment.amount_due)?`Credit £${(Number(payment.amount_paid)-Number(payment.amount_due)).toFixed(2)}`:payment.status}
+                {Number(payment.amount_paid)>Number(payment.amount_due)?`Credit £${money(Number(payment.amount_paid)-Number(payment.amount_due))}`:payment.status==='pending'?'Unpaid · Not yet due':payment.status}
               </span>
+              <RentInvoiceButton paymentId={payment.id}/>
+              {(Number(payment.bank_transaction_count)>0||Number(payment.bank_received)>0)&&<RentBankTransactions paymentId={payment.id} onChanged={reloadPayments}/>}
+              {payment.status !== 'paid' && ['overdue','due today'].includes(payment.status) && <TenantMessageTemplates tenantId={payment.tenant_id} rentPaymentId={payment.id} onSent={()=>{}}/>}
               {payment.status !== 'paid' && (
-                <Button variant="ghost" size="sm" onClick={() => handlePay(payment)}>
+                <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => handlePay(payment)}>
                   Mark Paid
                 </Button>
               )}

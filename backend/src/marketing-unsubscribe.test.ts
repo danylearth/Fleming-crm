@@ -1,0 +1,21 @@
+import {beforeEach,it,expect,vi} from 'vitest';
+const state=vi.hoisted(()=>({permission:{allowed:true,channel:'email',destination:'alex@example.test'} as any,audits:[] as any[],skipped:false,calls:[] as string[]}));
+vi.mock('./db-pg',()=>({default:{connect:async()=>({release(){},query:async(sql:string,args:any[]=[])=>{
+ state.calls.push(sql);
+ if(sql.startsWith('SELECT channel'))return {rows:state.permission?[{...state.permission}]:[]};
+ if(sql.startsWith('UPDATE marketing_permissions'))state.permission.allowed=false;
+ if(sql.startsWith('INSERT INTO audit_log'))state.audits.push(JSON.parse(args[0]));
+ if(sql.startsWith('UPDATE marketing_recipients'))state.skipped=true;
+ return {rows:[]};
+}})}}));
+vi.mock('./marketing-preference-records',()=>({channels:['email','sms','phone','post'],preferenceRecords:async()=>({choices:{email:false,sms:false,phone:false,post:false},available:{email:true,sms:true,phone:true,post:true}}),savePreferenceRecords:async()=>{}}));
+vi.mock('./marketing-preferences-page',()=>({preferenceRevision:()=> 'revision',marketingPreferencesPage:()=>({html:'You are unsubscribed',policy: "default-src 'none'"})}));
+import {registerMarketingUnsubscribe} from './marketing-unsubscribe';
+const handlers=new Map<string,any>();registerMarketingUnsubscribe({get:(_p,h)=>handlers.set('GET',h),post:(p,h)=>handlers.set(p.includes('/preferences/')?'PREFS':'POST',h)} as any);
+const token='12345678-1234-1234-1234-123456789012';
+const call=async(method='GET',body:any={},t=token)=>{let status=200,html='';const res:any={setHeader(){},sendStatus(s){status=s;},type(){return res;},send(s){html=s;}};await handlers.get(method==='HEAD'?'GET':method)({method,params:{token:t},body},res);return {status,html};};
+beforeEach(()=>{state.permission={allowed:true,channel:'email',destination:'alex@example.test'};state.audits=[];state.skipped=false;state.calls=[];});
+it('a single link visit opts out, audits the change and skips queued marketing',async()=>{const result=await call();expect(result.status).toBe(200);expect(state.permission.allowed).toBe(false);expect(state.skipped).toBe(true);expect(state.audits).toHaveLength(1);expect(result.html).toContain('You are unsubscribed');expect(result.html).not.toContain('Opt in');expect(state.calls.at(-1)).toBe('COMMIT');});
+it('repeated clicks cannot re-enable marketing or duplicate the audit',async()=>{await call();await call();await call('POST',{preference:'in'});expect(state.permission.allowed).toBe(false);expect(state.audits).toHaveLength(1);});
+it('does not change a preference on HEAD probes or invalid links',async()=>{await call('HEAD');expect(state.calls).toHaveLength(0);expect((await call('GET',{},'invalid')).status).toBe(404);expect(state.calls).toHaveLength(0);});
+it('does not claim success for an unknown token',async()=>{state.permission=null;expect((await call()).status).toBe(404);expect(state.audits).toHaveLength(0);expect(state.calls.at(-1)).toBe('ROLLBACK');});

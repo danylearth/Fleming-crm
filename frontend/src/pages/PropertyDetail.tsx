@@ -1,6 +1,10 @@
+import {noteDisplayText} from '../utils/noteDisplay';
+import {ToolbarButton} from '../components/ui';
+import ServiceFeeFields from '../components/ServiceFeeFields';
 import SectionEditButton from '../components/ui/SectionEditButton';
 import RentComparisons from '../components/RentComparisons';
 import ServiceAgreements from '../components/ServiceAgreements';
+import PropertyContractStep from '../components/PropertyContractStep';
 import {Copy,Check} from 'lucide-react';
 import PropertyInspections from '../components/PropertyInspections';
 import { usePermissions } from '../hooks/usePermissions';
@@ -38,10 +42,11 @@ interface PropertyDetail {
   current_tenant_email?: string | null; current_tenant_phone?: string | null;
   bedrooms: number; property_type: string;
   // Management
-  service_type: string | null; charge_percentage: number | null; total_charge: number | null;
+  service_type: string | null; service_setup_fee:number|null; service_monthly_fee:number|null; charge_percentage: number | null; total_charge: number | null;
   council_tax_band: string | null; epc_grade: string | null;
   rent_review_date: string | null; onboarded_date: string | null;
   proof_of_ownership_received: number;
+  earnings?: {letting_fees:number;ongoing_fees:number;total:number;client_rent:number;missing_rates:number};
   // Leasehold
   is_leasehold: number; leasehold_start_date: string | null;
   leasehold_end_date: string | null; leaseholder_info: string | null;
@@ -153,6 +158,7 @@ export default function PropertyDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { confirmAction: confirmCrmAction } = useNotifications();
+  const [manageContract,setManageContract]=useState(false);
   const [property, setProperty] = useState<PropertyDetail | null>(null);
   const id = useRecordAddress('properties', property?.address);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -231,7 +237,7 @@ export default function PropertyDetail() {
     landlord_id: p.landlord_id, address: p.address || '', address_line_2: p.address_line_2 || '', city: p.city || '', postcode: p.postcode || '',
     rent_amount: String(p.rent_amount || ''), bedrooms: String(p.bedrooms || ''),
     property_type: p.property_type || 'house', status: p.status || 'to_let',
-    service_type: p.service_type || '', charge_percentage: String(p.charge_percentage ?? ''),
+    service_type: p.service_type || '', service_setup_fee:String(p.service_setup_fee??''),service_monthly_fee:String(p.service_monthly_fee??''), charge_percentage: String(p.charge_percentage ?? ''),
     total_charge: String(p.total_charge ?? ''), council_tax_band: p.council_tax_band || '',
     epc_grade: p.epc_grade || '', rent_review_date: p.rent_review_date || '',
     onboarded_date: p.onboarded_date || '', proof_of_ownership_received: !!p.proof_of_ownership_received,
@@ -352,6 +358,7 @@ export default function PropertyDetail() {
         council_tax_band: form.council_tax_band || null,
         epc_grade: form.epc_grade || null,
         service_type: form.service_type || null,
+        ...(form.service_setup_fee!==''?{service_setup_fee:form.service_setup_fee,service_monthly_fee:form.service_type==='let_only'?0:form.service_monthly_fee}:{}),
         leaseholder_info: form.leaseholder_info || null,
         leasehold_issued_by: form.leasehold_issued_by || null,
         leasehold_email: form.leasehold_email || null,
@@ -676,11 +683,11 @@ export default function PropertyDetail() {
       <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         {/* Hero */}
         <div className="relative h-48 sm:h-56 md:h-64 rounded-xl sm:rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
-          <img src={getPropertyImage(property.id, 1200, 400, `${property.address}, ${property.postcode}`, property.image_url, property.landlord_name)} alt={property.address}
+          <img src={getPropertyImage(property.id, 1200, 400, `${property.address}, ${property.postcode}`, property.image_url, property.landlord_name, property.landlord_id)} alt={property.address}
             className="absolute inset-0 w-full h-full object-cover" loading="lazy"
             onError={event => {
               event.currentTarget.onerror = null;
-              event.currentTarget.src = getPropertyPlaceholder(property.id, 1200, 400, property.landlord_name);
+              event.currentTarget.src = getPropertyPlaceholder(property.id, 1200, 400, property.landlord_name, property.landlord_id);
             }} />
           <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-t from-black/70 to-transparent">
             <div className="flex items-center gap-2 mb-1">
@@ -763,6 +770,7 @@ export default function PropertyDetail() {
 
                     <Select label="Type" value={form.property_type} onChange={(v: string) => setForm({ ...form, property_type: v })}
                       options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
+                    <Select label="Tenure" value={form.is_leasehold?'leasehold':'freehold'} onChange={value=>setForm({...form,is_leasehold:value==='leasehold'})} options={[{value:'freehold',label:'Freehold'},{value:'leasehold',label:'Leasehold'}]} />
                     <Input label="Bedrooms" value={form.bedrooms} onChange={(v: string) => setForm({ ...form, bedrooms: v })} />
                     <Select label="Status" value={form.status} onChange={(v: string) => setForm({ ...form, status: v })}
                       options={[{ value: 'to_let', label: 'To Let' }, { value: 'let_agreed', label: 'Let Agreed' },...(property.status==='let'?[{value:'let',label:'Let'}]:[]),...(property.landlord_type!=='internal'?[{value:'closed',label:'Closed'}]:[])]} />
@@ -817,6 +825,7 @@ export default function PropertyDetail() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                     <ReadField label="Type" value={<span className="capitalize">{property.property_type}</span>} />
                     <ReadField label="Bedrooms" value={String(property.bedrooms)} />
+                    <ReadField label="Tenure" value={property.is_leasehold ? 'Leasehold' : 'Freehold'} />
                     <ReadField label="Rent" value={`£${property.rent_amount?.toLocaleString()}/mo`} />
                     <ReadField label="Postcode" value={property.postcode} />
                     <ReadField label="Status" value={
@@ -922,18 +931,17 @@ export default function PropertyDetail() {
                 </div>
               )}
             </GlassCard>
-            <GlassCard className="p-4 sm:p-6"><div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Property Financials" icon={<Briefcase size={16}/>} />{sectionActions('financials')}</div>{(editingSection==='financials')?<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">                    <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />                  {property.landlord_type !== 'internal' && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v, ...(v==='let_only'&&form.service_type!==v?{charge_percentage:'100',total_charge:''}:{}) })}
+            <GlassCard className="p-4 sm:p-6"><div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Property Financials" icon={<Briefcase size={16}/>} />{sectionActions('financials')}</div>{(editingSection==='financials')?<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">                    <Input label="Rent (£/mo)" value={form.rent_amount} onChange={(v: string) => setForm({ ...form, rent_amount: v })} />                  {property.landlord_type !== 'internal' && <Select label="Service Type *" value={form.service_type} onChange={(v: string) => setForm({ ...form, service_type: v })}
                     options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
                   }
-                  {property.landlord_type !== 'internal' && <Input label="Charge (%)" value={form.charge_percentage} onChange={(v: string) => setForm({ ...form, charge_percentage: v })} placeholder="e.g. 10" />}
-                  {property.landlord_type !== 'internal' && <Input label="Total Charge (£)" value={form.total_charge} onChange={(v: string) => setForm({ ...form, total_charge: v })} />}
+                  {property.landlord_type !== 'internal' && <div className="sm:col-span-2"><ServiceFeeFields service={form.service_type} setup={form.service_setup_fee} monthly={form.service_monthly_fee} onChange={fees=>setForm({...form,...fees})}/></div>}
 </div>:<div className="grid grid-cols-2 sm:grid-cols-3 gap-4"><ReadField label="Monthly Rent" value={`£${Number(property.rent_amount||0).toLocaleString('en-GB')}`}/>                  {property.landlord_type !== 'internal' && <ReadField label="Service Type" value={
                     property.service_type === 'full_management' ? 'Full Management' :
                     property.service_type === 'rent_collection' ? 'Rent Collection' :
                     property.service_type === 'let_only' ? 'Let Only' : null
                   } />}
-                  {property.landlord_type !== 'internal' && <ReadField label="Charge" value={property.charge_percentage ? `${property.charge_percentage}%` : null} />}
-                  {property.landlord_type !== 'internal' && <ReadField label="Total Charge" value={property.total_charge ? `£${property.total_charge}` : null} />}
+                  {property.landlord_type !== 'internal' && <><ReadField label="Fee (% of First Month’s Rent)" value={property.service_setup_fee!=null?Number(property.service_setup_fee).toFixed(2)+'%':null}/>{property.service_type!=='let_only'&&<ReadField label="Ongoing Fee (% of Rent)" value={property.service_monthly_fee!=null?Number(property.service_monthly_fee).toFixed(2)+'%':null}/>}</>}
+{property.landlord_type==='external'&&<div><ReadField label="Earnings to Date" value={property.earnings?new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(property.earnings.total):'Unavailable'}/>{property.earnings&&<p className="text-xs text-[var(--text-muted)] mt-1">Letting fees £{property.earnings.letting_fees.toFixed(2)} · Ongoing fees £{property.earnings.ongoing_fees.toFixed(2)}<br/>Calculated from confirmed receipts.{property.earnings.missing_rates>0&&' Some receipts need historical fee rates and are excluded.'}</p>}</div>}
 </div>}</GlassCard>
             <div className={`grid grid-cols-1 gap-6 ${property.postcode ? 'xl:grid-cols-2' : ''}`}>
               <RentComparisons propertyId={property.id}/>
@@ -941,12 +949,11 @@ export default function PropertyDetail() {
             </div>
 
             {/* Leasehold (conditional) */}
-            <>
+            {!!property.is_leasehold && <>
               <GlassCard className="p-4 sm:p-6">
                 <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Leasehold" icon={<KeyRound size={16} />} />{sectionActions('leasehold')}</div>
                 {(editingSection==='leasehold') ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                    <Toggle label="Leasehold Property" checked={form.is_leasehold} onChange={v => setForm({ ...form, is_leasehold: v })} />
                     <DatePicker label="Lease Start" value={form.leasehold_start_date} onChange={(v: string) => setForm({ ...form, leasehold_start_date: v })} />
                     <DatePicker label="Lease End" value={form.leasehold_end_date} onChange={(v: string) => setForm({ ...form, leasehold_end_date: v })} />
                     <Input label="Leasehold Issued By" value={form.leasehold_issued_by} onChange={(v: string) => setForm({ ...form, leasehold_issued_by: v })} />
@@ -957,7 +964,7 @@ export default function PropertyDetail() {
                     <Input label="Portal Username" value={form.leasehold_portal_username} onChange={(v: string) => setForm({ ...form, leasehold_portal_username: v })} />
                     {user?.role === 'admin' && <div><Input label={form.leasehold_portal_password === null ? 'Portal Password (will be removed)' : property.leasehold_portal_password_set ? 'New Portal Password (leave blank to keep)' : 'Portal Password'} type="password" value={form.leasehold_portal_password || ''} onChange={(v: string) => setForm({ ...form, leasehold_portal_password: v })} />{property.leasehold_portal_password_set && <button type="button" className="text-xs text-red-600 mt-2 underline" onClick={()=>setForm({...form,leasehold_portal_password:null})}>Remove Stored Password</button>}</div>}
                   </div>
-                ) : !property.is_leasehold ? <p className="text-sm text-[var(--text-secondary)]">Not a leasehold property</p> : (
+                ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                     <ReadField label="Lease Start" value={formatDate(property.leasehold_start_date)} />
                     <ReadField label="Lease End" value={formatDate(property.leasehold_end_date)} />
@@ -978,9 +985,9 @@ export default function PropertyDetail() {
                   </div>
                 )}
               </GlassCard>
-            </>
+            </>}
 
-            <>
+            {!!property.is_leasehold && <>
               <GlassCard className="p-4 sm:p-6">
                 <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Management Company" icon={<Landmark size={16} />} />{sectionActions('company')}</div>
                 {(editingSection==='company') ? (
@@ -1015,7 +1022,7 @@ export default function PropertyDetail() {
                   </div>
                 )}
               </GlassCard>
-            </>
+            </>}
 
             {/* Tenancy information, including retained historic tenants */}
             {(!isToLet || linkedTenants.length > 0) && (
@@ -1029,9 +1036,9 @@ export default function PropertyDetail() {
                     </Button>
                   )}
                   {!(editingSection==='tenancy') && currentTenants.length === 0 && (
-                    <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('create'); setApplicantError(''); }}>
+                    <ToolbarButton variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => { setShowTenantModal(true); setTenantModalMode('create'); setApplicantError(''); }}>
                       <Plus size={14} className="mr-1.5" /> <span className="hidden sm:inline">Add Tenant</span><span className="sm:hidden">Add</span>
-                    </Button>
+                    </ToolbarButton>
                   )}
                   {!(editingSection==='tenancy') && currentTenants.length > 0 && (
                     <Button variant="outline" size="sm" onClick={handleRemoveTenant} className="!bg-red-600 !text-white !border-red-600 rounded-full">
@@ -1195,9 +1202,9 @@ export default function PropertyDetail() {
               </div>
               <div className="space-y-3">
                 {(editingSection==='compliance') ? <div className="space-y-4"><DatePicker label="EICR Expiry Date" value={form.eicr_expiry_date} onChange={v=>setForm(f=>({...f,eicr_expiry_date:v}))}/><DatePicker label="EPC Expiry Date" value={form.epc_expiry_date} onChange={v=>setForm(f=>({...f,epc_expiry_date:v}))}/>{form.has_gas&&<><DatePicker label="Gas Safety Expiry Date" value={form.gas_safety_expiry_date} onChange={v=>setForm(f=>({...f,gas_safety_expiry_date:v}))}/></>}</div>:<>
-                <ComplianceRow label="EICR" expiry={property.compliance?.items.some(i=>i.docType==='EICR'&&i.hasDocument)?property.eicr_expiry_date:null} />{property.compliance?.items.filter(i=>i.docType==='EICR'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}
-                <ComplianceRow label="EPC" expiry={property.compliance?.items.some(i=>i.docType==='EPC'&&i.hasDocument)?property.epc_expiry_date:null} grade={property.epc_grade} />{property.compliance?.items.filter(i=>i.docType==='EPC'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}
-                {property.has_gas ? <><ComplianceRow label="Gas Safety" expiry={property.compliance?.items.some(i=>i.docType==='Gas Safety Certificate'&&i.hasDocument)?property.gas_safety_expiry_date:null} />{property.compliance?.items.filter(i=>i.docType==='Gas Safety Certificate'&&!i.ready).map(i=><p key={i.docType} className="flex items-start gap-2 text-xs text-red-600"><AlertTriangle size={14} className="shrink-0"/>{i.reason}</p>)}</> : null}</>}
+                <ComplianceRow label="EICR" expiry={property.compliance?.items.some(i=>i.docType==='EICR'&&i.hasDocument)?property.eicr_expiry_date:null} />{property.compliance?.items.filter(i=>i.docType==='EICR'&&!i.ready).map(i=><ComplianceWarning key={i.docType} label="EICR" hasDocument={i.hasDocument} expiry={property.eicr_expiry_date}/>)}
+                <ComplianceRow label="EPC" expiry={property.compliance?.items.some(i=>i.docType==='EPC'&&i.hasDocument)?property.epc_expiry_date:null} grade={property.epc_grade} />{property.compliance?.items.filter(i=>i.docType==='EPC'&&!i.ready).map(i=><ComplianceWarning key={i.docType} label="EPC" hasDocument={i.hasDocument} expiry={property.epc_expiry_date}/>)}
+                {property.has_gas ? <><ComplianceRow label="Gas Safety" expiry={property.compliance?.items.some(i=>i.docType==='Gas Safety Certificate'&&i.hasDocument)?property.gas_safety_expiry_date:null} />{property.compliance?.items.filter(i=>i.docType==='Gas Safety Certificate'&&!i.ready).map(i=><ComplianceWarning key={i.docType} label="Gas Safety" hasDocument={i.hasDocument} expiry={property.gas_safety_expiry_date}/>)}</> : null}</>}
               </div>
             </Card>
 
@@ -1225,9 +1232,9 @@ export default function PropertyDetail() {
             <Card className="p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
                 <SectionHeader title="Landlords" icon={<User size={16} />} />
-                {property.landlord_type !== 'internal' && <Button variant="outline" size="sm" onClick={() => setShowAddLandlord(true)}>
+                {property.landlord_type !== 'internal' && <ToolbarButton variant="outline" size="sm" onClick={() => setShowAddLandlord(true)}>
                   <Plus size={14} className="mr-1.5" /> <span className="hidden sm:inline">Add Landlord</span><span className="sm:hidden">Add</span>
-                </Button>}
+                </ToolbarButton>}
               </div>
               {propertyLandlords.length === 0 ? (
                 <EmptyState message="No landlords linked" />
@@ -1316,7 +1323,7 @@ export default function PropertyDetail() {
               )}
             </Card>
 
-            {user?.role!=='viewer'&&<ServiceAgreements propertyId={property.id}/>}
+            {user?.role!=='viewer'&&<><ServiceAgreements propertyId={property.id} onManage={()=>setManageContract(true)}/>{manageContract&&<PropertyContractStep propertyId={property.id} existing onClose={()=>{setManageContract(false);void loadDetail();}}/>}</>}
 
             {/* Documents */}
             <DocumentUpload refreshKey={inventoryRefresh} entityType="property" entityId={property.id} onChange={loadDetail} />
@@ -1375,7 +1382,7 @@ export default function PropertyDetail() {
                       <StickyNote size={14} className="text-[var(--text-muted)]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2"><p className="text-sm whitespace-pre-wrap">{n.text}</p><DeleteNoteButton entity={notesFilter.startsWith('tenant-')?'tenant':notesFilter} id={notesFilter==='property'?property.id:notesFilter==='landlord'?property.landlord_id!:Number(notesFilter.replace('tenant-',''))} note={n} onDeleted={loadDetail} /></div>
+                      <div className="flex items-start justify-between gap-2"><p className="min-w-0 flex-1 text-xs leading-5 whitespace-pre-wrap [overflow-wrap:anywhere]">{noteDisplayText(n.text)}</p><DeleteNoteButton entity={notesFilter.startsWith('tenant-')?'tenant':notesFilter} id={notesFilter==='property'?property.id:notesFilter==='landlord'?property.landlord_id!:Number(notesFilter.replace('tenant-',''))} note={n} onDeleted={loadDetail} /></div>
                       <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
                         {n.author}{n.created_at ? ` · ${new Date(n.created_at).toLocaleDateString()}` : ''}
                       </p>
@@ -1449,7 +1456,7 @@ export default function PropertyDetail() {
 
                 <div className="flex gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setShowAddTask(false)}>Cancel</Button>
-                  <Button variant="gradient" onClick={addTask} disabled={!taskForm.title}>Add Task</Button>
+                  <ToolbarButton variant="gradient" onClick={addTask} disabled={!taskForm.title}>Add Task</ToolbarButton>
                 </div>
               </div>
             </div>
@@ -1857,6 +1864,11 @@ export default function PropertyDetail() {
       </div>
     </Layout>
   );
+}
+
+function ComplianceWarning({ label, hasDocument, expiry }: { label: string; hasDocument: boolean; expiry: string | null }) {
+  const status = !hasDocument ? 'Missing' : !expiry ? 'Expiry Missing' : 'Expired';
+  return <span className="inline-flex items-center gap-2 rounded-full bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-600"><AlertTriangle size={14} className="shrink-0"/>{label} {status}</span>;
 }
 
 function ComplianceRow({ label, expiry, grade }: { label: string; expiry: string | null; grade?: string | null }) {

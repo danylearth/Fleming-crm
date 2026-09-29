@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGovernmentAPIs } from '../../hooks/useGovernmentAPIs';
 import { Card, Button } from './index';
-import { PoundSterling, TrendingUp, Calendar, Home, Loader2, AlertCircle } from 'lucide-react';
+import { PoundSterling, ArrowUpRight, TrendingUp, Calendar, Home, Loader2, AlertCircle, X } from 'lucide-react';
 
 interface PricePaidDataProps {
   postcode: string;
@@ -49,18 +49,18 @@ export default function PricePaidData({ postcode }: PricePaidDataProps) {
 
   if (!showData) {
     return (
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3 p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 shrink-0 rounded-xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 flex items-center justify-center">
+      <Card className="h-full flex flex-col">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 items-start p-6">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-12 h-12 shrink-0 rounded-xl bg-emerald-500/10 flex items-center justify-center">
               <TrendingUp className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-navy-900">Land Registry Price Data</h3>
-              <p className="text-sm text-gray-500">View recent sales in this area</p>
+              <h3 className="text-base font-semibold text-[var(--text-primary)]">Land Registry Price Data</h3>
             </div>
           </div>
           <Button
+            className="self-start h-9 !px-3 !text-xs shrink-0 justify-center whitespace-nowrap"
             onClick={loadPriceData}
             variant="outline"
             disabled={loading || !postcode}
@@ -72,11 +72,12 @@ export default function PricePaidData({ postcode }: PricePaidDataProps) {
               </>
             ) : (
               <>
-                <TrendingUp className="w-4 h-4 mr-2" />
+                <ArrowUpRight className="w-4 h-4 mr-2" aria-hidden="true" />
                 View Price Data
               </>
             )}
           </Button>
+          <p className="col-span-2 text-sm text-[var(--text-muted)]">View recent sales in this area</p>
         </div>
       </Card>
     );
@@ -103,19 +104,19 @@ export default function PricePaidData({ postcode }: PricePaidDataProps) {
       {/* Summary Card */}
       <Card>
         <div className="p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 shrink-0 rounded-xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 flex items-center justify-center">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 items-start mb-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-12 h-12 shrink-0 rounded-xl bg-emerald-500/10 flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-emerald-600" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-navy-900">Land Registry Price Data</h3>
-                <p className="text-sm text-gray-500">{priceData.length} recent transactions found</p>
+                <h3 className="text-base font-semibold text-[var(--text-primary)]">Land Registry Price Data</h3>
               </div>
             </div>
-            <Button onClick={() => setShowData(false)} variant="ghost" size="sm">
-              Hide
+            <Button onClick={() => setShowData(false)} variant="outline" className="self-start h-9 !px-3 !text-xs shrink-0 justify-center whitespace-nowrap">
+              <X className="w-4 h-4 mr-2" aria-hidden="true" />Close
             </Button>
+            <p className="col-span-2 text-sm text-[var(--text-muted)]">{priceData.length} recent transactions found</p>
           </div>
 
           {priceData.length > 0 && (
@@ -156,20 +157,20 @@ export default function PricePaidData({ postcode }: PricePaidDataProps) {
       {recentSales.length > 0 && (
         <Card>
           <div className="p-6">
-            <h4 className="text-md font-semibold text-navy-900 mb-4">Recent Sales</h4>
-            <div className="space-y-3">
+            <h4 className="text-base font-semibold text-[var(--text-primary)] mb-3">Recent Sales</h4>
+            <div className="space-y-2">
               {recentSales.map((sale, idx) => (
                 <div
                   key={idx}
-                  className="flex flex-wrap items-center justify-between gap-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2.5 bg-[var(--bg-subtle)] rounded-lg hover:bg-[var(--bg-hover)] transition-colors"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-navy-100 flex items-center justify-center">
-                      <Home className="w-5 h-5 text-navy-600" />
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-8 h-8 shrink-0 rounded-lg bg-navy-100 flex items-center justify-center">
+                      <Home className="w-4 h-4 text-navy-600" />
                     </div>
-                    <div>
-                      <p className="font-medium text-navy-900">{sale.address}</p>
-                      <div className="flex flex-col items-start gap-1 text-sm text-gray-500 mt-1">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[var(--text-primary)] break-words">{sale.address}</p>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--text-secondary)] mt-0.5">
                         <span className="flex items-center gap-1 whitespace-nowrap">
                           <Calendar className="w-3 h-3" />
                           {formatDate(sale.date)}
@@ -189,7 +190,7 @@ export default function PricePaidData({ postcode }: PricePaidDataProps) {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-bold text-emerald-600">{formatPrice(sale.price)}</p>
+                    <p className="text-sm font-medium text-[var(--feedback-emerald)] whitespace-nowrap">{formatPrice(sale.price)}</p>
                   </div>
                 </div>
               ))}

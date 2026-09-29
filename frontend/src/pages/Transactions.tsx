@@ -1,3 +1,5 @@
+import {rentDueTiming} from '../utils/rentDueTiming';
+import ClientEarnings from '../components/ClientEarnings';
 import DepositParticipantsSelect, {type DepositParticipant} from '../components/DepositParticipantsSelect';
 import {PropertiesIcon} from '../components/ui/icons/FlemingIcons';
 import DocumentsSection from '../components/DocumentsSection';
@@ -8,10 +10,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Layout from '../components/Layout';
 import { Button, Card, GlassCard, EmptyState, Select, Input } from '../components/ui';
 import { useApi, invalidateCache } from '../hooks/useApi';
-import { PoundSterling, TrendingUp, TrendingDown, Home, Landmark, RefreshCw, Clock3 } from 'lucide-react';
+import { PoundSterling, TrendingUp, TrendingDown, Home, Landmark, RefreshCw, Clock3, X } from 'lucide-react';
 
 interface RentPayment {
   id: number;
+  property_id?: number;
   tenant_name?: string;
   address?: string;
   amount_due: number | string;
@@ -21,6 +24,8 @@ interface RentPayment {
   status?: string; opening_balance_amount?: number; bank_received?:number; bank_payment_date?:string;
 }
 
+type RentSuggestion={rent_payment_id:number;tenant_name:string;address:string;due_date:string;outstanding:number;kind:string;reason:string;amount_matches:boolean};
+const money=(value:number|string)=>Number(value).toLocaleString('en-GB',{style:'currency',currency:'GBP'});
 interface BankFeedStatus {
   configured: boolean;
   connection?: { provider?:string; status: string; provider_name?: string; last_synced_at?: string; last_error?: string } | null;
@@ -45,11 +50,20 @@ interface Property {
   id: number;
   address: string;
   city?: string; postcode?: string;
-  landlord_type?: string; service_type?: string; active_monthly_rent?: number;
+  landlord_name?:string; landlord_type?: string; service_type?: string; active_monthly_rent?: number;
   monthly_rent?: number;
   rent?: number;
   rent_amount?: number;
   status?: string;
+}
+
+function AssignmentConfirmation({children,onCancel,onConfirm}:{children:React.ReactNode;onCancel:()=>void;onConfirm:()=>void}){
+ const dialog=useRef<HTMLDialogElement>(null);
+ useEffect(()=>{dialog.current?.showModal();},[]);
+ return <dialog ref={dialog} aria-labelledby="assignment-confirm-title" onCancel={event=>{event.preventDefault();onCancel();}} className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--border-input)] bg-[var(--bg-card)] p-6 text-[var(--text-primary)] shadow-xl backdrop:bg-black/60">
+  <h2 id="assignment-confirm-title" className="mb-3 text-lg font-bold">Are you sure you want to assign?</h2>{children}
+  <div className="mt-6 flex justify-end gap-3"><button type="button" autoFocus onClick={onCancel} className="rounded-full border border-[var(--border-input)] px-5 py-2 text-sm">Cancel</button><Button onClick={onConfirm}>Confirm assignment</Button></div>
+ </dialog>;
 }
 
 export default function Transactions() {
@@ -62,34 +76,39 @@ export default function Transactions() {
   const [bankTransactions, setBankTransactions] = useState<BankFeedTransaction[]>([]);
   const [bankBusy, setBankBusy] = useState(false);
   const [bankMessage, setBankMessage] = useState('');
+  const [bankResult,setBankResult]=useState('');
+  useEffect(()=>{if(bankMessage)setBankResult(bankMessage);},[bankMessage]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [rentSuggestions,setRentSuggestions]=useState<RentSuggestion[]>([]),[suggestionError,setSuggestionError]=useState('');
   const [selectedBank,setSelectedBank]=useState<BankFeedTransaction|null>(null);
   const [deposits,setDeposits]=useState<{security:number;holding:number;transactions:BankFeedTransaction[]}>({security:0,holding:0,transactions:[]});
   const [bankFilter,setBankFilter]=useState('unmatched');
   const [transactionName,setTransactionName]=useState(''),[showImportName,setShowImportName]=useState(false);
   const rentCutoff=new Date();rentCutoff.setUTCDate(rentCutoff.getUTCDate()-30);
-  const selectablePayments=payments.filter(p=>p.due_date&&p.due_date.slice(0,10)>=rentCutoff.toISOString().slice(0,10)&&p.due_date.slice(0,10)<=new Date().toISOString().slice(0,10)&&(!Number(p.bank_received)||Number(p.amount_paid)<Number(p.amount_due)));
+  const selectablePayments=payments.filter(p=>p.due_date&&(Number(p.amount_paid||0)<Number(p.amount_due)||(!Number(p.bank_received)&&p.due_date.slice(0,10)>=rentCutoff.toISOString().slice(0,10))));
   const renameTransaction=async()=>{if(!selectedBank)return;setBankBusy(true);try{const row=await api.patch(`/api/bank-feed/transactions/${selectedBank.id}/name`,{display_name:transactionName});setSelectedBank({...selectedBank,display_name:row.display_name});await refreshBankData();setBankMessage('Transaction name saved.');}catch(e){setBankMessage(String(e));}finally{setBankBusy(false);}};
   type Allocation={participants:DepositParticipant[];kind:string;amount:string;rent_payment_id:string;tenant_id:string;property_id:string;maintenance_id:string;category:string;notes:string};
   const [allocations,setAllocations]=useState<Allocation[]>([]);
+  const [pendingAssignment,setPendingAssignment]=useState<Allocation[]|null>(null);
   const [tenants,setTenants]=useState<{id:number;name:string;linked_tenant_id?:number;property_id?:number;tenancy_start_date?:string}[]>([]);
-  const [enquiries,setEnquiries]=useState<{id:number;first_name_1:string;last_name_1:string;linked_property_id?:number;status?:string}[]>([]);
+  const [enquiries,setEnquiries]=useState<{id:number;first_name_1:string;last_name_1:string;linked_property_id?:number;status?:string;balance_payment_requested?:number;balance_payment_received?:number}[]>([]);
   const [jobs,setJobs]=useState<{id:number;title:string;property_id:number}[]>([]);
   const freshAllocation=(amount=''):Allocation=>({kind:selectedBank&&Number(selectedBank.amount)<0?'expense':'rent',amount,participants:[],rent_payment_id:'',tenant_id:'',property_id:'',maintenance_id:'',category:'',notes:''});
   const beginAssign=useCallback(async(transaction:BankFeedTransaction)=>{
-    setBankMessage('');setTransactionName(transaction.display_name||transaction.description||'');setShowImportName(false);
-    try{const [tenantRows,jobRows,enquiryRows]=await Promise.all([api.get('/api/tenants'),api.get('/api/maintenance'),api.get('/api/tenant-enquiries')]);setTenants(tenantRows);setEnquiries(enquiryRows);setJobs(jobRows);setSelectedBank(transaction);setAllocations([{amount:String(Math.abs(Number(transaction.amount))),kind:Number(transaction.amount)>0?'rent':'expense',participants:[],rent_payment_id:'',tenant_id:'',property_id:'',maintenance_id:'',category:'',notes:''}]);}
+    setPendingAssignment(null);setRentSuggestions([]);setSuggestionError('');setBankMessage('');setTransactionName(transaction.display_name||transaction.description||'');setShowImportName(false);
+    try{const [tenantRows,jobRows,enquiryRows,suggestions]=await Promise.all([api.get('/api/tenants'),api.get('/api/maintenance'),api.get('/api/tenant-enquiries'),transaction.match_status==='unmatched'&&Number(transaction.amount)>0?api.get(`/api/bank-feed/transactions/${transaction.id}/rent-suggestions?at=${Date.now()}`).catch(()=>{setSuggestionError('Suggestions could not be loaded. You can still choose a rent charge below.');return [];}):Promise.resolve([])]);setRentSuggestions(suggestions);setTenants(tenantRows);setEnquiries(enquiryRows);setJobs(jobRows);setSelectedBank(transaction);setAllocations([{amount:String(Math.abs(Number(transaction.amount))),kind:Number(transaction.amount)>0?'rent':'expense',participants:[],rent_payment_id:'',tenant_id:'',property_id:'',maintenance_id:'',category:'',notes:''}]);}
     catch(error){setBankMessage(error instanceof Error?error.message:'Could not load allocation options');}
   },[api]);
   useEffect(()=>{const requested=searchParams.get('transaction');if(!loading&&requested&&openedTransaction.current!==requested){const match=bankTransactions.find(t=>String(t.id)===requested);openedTransaction.current=requested;if(match){setBankFilter('all');void beginAssign(match);}else setBankMessage('The linked bank transaction is outside the loaded range. Use the bank feed to review its allocation.');}},[loading,searchParams,bankTransactions,beginAssign]);
-  const reconcile=async(transaction:BankFeedTransaction,action:string)=>{
+  const reconcile=async(transaction:BankFeedTransaction,action:string,confirmedAllocations?:Allocation[])=>{
+    const toSave=confirmedAllocations||allocations;setPendingAssignment(null);
     setBankBusy(true);setBankMessage('');
-    try{await api.post(`/api/bank-feed/transactions/${transaction.id}/reconcile`,{action,allocations});setSelectedBank(null);invalidateCache('/api/rent-payments');invalidateCache('/api/financial-summary');await refreshBankData();const [pay,totals]=await Promise.all([api.get('/api/rent-payments'),api.get('/api/financial-summary')]);setPayments(pay);setSummary(totals);setBankMessage(action==='assign'?'Payment assigned.':action==='unassign'?'Allocation removed. You can assign this payment again.':action==='ignore'?'Transaction ignored.':'Transaction restored.');}
+    try{await api.post(`/api/bank-feed/transactions/${transaction.id}/reconcile`,{action,confirm_rent_assignment:action==='assign'&&!!confirmedAllocations,allocations:toSave.map(a=>a.kind==='client_rent'?{...a,kind:'rent',category:'Client Rent'}:a)});setSelectedBank(null);invalidateCache('/api/rent-payments');invalidateCache('/api/tenant-enquiries');invalidateCache('/api/financial-summary');await refreshBankData();const [pay,totals]=await Promise.all([api.get('/api/rent-payments'),api.get('/api/financial-summary')]);setPayments(pay);setSummary(totals);setBankMessage(action==='assign'?`£${Math.abs(Number(transaction.amount)).toFixed(2)} assigned across ${toSave.length} allocation${toSave.length===1?'':'s'}.`:action==='unassign'?'Allocation removed. You can assign this payment again.':action==='ignore'?'Transaction ignored.':'Transaction restored.');}
     catch(error){setBankMessage(error instanceof Error?error.message:'Could not save transaction');}
     finally{setBankBusy(false);}
   };
-  const setAllocation=(index:number,changes:Partial<Allocation>)=>setAllocations(current=>current.map((a,i)=>i===index?{...a,...changes}:a));
+  const setAllocation=(index:number,changes:Partial<Allocation>)=>{setPendingAssignment(null);setAllocations(current=>current.map((a,i)=>i===index?{...a,...changes}:a));};
 
 
   useEffect(() => {
@@ -173,22 +192,30 @@ export default function Transactions() {
 
   return (
     <Layout title="Financials" breadcrumb={[{ label: 'Financials' }]}>
-      {selectedBank&&<div role="dialog" aria-modal="true" aria-label="Assign bank transaction" className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4"><div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--bg-card)] p-6 space-y-4">
-        <h2 className="text-lg font-semibold">{selectedBank.match_status==='unmatched'?'Assign':'Review'} £{Math.abs(Number(selectedBank.amount)).toFixed(2)}</h2><div className="flex items-end gap-2"><Input className="flex-1" label="Transaction Name" value={transactionName} onChange={setTransactionName}/><Button variant="outline" size="sm" disabled={bankBusy||!transactionName.trim()} onClick={()=>void renameTransaction()}>Save Name</Button></div>{selectedBank.display_name?.trim()&&selectedBank.display_name.trim()!==selectedBank.description?.trim()&&<button className="text-xs rounded-full border border-[var(--border-input)] px-3 py-1.5" onClick={()=>setShowImportName(v=>!v)}>{showImportName?'Hide Import Name':'View Import Name'}</button>}{showImportName&&selectedBank.display_name?.trim()!==selectedBank.description?.trim()&&<p className="text-sm break-words">{selectedBank.description}</p>}
+      {selectedBank&&pendingAssignment&&<AssignmentConfirmation onCancel={()=>setPendingAssignment(null)} onConfirm={()=>void reconcile(selectedBank,'assign',pendingAssignment)}>
+        <p className="text-sm text-[var(--text-secondary)]">Assign this {Number(selectedBank.amount)>0?'incoming':'outgoing'} payment of <strong className="text-[var(--text-primary)]">{money(Math.abs(Number(selectedBank.amount)))}</strong>?</p>
+        <div className="mt-4 space-y-3">{pendingAssignment.map((a,index)=>{const rent=payments.find(p=>String(p.id)===a.rent_payment_id);const outstanding=rent?Math.max(0,Number(rent.amount_due)-Number(rent.amount_paid||0)):0;return <div key={index} className="rounded-xl bg-[var(--bg-input)] p-3 text-sm"><p className="font-bold">{rent?.tenant_name||a.category||a.kind.replaceAll('_',' ')} · {money(a.amount)}</p>{rent&&<><p className="mt-1">{rent.address}</p><p className="mt-1 text-[var(--text-secondary)]">Due {rent.due_date?.slice(0,10).split('-').reverse().join('/')} · {money(outstanding)} outstanding</p>{Math.abs(Number(a.amount)-outstanding)>0.005&&<p className="mt-2 text-amber-700 dark:text-amber-400">The payment amount differs from the outstanding rent. Cancel to adjust or split the allocation.</p>}</>}</div>;})}</div>
+      </AssignmentConfirmation>}
+      {bankResult&&<div role="dialog" aria-modal="true" aria-labelledby="bank-result-title" className="fixed inset-0 z-[120] grid place-items-center bg-black/60 p-4" onKeyDown={event=>{if(event.key==='Escape')setBankResult('');}}><div className="w-full max-w-md rounded-2xl bg-[var(--bg-card)] p-6 shadow-xl"><h2 id="bank-result-title" className="text-lg font-semibold">Bank Feed Results</h2><p className="mt-3 text-sm whitespace-pre-line break-words">{bankResult}</p><div className="flex justify-end mt-5"><button autoFocus className="rounded-full px-4 py-2 text-sm bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)]" onClick={()=>setBankResult('')}>Close</button></div></div></div>}
+      {selectedBank&&<div role="dialog" aria-modal="true" aria-label="Assign bank transaction" className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4"><div className="flex w-full max-w-2xl max-h-[90vh] flex-col overflow-hidden rounded-2xl bg-[var(--bg-card)]">
+        <div className="flex shrink-0 items-center justify-between gap-4 px-6 py-4"><h2 className="text-lg font-semibold">{selectedBank.match_status==='unmatched'?'Assign':'Review'} {money(Math.abs(Number(selectedBank.amount)))}</h2><button type="button" aria-label="Close assignment" title="Close" disabled={bankBusy} onClick={()=>{setPendingAssignment(null);setSelectedBank(null);}} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--text-secondary)] hover:bg-[var(--bg-input)] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"><X size={20}/></button></div>
+        <div className="min-h-0 overflow-y-auto px-6 pb-6 space-y-4"><div className="flex items-end gap-2"><Input className="flex-1 [&_input]:h-11" label="Transaction Name" value={transactionName} onChange={setTransactionName}/><Button variant="outline" size="sm" className="!h-11 !py-2.5 shrink-0" disabled={bankBusy||!transactionName.trim()} onClick={()=>void renameTransaction()}>Save Name</Button></div>{selectedBank.display_name?.trim()&&selectedBank.display_name.trim()!==selectedBank.description?.trim()&&<button className="text-xs rounded-full border border-[var(--border-input)] px-3 py-1.5" onClick={()=>setShowImportName(v=>!v)}>{showImportName?'Hide Import Name':'View Import Name'}</button>}{showImportName&&selectedBank.display_name?.trim()!==selectedBank.description?.trim()&&<p className="text-sm break-words">{selectedBank.description}</p>}
         {selectedBank.match_status!=='unmatched'?<><div className="space-y-2">{selectedBank.allocations?.map((a,i)=><div key={i}><p>{a.kind.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase())}{a.category?` · ${a.category}`:''} · £{Number(a.amount).toFixed(2)}</p>{a.participants?.length?<p className="text-sm">{a.participants.map(p=>p.name).join(' & ')}</p>:a.tenant_name&&<p className="text-sm">{a.tenant_name}</p>}{a.notes&&<p className="text-sm whitespace-pre-wrap text-[var(--text-secondary)]">{a.notes}</p>}</div>)}</div><Button disabled={bankBusy} onClick={()=>void reconcile(selectedBank,'unassign')}>Unallocate Payment</Button><p className="text-xs">The original allocation and attached documents stay in the history. You can assign the payment again after removing its current allocation.</p></>:<>
 
-        {allocations.map((a,index)=>{const incoming=Number(selectedBank.amount)>0;const categories:Record<string,string[]>={expense:['Ground Rent','Insurance','Lease Renewal','Management Fee','Other','Service Charge'],maintenance:['Contractors Invoice','Labour','Materials','Other','Refurbishment','Servicing'],financial:['Accountancy Fees','Utilities','Administration Expenses','Bank Fees','Commission Payment','Council Tax','Marketing Costs','Stamp Duty','Legal & Professional Fees','Office Costs','Other','Refunds'],income:['Commission Payment','Interest Received','Other','Tax Rebate']};return <div key={index} className="grid sm:grid-cols-2 gap-3 p-4 rounded-xl border border-[var(--border-input)]">
-          <Select label="Payment Type" value={a.kind} onChange={kind=>setAllocation(index,{kind,category:''})} options={(incoming?[{value:'rent',label:'Rent Payment'},{value:'deposit',label:'Security Deposit'},{value:'holding_deposit',label:'Holding Deposit'},{value:'income',label:'Other Money In'},{value:'financial',label:'Financials'}]:[{value:'deposit',label:'Security Deposit'},{value:'holding_deposit',label:'Holding Deposit'},{value:'expense',label:'Property Expense'},{value:'maintenance',label:'Maintenance & Repairs'},{value:'financial',label:'Financials'}]).sort((a,b)=>a.label.localeCompare(b.label))}/>
+        {selectedBank.match_status==='unmatched'&&Number(selectedBank.amount)>0&&<section aria-label="Suggested rent matches" className="rounded-xl border border-[var(--border-input)] p-3 space-y-2"><h3 className="text-sm font-semibold">Suggested rent matches</h3><p className="text-xs text-[var(--text-secondary)]">Based on previous confirmed payer names and references. Review the tenant, date and amount before assigning.</p>{suggestionError?<p role="status" className="text-xs">{suggestionError}</p>:!rentSuggestions.length?<p className="text-xs text-[var(--text-muted)]">No previous confirmed payer match found. Choose a rent charge below.</p>:<div className="max-h-56 overflow-y-auto space-y-1.5">{rentSuggestions.map(s=><div key={s.rent_payment_id} className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-3 py-2 text-xs ${rentDueTiming(s.due_date).className}`}><div className="min-w-0 flex-1 basis-64"><p className="font-semibold break-words">{s.tenant_name} · {s.address}</p><p>{s.due_date.split('-').reverse().join('/')} · {money(s.outstanding)} outstanding · {rentDueTiming(s.due_date).label}</p><p className="mt-0.5 text-[11px] leading-snug">{s.reason}{!s.amount_matches?' — payment amount differs; review the allocation.':''}</p></div><button type="button" className="shrink-0 rounded-full border border-current px-3 py-1.5 text-xs" onClick={()=>{setPendingAssignment([{...freshAllocation(String(Math.abs(Number(selectedBank.amount)))),kind:s.kind,rent_payment_id:String(s.rent_payment_id)}]);}}>Use suggestion</button></div>)}</div>}</section>}
+        {allocations.map((a,index)=>{const incoming=Number(selectedBank.amount)>0;const categories:Record<string,string[]>={expense:['Ground Rent','Insurance','Lease Renewal','Management Fee','Other','Service Charge'],maintenance:['Contractors Invoice','Labour','Materials','Other','Refurbishment','Servicing'],financial:['Landlord Rent Remittance','Accountancy Fees','Utilities','Administration Expenses','Bank Fees','Commission Payment','Council Tax','Marketing Costs','Stamp Duty','Legal & Professional Fees','Office Costs','Other','Refunds'],income:['Commission Payment','Interest Received','Other','Tax Rebate']};return <div key={index} className="grid sm:grid-cols-2 gap-3 p-4 rounded-xl border border-[var(--border-input)]">
+          <h3 className="sm:col-span-2 text-base font-bold">{incoming?'Money In':'Money Out'}</h3>
+          <Select label="Payment Type" value={a.kind} onChange={kind=>setAllocation(index,{kind,category:''})} options={(incoming?[{value:'final_balance',label:'Final Tenancy Balance'},{value:'rent',label:'Portfolio Rent'},{value:'client_rent',label:'Client Rent'},{value:'deposit',label:'Security Deposit'},{value:'holding_deposit',label:'Holding Deposit'},{value:'income',label:'Other Money In'},{value:'financial',label:'Financials'}]:[{value:'deposit',label:'Security Deposit'},{value:'holding_deposit',label:'Holding Deposit'},{value:'expense',label:'Property Expense'},{value:'maintenance',label:'Maintenance & Repairs'},{value:'financial',label:'Financials'}]).sort((a,b)=>a.label.localeCompare(b.label))}/>
           <Input label="Amount (£)" type="currency" value={a.amount} onChange={amount=>setAllocation(index,{amount})}/>
-          {categories[a.kind]&&<Select label="Category" value={a.category} onChange={category=>setAllocation(index,{category})} options={[{value:'',label:'Choose category'},...categories[a.kind].map(v=>({value:v,label:v}))]}/>}
-          {a.kind==='rent'?<Select className="sm:col-span-2" searchable label="Rent Charge" value={a.rent_payment_id} onChange={rent_payment_id=>setAllocation(index,{rent_payment_id})} options={[{value:'',label:'Choose rent due'},...selectablePayments.map(p=>({value:String(p.id),label:`${p.tenant_name} · ${p.address} · ${p.due_date?.slice(0,10)} · £${Number(p.amount_due).toFixed(2)}`}))]}/>:a.kind==='deposit'?<DepositParticipantsSelect value={a.participants} onChange={participants=>setAllocation(index,{participants})} options={[...tenants.filter(t=>t.property_id).map(t=>({key:`tenant:${t.id}`,name:t.name,address:formatPropertyAddress(properties.find(p=>p.id===t.property_id)?.address,properties.find(p=>p.id===t.property_id)?.postcode,properties.find(p=>p.id===t.property_id)?.city),participant:{tenant_id:t.id}})),...enquiries.filter(e=>e.linked_property_id&&e.status!=='converted').map(e=>({key:`enquiry:${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' '),address:formatPropertyAddress(properties.find(p=>p.id===e.linked_property_id)?.address,properties.find(p=>p.id===e.linked_property_id)?.postcode,properties.find(p=>p.id===e.linked_property_id)?.city),participant:{enquiry_id:e.id}}))]}/>:<div className="sm:col-span-2"><PropertiesIcon size={18} className="text-blue-500 mb-1"/><Select label={['financial','income'].includes(a.kind)?'Property (optional)':'Property'} searchable value={a.property_id} onChange={property_id=>setAllocation(index,{property_id,maintenance_id:''})} options={[{value:'',label:'Choose property'},...properties.map(p=>({value:String(p.id),label:formatPropertyAddress(p.address,p.postcode,p.city)}))]}/></div>}
+          {categories[a.kind]&&<Select label="Category" value={a.category} onChange={category=>setAllocation(index,{category})} options={[{value:'',label:'Choose category'},...categories[a.kind].filter(category=>!incoming||category!=='Landlord Rent Remittance').map(v=>({value:v,label:v}))]}/>}
+          {['rent','client_rent'].includes(a.kind)?<Select className="sm:col-span-2" searchable label="Rent Charge" value={a.rent_payment_id} onChange={rent_payment_id=>setAllocation(index,{rent_payment_id})} options={[{value:'',label:'Choose rent due'},...selectablePayments.filter(p=>{const client=properties.find(x=>x.id===p.property_id)?.landlord_type!=='internal';return a.kind==='client_rent'?client:!client;}).map(p=>({value:String(p.id),className:rentDueTiming(p.due_date!).className,label:`${p.tenant_name} · ${p.address} · ${p.due_date?.slice(0,10)} · ${money(p.amount_due)} · ${rentDueTiming(p.due_date!).label}`}))]}/>:a.kind==='final_balance'?<Select className="sm:col-span-2" searchable label="Tenant Enquiry" value={String(a.participants[0]?.enquiry_id||'')} onChange={id=>setAllocation(index,{participants:id?[{enquiry_id:Number(id)}]:[]})} options={[{value:'',label:'Choose final balance'},...enquiries.filter(e=>e.balance_payment_requested&&!e.balance_payment_received&&e.status!=='converted').map(e=>({value:String(e.id),label:`${e.first_name_1} ${e.last_name_1} · ${formatPropertyAddress(properties.find(p=>p.id===e.linked_property_id)?.address,properties.find(p=>p.id===e.linked_property_id)?.postcode)}`}))]}/>:['deposit','holding_deposit'].includes(a.kind)?<DepositParticipantsSelect value={a.participants} onChange={participants=>setAllocation(index,{participants})} options={[...tenants.filter(t=>t.property_id).map(t=>({key:`tenant:${t.id}`,name:t.name,address:formatPropertyAddress(properties.find(p=>p.id===t.property_id)?.address,properties.find(p=>p.id===t.property_id)?.postcode,properties.find(p=>p.id===t.property_id)?.city),participant:{tenant_id:t.id}})),...enquiries.filter(e=>e.linked_property_id&&e.status!=='converted').map(e=>({key:`enquiry:${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' '),address:formatPropertyAddress(properties.find(p=>p.id===e.linked_property_id)?.address,properties.find(p=>p.id===e.linked_property_id)?.postcode,properties.find(p=>p.id===e.linked_property_id)?.city),participant:{enquiry_id:e.id}}))]}/>:<div className="sm:col-span-2"><Select icon={<PropertiesIcon size={18} className="text-blue-500 shrink-0"/>} label={['financial','income'].includes(a.kind)&&a.category!=='Landlord Rent Remittance'?'Property (optional)':'Property'} searchable value={a.property_id} onChange={property_id=>setAllocation(index,{property_id,maintenance_id:''})} options={[{value:'',label:'Choose property'},...properties.filter(p=>a.category!=='Landlord Rent Remittance'||p.landlord_type==='external').map(p=>({value:String(p.id),label:formatPropertyAddress(p.address,p.postcode,p.city)+(a.category==='Landlord Rent Remittance'&&p.landlord_name?' · '+p.landlord_name:'')}))]}/></div>}
           {a.kind==='maintenance'&&<Select className="sm:col-span-2" label="Maintenance Task (optional)" value={a.maintenance_id} onChange={maintenance_id=>setAllocation(index,{maintenance_id})} options={[{value:'',label:'No linked task'},...jobs.filter(j=>String(j.property_id)===a.property_id).map(j=>({value:String(j.id),label:j.title}))]}/>}
           <label className="text-sm sm:col-span-2">Notes<textarea className="block w-full mt-2 p-3 rounded-xl border border-[var(--border-input)] bg-[var(--bg-input)]" rows={2} value={a.notes} onChange={e=>setAllocation(index,{notes:e.target.value})}/></label>
-          {allocations.length>1&&<button className="text-sm underline" onClick={()=>setAllocations(current=>current.filter((_,i)=>i!==index))}>Remove Allocation</button>}</div>})}
-        <div className="flex justify-between"><Button size="sm" variant="outline" onClick={()=>setAllocations(current=>[...current,freshAllocation()])}>Split Payment</Button><p className="text-sm">Remaining: £{(Math.abs(Number(selectedBank.amount))-allocations.reduce((sum,a)=>sum+Number(a.amount||0),0)).toFixed(2)}</p></div></>}
+          {allocations.length>1&&<button className="text-sm underline" onClick={()=>{setPendingAssignment(null);setAllocations(current=>current.filter((_,i)=>i!==index));}}>Remove Allocation</button>}</div>})}
+        <div className="flex justify-between"><Button size="sm" variant="outline" onClick={()=>{setPendingAssignment(null);setAllocations(current=>[...current,freshAllocation()]);}}>Split Payment</Button><p className="text-sm">Remaining: £{(Math.abs(Number(selectedBank.amount))-allocations.reduce((sum,a)=>sum+Number(a.amount||0),0)).toFixed(2)}</p></div></>}
         <DocumentsSection entityType="bank_transaction" entityId={selectedBank.id} title="Related Documents" compact/>
-        {bankMessage&&<p role="alert" className="text-red-500">{bankMessage}</p>}<div className="flex justify-end gap-3"><Button disabled={bankBusy} variant="ghost" onClick={()=>setSelectedBank(null)}>Cancel</Button>{selectedBank.match_status==='unmatched'&&<Button disabled={bankBusy} onClick={()=>void reconcile(selectedBank,'assign')}>Save Assignment</Button>}</div>
-      </div></div>}
+        <div className="flex justify-end gap-3"><Button disabled={bankBusy} variant="ghost" onClick={()=>setSelectedBank(null)}>Cancel</Button>{selectedBank.match_status==='unmatched'&&<Button disabled={bankBusy} onClick={()=>setPendingAssignment(allocations.map(a=>({...a})))}>Save Assignment</Button>}</div>
+      </div></div></div>}
       <div className="p-4 md:p-8">
         {loadError ? <p role="alert" className="text-red-400 py-8">{loadError}</p> : loading ? (
           <div className="text-center text-[var(--text-muted)] py-16">Loading...</div>
@@ -207,7 +234,7 @@ export default function Transactions() {
                           ? `Connected${bankStatus.connection.provider_name ? ` via ${bankStatus.connection.provider_name}` : ''}${bankStatus.connection.last_synced_at ? ` · last synced ${new Date(bankStatus.connection.last_synced_at).toLocaleString('en-GB')}` : ''}`
                           : 'Ready to connect and approve access in Barclays.'}
                     </p>
-                    {bankMessage && <p className="text-xs text-orange-400 mt-2">{bankMessage}</p>}
+                    
                     {bankStatus?.connection?.last_error && <p className="text-xs text-red-400 mt-2">{bankStatus.connection.last_error}</p>}
                   </div>
                 </div>
@@ -301,6 +328,7 @@ export default function Transactions() {
                   </div>
                 )}
               </Card>
+              <div className="lg:col-span-2"><ClientEarnings refreshKey={bankMessage}/></div>
             </div>
 
             {bankTransactions.length > 0 && (

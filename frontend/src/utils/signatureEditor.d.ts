@@ -1,0 +1,1 @@
+export function signatureEditor(options:{label?:string;canvas:HTMLCanvasElement;name:()=>string;apply:(image:HTMLCanvasElement,generated:boolean)=>void}):{open:(method?:string)=>void;refresh:(signed:boolean)=>void;destroy:()=>void};

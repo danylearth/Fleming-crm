@@ -1,7 +1,11 @@
 import {PHONE_PLACEHOLDER,normaliseUkPhone} from '../../utils/phone';
-import { type ReactNode, useState, useRef, useEffect } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { type ReactNode, useState, useRef, useEffect, useId } from 'react';
+import { Eye, EyeOff, Check } from 'lucide-react';
 import FloatingDropdown from '../FloatingDropdown';
+
+export function AdministratorAccessBadge() {
+  return <span className="inline-flex rounded-full px-5 py-2.5 text-sm font-bold bg-purple-500/10 text-[var(--text-primary)] border border-purple-500/20">Administrator Access Only</span>;
+}
 
 // ─── Card ───
 export function Card({ children, className = '', onClick, hover }: {
@@ -57,6 +61,11 @@ export function Button({ children, onClick, variant = 'primary', size = 'md', cl
   );
 }
 
+// Consistent compact actions across list-page import/add toolbars.
+export function ToolbarButton(props: Parameters<typeof Button>[0]) {
+  return <Button {...props} size="sm" className={`!h-9 !px-4 !py-1.5 !text-xs [&_svg]:!w-3.5 [&_svg]:!h-3.5 ${props.className||''}`} />;
+}
+
 // ─── Input ───
 export function Input({ label, value, onChange, placeholder, type = 'text', className = '' }: {
   label?: string; value: string; onChange: (v: string) => void; placeholder?: string;
@@ -85,21 +94,24 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
 }
 
 // ─── Select ───
-export function Select({ label, value, onChange, options, className = '', searchable, inlineLabel = false, hideLabel = false }: {
+export function Select({ label, value, onChange, options, className = '', searchable, inlineLabel = false, hideLabel = false, icon, compact = false, disabled = false }: {
   label?: string; value: string; onChange: (v: string) => void;
-  options: { value: string; label: string }[]; className?: string; searchable?: boolean; inlineLabel?: boolean; hideLabel?: boolean;
+  options: { value: string; label: string; className?:string }[]; className?: string; searchable?: boolean; inlineLabel?: boolean; hideLabel?: boolean; icon?: ReactNode; compact?: boolean; disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
   const selected = options.find(o => o.value === value);
   const showSearch = searchable === true || (searchable !== false && options.length > 5);
   const filtered = search ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase())) : options;
 
   useEffect(() => {
     if (open && showSearch && searchRef.current) searchRef.current.focus();
-  }, [open, showSearch]);
+    else if(open&&compact) (menuRef.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]') || menuRef.current?.querySelector<HTMLButtonElement>('[role="option"]'))?.focus();
+  }, [open, showSearch, compact]);
 
   const dropdown = open ? <FloatingDropdown anchor={triggerRef} onClose={()=>{setOpen(false);setSearch('');}}>
       {showSearch && (
@@ -108,17 +120,27 @@ export function Select({ label, value, onChange, options, className = '', search
             placeholder="Search..." className="w-full bg-[var(--bg-hover)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none" />
         </div>
       )}
-      <div className="max-h-56 overflow-y-auto py-1">
+      <div ref={menuRef} id={menuId} role={compact?'listbox':undefined} aria-label={compact?label:undefined} className={compact?'max-h-64 overflow-y-auto p-1.5 space-y-0.5':'max-h-56 overflow-y-auto py-1'} onKeyDown={event=>{
+        if(!compact)return;
+        if(event.key==='Escape'){event.preventDefault();setOpen(false);triggerRef.current?.focus();return;}
+        const items=Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]'));
+        const index=items.indexOf(document.activeElement as HTMLButtonElement);
+        const next=event.key==='ArrowDown'?(index+1)%items.length:event.key==='ArrowUp'?(index-1+items.length)%items.length:event.key==='Home'?0:event.key==='End'?items.length-1:-1;
+        if(next>=0){event.preventDefault();items[next]?.focus();}
+      }} onBlur={event=>{if(compact&&!event.currentTarget.contains(event.relatedTarget as Node))setOpen(false);}}>
         {filtered.map(o => (
           <button
             key={o.value}
             type="button"
-            onClick={() => { onChange(o.value); setOpen(false); setSearch(''); }}
-            className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-[var(--bg-hover)] ${
+            role={compact?'option':undefined}
+            aria-selected={compact?value===o.value:undefined}
+            tabIndex={compact?-1:undefined}
+            onClick={() => { if(!compact||o.value!==value)onChange(o.value); setOpen(false); setSearch(''); if(compact)triggerRef.current?.focus(); }}
+            className={compact ? `w-full flex items-center gap-2 rounded-lg px-3 py-2.5 text-[13px] text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-400 ${value===o.value?'bg-purple-500/10 text-[var(--text-primary)] font-medium':'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'}` : `w-full text-left px-4 py-2 text-sm transition-colors hover:bg-[var(--bg-hover)] ${
               value === o.value ? 'text-[var(--text-primary)] bg-[var(--bg-hover)] font-medium' : 'text-[var(--text-secondary)]'
             }`}
           >
-            {o.label}
+            <span className={`flex-1 ${o.className||''} ${o.className?'rounded-lg px-2 py-1':''}`}>{o.label}</span>{compact&&<span className="w-4 shrink-0">{value===o.value&&<Check size={15} className="text-purple-500"/>}</span>}
           </button>
         ))}
         {filtered.length === 0 && <p className="px-4 py-2 text-xs text-[var(--text-muted)]">No results</p>}
@@ -131,11 +153,16 @@ export function Select({ label, value, onChange, options, className = '', search
       <button
         ref={triggerRef}
         aria-label={label}
+        aria-expanded={open}
+        aria-haspopup={compact?"listbox":undefined}
+        aria-controls={open?menuId:undefined}
+        disabled={disabled}
+        onKeyDown={event=>{if(compact&&(event.key==='ArrowDown'||event.key==='ArrowUp')){event.preventDefault();setOpen(true);}}}
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors text-left"
+        className={`w-full flex items-center justify-between gap-3 border rounded-xl text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed ${compact ? "bg-[var(--bg-card)] border-[var(--border-input)] px-3 py-2 text-[13px] shadow-sm hover:border-purple-400" : "bg-[var(--bg-input)] border-[var(--border-input)] px-4 py-2.5 text-sm focus:border-[var(--accent)]"}`}
       >
-        <span className={selected ? '' : 'text-[var(--text-muted)]'}>{selected?.label || 'Select...'}</span>
+        <span className={`flex items-center gap-2 min-w-0 ${selected ? '' : 'text-[var(--text-muted)]'}`}>{icon}<span className={selected?.className?`rounded-lg px-2 py-1 ${selected.className}`:undefined}>{selected?.label || 'Select...'}</span></span>
         <svg className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
@@ -175,8 +202,8 @@ export function Tag({ children, active, onClick }: {
 }
 
 // ─── Avatar ───
-export function Avatar({ name, src, size = 'md', className = '' }: {
-  name?: string; src?: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'; className?: string;
+export function Avatar({ name, initials, src, size = 'md', className = '' }: {
+  name?: string; initials?: string; src?: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'; className?: string;
 }) {
   const sizes = { xs: 'w-6 h-6 text-[10px]', sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-sm', lg: 'w-14 h-14 text-lg', xl: 'w-20 h-20 text-2xl' };
   if (src) {
@@ -184,7 +211,7 @@ export function Avatar({ name, src, size = 'md', className = '' }: {
   }
   return (
     <div className={`${sizes[size]} rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center font-bold text-white shrink-0 ${className}`}>
-      {name?.[0]?.toUpperCase() || '?'}
+      <span>{initials || name?.[0]?.toUpperCase() || '?'}</span>
     </div>
   );
 }

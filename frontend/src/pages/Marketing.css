@@ -1,0 +1,17 @@
+.marketing-contact-row[aria-selected="true"] {
+  background-color: #fff;
+}
+
+.marketing-contact-row[aria-selected="true"] > td:first-child {
+  box-shadow: inset 3px 0 #853477;
+}
+
+.marketing-contact-row[aria-selected="true"] > td:nth-child(2) {
+  font-weight: 600;
+}
+
+[data-theme="dark"] .marketing-contact-row[aria-selected="true"] {
+  background-color: #444;
+}
+
+.campaign-history-list{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:4px}.campaign-history-list>article{flex-shrink:0}

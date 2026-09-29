@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {nextInspectionDate,hasPropertyInspections,inspectionAnswers} from './property-inspections';
+import {nextInspectionDate,hasPropertyInspections,inspectionAnswers,inspectionConditions} from './property-inspections';
 describe('property inspection schedule',()=>{
  it('uses three, six, twelve months and then annual anniversaries',()=>{
   expect(nextInspectionDate('2026-09-21')).toBe('2026-12-21');
@@ -21,6 +21,8 @@ describe('property inspection schedule',()=>{
 });
 
 describe('inspection answers',()=>{
+ it.each(['average','very_good'])('accepts %s across overall and detailed condition answers',rating=>{expect(inspectionConditions).toContain(rating);expect(inspectionAnswers({internal_condition:rating,external_condition:rating,damage_noticed:false})).toMatchObject({internal_condition:rating,external_condition:rating});});
+ it('rejects an unrecognised condition',()=>{expect(()=>inspectionAnswers({internal_condition:'unknown',external_condition:'good',damage_noticed:false})).toThrow('internal condition');});
  it('requires the CRM answers even if a report is attached',()=>{expect(()=>inspectionAnswers({document_id:12})).toThrow();});
  it('accepts a complete form without an attachment',()=>{expect(inspectionAnswers({internal_condition:'good',external_condition:'not_applicable',damage_noticed:false})).toEqual({internal_condition:'good',external_condition:'not_applicable',damage_noticed:false,damage_details:null});});
  it('requires damage details and an explicit yes or no',()=>{expect(()=>inspectionAnswers({internal_condition:'good',external_condition:'good'})).toThrow();expect(()=>inspectionAnswers({internal_condition:'good',external_condition:'good',damage_noticed:true})).toThrow('Describe');});

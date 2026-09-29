@@ -12,3 +12,5 @@ it('includes the selected office address in landlord confirmations',()=>{
  const details=appointmentDetails({kind:'meeting',date:'2026-10-01',time:'10:30',location},'2026-09-25');
  expect(appointmentMessage('Sample',details)).toContain(location);
 });
+
+it('requires a note and follow-up date when contact is made',()=>{expect(()=>appointmentDetails({kind:'follow_up',contact_made:true,contact_note:'',date:'2026-10-01'},'2026-09-25')).toThrow('contact note');expect(()=>appointmentDetails({kind:'follow_up',contact_made:true,contact_note:'Spoke today'},'2026-09-25')).toThrow();});

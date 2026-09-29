@@ -1,3 +1,6 @@
+import type {PhoneChallenge} from '../components/PhoneVerification';
+export type LoginChallenge=PhoneChallenge & {requiresTwoFactor:true;resendAfterSeconds:number;codesSent?:number;lockAt?:string|null};
+export type LoginDeliveryOptions={requiresTwoFactor:true;selectDelivery:true;options:{method:'phone'|'email';destination:string;label:string}[]};
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 
@@ -16,7 +19,9 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string,verificationMethod?:'phone'|'email') => Promise<LoginChallenge|LoginDeliveryOptions|void>;
+  verifyLogin: (challengeId:string,code:string,rememberDevice:boolean)=>Promise<void>;
+  resendLoginCode:(challengeId:string)=>Promise<LoginChallenge>;
   register: (data: { email: string; password: string; name: string; role: string; phone?: string }) => Promise<void>;
   logout: () => void;
   updateUser: (changes: Partial<User>) => void;
@@ -62,20 +67,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => controller.abort();
   }, [token]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string,verificationMethod?:'phone'|'email') => {
     let res: Response;
     try { res = await fetch(`${API_URL}/api/auth/login`, {
-      method: 'POST',
+      method: 'POST',credentials:'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim(), password })
+      body: JSON.stringify({ email: email.trim(), password,verificationMethod })
     }); } catch { throw new Error('Cannot reach the CRM. Please check your connection and try again.'); }
-    if (res.status === 401) throw new Error('Invalid login details');
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || 'The CRM is temporarily unavailable. Please try again.');
+    if (!res.ok) throw Object.assign(new Error(data.error || 'The CRM is temporarily unavailable. Please try again.'),{requiresPasswordReset:data.requiresPasswordReset===true,status:res.status});
+    if(data.requiresTwoFactor)return data as LoginChallenge|LoginDeliveryOptions;
     localStorage.setItem('fleming-last-activity', String(Date.now()));
     localStorage.setItem('token', data.token);
     setToken(data.token);
     setUser(data.user);
+  };
+
+  const verifyLogin=async(challengeId:string,code:string,rememberDevice:boolean)=>{
+    const res=await fetch(`${API_URL}/api/auth/login/verify`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({verification:{challengeId,codes:[code]},rememberDevice})});
+    const data=await res.json();if(!res.ok)throw Error(data.error||'Verification failed');
+    localStorage.setItem('fleming-last-activity',String(Date.now()));localStorage.setItem('token',data.token);setToken(data.token);setUser(data.user);
+  };
+
+  const resendLoginCode=async(challengeId:string):Promise<LoginChallenge>=>{
+    const res=await fetch(`${API_URL}/api/auth/login/resend`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({challengeId})});
+    const data=await res.json();if(!res.ok)throw Error(data.error||'Could not request a new code');return data;
   };
 
   const register = async (regData: { email: string; password: string; name: string; role: string; phone?: string }) => {
@@ -95,11 +111,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const a=user?.appearance;const root=document.documentElement;
     const fonts:Record<string,string>={lufga:"'Lufga', sans-serif",system:'system-ui, sans-serif',verdana:'Verdana, sans-serif',arial:'Arial, sans-serif',aptos:'Aptos, Calibri, sans-serif',times:'"Times New Roman", serif',comic:'"Comic Sans MS", cursive',georgia:'Georgia, serif',tahoma:'Tahoma, sans-serif',trebuchet:'"Trebuchet MS", sans-serif',courier:'"Courier New", monospace',calibri:'Calibri, sans-serif',cambria:'Cambria, serif',helvetica:'Helvetica, Arial, sans-serif',palatino:'Palatino, serif'};
-    root.style.setProperty('--user-font',fonts[a?.font || 'lufga'] || fonts.lufga);
-    root.style.fontSize=`${a?.scale || 100}%`;
+    let selectedFont=user?(a?.font || 'lufga'):'arial';
+    try{
+      if(user)localStorage.setItem('fleming-login-font',fonts[selectedFont]?selectedFont:'lufga');
+      else selectedFont=localStorage.getItem('fleming-login-font')||'arial';
+    }catch{/* Use the normal default if browser storage is unavailable. */}
+    root.style.setProperty('--user-font',fonts[selectedFont] || fonts.lufga);
+    root.style.fontSize=`${user ? (a?.scale || 90) : 100}%`;
     root.dataset.appearanceBackground=a?.background || 'default';
     return ()=>{root.style.removeProperty('--user-font');root.style.removeProperty('font-size');delete root.dataset.appearanceBackground;};
-  },[user?.appearance]);
+  },[user?.id,user?.appearance]);
 
   const logout = useCallback(() => {
     localStorage.removeItem('fleming-last-activity');
@@ -148,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUser = (changes: Partial<User>) => setUser(current => current ? { ...current, ...changes } : current);
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, loading, updateUser }}>
+    <AuthContext.Provider value={{ user, token, login, verifyLogin,resendLoginCode, register, logout, loading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

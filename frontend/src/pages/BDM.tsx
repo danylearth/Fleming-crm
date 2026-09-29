@@ -1,3 +1,4 @@
+import {ToolbarButton} from '../components/ui';
 import LandlordAppointmentForm from '../components/LandlordAppointmentForm';
 import CsvImport from '../components/ui/CsvImport';
 import {usePermissions} from '../hooks/usePermissions';
@@ -58,7 +59,7 @@ export default function BDM() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   const [workflowProspect, setWorkflowProspect] = useState<Prospect | null>(null);
-  const [workflowMode, setWorkflowMode] = useState<'choose' | 'follow_up' | 'meeting' | 'reject' | 'confirm_drag'>('choose');
+  const [workflowMode, setWorkflowMode] = useState<'choose' | 'contacted' | 'follow_up' | 'meeting' | 'reject' | 'confirm_drag'>('choose');
   const [, setWorkflowReason] = useState('');
   const [workflowLoading, setWorkflowLoading] = useState(false);
   const [converting, setConverting] = useState(false);
@@ -253,10 +254,10 @@ export default function BDM() {
           >
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
-          {isManager()&&<Button variant="outline" onClick={()=>setShowImport(true)}><Upload size={16} className="mr-2"/>Import CSV</Button>}
-          <Button variant="gradient" onClick={() => setShowModal(true)}>
+          {isManager()&&<ToolbarButton variant="outline" onClick={()=>setShowImport(true)}><Upload size={16} className="mr-2"/>Import CSV</ToolbarButton>}
+          <ToolbarButton variant="gradient" onClick={() => setShowModal(true)}>
             <Plus size={16} className="mr-2" /> Add Prospect
-          </Button>
+          </ToolbarButton>
         </div>
 
         {showImport&&isManager()&&<CsvImport entity="landlords-bdm" onClose={()=>setShowImport(false)} onDone={load}/>}
@@ -499,9 +500,9 @@ export default function BDM() {
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="ghost" onClick={() => { setShowModal(false); setError(''); }}>Cancel</Button>
-              <Button variant="gradient" onClick={handleAdd} disabled={saving || !form.name.trim()}>
+              <ToolbarButton variant="gradient" onClick={handleAdd} disabled={saving || !form.name.trim()}>
                 {saving ? 'Adding...' : 'Add Prospect'}
-              </Button>
+              </ToolbarButton>
             </div>
           </div>
         </div>
@@ -510,7 +511,7 @@ export default function BDM() {
       {workflowProspect && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm"
           onClick={() => setWorkflowProspect(null)}>
-          <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-2"
+          <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-2 max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -526,7 +527,7 @@ export default function BDM() {
             {workflowMode === 'choose' ? (
               <>
                 <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Progress</p>
-                <button onClick={() => doWorkflowAction('contacted')}
+                <button onClick={() => setWorkflowMode('contacted')}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center">
                     <Phone size={14} className="text-white" />
@@ -534,7 +535,7 @@ export default function BDM() {
                   <div className="flex-1"><p className="text-sm font-medium">Mark as Contacted</p><p className="text-xs text-[var(--text-muted)]">Initial outreach made</p></div>
                   <ArrowRight size={14} className="text-[var(--text-muted)]" />
                 </button>
-                <Button variant="outline" className="w-full justify-start" onClick={()=>setWorkflowMode('meeting')}><Calendar size={16} className="mr-2"/>Book a Meeting</Button>
+                <button onClick={()=>setWorkflowMode('meeting')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left"><div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center"><Calendar size={14} className="text-white"/></div><div className="flex-1"><p className="text-sm font-medium">Book Meeting</p><p className="text-xs text-[var(--text-muted)]">Select date, time & location</p></div><ArrowRight size={14} className="text-[var(--text-muted)]"/></button>
                 <button onClick={() => setWorkflowMode('follow_up')}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
@@ -597,13 +598,13 @@ export default function BDM() {
                 <p className="text-xs text-[var(--text-muted)]">Confirm moving {workflowProspect?.name} to {statusLabel(dragTargetStatus)}?</p>
                 <div className="flex gap-3">
                   <Button variant="ghost" onClick={() => setWorkflowProspect(null)}>Cancel</Button>
-                  <Button variant="gradient" onClick={() => doWorkflowAction(dragTargetStatus)} disabled={workflowLoading}>
+                  <Button variant="gradient" onClick={() => dragTargetStatus==='contacted'?setWorkflowMode('contacted'):doWorkflowAction(dragTargetStatus)} disabled={workflowLoading}>
                     {workflowLoading ? 'Moving...' : 'Confirm'}
                   </Button>
                 </div>
               </div>
-            ) : workflowMode === 'follow_up' || workflowMode === 'meeting' ? (
-              <LandlordAppointmentForm key={`${workflowProspect.id}-${workflowMode}`} prospect={workflowProspect} kind={workflowMode} onBack={()=>setWorkflowMode('choose')} onSaved={()=>{setWorkflowProspect(null);void load();}} />
+            ) : workflowMode === 'follow_up' || workflowMode === 'meeting' || workflowMode === 'contacted' ? (
+              <LandlordAppointmentForm key={`${workflowProspect.id}-${workflowMode}`} prospect={workflowProspect} kind={workflowMode==='contacted'?'follow_up':workflowMode} contactMade={workflowMode==='contacted'} onBack={()=>setWorkflowMode('choose')} onSaved={()=>{setWorkflowProspect(null);void load();}} />
             ) : (
               <div className="space-y-4">
                 <p className="text-sm font-medium text-red-400">Mark as Not Interested</p>

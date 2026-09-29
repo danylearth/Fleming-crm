@@ -1,15 +1,18 @@
-import {pipelineVisible,pipelineStage,matchesPipelineAgent} from '../utils/pipeline';
+import {applicationReadyForReview,pipelineVisible,pipelineStage,matchesPipelineAgent} from '../utils/pipeline';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
+import DashboardTaskPreview from '../components/DashboardTaskPreview';
 import { Card, GlassCard, SectionHeader, EmptyState, Select, Button } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
+import { usePortfolio } from '../context/PortfolioContext';
+import { portfolioMatcher, type PortfolioRecord } from '../utils/dashboardPortfolio';
 import { useNotifications } from '../context/NotificationContext';
 import { getPropertyImage, getPropertyPlaceholder } from '../utils/propertyImages';
 import {
   Building2, Users, Wrench, MessageSquare, AlertTriangle,
-  Clock, CheckCircle2, ArrowRight, CalendarDays, Trash2, X, ListChecks, Eye
+  Clock, CheckCircle2, ArrowRight, CalendarDays, Trash2, ListChecks, Eye
 } from 'lucide-react';
 
 interface MaintenanceItem {
@@ -28,8 +31,9 @@ interface DashboardData {
 }
 
 interface Property {
+  landlord_type?: string;
   id: number; address: string; postcode: string; rent_amount: number;
-  status: string; landlord_name: string; current_tenant: string | null;
+  status: string; landlord_name: string; landlord_id?: number; current_tenant: string | null;
   bedrooms: number; property_type: string; image_url?: string | null;
 }
 
@@ -40,10 +44,11 @@ interface Task {
 }
 
 interface Enquiry {
+  landlord_type?: string;
   viewing_date?:string;viewing_time?:string;handover_date?:string;handover_not_required?:number; previous_agent?:string; id: number; status: string; first_name_1?: string; last_name_1?: string;
   property_address?: string; property_id?: number; created_at?: string;
   email_1?: string; phone_1?: string;
-  application_form_completed?: number | boolean; application_review_status?: string;
+  joint_partner_id?:number; application_changes_sent_at?:string; application_form_completed?: number | boolean; application_review_status?: string;
   balance_payment_received?:number; balance_payment_requested?:number; balance_follow_up_date?:string; tenancy_agreement_completed?: boolean; tenancy_agreement_status?: string; updated_at?:string; follow_up_date?:string; holding_deposit_requested?:number; application_form_sent?:number;
 }
 
@@ -51,38 +56,72 @@ export default function Dashboard() {
   const api = useApi();
   const { confirmAction } = useNotifications();
   const { user } = useAuth();
+  const { portfolioFilter } = usePortfolio();
   const navigate = useNavigate();
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [allDashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [allProperties, setProperties] = useState<Property[]>([]);
+  const [portfolioRecords, setPortfolioRecords] = useState<{tenants: PortfolioRecord[]; landlords: PortfolioRecord[]; maintenance: PortfolioRecord[]}>({tenants:[],landlords:[],maintenance:[]});
   const [teamMembers,setTeamMembers]=useState<{id:number;name:string}[]>([]);
   const [maintenanceOwner,setMaintenanceOwner]=useState('all');
   const matchesMaintenanceOwner=(assigned:unknown)=>maintenanceOwner==='all'||(maintenanceOwner==='unassigned'?!assigned:[maintenanceOwner,teamMembers.find(m=>String(m.id)===maintenanceOwner)?.name].includes(String(assigned||'')));
   const [taskOwner,setTaskOwner]=useState('all');
   const [calendarOwner,setCalendarOwner]=useState('all');
   const [selectedTask,setSelectedTask]=useState<Task|null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
-  const [landlordEnquiries,setLandlordEnquiries]=useState<{id:number;previous_agent?:string;name?:string;first_name?:string;last_name?:string;status:string;updated_at?:string;created_at?:string;follow_up_date?:string}[]>([]);
+  const [allTasks, setTasks] = useState<Task[]>([]);
+  const [allEnquiries, setEnquiries] = useState<Enquiry[]>([]);
+  const [allLandlordEnquiries,setLandlordEnquiries]=useState<{id:number;previous_agent?:string;name?:string;first_name?:string;last_name?:string;status:string;updated_at?:string;created_at?:string;follow_up_date?:string}[]>([]);
   const [pipelineOldest,setPipelineOldest]=useState(false);
   const [pipelineAgent,setPipelineAgent]=useState('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
+    const getAll = async (endpoint: string) => {
+      const rows = [];
+      for (let offset=0; ; offset+=1000) {
+        const page = await api.get(`${endpoint}?limit=1000&offset=${offset}`);
+        rows.push(...page);
+        if (page.length < 1000) return rows;
+      }
+    };
     Promise.all([
       api.get('/api/dashboard').catch(() => null),
-      api.get('/api/properties').catch(() => []),
-      api.get('/api/tasks').catch(() => []),
-      api.get('/api/tenant-enquiries').catch(() => []),
+      getAll('/api/properties').catch(() => []),
+      getAll('/api/tasks').catch(() => []),
+      getAll('/api/tenant-enquiries').catch(() => []),
       api.get('/api/users/options').catch(()=>[]),
       api.get('/api/landlords-bdm').catch(()=>[]),
-    ]).then(([dash, props, tks, enqs, members, bdm]) => {
+      getAll('/api/tenants').catch(()=>[]),
+      getAll('/api/landlords').catch(()=>[]),
+      getAll('/api/maintenance').catch(()=>[]),
+    ]).then(([dash, props, tks, enqs, members, bdm, tenants, landlords, maintenance]) => {
+      if (!active) return;
+      setPortfolioRecords({tenants,landlords,maintenance});
       setTeamMembers(members);setLandlordEnquiries(bdm);
       setDashboard(dash);
       setProperties(Array.isArray(props) ? props : []);
       setTasks(Array.isArray(tks) ? tks : []);
-      setEnquiries(Array.isArray(enqs) ? enqs.filter((enquiry: Enquiry) => !['rejected','converted','closed'].includes(enquiry.status)) : []);
-    }).finally(() => setLoading(false));
+      setEnquiries(Array.isArray(enqs) ? enqs : []);
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [api]);
+
+  const matches = portfolioMatcher({...portfolioRecords, properties:allProperties, enquiries:allEnquiries}, portfolioFilter);
+  const properties = allProperties.filter(matches.record);
+  const tasks = allTasks.filter(matches.task);
+  const enquiries = allEnquiries.filter(matches.record).filter(e=>!['rejected','converted','closed'].includes(e.status));
+  const landlordEnquiries = portfolioFilter === 'internal' ? [] : allLandlordEnquiries;
+  const dashboard = allDashboard && {
+    ...allDashboard,
+    complianceAlerts: allDashboard.complianceAlerts.filter(a=>matches.property(a.id)),
+    recentMaintenance: allDashboard.recentMaintenance.filter(m=>matches.maintenance(m.id)),
+    stats: portfolioFilter === 'all' ? allDashboard.stats : {
+      properties:properties.length,
+      active_tenancies:new Set(portfolioRecords.tenants.filter(matches.record).filter(t=>(t.status||'active')==='active').map(t=>t.property_id).filter(Boolean)).size,
+      open_maintenance:portfolioRecords.maintenance.filter(matches.record).filter(m=>['open','in_progress'].includes(m.status||'')).length,
+      active_enquiries:enquiries.length,
+    },
+  };
 
   const firstName = user?.name?.split(' ')[0] || 'there';
 
@@ -124,16 +163,16 @@ export default function Dashboard() {
 
   const urgencyColor = (date: string) => {
     const d = daysUntil(date);
-    if (d < 0) return 'text-red-400';
-    if (d < 30) return 'text-amber-400';
-    return 'text-emerald-400';
+    if (d < 0) return 'text-red-600 dark:text-red-400';
+    if (d < 30) return 'text-[var(--feedback-amber)]';
+    return 'text-[var(--feedback-emerald)]';
   };
 
   const visibleRecentTasks = tasks.filter(task => ['pending','in_progress'].includes(task.status) && !task.dashboard_dismissed_at && !['tenant_enquiry','landlord_bdm'].includes(task.entity_type||'') && (taskOwner==='all' || (taskOwner==='me' ? [String(user?.id),user?.name].includes(task.assigned_to) : [taskOwner,teamMembers.find(member=>String(member.id)===taskOwner)?.name].includes(String(task.assigned_to)))));
 
   const todayKey=new Date(now).toLocaleDateString('en-CA',{timeZone:'Europe/London'});
   const pipeline=[
-    ...enquiries.filter(e=>pipelineVisible(e,todayKey,new Date(now).toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour12:false}).slice(0,5))).map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',previousAgent:e.previous_agent||'—',type:'Tenant Enquiry',date:e.balance_follow_up_date&&e.balance_follow_up_date.slice(0,10)<=todayKey?e.balance_follow_up_date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:pipelineStage(e,todayKey),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
+    ...enquiries.map(e=>({...e,ready_for_review:applicationReadyForReview(e,allEnquiries.find(p=>p.id===e.joint_partner_id))})).filter(e=>pipelineVisible(e,todayKey,new Date(now).toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour12:false}).slice(0,5))).map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',previousAgent:e.previous_agent||'—',type:'Tenant Enquiry',date:e.balance_follow_up_date&&e.balance_follow_up_date.slice(0,10)<=todayKey?e.balance_follow_up_date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:pipelineStage(e,todayKey),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
     ...landlordEnquiries.filter(e=>!['onboarded','not_interested','rejected','closed'].includes(e.status)&&(!e.follow_up_date||e.follow_up_date.slice(0,10)<=todayKey)).map(e=>({key:`landlord-${e.id}`,name:e.name||[e.first_name,e.last_name].filter(Boolean).join(' ')||'Landlord Enquiry',previousAgent:e.previous_agent||'—',type:'Landlord Enquiry',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.status.replaceAll('_',' '),href:`/bdm/${e.id}`,onboarding:false})),
     ...tasks.filter(t=>t.entity_type==='tenant'&&t.task_type==='follow_up'&&t.status!=='completed'&&t.due_date?.slice(0,10)<=todayKey).map(t=>({key:`followup-${t.id}`,name:t.title,previousAgent:teamMembers.find(m=>String(m.id)===String(t.assigned_to))?.name||t.assigned_to||'—',type:'Tenant Follow-up',date:t.due_date,status:'Follow-up Due',href:`/tasks/${t.id}`,onboarding:false})),
   ].filter(row=>matchesPipelineAgent(row.previousAgent,pipelineAgent,teamMembers)).sort((a,b)=>(Date.parse(a.date||'1970-01-01')-Date.parse(b.date||'1970-01-01'))*(pipelineOldest?1:-1));
@@ -150,7 +189,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <Layout hideTopBar>
+      <Layout title="Dashboard">
         <div className="flex items-center justify-center h-full">
           <div className="w-8 h-8 border-2 border-[var(--border-input)] border-t-orange-500 rounded-full animate-spin" />
         </div>
@@ -159,13 +198,14 @@ export default function Dashboard() {
   }
 
   return (
-    <Layout hideTopBar>
-      {selectedTask && <div role="dialog" aria-modal="true" aria-labelledby="task-detail-title" className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4" onClick={()=>setSelectedTask(null)}><div className="w-full max-w-lg rounded-2xl bg-[var(--bg-card)] p-6 space-y-4" onClick={e=>e.stopPropagation()}><div className="flex justify-between gap-4"><h2 id="task-detail-title" className="font-semibold text-lg">{selectedTask.title}</h2><button aria-label="Close task" onClick={()=>setSelectedTask(null)}><X size={20}/></button></div><p className="whitespace-pre-wrap text-sm">{selectedTask.description || 'No description'}</p><p className="text-sm">{selectedTask.property_address}</p><p className="text-sm">Assigned To: {teamMembers.find(m=>String(m.id)===String(selectedTask.assigned_to))?.name || selectedTask.assigned_to || (selectedTask.entity_type==='maintenance'?'Maintenance':'Unassigned')}</p><p className="text-sm capitalize">{selectedTask.status} · {selectedTask.priority} Priority</p><p className="text-sm">Due: {selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString('en-GB') : 'Not Set'}</p><Button onClick={()=>navigate(`/tasks/${selectedTask.id}`)}>Open Task</Button></div></div>}
+    <Layout title="Dashboard">
+      {selectedTask && <DashboardTaskPreview key={selectedTask.id} task={selectedTask} members={teamMembers} onClose={()=>setSelectedTask(null)} onUpdated={updated=>{setSelectedTask(current=>current?{...current,...updated}:null);setTasks(current=>current.map(task=>task.id===updated.id?{...task,...updated}:task));}}/>}
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         {/* Greeting */}
-        <div className="pt-10 md:pt-0">
+        <div className="pt-0">
           <h1 className="text-2xl md:text-4xl font-bold">Hi there {firstName} 👋</h1>
           <p className="text-[var(--text-secondary)] mt-1 text-sm">Lets go to work!</p>
+          {portfolioFilter!=='all'&&<p className="mt-2 text-xs text-[var(--text-muted)]">Showing {portfolioFilter==='internal'?'your own portfolio':'client properties'} across this dashboard. Tasks and enquiries without a linked portfolio remain under All.</p>}
         </div>
 
         {/* Stats Row */}
@@ -194,7 +234,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 min-[1700px]:grid-cols-2 gap-6">
           {/* Compliance and maintenance alerts */}
           <Card className="p-6">
-            <div className="flex flex-wrap justify-between items-center gap-3 mb-5"><h2 className="font-semibold flex items-center gap-2"><AlertTriangle size={16}/> Compliance Alerts & Maintenance Requests</h2><div className="flex flex-wrap items-center gap-2 ml-auto max-w-full"><Select hideLabel searchable className="w-64 max-w-full" label="Select User…" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'View All'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/></div></div>
+            <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 mb-5"><h2 className="font-semibold flex items-center gap-2 min-w-0"><AlertTriangle size={16} className="shrink-0"/> Compliance &amp; Maintenance Alerts</h2><div className="ml-auto shrink-0 max-w-full"><Select hideLabel searchable className="w-56 max-w-full" label="Select User…" value={maintenanceOwner} onChange={setMaintenanceOwner} options={[{value:'all',label:'View All'},{value:'unassigned',label:'Unassigned'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/></div></div>
             {dashboard?.complianceAlerts?.some(a=>matchesMaintenanceOwner(a.assigned_to)) || dashboard?.recentMaintenance?.some(m=>matchesMaintenanceOwner(m.assigned_to)) ? (
               <div id="dashboard-alerts" className="space-y-2">
                 {dashboard!.complianceAlerts.filter(a=>matchesMaintenanceOwner(a.assigned_to)).map((alert, i) => (
@@ -203,8 +243,8 @@ export default function Dashboard() {
                       <AlertTriangle size={16} className={urgencyColor(alert.expiry_date)} />
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{alert.property_address}</p>
-                        <div className="flex flex-wrap items-center gap-x-2 text-xs">
-                          <span className="text-[var(--text-muted)]">{alert.type}</span>
+                        <div className="flex flex-wrap items-center gap-x-2 text-sm font-normal">
+                          <span className="text-[var(--text-secondary)]">{alert.type}</span>
                           <span className={`font-medium ${urgencyColor(alert.expiry_date)}`}>
                         {daysUntil(alert.expiry_date) < 0
                           ? `${Math.abs(daysUntil(alert.expiry_date))}d overdue`
@@ -213,7 +253,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0"><span className="text-xs text-[var(--text-muted)]">{new Date(alert.expiry_date).toLocaleDateString('en-GB')}</span><span aria-label="View alert" title="View alert" className="rounded-full bg-[var(--bg-hover)] p-1.5"><Eye size={14}/></span></div>
+                    <div className="flex items-center gap-2 shrink-0"><span className="text-sm text-[var(--text-secondary)]">{new Date(alert.expiry_date).toLocaleDateString('en-GB')}</span><span aria-label="View alert" title="View alert" className="rounded-full bg-[var(--bg-hover)] p-1.5"><Eye size={14}/></span></div>
                   </button>
                 ))}
                 {dashboard!.recentMaintenance.filter(m=>matchesMaintenanceOwner(m.assigned_to)).map(item => (
@@ -225,13 +265,13 @@ export default function Dashboard() {
               </div>
             ) : (
               <EmptyState message="No compliance alerts or open maintenance requests" />
-            )}{user?.role==='admin'&&!!(dashboard?.complianceAlerts.length||dashboard?.recentMaintenance.length)&&<div className="flex justify-end mt-4"><Button size="sm" variant="outline" className="!text-red-600 !border-red-300" onClick={async()=>{if(!await confirmAction('Clear all current compliance alerts and maintenance requests from the dashboard? The records and tasks will remain available.','Clear Dashboard Alerts'))return;try{await api.post('/api/dashboard/clear-alerts',{});setDashboard(await api.get('/api/dashboard'));}catch(e){alert(e instanceof Error?e.message:'Could not clear alerts');}}}>Clear All</Button></div>}
+            )}{portfolioFilter==='all'&&user?.role==='admin'&&!!(dashboard?.complianceAlerts.length||dashboard?.recentMaintenance.length)&&<div className="flex justify-end mt-4"><Button size="sm" variant="outline" className="!text-red-600 !border-red-300" onClick={async()=>{if(!await confirmAction('Clear all current compliance alerts and maintenance requests from the dashboard? The records and tasks will remain available.','Clear Dashboard Alerts'))return;try{await api.post('/api/dashboard/clear-alerts',{});setDashboard(await api.get('/api/dashboard'));}catch(e){alert(e instanceof Error?e.message:'Could not clear alerts');}}}>Clear All</Button></div>}
           </Card>
 
           {/* Pipeline */}
           <Card className="p-6">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 className="font-semibold flex items-center gap-2"><MessageSquare size={16}/>Enquiry Pipeline</h2><Select hideLabel searchable className="w-64 max-w-full" label="Filter enquiries by agent" value={pipelineAgent} onChange={setPipelineAgent} options={[{value:'all',label:'View All'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/></div>
-            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="w-full text-sm text-left [&_th+th]:border-l [&_td+td]:border-l [&_th]:border-[var(--border-subtle)] [&_td]:border-[var(--border-subtle)]"><thead><tr className="text-xs text-[var(--text-muted)]"><th className="py-3">Enquiry Name</th><th className="px-3">Enquiry Type</th><th className="px-3">Stage</th><th className="px-3">Previous Agent</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="px-3 py-2 min-w-28 text-left whitespace-nowrap" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="px-3 text-center">Action</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-3 pr-3"><button className="text-left" onClick={()=>navigate(row.href)}><strong className="block">{row.name}</strong></button></td><td className="px-3 text-xs">{row.type}</td><td className="px-3 text-xs">{row.status.charAt(0).toUpperCase()+row.status.slice(1)}</td><td className="px-3 text-xs">{row.previousAgent}</td><td className="px-3 text-xs whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="px-3 text-center"><Button size="sm" className="!text-xs !px-3 !py-1 whitespace-nowrap" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue':'View'}</Button></td></tr>)}</tbody></table></div>:<EmptyState message={pipelineAgent==='all'?"No enquiries or follow-ups awaiting action":"No enquiries or follow-ups awaiting action for this agent"}/>}
+            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="w-full text-sm text-left [&_th+th]:border-l [&_td+td]:border-l [&_th]:border-[var(--border-subtle)] [&_td]:border-[var(--border-subtle)]"><thead><tr className="text-sm text-[var(--text-muted)]"><th className="py-3">Enquiry Name</th><th className="px-2 whitespace-nowrap">Enquiry Type</th><th className="px-2">Stage</th><th className="px-2">Last Agent</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="px-2 py-2 text-left whitespace-nowrap" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="px-2 text-center">Action</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-3 pr-3"><button className="text-left" onClick={()=>navigate(row.href)}><span className="block font-normal">{row.key.startsWith('followup-')?row.name:row.name.replace(/^(?:(?:mr|mrs|ms|miss|dr|prof|sir|dame|rev)\.?\s+)+/i,'')}</span></button></td><td className="px-2 text-sm whitespace-nowrap">{row.type}</td><td className="px-2 text-sm">{row.status.charAt(0).toUpperCase()+row.status.slice(1)}</td><td className="px-2 text-sm">{row.previousAgent}</td><td className="px-2 text-sm whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="px-2 text-center"><Button size="sm" className="!text-sm !px-3 !py-1 whitespace-nowrap" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue':'View'}</Button></td></tr>)}</tbody></table></div>:<EmptyState message={pipelineAgent==='all'?"No enquiries or follow-ups awaiting action":"No enquiries or follow-ups awaiting action for this agent"}/>}
           </Card>
         </div>
 
@@ -310,7 +350,7 @@ export default function Dashboard() {
           ) : (
             <EmptyState message="No tasks yet" />
           )}
-          <div className="flex justify-end mt-4">{user?.role === 'admin' && visibleRecentTasks.length > 0 && <button className="self-end rounded-full bg-red-600 px-4 py-2.5 text-xs text-white font-medium whitespace-nowrap" onClick={async () => { if (!await confirmAction('Clear all recent tasks from the dashboard? They will remain available in Team Calendar.', 'Clear Recent Tasks')) return; try { await api.post('/api/tasks/clear-recent', {}); setTasks(current => current.map(t => ({ ...t, dashboard_dismissed_at: new Date().toISOString() }))); } catch (e) { alert(e instanceof Error ? e.message : 'Could not clear tasks'); } }}>Clear All</button>}</div>
+          <div className="flex justify-end mt-4">{portfolioFilter === 'all' && user?.role === 'admin' && visibleRecentTasks.length > 0 && <button className="self-end rounded-full bg-red-600 px-4 py-2.5 text-xs text-white font-medium whitespace-nowrap" onClick={async () => { if (!await confirmAction('Clear all recent tasks from the dashboard? They will remain available in Team Calendar.', 'Clear Recent Tasks')) return; try { await api.post('/api/tasks/clear-recent', {}); setTasks(current => current.map(t => ({ ...t, dashboard_dismissed_at: new Date().toISOString() }))); } catch (e) { alert(e instanceof Error ? e.message : 'Could not clear tasks'); } }}>Clear All</button>}</div>
         </Card>
 
         {/* My Properties Carousel */}
@@ -318,20 +358,20 @@ export default function Dashboard() {
           <SectionHeader title="My Properties" action={() => navigate('/properties')} actionLabel="View All" />
           {properties.length ? (
             <div className="flex gap-4 overflow-x-auto pb-4 -mx-2 px-2 scrollbar-hide">
-              {properties.map((prop, index) => (
+              {properties.map((prop) => (
                 <GlassCard
                   key={prop.id}
                   onClick={() => navigate(`/properties/${prop.id}`)}
                   className="min-w-[280px] max-w-[280px] shrink-0 overflow-hidden"
                 >
                   <img
-                    src={getPropertyImage(prop.id, 400, 240, `${prop.address}, ${prop.postcode}`, prop.image_url, prop.landlord_name, index)}
+                    src={getPropertyImage(prop.id, 400, 240, `${prop.address}, ${prop.postcode}`, prop.image_url, prop.landlord_name, prop.landlord_id)}
                     alt={prop.address}
                     className="h-36 w-full object-cover"
                     loading="lazy"
                     onError={event => {
                       event.currentTarget.onerror = null;
-                      event.currentTarget.src = getPropertyPlaceholder(prop.id, 400, 240, prop.landlord_name, index);
+                      event.currentTarget.src = getPropertyPlaceholder(prop.id, 400, 240, prop.landlord_name, prop.landlord_id);
                     }}
                   />
                   <div className="p-4">

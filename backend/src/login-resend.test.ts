@@ -1,0 +1,13 @@
+import {createHash} from 'crypto';
+import {beforeEach,expect,it,vi} from 'vitest';
+const state=vi.hoisted(()=>({previous:null as any,user:null as any,issued:[] as any[],queries:[] as string[]}));
+vi.mock('./db-pg',()=>({default:{},queryOne:async(sql:string)=>{state.queries.push(sql);return sql.includes('settings_phone_challenges')?state.previous:state.user;}}));
+vi.mock('./settings-phone-verification',()=>({maskPhone:()=>'',payloadHash:(p:any)=>JSON.stringify(p),issuePhoneChallenge:async(...args:any[])=>{state.issued=args;return {challengeId:'new-challenge',expiresInSeconds:1200};},consumePhoneChallenge:vi.fn()}));
+vi.mock('./auth',()=>({generateToken:vi.fn()}));
+import {registerLoginVerification} from './login-phone-verification';
+const handlers=new Map<string,any>();registerLoginVerification({post:(path,...h)=>handlers.set(path,h.at(-1))} as any);
+const req=()=>({body:{challengeId:'11111111-1111-4111-8111-111111111111',destination:'attacker@example.test'},headers:{'user-agent':'test-browser'}});
+const response=()=>{const r:any={statusCode:200,status(n){r.statusCode=n;return r},set(){return r},json(body){r.body=body;return r}};return r;};
+beforeEach(()=>{state.issued=[];state.queries=[];state.user={id:3,email:'saved@example.test',trusted_phone:'+441902212331',last_password_change:null};state.previous={user_id:3,session_hash:createHash('sha256').update('test-browser').digest('hex'),payload_hash:JSON.stringify({passwordChangedAt:null,email:'saved@example.test'}),trusted_phone:state.user.trusted_phone,delivery_method:'email'};});
+it('resends to the same saved channel without issuing an access token',async()=>{const res=response();await handlers.get('/api/auth/login/resend')(req(),res);expect(state.issued[4]).toBe('email');expect(state.issued[2]).toEqual({passwordChangedAt:null,email:'saved@example.test'});expect(res.body.challengeId).toBe('new-challenge');expect(res.body.token).toBeUndefined();expect(state.queries[0]).toContain('expires_at>NOW() AND attempts<5');});
+it.each(['expired','session','email','phone','password'])('rejects an %s or changed verification context',async(type)=>{if(type==='expired')state.previous=null;if(type==='session')state.previous.session_hash='other';if(type==='email')state.user.email='changed@example.test';if(type==='phone')state.user.trusted_phone='+447700900001';if(type==='password')state.user.last_password_change=new Date().toISOString();const res=response();await handlers.get('/api/auth/login/resend')(req(),res);expect(res.statusCode).toBe(403);expect(state.issued).toHaveLength(0);});

@@ -1,4 +1,5 @@
 import { generateSourceTenancyPdf } from './tenancy-template';
+import type {CompanySettings} from './company-settings-values';
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
@@ -21,6 +22,7 @@ export interface AgreementPerson {
 }
 
 export interface TenancyAgreementPdfInput {
+  companySettings?:CompanySettings;
   enquiryId: number;
   agreementType: AgreementType;
   serviceType?: string | null;
@@ -70,9 +72,9 @@ export function resolvePaymentRoute(agreementType: AgreementType, serviceType: s
   return serviceType === 'let_only' ? 'landlord' : 'fleming_client_money';
 }
 
-export function bankDetailsForRoute(route: PaymentRoute, landlordBank?: Partial<AgreementBankDetails>): AgreementBankDetails {
-  if (route === 'fleming_operating') return FLEMING_OPERATING_ACCOUNT;
-  if (route === 'fleming_client_money') return FLEMING_CLIENT_MONEY_ACCOUNT;
+export function bankDetailsForRoute(route: PaymentRoute, landlordBank?: Partial<AgreementBankDetails>, company?:CompanySettings): AgreementBankDetails {
+  if (route === 'fleming_operating') return company?.operatingAccount || FLEMING_OPERATING_ACCOUNT;
+  if (route === 'fleming_client_money') return company?.clientAccount || FLEMING_CLIENT_MONEY_ACCOUNT;
   const bank = {
     sortCode: String(landlordBank?.sortCode || '').trim(),
     accountNumber: String(landlordBank?.accountNumber || '').trim(),

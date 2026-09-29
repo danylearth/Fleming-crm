@@ -1,3 +1,4 @@
+import {ToolbarButton} from '../components/ui';
 import FloatingDropdown from '../components/FloatingDropdown';
 import {validUkPhone,normaliseUkPhone} from '../utils/phone';
 import { useState, useEffect, useRef } from 'react';
@@ -301,13 +302,13 @@ export default function Landlords() {
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
           {isManager() && (
-            <Button variant="outline" onClick={() => setShowImport(true)}>
+            <ToolbarButton variant="outline" onClick={() => setShowImport(true)}>
               <Upload size={16} className="mr-2" /> Import CSV
-            </Button>
+            </ToolbarButton>
           )}
-          <Button variant="gradient" onClick={() => setShowModal(true)}>
+          <ToolbarButton variant="gradient" onClick={() => setShowModal(true)}>
             <Plus size={16} className="mr-2" /> Add Landlord
-          </Button>
+          </ToolbarButton>
         </div>
 
         {showImport && isManager() && <CsvImport entity="landlords" onClose={() => setShowImport(false)} onDone={load} />}

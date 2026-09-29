@@ -1,3 +1,4 @@
+import {ToolbarButton} from '../components/ui';
 import CsvImport from '../components/ui/CsvImport';
 import {usePermissions} from '../hooks/usePermissions';
 import { useAuth } from '../context/AuthContext';
@@ -272,10 +273,10 @@ export default function Tenants() {
           >
             {editMode ? 'Cancel' : 'Edit'}
           </Button>
-          {isManager()&&<Button variant="outline" onClick={()=>setShowImport(true)}>Import CSV</Button>}
-          <Button variant="gradient" onClick={() => setShowModal(true)}>
+          {isManager()&&<ToolbarButton variant="outline" onClick={()=>setShowImport(true)}>Import CSV</ToolbarButton>}
+          <ToolbarButton variant="gradient" onClick={() => setShowModal(true)}>
             <Plus size={16} className="mr-2" /> Add Tenant
-          </Button>
+          </ToolbarButton>
         </div>
 
         {/* Filter dropdowns row */}

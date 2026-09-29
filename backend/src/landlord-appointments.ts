@@ -4,6 +4,7 @@ import pool,{queryOne,run} from './db-pg';
 import {brandedEmailHtml,sendEmail,OUTBOUND_EMAIL_ADDRESS} from './email';
 import {sendSms,normalizeUkPhone,SMS_FROM} from './sms';
 export function appointmentDetails(body:any,today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date())){
+ if(body.contact_made&&!String(body.contact_note||'').trim())throw Error('Add a contact note and follow-up date');
  const {kind,date,time}=body,location=String(body.location||'').trim();
  if(!['meeting','follow_up'].includes(kind))throw Error('Choose a meeting or follow-up');
  if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||date<today)throw Error('Choose today or a future date');
@@ -34,6 +35,7 @@ export function registerLandlordAppointments(app:Express){
    appointmentId=(await c.query('INSERT INTO landlord_appointments(enquiry_id,request_id,kind,appointment_date,appointment_time,location,assigned_to,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',[prospect.id,requestId,details.kind,details.date,details.time||null,details.location||null,details.assigned_to,req.user.id])).rows[0].id;
    await c.query("UPDATE tasks SET status='completed' WHERE entity_type='landlord_bdm' AND entity_id=$1 AND task_type=$2 AND status IN ('pending','in_progress')",[prospect.id,'landlord_'+details.kind]);
    await c.query("INSERT INTO tasks(title,description,task_type,entity_type,entity_id,due_date,assigned_to,status,priority) VALUES($1,$2,$3,'landlord_bdm',$4,$5,$6,'pending','medium')",[(details.kind==='meeting'?'Landlord Meeting':'Landlord Follow-up')+' — '+prospect.name,text,'landlord_'+details.kind,prospect.id,details.date,details.assigned_to]);
+   if(req.body.contact_made){const current=(await c.query('SELECT notes FROM landlords_bdm WHERE id=$1',[prospect.id])).rows[0];let notes=[];try{notes=JSON.parse(current.notes||'[]');}catch{notes=current.notes?[{id:'legacy',text:current.notes,author:'Imported',created_at:new Date().toISOString()}]:[];}if(!Array.isArray(notes))notes=[];notes.push({id:requestId,text:String(req.body.contact_note).trim().slice(0,4000),author:req.user.name||req.user.email,created_at:new Date().toISOString()});await c.query('UPDATE landlords_bdm SET notes=$1 WHERE id=$2',[JSON.stringify(notes),prospect.id]);}
    await c.query("UPDATE landlords_bdm SET status='follow_up',follow_up_date=$1,updated_at=NOW() WHERE id=$2",[details.date,prospect.id]);
    await c.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','landlord_bdm',$3,$4)",[req.user.id,req.user.email,prospect.id,JSON.stringify({appointment_id:appointmentId,...details})]);
    await c.query('COMMIT');

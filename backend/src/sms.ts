@@ -1,6 +1,7 @@
 // Twilio SMS integration — follows the same provider-confirmed semantics as email.ts.
 
 import type { Request, Response, NextFunction } from 'express';
+import {VERIFICATION_CODE_MINUTES} from './verification-code-policy';
 
 let twilioClient: any = null;
 let twilioLib: any = null;
@@ -72,8 +73,8 @@ export async function sendSms(params: SendSmsParams): Promise<{ success: boolean
       from: SMS_FROM,
       to: params.to,
     };
-    // Only set statusCallback when BASE_URL is configured (Twilio can't reach localhost)
-    if (process.env.BASE_URL) {
+    // Local installs can send SMS without an unreachable delivery-status callback.
+    if (process.env.BASE_URL && process.env.TWILIO_DISABLE_STATUS_CALLBACK !== 'true') {
       createOpts.statusCallback = `${process.env.BASE_URL}/api/sms/status`;
     }
     const message = await twilioClient.messages.create(createOpts);
@@ -86,6 +87,29 @@ export async function sendSms(params: SendSmsParams): Promise<{ success: boolean
 }
 
 // Normalize UK phone numbers to E.164 format (+44...)
+// Authentication messages never use the simulated messaging path.
+export async function sendSecurityCode(to:string,code:string,action:string,name='there'):Promise<boolean> {
+  if(!twilioClient||process.env.ALLOW_SIMULATED_MESSAGES==='true')return false;
+  try {
+    if(to.startsWith('+447')) {
+      const firstName=String(name||'').trim().split(/\s+/)[0]||'there';
+      const result=await twilioClient.messages.create({to,from:SMS_FROM,body:`Hi ${firstName}, your two-factor authentication code is ${code}. This code will expire in ${VERIFICATION_CODE_MINUTES} minutes. If you were not expecting this message then please contact your line manager or the administrator urgently.`});
+      return Boolean(result.sid);
+    }
+    if(!TWILIO_PHONE)return false;
+    // Only server-owned text and numeric codes are used in this TwiML.
+    const digits=code.split('').join(' ');
+    const call=await twilioClient.calls.create({to,from:TWILIO_PHONE,twiml:`<Response><Say voice="alice" language="en-GB">Fleming Lettings verification to ${action}. Your code is ${digits}. I repeat, ${digits}. This code expires in ${VERIFICATION_CODE_MINUTES} minutes. Do not share this code.</Say></Response>`});
+    return Boolean(call.sid);
+  }catch(err:any){
+    // Log only provider identifiers: error messages/requests may contain the code or phone number.
+    const providerCode=Number(err?.code)||undefined;
+    console.error('[2FA] Verification delivery failed',{channel:to.startsWith('+447')?'sms':'voice',code:providerCode,status:Number(err?.status)||undefined});
+    if(!to.startsWith('+447')&&providerCode===10005)throw Error('Verification calls are currently blocked by our phone provider. Ask an administrator to restore calling or configure a trusted mobile number for SMS verification.');
+    return false;
+  }
+}
+
 export function normalizeUkPhone(phone: string): string {
   if (!phone) return phone;
   // Remove all non-digit characters

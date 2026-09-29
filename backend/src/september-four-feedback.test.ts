@@ -31,15 +31,15 @@ describe('4 September CRM feedback', () => {
 
   it('preserves failed agreement delivery for a visible retry', () => {
     expect(backend).toContain("tenancy-agreement/retry-delivery");
-    expect(backend).toContain("if (!failed)");
+    expect(backend).toContain("if (!failed && !resend?.recipient");
     expect(wizard).toContain('Retry Agreement Delivery');
   });
 
   it('shows tenant addresses and maintenance and exposes clear tenancy actions', () => {
     expect(tenantDetail).toContain('Previous Address');
     expect(tenantDetail).toContain('Maintenance (');
-    expect(tenantDetail).toContain('label="tenancy"');
-    expect(tenantDetail).toContain('Schedule Tenancy End');
+    expect(tenantDetail).toContain('label="deposit scheme"');
+    expect(tenantDetail).toContain('onClick={() => setShowEndModal(true)}>End Tenancy</Button>');
   });
 
   it('requires client service types and restricts property statuses', () => {

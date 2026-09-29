@@ -14,5 +14,5 @@ export default function FloatingDropdown({anchor,onClose,children}:{anchor:RefOb
   update();window.addEventListener('resize',update);window.addEventListener('scroll',update,true);document.addEventListener('mousedown',outside);document.addEventListener('keydown',key);
   return()=>{window.removeEventListener('resize',update);window.removeEventListener('scroll',update,true);document.removeEventListener('mousedown',outside);document.removeEventListener('keydown',key);};
  },[anchor,onClose]);
- return createPortal(<div ref={ref} style={{...position,zIndex:10000,position:'fixed',overflowY:'auto'}} className="bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-input)] rounded-xl shadow-2xl">{children}</div>,document.body);
+ return createPortal(<div ref={ref} style={{...position,zIndex:10000,position:'fixed',overflowY:'auto'}} className="bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-input)] rounded-xl shadow-2xl">{children}</div>,anchor.current?.closest('dialog') || document.body);
 }

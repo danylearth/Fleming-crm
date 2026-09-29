@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { queryOne } from './db-pg';
+import {loginIsLocked} from './login-security';
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   console.error('FATAL: JWT_SECRET environment variable must be set in production');
@@ -24,8 +25,8 @@ export interface AuthRequest extends Request {
   };
 }
 
-export function generateToken(user: { id: number; email: string; role: string; name: string }) {
-  return jwt.sign({...user,issuedAtMs:Date.now()}, JWT_SECRET, { expiresIn: '24h' });
+export function generateToken(user: { id: number; email: string; role: string; name: string }, authenticatedAtMs=Date.now()) {
+  return jwt.sign({...user,issuedAtMs:authenticatedAtMs}, JWT_SECRET, { expiresIn: '24h' });
 }
 
 export function verifyToken(token: string) {
@@ -46,10 +47,10 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
     // Revocation: deactivating a user or changing their password invalidates
     // every token issued before that moment
     const user = await queryOne(
-      'SELECT is_active, password_setup_required, last_password_change, role, name, email, department, phone, office_extension, contact_email, finance_access, last_login, avatar_url, accent_color, appearance FROM users WHERE id = $1',
+      'SELECT is_active, password_setup_required, last_password_change, login_locked_at, login_2fa_lock_after, role, name, email, department, phone, office_extension, contact_email, finance_access, last_login, avatar_url, accent_color, appearance FROM users WHERE id = $1',
       [decoded.id]
     );
-    if (!user || !user.is_active || user.password_setup_required) {
+    if (!user || !user.is_active || user.password_setup_required || loginIsLocked(user)) {
       return res.status(401).json({ error: 'Invalid token' });
     }
     if (user.last_password_change && decoded.iat &&

@@ -1,4 +1,6 @@
+import TrustedPhone from '../components/TrustedPhone';
 import FreeAgentConnection from '../components/FreeAgentConnection';
+import CompanySettings from '../components/CompanySettings';
 import FlemoConnection from '../components/FlemoConnection';
 import PermissionRequests from '../components/ui/PermissionRequests';
 import { useTheme } from '../context/ThemeContext';
@@ -7,7 +9,7 @@ import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Avatar, SectionHeader, Select } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
-import { Camera, Lock } from 'lucide-react';
+import { Camera, Lock, UserRound, ContactRound, Palette, Save } from 'lucide-react';
 
 export default function Settings() {
   const { user, token, updateUser } = useAuth();
@@ -42,7 +44,7 @@ export default function Settings() {
     finally { setProfileBusy(false); }
   };
   const [accent,setAccent]=useState(user?.accent_color || '#a32372');
-  const [appearance,setAppearance]=useState({font:user?.appearance?.font || 'lufga',scale:user?.appearance?.scale || 100,background:user?.appearance?.background || 'default'});
+  const [appearance,setAppearance]=useState({font:user?.appearance?.font || 'lufga',scale:user?.appearance?.scale || 90,background:user?.appearance?.background || 'default'});
   const [appearanceMsg,setAppearanceMsg]=useState('');
   const savedAppearance=useRef({appearance:user?.appearance,accent:user?.accent_color});
   useEffect(()=>{savedAppearance.current={appearance:user?.appearance,accent:user?.accent_color};},[user?.appearance,user?.accent_color]);
@@ -52,7 +54,7 @@ export default function Settings() {
     const fonts:Record<string,string>={lufga:"'Lufga', sans-serif",system:'system-ui, sans-serif',verdana:'Verdana, sans-serif',arial:'Arial, sans-serif',aptos:'Aptos, Calibri, sans-serif',times:'"Times New Roman", serif',comic:'"Comic Sans MS", cursive',georgia:'Georgia, serif',tahoma:'Tahoma, sans-serif',trebuchet:'"Trebuchet MS", sans-serif',courier:'"Courier New", monospace',calibri:'Calibri, sans-serif',cambria:'Cambria, serif',helvetica:'Helvetica, Arial, sans-serif',palatino:'Palatino, serif'};
     root.style.setProperty('--user-font',fonts[appearance.font] || fonts.lufga);root.style.fontSize=`${appearance.scale}%`;
     root.style.setProperty('--accent-orange',accent);root.style.setProperty('--btn-primary-bg',accent);
-    return ()=>{const saved=savedAppearance.current;root.style.setProperty('--user-font',fonts[saved.appearance?.font || 'lufga']);root.style.fontSize=`${saved.appearance?.scale || 100}%`;root.style.setProperty('--accent-orange',saved.accent || previous.accent);root.style.setProperty('--btn-primary-bg',saved.accent || previous.button);};
+    return ()=>{const saved=savedAppearance.current;root.style.setProperty('--user-font',fonts[saved.appearance?.font || 'lufga']);root.style.fontSize=`${saved.appearance?.scale || 90}%`;root.style.setProperty('--accent-orange',saved.accent || previous.accent);root.style.setProperty('--btn-primary-bg',saved.accent || previous.button);};
   },[appearance,accent,user?.appearance,user?.accent_color]);
 
   const [appearanceBusy,setAppearanceBusy]=useState(false);
@@ -93,11 +95,12 @@ export default function Settings() {
 
   return (
     <Layout title="Settings" breadcrumb={[{ label: 'Settings' }]}>
-      <div className="p-4 md:p-8 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-        <div className="space-y-6 min-w-0">
+      <div className="p-4 md:p-8 space-y-6">
         {/* Profile */}
         <GlassCard className="p-6">
-          <SectionHeader title="Profile" />
+          <SectionHeader title="Profile" icon={<UserRound size={20} aria-hidden="true"/>} />
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-6">
+          <div className="min-w-0">
           <div className="flex items-center gap-6">
             <label className="relative group cursor-pointer" aria-label="Upload profile photo">
               <Avatar name={user?.name} src={user?.avatar_url} size="xl" /><input ref={photoInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={profileBusy} onChange={event => { void uploadPhoto(event.target.files?.[0]); event.target.value = ''; }} />
@@ -112,17 +115,17 @@ export default function Settings() {
           </div>
           <div className="flex gap-2 mt-4"><Button size="sm" variant="outline" disabled={profileBusy} onClick={()=>photoInput.current?.click()}>{user?.avatar_url?'Replace Photo':'Upload Photo'}</Button>{user?.avatar_url&&<Button size="sm" variant="outline" className="!text-red-600" disabled={profileBusy} onClick={async()=>{setProfileBusy(true);try{updateUser(await api.delete('/api/auth/profile/photo'));setProfileMessage('Photo deleted');}catch(e){setProfileMessage(String(e));}finally{setProfileBusy(false);}}}>Delete Photo</Button>}</div>
           <p role="status" className="mt-4 text-sm">{profileMessage || 'Click your photo to upload a JPG, PNG or WebP (up to 5 MB).'}</p><p className="mt-3 text-sm">Last Login: {user?.last_login ? new Date(user.last_login).toLocaleString('en-GB') : 'Not Recorded'}</p><details className="mt-3 text-sm"><summary>Recent Login History</summary>{loginHistory.map((row,i)=><p key={i} className="mt-2">{new Date(row.created_at).toLocaleString('en-GB')}</p>)}</details>
+
+          </div>
+          <div className="min-w-0 space-y-4 border-t xl:border-t-0 xl:border-l border-[var(--border-subtle)] pt-6 xl:pt-0 xl:pl-6"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold flex items-center gap-2"><ContactRound size={20} aria-hidden="true"/>Contact Details</h2>{!editingContact&&<Button size="sm" variant="outline" onClick={()=>{resetContact();setEditingContact(true);}}>Edit</Button>}</div>{editingContact?<><Input label="Mobile Number (Optional)" type="tel" value={contact.phone} onChange={phone=>setContact({...contact,phone})}/><Input label="Email Address" type="email" value={contact.contact_email} onChange={contact_email=>setContact({...contact,contact_email})}/><Select label="Department / Team" value={contact.department} onChange={department=>setContact({...contact,department})} options={[{value:'',label:'No Department'},...departments.map(d=>({value:d.name,label:d.name}))]}/><div className="flex gap-2"><Button size="sm" disabled={contactBusy} onClick={()=>void saveContact()}>Save Contact Details</Button><Button size="sm" variant="ghost" disabled={contactBusy} onClick={()=>{resetContact();setEditingContact(false);}}>Cancel</Button></div></>:<dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm"><div><dt className="text-[var(--text-muted)]">Mobile Number</dt><dd className="break-words">{user?.phone||'Not Set'}</dd></div><div><dt className="text-[var(--text-muted)]">Email Address</dt><dd className="break-words">{user?.contact_email||user?.email||'Not Set'}</dd></div><div><dt className="text-[var(--text-muted)]">Department / Team</dt><dd className="break-words">{user?.department||'Unassigned'}</dd></div></dl>}{contactMessage&&<p role="status" className="text-sm">{contactMessage}</p>}</div>
+          </div>
         </GlassCard>
 
-        <GlassCard className="p-6 space-y-4"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Contact Details</h2>{!editingContact&&<Button size="sm" variant="outline" onClick={()=>{resetContact();setEditingContact(true);}}>Edit</Button>}</div>{editingContact?<><Input label="Mobile Number (Optional)" type="tel" value={contact.phone} onChange={phone=>setContact({...contact,phone})}/><Input label="Email Address" type="email" value={contact.contact_email} onChange={contact_email=>setContact({...contact,contact_email})}/><Select label="Department / Team" value={contact.department} onChange={department=>setContact({...contact,department})} options={[{value:'',label:'No Department'},...departments.map(d=>({value:d.name,label:d.name}))]}/><div className="flex gap-2"><Button size="sm" disabled={contactBusy} onClick={()=>void saveContact()}>Save Contact Details</Button><Button size="sm" variant="ghost" disabled={contactBusy} onClick={()=>{resetContact();setEditingContact(false);}}>Cancel</Button></div></>:<dl className="space-y-3 text-sm"><div><dt className="text-[var(--text-muted)]">Mobile Number</dt><dd>{user?.phone||'Not Set'}</dd></div><div><dt className="text-[var(--text-muted)]">Email Address</dt><dd>{user?.contact_email||user?.email||'Not Set'}</dd></div><div><dt className="text-[var(--text-muted)]">Department / Team</dt><dd>{user?.department||'Unassigned'}</dd></div></dl>}{contactMessage&&<p role="status" className="text-sm">{contactMessage}</p>}</GlassCard>
-        <PermissionRequests />
-        <FlemoConnection />
-        <FreeAgentConnection />
-        </div>
-        <div className="space-y-6 min-w-0">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
+          <div className="min-w-0 [&>div]:h-full"><TrustedPhone/></div>
         {/* Password */}
-        <GlassCard className="p-6">
-          <SectionHeader title="Change Password" />
+        <GlassCard className="p-6 h-full min-w-0 flex flex-col">
+          <SectionHeader title="Change Password" icon={<Lock size={20} aria-hidden="true"/>} />
           <div className="space-y-4">
             <Input label="Current Password" value={oldPassword} onChange={setOldPassword} type="password" placeholder="••••••••" />
             <Input label="New Password" value={newPassword} onChange={setNewPassword} type="password" placeholder="••••••••" />
@@ -132,22 +135,33 @@ export default function Settings() {
                 {passwordMsg}
               </p>
             )}
-            <Button variant="primary" size="sm" onClick={handlePasswordChange} disabled={passwordLoading}>
+          </div>
+          <div className="mt-auto pt-4">
+            <Button variant="primary" className="w-64 max-w-full h-12" onClick={handlePasswordChange} disabled={passwordLoading}>
               <Lock size={14} className="mr-2" /> {passwordLoading ? 'Updating...' : 'Update Password'}
             </Button>
           </div>
         </GlassCard>
+        </div>
 
+        {user?.role==='admin'&&<CompanySettings/>}
 
-
+        <div className={user?.role==='admin'?'grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch':'grid grid-cols-1 gap-6'}>
+          {user?.role==='admin'&&<div className="min-w-0 [&>div]:h-full"><PermissionRequests/></div>}
         {/* Preferences */}
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between gap-3 mb-4"><h2 className="text-lg font-semibold">Appearance</h2><div className="flex items-center gap-3 text-sm"><span>Dark Mode</span><button role="switch" aria-label="Dark Mode" aria-checked={theme==='dark'} onClick={toggleTheme} className={`w-12 h-7 rounded-full relative ${theme==='dark'?'bg-emerald-600':'bg-slate-400'}`}><span className={`w-5 h-5 bg-white rounded-full absolute top-1 ${theme==='dark'?'right-1':'left-1'}`} /></button></div></div>
+        <GlassCard className="p-6 h-full min-w-0">
+          <div className="flex items-center justify-between gap-3 mb-4"><h2 className="text-lg font-semibold flex items-center gap-2"><Palette size={20} aria-hidden="true"/>Appearance</h2><div className="flex items-center gap-3 text-sm"><span>Dark Mode</span><button role="switch" aria-label="Dark Mode" aria-checked={theme==='dark'} onClick={toggleTheme} className={`w-12 h-7 rounded-full relative ${theme==='dark'?'bg-emerald-600':'bg-slate-400'}`}><span className={`w-5 h-5 bg-white rounded-full absolute top-1 ${theme==='dark'?'right-1':'left-1'}`} /></button></div></div>
           <p className="text-sm text-[var(--text-secondary)] mb-3">Choose your colour. This preference follows your account.</p>
-          <div className="flex flex-wrap gap-3 mb-4">{[['Fleming pink','#a32372'],['Purple','#6d28d9'],['Blue','#1d4ed8'],['Teal','#0f766e'],['Forest','#166534'],['Navy','#1e3a5f'],['Red','#b91c1c'],['Burgundy','#881337'],['Orange','#c2410c'],['Ochre','#854d0e'],['Olive','#4d7c0f'],['Cyan','#0e7490'],['Indigo','#4338ca'],['Slate','#475569'],['Charcoal','#27272a']].map(([name,color]) => <button key={color} type="button" disabled={appearanceBusy} aria-label={name} aria-pressed={accent === color} onClick={() => setAccent(color)} className="w-11 h-11 rounded-full border-4 border-white/50 text-white" style={{background:color}}>{accent === color ? '✓' : ''}</button>)}</div>
-          <div className="grid sm:grid-cols-2 gap-4 mb-4"><Select label="Font" value={appearance.font} onChange={font=>setAppearance(a=>({...a,font}))} options={[{value:'lufga',label:'Fleming Lufga'},{value:'system',label:'System Font'},{value:'verdana',label:'Verdana'},{value:'arial',label:'Arial'},{value:'aptos',label:'Aptos'},{value:'times',label:'Times New Roman'},{value:'comic',label:'Comic Sans MS'},{value:'georgia',label:'Georgia'},{value:'tahoma',label:'Tahoma'},{value:'trebuchet',label:'Trebuchet MS'},{value:'courier',label:'Courier New'},{value:'calibri',label:'Calibri'},{value:'cambria',label:'Cambria'},{value:'helvetica',label:'Helvetica'},{value:'palatino',label:'Palatino'}]}/><Select label="Text Size" value={String(appearance.scale)} onChange={scale=>setAppearance(a=>({...a,scale:Number(scale)}))} options={[100,112.5,125,150].map(v=>({value:String(v),label:`${v}%`}))}/></div><Button disabled={appearanceBusy} onClick={()=>void saveAppearance()}>{appearanceBusy?'Saving…':'Save Appearance'}</Button><p role="status" className="mt-3 text-sm">{appearanceMsg}</p>
+          <div className="flex flex-wrap gap-3 mb-4">{[['Fleming pink','#dc006d'],['Fleming deep purple','#27083d'],['Fleming plum','#8e2d72'],['Fleming berry','#a32372'],['Rose','#be185d'],['Raspberry','#9d174d'],['Violet','#7e22ce'],['Ocean','#0369a1'],['Emerald','#047857'],['Purple','#6d28d9'],['Blue','#1d4ed8'],['Teal','#0f766e'],['Forest','#166534'],['Navy','#1e3a5f'],['Red','#b91c1c'],['Burgundy','#881337'],['Orange','#c2410c'],['Ochre','#854d0e'],['Olive','#4d7c0f'],['Cyan','#0e7490'],['Indigo','#4338ca'],['Slate','#475569']].map(([name,color]) => <button key={color} type="button" disabled={appearanceBusy} aria-label={name} title={name} aria-pressed={accent === color} onClick={() => setAccent(color)} className="w-11 h-11 rounded-full border-4 border-white/50 text-white" style={{background:color}}>{accent === color ? '✓' : ''}</button>)}</div>
+          <div className="grid sm:grid-cols-2 gap-4 mb-4"><Select label="Font" value={appearance.font} onChange={font=>setAppearance(a=>({...a,font}))} options={[{value:'lufga',label:'Fleming Lufga'},{value:'system',label:'System Font'},{value:'verdana',label:'Verdana'},{value:'arial',label:'Arial'},{value:'aptos',label:'Aptos'},{value:'times',label:'Times New Roman'},{value:'comic',label:'Comic Sans MS'},{value:'georgia',label:'Georgia'},{value:'tahoma',label:'Tahoma'},{value:'trebuchet',label:'Trebuchet MS'},{value:'courier',label:'Courier New'},{value:'calibri',label:'Calibri'},{value:'cambria',label:'Cambria'},{value:'helvetica',label:'Helvetica'},{value:'palatino',label:'Palatino'}]}/><Select label="Text Size" value={String(appearance.scale)} onChange={scale=>setAppearance(a=>({...a,scale:Number(scale)}))} options={[90,100,112.5,125,150].map(v=>({value:String(v),label:`${v}%`}))}/></div><Button className="w-64 max-w-full h-12" disabled={appearanceBusy} onClick={()=>void saveAppearance()}><Save size={17} aria-hidden="true" />{appearanceBusy?'Saving…':'Save Appearance'}</Button><p role="status" className="mt-3 text-sm">{appearanceMsg}</p>
         </GlassCard>
         </div>
+
+        <div className={user?.role==='admin'?'grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch':'grid grid-cols-1 gap-6'}>
+          <div className="min-w-0 [&>div]:h-full"><FlemoConnection/></div>
+          {user?.role==='admin'&&<div className="min-w-0 [&>div]:h-full"><FreeAgentConnection/></div>}
+        </div>
+
       </div>
     </Layout>
   );
