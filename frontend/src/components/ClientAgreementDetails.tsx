@@ -3,6 +3,7 @@ import {createPortal} from 'react-dom';
 import {CheckCircle,X} from 'lucide-react';
 import {useApi} from '../hooks/useApi';
 import {Button,Input,Select} from './ui';
+import AgreementPaymentAccountSummary from './AgreementPaymentAccountSummary';
 
 type Details={landlordName:string;landlordAddress:string;companyNumber:string;landlordEmail:string;landlordPhone:string;serviceAddress:string;emergencyContact:string;directorName:string;depositScheme:string;bankAccountName?:string;bankSortCode?:string;bankAccountNumber?:string};
 type Account={accountName:string;sortCode:string;accountNumber:string;bankName:string};
@@ -31,6 +32,7 @@ export default function ClientAgreementDetails({enquiryId,onReady}:{enquiryId:nu
   catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
  };
  const confirmAccount=()=>{if(!state)return;if(!accountsMatch(account,state.suggestedPaymentAccount)){setOverrideChecked(false);setConfirmOverride(true);}else void save(true);};
+ const initialPaymentAccount=state?.serviceType==='let_only'?state.companyAccounts?.clientMoney:account;
  return <>
   {error&&<p role="alert" className="text-sm text-[var(--onboarding-danger)]">{error}</p>}
   <section aria-label="Landlords Details" className={`rounded-xl border p-3 space-y-3 ${saved?'border-emerald-500/25 bg-emerald-500/5':'border-[var(--border-input)] bg-[var(--bg-subtle)]'}`}>
@@ -49,7 +51,11 @@ export default function ClientAgreementDetails({enquiryId,onReady}:{enquiryId:nu
   </section>
   <section aria-label="Payment Account Confirmation" className={`rounded-xl border p-3 space-y-3 ${paymentConfirmed?'border-emerald-500/25 bg-emerald-500/5':'border-[var(--border-input)] bg-[var(--bg-subtle)]'}`}>
    <div className="flex flex-wrap items-center justify-between gap-2"><h5 className="text-base font-semibold flex items-center gap-2">Payment Account Confirmation{paymentConfirmed&&<CheckCircle size={18} className="text-[var(--onboarding-success)]"/>}</h5><button type="button" className="ml-auto rounded-lg bg-[#742878] px-3 py-2 text-xs font-medium text-white hover:bg-[#632268] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-500 disabled:opacity-40" disabled={!state?.companyAccounts} onClick={()=>setShowCompanyAccounts(true)}>View Company Account Details</button></div>
-   {state&&<p role="note" className="rounded-lg border border-purple-500/15 bg-purple-500/5 px-3 py-2.5 text-sm leading-relaxed">{defaultInstructions(state.serviceType)}</p>}
+   {state&&<div role="note" aria-label="Initial payment account in the APT" className="rounded-lg border border-purple-500/15 bg-purple-500/5 px-3 py-2.5 text-sm leading-relaxed space-y-3">
+    <p>{defaultInstructions(state.serviceType)}</p>
+    <AgreementPaymentAccountSummary account={initialPaymentAccount}/>
+   </div>}
+   <h6 className="text-sm font-semibold">{state?.serviceType==='let_only'?'Future rental payments — landlord’s account':'Future rental payments'}</h6>
    <fieldset disabled={busy||!editingAccount} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
     <Input label="Account Name *" value={account.accountName} onChange={v=>changeAccount('accountName',v)}/><Input label="Bank Name" value={account.bankName} onChange={v=>changeAccount('bankName',v)}/><Input label="Sort Code *" value={account.sortCode} onChange={v=>changeAccount('sortCode',v.replace(/\D/g,'').slice(0,6).match(/.{1,2}/g)?.join('-')||'')}/><Input label="Account Number *" value={account.accountNumber} onChange={v=>changeAccount('accountNumber',v.replace(/\D/g,'').slice(0,8))}/>
    </fieldset>

@@ -5878,6 +5878,7 @@ app.get('/api/tenant-enquiries/:id/tenancy-agreement-compliance', authMiddleware
       agreementType,
       serviceType: enquiry.service_type,
       paymentRoute,
+      initialPaymentAccount: agreementType==='internal'?await configuredBankDetails('fleming_operating'):undefined,
       landlordName: enquiry.landlord_name,
       fees: {setupPercent:enquiry.service_setup_fee,monthlyPercent:enquiry.service_monthly_fee},
       defaults: {

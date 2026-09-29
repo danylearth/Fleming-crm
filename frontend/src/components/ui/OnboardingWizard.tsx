@@ -9,6 +9,7 @@ import AgreementComplianceDocuments,{type ComplianceDocument} from '../Agreement
 import {Link} from 'react-router-dom';
 import {applicationReviewSections,missingDocumentRequest,onboardingReviewNotes} from '../../utils/applicationReview';
 import ClientAgreementDetails from '../ClientAgreementDetails';
+import AgreementPaymentAccountSummary from '../AgreementPaymentAccountSummary';
 import { useNotifications } from '../../context/NotificationContext';
 import React, { useState, useEffect, useRef } from 'react';
 import { useApi } from '../../hooks/useApi';
@@ -135,6 +136,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     agreementType?: 'internal' | 'client';
     serviceType?: string | null;
     paymentRoute?: 'fleming_operating' | 'fleming_client_money' | 'landlord';
+    initialPaymentAccount?: {accountName:string;bankName:string;sortCode:string;accountNumber:string};
     landlordName?: string | null;
     fees?: {setupPercent?:string|number|null;monthlyPercent?:string|number|null};
     jointApplicantsReady?: boolean;
@@ -1200,7 +1202,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       <ArrowRight size={20} aria-hidden="true" className="ml-2 sm:ml-0 shrink-0 rotate-90 sm:rotate-0 text-[var(--text-secondary)]"/>
                       <div className="flex items-center gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-300" aria-hidden="true">2</span><div><span className="block font-medium">{enquiry.joint_partner_id?'Tenants sign':'Tenant signs'}</span><span className="block text-xs text-[var(--text-secondary)]">Invited once landlord has signed</span></div></div>
                     </div>}
-                    {agreementCompliance?.agreementType==='internal'&&<p role="note" className="rounded-lg border border-purple-500/15 bg-purple-500/5 px-3 py-2.5 text-sm leading-relaxed">For Fleming Lettings’ own properties, the initial rental payment, holding deposit and future rent are paid directly into Fleming Lettings’ business bank account, not the client money account.</p>}
+                    {agreementCompliance?.agreementType==='internal'&&<div role="note" aria-label="APT payment account" className="rounded-lg border border-purple-500/15 bg-purple-500/5 px-3 py-2.5 text-sm leading-relaxed space-y-3"><p>For Fleming Lettings’ own properties, the initial rental payment, holding deposit and future rent are paid directly into Fleming Lettings’ business bank account, not the client money account.</p><AgreementPaymentAccountSummary account={agreementCompliance.initialPaymentAccount} ownPortfolio/></div>}
                     {!agreementServiceComplete&&<p className="text-sm text-[var(--onboarding-warning)]">Set the service type on the property before generating the agreement.</p>}
                   </section>
                   <section aria-label="Agreement Particulars" className="agreement-particulars rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 space-y-3"><h5 className="text-base font-semibold">Agreement Particulars</h5>
