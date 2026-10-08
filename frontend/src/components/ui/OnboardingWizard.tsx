@@ -1,4 +1,7 @@
+import GuarantorCreditPanel from '../GuarantorCreditPanel';
+import {deliveryFailureReason} from '../../utils/deliveryFailure';
 import CreditCheckPanel from '../CreditCheckPanel';
+import GuarantorReview from '../GuarantorReview';
 import {creditChecksComplete} from '../../utils/creditChecks';
 import DeliveryChoices from './DeliveryChoices';
 import ApplicationReviewPanel from '../ApplicationReviewPanel';
@@ -10,6 +13,7 @@ import {Link} from 'react-router-dom';
 import {applicationReviewSections,missingDocumentRequest,onboardingReviewNotes} from '../../utils/applicationReview';
 import ClientAgreementDetails from '../ClientAgreementDetails';
 import AgreementPaymentAccountSummary from '../AgreementPaymentAccountSummary';
+import AgreementDataPreview from '../AgreementDataPreview';
 import { useNotifications } from '../../context/NotificationContext';
 import React, { useState, useEffect, useRef } from 'react';
 import { useApi } from '../../hooks/useApi';
@@ -40,19 +44,23 @@ const STATUS = {
   green: { bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', text: 'text-[var(--onboarding-success)]', dot: 'bg-emerald-500' },
 };
 
-function StepCard({ idx, step, children, activeStep, actions, split = false }: {
+function StagePrerequisite({children}:{children:React.ReactNode}){return <p role="status" className="flex items-start gap-2 text-sm leading-5 text-[var(--text-muted)]"><AlertTriangle size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--onboarding-warning)]"/><span>{children}</span></p>;}
+
+function StepCard({ idx, step, children, activeStep, actions, bottom, split = false }: {
   idx: number;
   step: { label: string; icon: React.ElementType; getStatus: () => string; desc: string; readyForApproval?: boolean };
   children: React.ReactNode;
   activeStep: number;
   actions?: React.ReactNode;
+  bottom?: React.ReactNode;
   split?: boolean;
 }) {
   if (activeStep !== idx) return null;
-  const status = step.getStatus();
+  const recordedStatus = step.getStatus();
+  const status = recordedStatus==='red'?'amber':recordedStatus;
   const s = STATUS[status as keyof typeof STATUS] || STATUS.red;
   const approved = status === 'green' && !step.readyForApproval;
-  const showActions = Boolean(actions) || (approved && !split);
+  const showActions = Boolean(actions) || (approved && !split && ![3,8,9].includes(idx));
   return (
     <section aria-labelledby={`onboarding-heading-${idx}`} className={`onboarding-stage ${split ? 'onboarding-deposit-stage' : ''} min-w-0 min-h-0 h-full flex flex-col ${status === 'green' ? 'rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 sm:p-5' : status === 'amber' ? 'rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 sm:p-5' : ''}`}>
       <div className="shrink-0 flex items-start gap-3 border-b border-[var(--border-subtle)] pb-4 mb-4">
@@ -62,12 +70,13 @@ function StepCard({ idx, step, children, activeStep, actions, split = false }: {
           <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">{step.desc}</p>
         </div>
         <span className={`shrink-0 rounded-full px-2.5 py-1 text-sm font-medium ${s.bg} ${s.text}`}>
-          {step.readyForApproval ? 'Ready to Approve' : status === 'green' ? 'Approved' : ['amber','grey'].includes(status) ? 'Pending' : 'To Do'}
+          {step.readyForApproval ? 'Ready to Approve' : status === 'green' ? (idx===8?'Completed':'Approved') : ['amber','grey'].includes(status) ? 'Pending' : 'To Do'}
         </span>
       </div>
-      <div className={showActions ? 'flex-1 min-h-0 grid grid-cols-1 grid-rows-[max-content_max-content] xl:grid-rows-1 content-start xl:grid-cols-[minmax(0,1fr)_224px] gap-4 overflow-y-auto xl:overflow-hidden' : 'flex-1 min-h-0 overflow-hidden'}>
-        <div className={`space-y-4 min-w-0 min-h-0 ${showActions ? 'xl:h-full' : 'h-full'} pr-3 [scrollbar-gutter:stable] ${split && idx !== 4 ? 'overflow-y-auto lg:overflow-hidden' : showActions ? 'xl:overflow-y-auto' : 'overflow-y-auto'}`}>{children}</div>
-        {showActions && <aside aria-label="Section actions" className="onboarding-actions rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 space-y-3 xl:overflow-y-auto xl:max-h-full self-start"><h5 className="text-base font-semibold">Actions & Previews</h5>{approved && <p className="flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-[var(--onboarding-success)]"><CheckCircle size={18}/>Approved</p>}{actions}</aside>}
+      <div className={bottom?'flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_260px] content-start gap-4 overflow-y-auto':showActions ? 'flex-1 min-h-0 grid grid-cols-1 grid-rows-[max-content_max-content] xl:grid-rows-1 content-start xl:grid-cols-[minmax(0,1fr)_260px] gap-4 overflow-y-auto xl:overflow-hidden' : 'flex-1 min-h-0 overflow-hidden'}>
+        <div className={bottom?'space-y-4 min-w-0':`space-y-4 min-w-0 min-h-0 ${showActions ? 'xl:h-full' : 'h-full'} pr-3 [scrollbar-gutter:stable] ${split && idx !== 4 ? 'overflow-y-auto lg:overflow-hidden' : showActions ? 'xl:overflow-y-auto' : 'overflow-y-auto'}`}>{children}</div>
+        {showActions && <aside aria-label="Section actions" className="onboarding-actions [&>button]:w-full [&>button]:min-h-10 rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 space-y-3 xl:overflow-y-auto xl:max-h-full self-start"><h5 className="text-base font-semibold">Actions & Previews</h5>{approved && <p className="flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-[var(--onboarding-success)]"><CheckCircle size={18}/>Approved</p>}{actions}</aside>}
+        {bottom&&<div className="xl:col-span-2 min-w-0">{bottom}</div>}
       </div>
     </section>
   );
@@ -93,11 +102,15 @@ function ReviewPopup({title,onClose,children}:{title:string;onClose:()=>void;chi
 }
 
 export default function OnboardingWizard({ enquiryId, enquiry, properties, users, onClose, onUpdate }: OnboardingWizardProps) {
+  const existingTenancy=Boolean(enquiry.existing_tenancy_application);
   const api = useApi();
   const {confirmAction,notify}=useNotifications();
-  const { token } = useAuth();
+  const { token,user } = useAuth();
   const [saving, setSaving] = useState(false);
   const [requiredProperty, setRequiredProperty] = useState('');
+  const [applicationProperty,setApplicationProperty]=useState(String(enquiry.linked_property_id||''));
+  const applicationPropertyLocked=Boolean(enquiry.application_form_sent||enquiry.application_form_completed||enquiry.application_form_token);
+  const propertySelectionChanged=applicationProperty!==String(enquiry.linked_property_id||'');
   const [activeStep, setActiveStep] = useState(0);
   const [onboardingActivity,setOnboardingActivity]=useState<{last_viewed_at?:string;last_progressed_at?:string;last_progressed_by?:string}>({});
   const viewedEnquiry=useRef<number|null>(null);
@@ -145,13 +158,16 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   } | null>(null);
   const [complianceLoading,setComplianceLoading]=useState(false);
   const complianceRequest=useRef(0);
-  const [agreementStartDate, setAgreementStartDate] = useState('');
-  const [agreementRent, setAgreementRent] = useState('');
-  const [agreementDeposit, setAgreementDeposit] = useState('');
-  const [agreementOccupiers, setAgreementOccupiers] = useState('');
-  const [agreementFacilities, setAgreementFacilities] = useState('');
-  const [agreementParking, setAgreementParking] = useState('');
-  const [paymentReference,setPaymentReference]=useState('');
+  const [agreementDraftKey]=useState(()=>['fleming-agreement-draft',user?.id||'local',enquiryId,enquiry.linked_property_id,new URLSearchParams(location.search).get('scenario')||'',new URLSearchParams(location.search).get('run')||''].join(':'));
+  const [initialAgreementDraft]=useState<Record<string,string>|null>(()=>{try{const draft=JSON.parse(localStorage.getItem(agreementDraftKey)||'null');return draft&&typeof draft==='object'&&!Array.isArray(draft)?draft:null;}catch{return null;}});
+  const [agreementStartDate, setAgreementStartDate] = useState(initialAgreementDraft?.tenancyStartDate??'');
+  const [agreementRent, setAgreementRent] = useState(initialAgreementDraft?.rent??'');
+  const [agreementDeposit, setAgreementDeposit] = useState(initialAgreementDraft?.deposit??'');
+  const [agreementOccupiers, setAgreementOccupiers] = useState(initialAgreementDraft?.permittedOccupiers??'');
+  const [agreementFacilities, setAgreementFacilities] = useState(initialAgreementDraft?.sharedFacilities??'');
+  const [agreementParking, setAgreementParking] = useState(initialAgreementDraft?.parking??'');
+  const [paymentReference,setPaymentReference]=useState(()=>{if(initialAgreementDraft?.paymentReference)return initialAgreementDraft.paymentReference;const property=properties.find(p=>Number(p.id)===Number(enquiry.linked_property_id));return (String(property?.address||enquiry.property_address||'').match(/^\s*\d+[A-Za-z]?/)?.[0]?.trim()||'PROPERTY')+' '+String(property?.postcode||enquiry.property_postcode||'').replace(/\s/g,'').toUpperCase()+' - '+String(enquiry.last_name_1||'TENANT').toUpperCase();});
+  const [showAgreementData,setShowAgreementData]=useState(false);
   const [clientDetailsReady,setClientDetailsReady]=useState(false);
   const [serviceGate,setServiceGate]=useState<{propertyId:number}|null>(null);
   useEffect(()=>{let active=true;api.get(`/api/tenant-enquiries/${enquiryId}/client-agreement-details`).then(data=>{if(active)setServiceGate(data.enabled&&!(data.serviceAgreementReady??data.serviceAgreementSigned)&&enquiry.status!=='converted'?{propertyId:data.propertyId}:null);}).catch(()=>{});return()=>{active=false;};},[api,enquiryId,enquiry.status]);
@@ -169,17 +185,22 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [balanceSmsMessage] = useState('Hi {{first_name}}, thank you for signing your tenancy agreement and completing our application and screening process. We have emailed your final payment details so we can arrange a handover date and location. Feel free to reach out to your lettings manager or to contact us on 01902 212 415 to book this in.');
   const [confirmingBalance,setConfirmingBalance]=useState(false);
   const [balanceReceiptDate,setBalanceReceiptDate]=useState('');
-  const [balanceFollowUpDate, setBalanceFollowUpDate] = useState(() => new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10));
+  const [balanceReceiptAmount,setBalanceReceiptAmount]=useState('');
+  const receiptAmount=balanceReceiptAmount||String(enquiry.balance_bank_amount||'');
+  const receiptDate=balanceReceiptDate||String(enquiry.balance_bank_date||'').slice(0,10);
+  const bankReceipt=!balanceReceiptAmount&&Number(enquiry.balance_bank_amount)>0;
+  const [balanceNotes,setBalanceNotes]=useState(enquiry.balance_internal_notes||'');
+  const [balanceFollowUpDate, setBalanceFollowUpDate] = useState(() => dateInputValue(enquiry.balance_follow_up_date)||new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10));
   const [balanceEmailPreview, setBalanceEmailPreview] = useState<{ subject: string; bodyHtml: string } | null>(null);
   const [handoverEmailPreview, setHandoverEmailPreview] = useState<{ subject: string; bodyHtml: string } | null>(null);
   const propertyAddress = (() => {
     const prop = properties.find(p => p.id === enquiry.linked_property_id);
     return prop ? formatPropertyAddress(prop.address, prop.postcode) : '';
   })();
-  const [handoverDate, setHandoverDate] = useState('');
-  const [handoverTime, setHandoverTime] = useState('10:00');
-  const [handoverAssignedTo, setHandoverAssignedTo] = useState('');
-  const [handoverWithLandlord, setHandoverWithLandlord] = useState(false);
+  const [handoverDate, setHandoverDate] = useState(()=>dateInputValue(enquiry.handover_date));
+  const [handoverTime, setHandoverTime] = useState(()=>String(enquiry.handover_time||'10:00').slice(0,5));
+  const [handoverAssignedTo, setHandoverAssignedTo] = useState(enquiry.handover_assigned_to||'');
+  const [handoverWithLandlord, setHandoverWithLandlord] = useState(Boolean(enquiry.handover_with_landlord));
   const [handoverLocationType,setHandoverLocationType]=useState('property');
   const [handoverOtherAddress,setHandoverOtherAddress]=useState('');
   const [handoverOffices,setHandoverOffices]=useState<{id:number;name:string;office_address?:string}[]>([]);
@@ -188,6 +209,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   useEffect(()=>{if(agreementCompliance?.agreementType==='internal'&&handoverWithLandlord){setHandoverWithLandlord(false);setHandoverAssignedTo('');}},[agreementCompliance?.agreementType,handoverWithLandlord]);
   const [handoverSendEmail, setHandoverSendEmail] = useState(false);
   const [handoverSendSms, setHandoverSendSms] = useState(false);
+  const [handoverLandlordEmail,setHandoverLandlordEmail]=useState(false);
+  const [handoverLandlordSms,setHandoverLandlordSms]=useState(false);
+  const [conversionComplete,setConversionComplete]=useState(false);
+  const onboardingComplete=conversionComplete||enquiry.status==='converted';
   const [handoverEmailMessage] = useState('Finally, we’re nearly there! Your move in and handover appointment is confirmed. We will meet you at {{handover_location}} to hand over the keys and answer any final questions that you may have.');
   const [handoverSmsMessage] = useState('Hi {{first_name}}, your move in and handover appointment is confirmed for {{handover_date}} at {{handover_time}} at {{handover_location}} with {{appointment_with}}. If you are running late or need to rearrange then please contact us on 01902 212 415.');
   const renderSmsPreview=(template:string)=>template.replace(/{{(\w+)}}/g,(_,key:string)=>({
@@ -207,6 +232,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
   // Application email modal
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [applicationSendEmail,setApplicationSendEmail]=useState(true),[applicationSendSms,setApplicationSendSms]=useState(false);
 
   // Holding deposit email preview modal
 
@@ -232,7 +258,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     } catch { /* email refresh is non-blocking */ }
   };
 
-  const agreementDirty=useRef(false);
+  const agreementDirty=useRef(!!initialAgreementDraft);
+  useEffect(()=>{if(!agreementDirty.current)return;try{localStorage.setItem(agreementDraftKey,JSON.stringify({tenancyStartDate:agreementStartDate,rent:agreementRent,deposit:agreementDeposit,permittedOccupiers:agreementOccupiers,sharedFacilities:agreementFacilities,parking:agreementParking,paymentReference}));}catch{setReviewError('Your changes could not be saved in this browser. Keep this screen open until the agreement is issued.');}},[agreementDraftKey,agreementStartDate,agreementRent,agreementDeposit,agreementOccupiers,agreementFacilities,agreementParking,paymentReference]);
   const fetchAgreement = async () => {
     try {
       const data = await api.get(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement`);
@@ -245,6 +272,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         setAgreementOccupiers(current => current || String(details.permittedOccupiers || ''));
         setAgreementFacilities(current => current || String(details.sharedFacilities || ''));
         setAgreementParking(current => current || String(details.parking || ''));
+        setPaymentReference(current=>current||String(details.paymentReference||''));
 
       }
       return data || null;
@@ -425,23 +453,56 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enquiryId]);
 
+  const [guarantorChecks,setGuarantorChecks]=useState<Record<number,Record<string,any>>>({});
+  const [guarantorError,setGuarantorError]=useState('');
+  const guarantorRecord=useRef(enquiryId);guarantorRecord.current=enquiryId;
+  const refreshGuarantors=async()=>{
+    const ids=[enquiryId,...enquiry.joint_partner_id?[Number(enquiry.joint_partner_id)]:[]];
+    const values=await Promise.all(ids.map(async id=>[id,await api.get(`/api/tenant-enquiries/${id}/guarantor`)] as const));
+    if(guarantorRecord.current!==enquiryId)return;
+    setGuarantorChecks(Object.fromEntries(values));setGuarantorError('');
+  };
+  useEffect(()=>{
+    let cancelled=false;
+    const refresh=()=>{if(!cancelled)void refreshGuarantors().catch(error=>{if(!cancelled)setGuarantorError(error instanceof Error?error.message:'Guarantor progress could not be loaded');});};
+    setGuarantorChecks({});refresh();window.addEventListener('focus',refresh);
+    return()=>{cancelled=true;window.removeEventListener('focus',refresh);};
+  },[enquiryId,enquiry.joint_partner_id]);
+  // Existing issued agreements keep their recorded journey. New agreements
+  // require an explicit decision and completed checks for each applicant.
+  const guarantorApplicantIds=[enquiryId,...enquiry.joint_partner_id?[Number(enquiry.joint_partner_id)]:[]];
+  const guarantorDecisionsComplete=guarantorApplicantIds.every(id=>typeof guarantorChecks[id]?.required==='boolean');
+  const hasRequiredGuarantor=guarantorApplicantIds.some(id=>guarantorChecks[id]?.required===true);
+  const [guarantorDecisionSaving,setGuarantorDecisionSaving]=useState(false);
+  const chooseGuarantor=async(id:number,value:boolean)=>{
+    setGuarantorDecisionSaving(true);setGuarantorError('');
+    try{await api.post('/api/tenant-enquiries/'+id+'/guarantor',{action:'require',value});await refreshGuarantors();}
+    catch(error){setGuarantorError(error instanceof Error?error.message:'The guarantor decision could not be saved.');}
+    finally{setGuarantorDecisionSaving(false);}
+  };
+  const resetGuarantor=async(id:number)=>{setGuarantorDecisionSaving(true);setGuarantorError('');try{await api.post('/api/tenant-enquiries/'+id+'/guarantor',{action:'reset'});await refreshGuarantors();setActiveStep(3);}catch(error){setGuarantorError(error instanceof Error?error.message:'The guarantor decision could not be reset.');}finally{setGuarantorDecisionSaving(false);}};
+  const allGuarantorReviewsComplete=Boolean(agreement)||guarantorApplicantIds.every(id=>{const g=guarantorChecks[id];return g?.required===false||(g?.required===true&&g.signed&&g.witnessed&&!g.deedNeedsResigning&&g.record?.application_review_status==='approved');});
+  const allGuarantorsComplete=Boolean(agreement)||[enquiryId,...enquiry.joint_partner_id?[Number(enquiry.joint_partner_id)]:[]].every(id=>guarantorChecks[id]?.required===false||(guarantorChecks[id]?.required===true&&guarantorChecks[id]?.status==='verified'));
   useEffect(() => {
     // Advance when a recorded milestone changes; saving a review must not reset inputs.
-    if (!enquiry.holding_deposit_requested) setActiveStep(0);
-    else if (!enquiry.holding_deposit_received) setActiveStep(1);
+    if (!existingTenancy&&!enquiry.holding_deposit_requested) setActiveStep(0);
+    else if (!existingTenancy&&!enquiry.holding_deposit_received) setActiveStep(1);
     else if (!enquiry.application_form_completed) setActiveStep(2);
     else if (enquiry.application_review_status !== 'approved' || (enquiry.joint_partner_id && jointApplication?.record.application_review_status !== 'approved')) setActiveStep(3);
-    else if (!creditChecksComplete(enquiry,jointApplication?.record)) setActiveStep(4);
+    else if (!agreement&&!guarantorDecisionsComplete) setActiveStep(3);
+    else if (!allGuarantorReviewsComplete) setActiveStep(9);
+    else if (!creditChecksComplete(enquiry,jointApplication?.record)||!allGuarantorsComplete) setActiveStep(4);
     else if (agreement?.status !== 'completed') setActiveStep(5);
-    else if (!enquiry.balance_payment_received) setActiveStep(6);
-    else if (!enquiry.handover_date && !enquiry.handover_not_required) setActiveStep(7);
+    else if (!existingTenancy&&!enquiry.balance_payment_received) setActiveStep(6);
+    else if (!existingTenancy&&!enquiry.handover_date && !enquiry.handover_not_required) setActiveStep(7);
     else setActiveStep(8);
-  }, [enquiryId,jointApplication?.record.credit_check_completed,jointApplication?.record.application_review_status,enquiry.holding_deposit_requested,enquiry.holding_deposit_received,enquiry.application_form_completed,enquiry.application_review_status,enquiry.credit_check_completed,enquiry.balance_payment_received,enquiry.handover_date,enquiry.handover_not_required,agreement?.status]);
+  }, [enquiryId,guarantorDecisionsComplete,allGuarantorReviewsComplete,allGuarantorsComplete,jointApplication?.record.credit_check_completed,jointApplication?.record.application_review_status,enquiry.holding_deposit_requested,enquiry.holding_deposit_received,enquiry.application_form_completed,enquiry.application_review_status,enquiry.credit_check_completed,enquiry.balance_payment_received,enquiry.handover_date,enquiry.handover_not_required,agreement?.status]);
 
   const formatMoneyInput=(value:string)=>{const [whole,fraction]=value.split('.');return whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')+(fraction!==undefined?'.'+fraction:'');};
   const name = [enquiry.first_name_1, enquiry.last_name_1].filter(Boolean).join(' ');
   const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
-  const allCreditChecksComplete = creditChecksComplete(enquiry,jointApplication?.record);
+  const allCreditChecksComplete = creditChecksComplete(enquiry,jointApplication?.record)&&allGuarantorsComplete;
+  useEffect(()=>{if(activeStep===3&&enquiry.application_review_status==='approved'&&!guarantorDecisionsComplete){const frame=requestAnimationFrame(()=>document.querySelector('[aria-label="Guarantor requirement"]')?.scrollIntoView({block:'end'}));return()=>cancelAnimationFrame(frame);}},[activeStep,enquiry.application_review_status,guarantorDecisionsComplete]);
   const applicationReviewStatus = reviewStatusOverride || enquiry.application_review_status;
   const waitingOnTenant = enquiry.application_review_status === 'changes_requested' && Boolean(enquiry.application_changes_sent_at);
   useEffect(()=>{setReviewStatusOverride(null);},[enquiry.application_review_status,enquiry.application_form_completed_at]);
@@ -463,7 +524,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   );
   const visibleSections=applicationReviewSections(enquiry).map(section=>section.title);
   const allSectionsApproved=sectionReviews['Application Details'] ? sectionReviews['Application Details'].status==='approved' : enquiry.application_review_status==='approved'||(visibleSections.length>0&&visibleSections.every(section=>sectionReviews[section]?.status==='approved'));
-  const reviewReadyForApproval=Boolean(enquiry.application_form_completed)&&!waitingOnTenant&&applicationReviewStatus!=='approved'&&allSectionsApproved&&allRequiredDocsApproved&&!enquiryDocs.some(doc=>doc.review_status==='rejected')&&!Object.values(documentDecisions).includes('rejected');
+  const allUploadedReviewDocsApproved=enquiryDocs.filter(doc=>!['Completed Tenancy Application','Tenancy Agreement','Signed Tenancy Agreement','Signed Deed of Guarantee','Credit Check Report'].includes(doc.doc_type)).every(doc=>(documentDecisions[doc.id]||doc.review_status)==='approved');
+  const reviewReadyForApproval=allUploadedReviewDocsApproved&&Boolean(enquiry.application_form_completed)&&!waitingOnTenant&&applicationReviewStatus!=='approved'&&allSectionsApproved&&allRequiredDocsApproved&&!enquiryDocs.some(doc=>doc.review_status==='rejected')&&!Object.values(documentDecisions).includes('rejected');
   // Step definitions
   const steps = [
     {
@@ -515,7 +577,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     {
       label: 'Final Balance',
       icon: PoundSterling,
-      getStatus: () => enquiry.balance_payment_received ? 'green' : enquiry.balance_payment_requested ? 'amber' : 'red',
+      getStatus: () => enquiry.balance_payment_received ? 'green' : enquiry.balance_payment_requested || agreement?.status === 'completed' ? 'amber' : 'red',
       desc: enquiry.balance_payment_received
         ? `Payment received${enquiry.balance_payment_received_at ? ` on ${new Date(enquiry.balance_payment_received_at).toLocaleDateString('en-GB')}` : ''}`
         : enquiry.balance_payment_requested ? `Waiting for £${Number(enquiry.balance_due_amount || 0).toLocaleString()}` : 'Request deposit and first rent balance',
@@ -524,18 +586,26 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       label: 'Schedule Handover',
       icon: CalendarDays,
       getStatus: () => enquiry.handover_date || enquiry.handover_not_required ? 'green' : enquiry.balance_payment_received ? 'amber' : 'red',
-      desc: enquiry.handover_not_required ? 'No handover required — confirmed by office' : enquiry.handover_date ? `${String(enquiry.handover_date).slice(0, 10)} at ${String(enquiry.handover_time || '').slice(0, 5)}` : 'Assign the property handover to the team calendar',
+      desc: enquiry.handover_not_required ? 'No handover required — confirmed by office' : enquiry.handover_date ? `${String(enquiry.handover_date).slice(0, 10)} at ${String(enquiry.handover_time || '').slice(0, 5)}` : handoverWithLandlord ? 'Arrange the handover directly with the landlord' : 'Assign the property handover to the team calendar',
     },
     {
-      label: 'Convert to Tenant',
+      label: 'Onboarding Completed',
       icon: User,
-      getStatus: () => enquiry.status === 'converted' ? 'green' : 'red',
-      desc: enquiry.status === 'converted' ? 'Converted' : 'Complete all steps to proceed',
+      getStatus: () => onboardingComplete ? 'green' : 'red',
+      desc: existingTenancy ? (onboardingComplete?'New tenancy scheduled; previous tenancy retained':'Complete the application, checks and agreement to finish onboarding') : onboardingComplete ? 'Tenant records created successfully' : 'Complete the handover stage to finish onboarding',
+    },
+    {
+      label:'Guarantor Review',icon:Shield,getStatus:()=>allGuarantorReviewsComplete?'green':applicationReviewStatus==='approved'?'amber':'red',
+      desc:allGuarantorReviewsComplete?'Guarantor application and witnessed deed reviewed':'Confirm the requirement, then review the application and witnessed deed',
     },
   ];
 
   const allPreviousComplete = (stepIdx: number) => {
+    if(stepIdx===9)return Boolean(enquiry.application_form_completed)&&applicationReviewStatus==='approved'&&(!enquiry.joint_partner_id||jointApplication?.record.application_review_status==='approved');
+    if(stepIdx===4&&!allGuarantorReviewsComplete)return false;
+    if([5,6,7,8].includes(stepIdx)&&!allGuarantorsComplete)return false;
     for (let i = 0; i < stepIdx; i++) {
+      if(existingTenancy&&[0,1,6,7].includes(i))continue;
       if (steps[i].getStatus() !== 'green' || steps[i].readyForApproval) return false;
     }
     return true;
@@ -567,6 +637,20 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     setSaving(false);
   };
 
+  const retryFailedHoldingEmail = async () => {
+    const failedEmail=emailMessages.find(message=>message.template==='holding_deposit_request');
+    if(!failedEmail || failedEmail.status!=='failed')return;
+    const paidNote=enquiry.holding_deposit_received?' The deposit is already recorded as received; this resends the original request email without changing the payment record.':'';
+    if(!await confirmAction('Resend the failed holding deposit email?'+paidNote))return;
+    setSaving(true);setReviewError('');
+    try{
+      const result=await api.post('/api/tenant-enquiries/'+enquiryId+'/retry-holding-deposit-email',{message_id:failedEmail.id});
+      if(!result.success)setReviewError('Email retry failed: '+(result.error||'Please check delivery status.'));
+      await fetchEmailHistory();
+    }catch(error){setReviewError(error instanceof Error?error.message:'Email retry failed');await fetchEmailHistory();}
+    finally{setSaving(false);}
+  };
+
   const confirmDepositReceived = async () => {
     if (!await confirmAction("Please confirm the deposit has been received in full and ensure that all automations have been selected where required.")) return;
     setSaving(true);
@@ -591,20 +675,24 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     setSaving(false);
   };
 
-  const convertToTenant = async () => {
-    setSaving(true);
-    setReviewError('');
-    try {
+  const completeOnboarding = async () => {
+    if (!onboardingComplete) {
       await api.post(`/api/tenant-enquiries/${enquiryId}/convert`, {
         property_id: enquiry.linked_property_id,
-        tenancy_start_date: agreement?.agreement_details?.tenancyStartDate || agreementStartDate || dateInputValue(enquiry.handover_date),
+        tenancy_start_date: agreement?.agreement_details?.tenancyStartDate || agreementStartDate || handoverDate,
         tenancy_type: 'Assured Periodic Tenancy',
       });
-      await onUpdate();
-      onClose();
-    } catch (err) { setReviewError(err instanceof Error ? err.message : 'Conversion failed. Please review both applicants and try again.'); }
-    setSaving(false);
+      setConversionComplete(true);
+    }
+    await onUpdate();
+    setActiveStep(8);
   };
+  const completingExisting=useRef(false);
+  useEffect(()=>{
+    if(!existingTenancy||onboardingComplete||agreement?.status!=='completed'||!allPreviousComplete(8)||completingExisting.current)return;
+    completingExisting.current=true;
+    void completeOnboarding().catch(error=>setReviewError(error instanceof Error?error.message:'Could not complete the new tenancy. Please retry.'));
+  },[existingTenancy,onboardingComplete,agreement?.status,enquiry.application_review_status,enquiry.credit_check_completed]);
 
   const issueAgreement = async () => {
     if (!token) return;
@@ -629,6 +717,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       });
       const failures = Object.values(result.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
       if (failures.length) setReviewError(`Agreement issued, but ${failures.length} communication${failures.length === 1 ? '' : 's'} failed. Check the email/SMS history.`);
+      agreementDirty.current=false;try{localStorage.removeItem(agreementDraftKey);}catch{/* The issued agreement is already saved. */}
       setEditingAgreement(false);
       await Promise.all([fetchAgreement(), fetchAgreementCompliance(), fetchEmailHistory(), onUpdate()]);
     } catch (err) {
@@ -658,25 +747,18 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const previewBalanceEmail = async () => {
     setReviewError('');
     try {
-      const preview = await api.post(`/api/tenant-enquiries/${enquiryId}/${confirmingBalance?'confirm-balance':'request-balance'}/email-preview`, { email_message: balanceEmailMessage,received_date:balanceReceiptDate });
+      const preview = await api.post(`/api/tenant-enquiries/${enquiryId}/${(confirmingBalance||bankReceipt)?'confirm-balance':'request-balance'}/email-preview`, { email_message: balanceEmailMessage,received_date:receiptDate,received_amount:Number(receiptAmount),bank_only:bankReceipt });
       setBalanceEmailPreview({ subject: preview.subject, bodyHtml: preview.body_html });
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : 'Balance email preview could not be prepared');
     }
   };
 
-  const retryAgreementDelivery = async () => {
-    setSaving(true); setReviewError('');
-    try {
-      const result = await api.post(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement/retry-delivery`, {});
-      const failures = Object.values(result?.delivery || {}).filter((item: any) => item?.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (failures.length) setReviewError(`Delivery still failed: ${failures.map((item: any) => item.error).filter(Boolean).join('; ')}`); // eslint-disable-line @typescript-eslint/no-explicit-any
-      await Promise.all([fetchAgreement(), fetchEmailHistory(), onUpdate()]);
-    } catch (err) {
-      setReviewError(err instanceof Error ? err.message : 'Agreement delivery could not be retried');
-    } finally { setSaving(false); }
+  const saveBalanceDraft = async (date=balanceFollowUpDate,notes=balanceNotes) => {
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||enquiry.balance_payment_requested)return;
+    try{await api.post('/api/tenant-enquiries/'+enquiryId+'/balance-follow-up',{follow_up_date:date,internal_notes:notes});}
+    catch(error){setReviewError(error instanceof Error?error.message:'Could not save the follow-up');}
   };
-
   const requestBalance = async () => {
     if(!balanceSendEmail&&!balanceSendSms){setReviewError('Select Email or SMS before sending the request.');return;}
     setSaving(true); setReviewError('');
@@ -684,12 +766,14 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       const result = await api.post(`/api/tenant-enquiries/${enquiryId}/request-balance`, {
         send_email: balanceSendEmail, send_sms: balanceSendSms,
         email_message: balanceEmailMessage, sms_message: balanceSmsMessage,
-        follow_up_date: balanceFollowUpDate,
+        follow_up_date: balanceFollowUpDate, internal_notes: balanceNotes,
       });
       const failures = Object.values(result?.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
       const deliveries=Object.values(result?.delivery||{}) as {success?:boolean;simulated?:boolean;error?:string}[];
       const channels=[balanceSendEmail?'email':'',balanceSendSms?'SMS':''].filter(Boolean).join(' and ');
-      setBalanceDeliveryResult(failures.length?{title:'Request delivery needs attention',message:'The balance request was saved, but some messages failed: '+failures.map((item:any)=>item.error||'Delivery failed').join('; ')}:deliveries.length?{title:result.simulated||deliveries.every(item=>item.simulated)?'Test request simulated':'Balance request sent',message:result.simulated||deliveries.every(item=>item.simulated)?'The '+channels+' request was recorded in this test. No real message was sent.':'The final balance request has been sent by '+channels+'. You can check delivery updates in Communications.'}:{title:'No message sent',message:'The balance request was saved, but no messages were sent. Check recipient contact details.'});
+      if(failures.length)setBalanceDeliveryResult({title:'Delivery failed',message:[...new Set(failures.map((item:any)=>deliveryFailureReason(item.error)))].join(' ')});
+      else if(deliveries.length)notify(result.simulated||deliveries.every(item=>item.simulated)?'Test request simulated. No real message was sent.':'Balance request sent by '+channels+'. Delivery updates are available in Communications.',result.simulated||deliveries.every(item=>item.simulated)?'info':'success');
+      else setBalanceDeliveryResult({title:'No message sent',message:'The balance request was saved, but no messages were sent. Check recipient contact details.'});
       await Promise.all([fetchEmailHistory(), onUpdate()]);
     } catch (err) { setReviewError(err instanceof Error ? err.message : 'Balance request could not be saved'); }
     finally { setSaving(false); }
@@ -698,7 +782,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const confirmBalance = async () => {
     setSaving(true); setReviewError('');
     try {
-      const result=await api.post(`/api/tenant-enquiries/${enquiryId}/confirm-balance`, {received_date:balanceReceiptDate,send_email:balanceSendEmail,send_sms:balanceSendSms});
+      const result=await api.post(`/api/tenant-enquiries/${enquiryId}/confirm-balance`, {received_date:receiptDate,received_amount:Number(receiptAmount),bank_only:bankReceipt,send_email:balanceSendEmail,send_sms:balanceSendSms});
       if(Object.values(result.delivery||{}).some(v=>(v as {success?:boolean}).success===false))setReviewError('Receipt saved, but a notification failed. Check communications history.');
       setConfirmingBalance(false);
       await onUpdate();
@@ -706,14 +790,14 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     finally { setSaving(false); }
   };
 
-  const previewHandoverEmail = async () => {
+  const previewHandoverEmail = async (landlord = false, sms = false) => {
     setReviewError('');
     try {
       const preview = await api.post(`/api/tenant-enquiries/${enquiryId}/schedule-handover/email-preview`, {
         handover_date: handoverDate, handover_time: handoverTime, assigned_to: handoverAssignedTo, location_type:handoverLocationType, location_address:handoverOtherAddress,
-        with_landlord: handoverWithLandlord, email_message: handoverEmailMessage,
+        with_landlord: handoverWithLandlord, recipient:landlord?'landlord':'tenant', email_message: handoverEmailMessage,
       });
-      setHandoverEmailPreview({ subject: preview.subject, bodyHtml: preview.body_html });
+      if(sms)setSmsPreview(preview.sms_body);else setHandoverEmailPreview({ subject: preview.subject, bodyHtml: preview.body_html });
     } catch (error) { setReviewError(error instanceof Error ? error.message : 'Email preview could not be prepared'); }
   };
 
@@ -723,12 +807,13 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       const result = await api.post(`/api/tenant-enquiries/${enquiryId}/schedule-handover`, {
         handover_date: handoverDate, handover_time: handoverTime, assigned_to: handoverAssignedTo, location_type:handoverLocationType, location_address:handoverOtherAddress,
         send_email: handoverSendEmail, send_sms: handoverSendSms,
+        landlord_send_email:handoverWithLandlord&&handoverLandlordEmail, landlord_send_sms:handoverWithLandlord&&handoverLandlordSms,
         with_landlord: handoverWithLandlord,
         email_message: handoverEmailMessage, sms_message: handoverSmsMessage,
       });
       const failures = Object.values(result?.delivery || {}).filter((item: any) => item && item.success === false); // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (failures.length) setReviewError(`Handover saved, but ${failures.length} communication${failures.length === 1 ? '' : 's'} failed.`);
-      await onUpdate();
+      if (failures.length) setReviewError(`Delivery failed: ${failures.map((item:any)=>item.error||'Message could not be delivered').join('; ')}`); // eslint-disable-line @typescript-eslint/no-explicit-any
+      await completeOnboarding();
     } catch (err) { setReviewError(err instanceof Error ? err.message : 'Handover could not be scheduled'); }
     finally { setSaving(false); }
   };
@@ -754,9 +839,10 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
 
   const sendApplicationEmail = async (_preview: { subject: string; bodyHtml: string }) => {
     void _preview;
+    if(existingTenancy&&!applicationSendEmail&&!applicationSendSms){setReviewError('Select Email or SMS before sending.');return;}
     setSendingEmail(true);
     try {
-      const result = await api.post(`/api/tenant-enquiries/${enquiryId}/send-application-email`, {send_email:true});
+      const result = await api.post(`/api/tenant-enquiries/${enquiryId}/send-application-email`, {send_email:existingTenancy?applicationSendEmail:true,send_sms:existingTenancy&&applicationSendSms});
       const failed=Object.values(result.delivery as Record<string,{success:boolean;error?:string}>).filter(r=>!r.success);
       if(failed.length)setReviewError(failed.map(r=>r.error).join('; '));
       fetchEmailHistory();
@@ -830,7 +916,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     desc: 'Confirm the holding deposit and track the tenant’s application.',
     getStatus: () => steps.slice(1,3).every(step=>step.getStatus()==='green') ? 'green' : enquiry.holding_deposit_requested ? 'amber' : 'red',
   };
-  const displayedStep = activeStep === 2 ? 1 : activeStep;
+  const displayedStep = existingTenancy&&[0,1,2].includes(activeStep)?2:activeStep === 2 ? 1 : activeStep;
   useEffect(()=>{
     if(displayedStep!==5)return;
     void fetchAgreementCompliance();
@@ -839,7 +925,12 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     return()=>{clearInterval(timer);window.removeEventListener('focus',refresh);};
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[displayedStep,enquiryId,trackingVersion,enquiry.credit_check_completed,jointApplication?.record.credit_check_completed]);
-  const navigationSteps = [{...steps[0],index:0},{...initialStage,index:1},...steps.slice(3).map((step,index)=>({...step,index:index+3,label:index===2?'Tenancy Agreement':step.label}))];
+  const cancelApplication=async()=>{
+    if(!await confirmAction('Cancel this new application? Its history will be retained, its application links will close, and the current tenancy will stay unchanged.','Cancel Application'))return;
+    setSaving(true);try{await api.post('/api/tenant-enquiries/'+enquiryId+'/cancel-new-application',{});await onUpdate();onClose();notify('Application cancelled. The current tenancy is unchanged.','success');}catch(error){notify(error instanceof Error?error.message:'Could not cancel the application','error');}finally{setSaving(false);}
+  };
+  const cancelControl=existingTenancy&&enquiry.status!=='converted'?<button type="button" disabled={saving} onClick={()=>void cancelApplication()} className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"><X size={17}/>{saving?'Please wait…':'Cancel Application'}</button>:null;
+  const navigationSteps = existingTenancy ? [2,3,...hasRequiredGuarantor?[9]:[],4,5,8].map(index=>({...steps[index],index,label:index===5?'Tenancy Agreement':steps[index].label})) : [{...steps[0],index:0},{...initialStage,index:1},...[3,...hasRequiredGuarantor?[9]:[],4,5,6,7,8].map(index=>({...steps[index],index,label:index===5?'Tenancy Agreement':steps[index].label}))];
   const depositRequestContent = <>
             {enquiry.holding_deposit_requested ? (
               <div className="space-y-3">
@@ -986,7 +1077,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       : latestApplicationEmail.status === 'delivered'
                         ? 'bg-emerald-500/10 border-emerald-500/20 text-[var(--onboarding-success)]'
                         : 'bg-blue-500/10 border-blue-500/20 text-blue-400'}`}>
-                      Latest email: <strong>{latestApplicationEmail.status === 'sent' ? 'accepted by provider' : latestApplicationEmail.status}</strong>
+                      Latest email: <strong>{latestApplicationEmail.status === 'sent' ? 'Accepted by provider' : latestApplicationEmail.status.charAt(0).toUpperCase() + latestApplicationEmail.status.slice(1)}</strong>
                       {latestApplicationEmail.error_message && <span> — {latestApplicationEmail.error_message}</span>}
                     </div>
                   )}
@@ -1023,7 +1114,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       </div>
                     </div>
                   ) : (
-                    <div className="text-sm text-[var(--text-muted)]">
+                    !existingTenancy&&<div className="text-sm text-[var(--text-muted)]">
                       <AlertTriangle size={14} className="inline mr-1 text-[var(--onboarding-warning)]" />
                       Application form link will be sent with the holding deposit email (Step 1)
                     </div>
@@ -1082,7 +1173,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           <div className="text-right">
             <p className="text-sm text-[var(--text-muted)]">Progress</p>
             <p className="text-sm font-bold text-[var(--onboarding-success)]">
-              {navigationSteps.filter(s => s.getStatus() === 'green' && !s.readyForApproval).length}/{navigationSteps.length}
+              {navigationSteps.filter(s => s.index!==8&&s.getStatus() === 'green' && !s.readyForApproval).length}/{navigationSteps.filter(s=>s.index!==8).length}
             </p>
           </div>
           <button onClick={onClose} aria-label="Close tenant onboarding" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0 grid place-items-center w-10 h-10 rounded-full border border-[var(--border-input)]"><X size={18} /></button>
@@ -1095,24 +1186,26 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           <nav aria-label="Onboarding sections" className="onboarding-section-nav hidden md:flex md:w-56 lg:w-60 shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3">
             {navigationSteps.map(step => {
               const idx = step.index;
-              const status = step.getStatus();
               const selected = displayedStep === idx;
+              const recordedStatus = step.getStatus();
+              const status = selected&&recordedStatus==='red'?'amber':recordedStatus;
               return <button key={step.label} type="button" style={{height:52,minHeight:52,width:'100%'}} aria-current={selected ? 'step' : undefined} onClick={()=>setActiveStep(idx)} className={`shrink-0 flex items-center gap-3 rounded-xl border px-3 py-1.5 text-left transition-colors ${status === 'green' ? `bg-emerald-500/10 ${selected ? 'border-emerald-500/60 shadow-sm' : 'border-emerald-500/20 hover:bg-emerald-500/15'}` : status === 'amber' ? `bg-amber-500/10 ${selected ? 'border-amber-500/60 shadow-sm' : 'border-amber-500/30 hover:bg-amber-500/15'}` : selected ? 'border-[var(--border-input)] bg-[var(--bg-card)] shadow-sm' : 'border-[var(--border-input)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)]'}`}>
                 <step.icon size={20} className={`shrink-0 ${status === 'green' ? 'text-[var(--onboarding-success)]' : status === 'amber' ? 'text-[var(--onboarding-warning)]' : selected ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`} />
                 <span className="min-w-0 flex-1"><span className={`block text-[13px] leading-snug ${selected ? 'font-semibold' : 'font-medium'}`}>{step.label}</span></span>
               </button>;
             })}
-            <dl className="mt-auto shrink-0 border-t border-[var(--border-input)] pt-3 px-3 text-xs space-y-2">
+            <div className="mt-auto shrink-0 pt-5 pb-3">{cancelControl}</div>
+            <dl className="shrink-0 border-t border-[var(--border-input)] pt-3 px-3 text-xs space-y-2">
               <div><dt className="text-[var(--text-muted)]">Last Viewed</dt><dd className="mt-0.5">{onboardingActivity.last_viewed_at ? new Date(onboardingActivity.last_viewed_at).toLocaleString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Not Recorded'}</dd></div>
               <div><dt className="text-[var(--text-muted)]">Last Progressed By</dt><dd className="mt-0.5 break-words">{onboardingActivity.last_progressed_by || 'Not Recorded'}</dd></div>
             </dl>
           </nav>
-          <div className="onboarding-section-select md:hidden border-b border-[var(--border-subtle)] p-4 shrink-0"><label className="block text-sm font-medium mb-2" htmlFor="onboarding-section">Onboarding Section</label><select id="onboarding-section" value={displayedStep} onChange={e=>setActiveStep(Number(e.target.value))} className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2">{navigationSteps.map((step,idx)=><option key={step.label} value={step.index}>{idx+1}. {step.label}</option>)}</select></div>
+          <div className="onboarding-section-select md:hidden border-b border-[var(--border-subtle)] p-4 shrink-0"><label className="block text-sm font-medium mb-2" htmlFor="onboarding-section">Onboarding Section</label><select id="onboarding-section" value={displayedStep} onChange={e=>setActiveStep(Number(e.target.value))} className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2">{navigationSteps.map((step,idx)=><option key={step.label} value={step.index}>{idx+1}. {step.label}</option>)}</select>{cancelControl&&<div className="mt-3">{cancelControl}</div>}</div>
           <div key={displayedStep} className="flex-1 min-w-0 min-h-0 overflow-hidden p-4 sm:p-5">
           {/* Step 1: Request Holding Deposit */}
-          <StepCard idx={0} step={steps[0]} activeStep={displayedStep} actions={!enquiry.holding_deposit_requested ? initialActions : <><Button variant="outline" className="gap-2" onClick={()=>previewHoldingEmail()}><Eye size={16}/>View Email</Button><Button variant="outline" className="gap-2" onClick={requestHoldingDeposit} disabled={saving || !enquiry.email_1 || !!enquiry.holding_deposit_received}><Send size={16}/>{saving?'Sending...':'Resend Email'}</Button></>}>
+          <StepCard idx={0} step={steps[0]} activeStep={displayedStep} actions={!enquiry.holding_deposit_requested ? initialActions : <><Button variant="outline" className="gap-2" onClick={()=>previewHoldingEmail()}><Eye size={16}/>View Email</Button><Button variant="outline" className="gap-2" onClick={latestHoldingEmail?.status==='failed'?retryFailedHoldingEmail:requestHoldingDeposit} disabled={saving || !enquiry.email_1 || (!!enquiry.holding_deposit_received && latestHoldingEmail?.status!=='failed')}><Send size={16}/>{saving?'Sending...':'Resend Email'}</Button></>}>
             {depositRequestContent}
-            {Boolean(enquiry.holding_deposit_requested)&&<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm rounded-xl bg-[var(--bg-subtle)] p-4"><p><span className="block text-[var(--text-secondary)]">Sent</span>{enquiry.onboarding_email_sent_at?new Date(enquiry.onboarding_email_sent_at).toLocaleString('en-GB'):'Not Recorded'}</p><p><span className="block text-[var(--text-secondary)]">Email Opened</span>{latestHoldingEmail?.opened_at?new Date(latestHoldingEmail.opened_at).toLocaleString('en-GB'):'No Open Recorded'}</p></div>}
+            {Boolean(enquiry.holding_deposit_requested)&&<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm rounded-xl bg-[var(--bg-subtle)] p-4"><p><span className="block text-[var(--text-secondary)]">Sent</span>{latestHoldingEmail&&['sent','delivered','delayed'].includes(latestHoldingEmail.status)?new Date(latestHoldingEmail.created_at).toLocaleString('en-GB'):'Not Recorded'}</p><p><span className="block text-[var(--text-secondary)]">Email Opened</span>{latestHoldingEmail?.opened_at?new Date(latestHoldingEmail.opened_at).toLocaleString('en-GB'):'No Open Recorded'}</p></div>}
           </StepCard>
           <StepCard idx={1} step={initialStage} activeStep={displayedStep} split>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:h-full min-h-0 items-start">
@@ -1125,48 +1218,63 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           {/* merged initial section 1 */}
 
           {/* Step 3: Application Form */}
-          {/* merged initial section 2 */}
+          {existingTenancy&&<StepCard idx={2} step={steps[2]} {...stepCardProps} actions={<><DeliveryChoices email={applicationSendEmail} sms={applicationSendSms} onEmail={setApplicationSendEmail} onSms={setApplicationSendSms} disabled={sendingEmail||saving||propertySelectionChanged} previewEmail={async()=>{try{setHoldingEmailPreview(await api.post('/api/tenant-enquiries/'+enquiryId+'/send-application-email/email-preview',{}));}catch(error){setReviewError(error instanceof Error?error.message:'Preview unavailable');}}} previewSms={async()=>{try{const preview=await api.post('/api/tenant-enquiries/'+enquiryId+'/send-application-email/email-preview',{});setSmsPreview(preview.sms);}catch(error){setReviewError(error instanceof Error?error.message:'Preview unavailable');}}}/><Button disabled={saving||propertySelectionChanged||sendingEmail||(!applicationSendEmail&&!applicationSendSms)} onClick={()=>void sendApplicationEmail({subject:'',bodyHtml:''})}><Send size={16}/>{sendingEmail?'Sending…':'Send New Application'}</Button>{reviewError&&<p role="alert" className="text-sm text-red-600">{reviewError}</p>}</>} >
+            <section aria-label="Application property" className="rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-4 space-y-3">
+              <h5 className="font-semibold">Property for This Application</h5>
+              {applicationPropertyLocked?<p className="text-sm">{formatPropertyAddress(prop.address,prop.postcode)}<br/><span className="text-[var(--text-muted)]">This property is fixed once the application is prepared or sent. Start a new application to choose another property.</span></p>:<><Select label="Search/Link Property" searchable value={applicationProperty} onChange={setApplicationProperty} options={[{value:'',label:'Search by address or postcode'},...properties.map(p=>({value:String(p.id),label:formatPropertyAddress(p.address,p.postcode)}))]}/><Button variant="gradient" disabled={saving||!applicationProperty||!propertySelectionChanged} onClick={()=>void(async()=>{setSaving(true);setReviewError('');try{await api.post('/api/tenant-enquiries/'+enquiryId+'/application-property',{property_id:Number(applicationProperty)});await onUpdate();}catch(e){setReviewError(e instanceof Error?e.message:'Property could not be linked');}finally{setSaving(false);}})()}>{saving?'Linking…':'Link Property'}</Button></>}
+              <p className="text-sm text-[var(--text-secondary)]">The tenant’s current tenancy and billing stay unchanged while this new application is completed.</p>
+            </section>
+            {enquiry.joint_partner_id?jointApplicationContent:applicationContent}
+          </StepCard>}
 
           {/* Each applicant owns their answers, documents and review decisions. */}
-          <StepCard idx={3} step={steps[3]} {...stepCardProps} split>
-            <div className={enquiry.joint_partner_id?'grid grid-cols-1 lg:grid-cols-2 gap-4 lg:h-full min-h-0':'h-full min-h-0'}>
+          <StepCard idx={3} step={steps[3]} {...stepCardProps}>
+            <div className={enquiry.joint_partner_id?'grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0':'min-h-0'}>
               <ApplicationReviewPanel key={enquiryId} enquiry={enquiry} documents={enquiryDocs} onView={viewDocument} onDownload={downloadDocument} onChange={async()=>{await Promise.all([onUpdate(),fetchDocs()]);setTrackingVersion(v=>v+1);}}/>
               {Boolean(enquiry.joint_partner_id)&&(jointApplication?<ApplicationReviewPanel key={jointApplication.id} enquiry={jointApplication.record} documents={jointApplication.documents} onView={viewDocument} onDownload={downloadDocument} onChange={async()=>{await onUpdate();setTrackingVersion(v=>v+1);}}/>:<p role="status">{jointApplicationError||'Loading joint applicant review…'}</p>)}
             </div>
+            {Boolean(enquiry.application_form_completed)&&!agreement&&<section aria-label="Guarantor requirement" className="mt-4 space-y-3">
+              {guarantorApplicantIds.map(id=>{const state=guarantorChecks[id];const applicant=id===enquiryId?enquiry:jointApplication?.record;const decided=typeof state?.required==='boolean';const locked=!!state&&state.status!=='draft'&&state.required===true;return <div key={id} className={'rounded-xl border p-4 space-y-3 '+(decided?'border-emerald-500/30 bg-emerald-500/10':'border-amber-500/30 bg-amber-500/10')}>
+                <div className="flex items-center justify-between gap-3"><h5 className="font-semibold">Is a Guarantor Required? <span className="text-red-600">*</span></h5><span role="status" className={'shrink-0 rounded-full px-2.5 py-1 text-sm font-medium '+(decided?'bg-emerald-500/15 text-[var(--onboarding-success)]':'bg-amber-500/15 text-[var(--onboarding-warning)]')}>{decided?'Completed':'Pending'}</span></div>
+                {guarantorApplicantIds.length>1&&<p className="font-medium">{[applicant?.first_name_1,applicant?.last_name_1].filter(Boolean).join(' ')}</p>}
+                <p className="text-sm text-[var(--text-secondary)]">{allPreviousComplete(9)?'Tenant application reviews are complete. Choose Yes or No to continue.':'Choose Yes or No now. Approve the tenant application before continuing to the next stage.'}</p>
+                <div className="flex flex-wrap items-center gap-3">{[true,false].map(value=><button key={String(value)} type="button" aria-pressed={state?.required===value} style={{fontWeight:state?.required===value?700:400}} disabled={guarantorDecisionSaving||!state||locked} onClick={()=>void chooseGuarantor(id,value)} className={'inline-flex items-center justify-center rounded-full border px-6 py-2.5 text-sm transition-all disabled:cursor-not-allowed '+(state?.required===value?'border-emerald-500/50 bg-emerald-500/20 font-bold text-[var(--onboarding-success)] ring-1 ring-emerald-500/30':'border-[var(--border-input)] font-normal hover:bg-[var(--bg-hover)]')}>{value?'Yes — Guarantor Required':'No — Guarantor Not Required'}</button>)}{decided&&<button type="button" disabled={guarantorDecisionSaving||locked} onClick={()=>void resetGuarantor(id)} className="inline-flex items-center justify-center rounded-full border border-red-500/40 bg-red-500/10 px-6 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-500/20 disabled:opacity-50">Reset</button>}</div>
+              </div>})}
+              {guarantorError&&<p role="alert" className="text-red-600">{guarantorError}</p>}
+            </section>}
           </StepCard>
 
           {/* Step 5: Run Credit Check */}
-          <StepCard idx={4} step={steps[4]} {...stepCardProps} split>
-            <div className={'grid grid-cols-1 gap-4 min-h-0 '+(enquiry.joint_partner_id?'lg:grid-cols-2':'')}>
+          <StepCard idx={9} step={steps[9]} {...stepCardProps}>
+            {allPreviousComplete(9)?<div className="min-w-0 space-y-5">
+
+              {guarantorChecks[enquiryId]?.required===true&&<GuarantorReview key={enquiryId} enquiryId={enquiryId} onChange={async()=>{await refreshGuarantors();await onUpdate();}} onContinue={()=>void refreshGuarantors()}/>}
+              {Boolean(enquiry.joint_partner_id)&&guarantorChecks[Number(enquiry.joint_partner_id)]?.required===true&&<GuarantorReview key={Number(enquiry.joint_partner_id)} enquiryId={Number(enquiry.joint_partner_id)} onChange={async()=>{await refreshGuarantors();await onUpdate();}} onContinue={()=>void refreshGuarantors()}/>}
+            </div>:<StagePrerequisite>Complete and approve each tenant application first.</StagePrerequisite>}
+            {guarantorError&&<p role="alert" className="text-sm text-red-600">{guarantorError}</p>}
+          </StepCard>
+          <StepCard idx={4} step={steps[4]} {...stepCardProps}>
+            {allPreviousComplete(4)?<div className={'grid grid-cols-1 gap-4 min-h-0 '+(hasRequiredGuarantor?'lg:grid-cols-2':'')}>
+              <section aria-label="Tenant credit checks" className="min-w-0 space-y-3"><h4 className="font-semibold text-base">{enquiry.joint_partner_id?'Tenants':'Tenant'}</h4>
               <CreditCheckPanel key={enquiryId} enquiry={{...enquiry,id:enquiryId}} documents={enquiryDocs} onView={viewDocument} onDownload={downloadDocument} onSaved={async()=>{await Promise.all([onUpdate(),fetchDocs()]);setTrackingVersion(v=>v+1);}}/>
               {Boolean(enquiry.joint_partner_id)&&(jointApplication?<CreditCheckPanel key={jointApplication.id} enquiry={{...jointApplication.record,id:jointApplication.id}} documents={jointApplication.documents} onView={viewDocument} onDownload={downloadDocument} onSaved={async()=>{await onUpdate();setTrackingVersion(v=>v+1);}}/>:<p role="status">{jointApplicationError||'Loading joint applicant credit check…'}</p>)}
-            </div>
+              </section>
+              {hasRequiredGuarantor&&<section aria-label="Guarantor credit checks" className="min-w-0 space-y-3"><h4 className="font-semibold text-base">{guarantorApplicantIds.filter(id=>guarantorChecks[id]?.required).length>1?'Guarantors':'Guarantor'}</h4>{guarantorApplicantIds.filter(id=>guarantorChecks[id]?.required).map(id=><GuarantorCreditPanel key={id} enquiryId={id} data={guarantorChecks[id]} onSaved={async()=>{await refreshGuarantors();await onUpdate();}}/>)}</section>}
+            </div>:<StagePrerequisite>Complete the application reviews and required guarantor signing before recording credit checks.</StagePrerequisite>}
           </StepCard>
 
           {/* Step 6: Tenancy Agreement */}
-          <StepCard idx={5} step={steps[5]} {...stepCardProps} actions={allPreviousComplete(5) && <>
-                {agreement && agreement.status !== 'completed' && <div className="flex flex-wrap gap-2">
-                  {agreementCompliance?.agreementType==='internal'&&<p className="text-sm font-semibold">Tenant Signing Invitation</p>}
-                  <DeliveryChoices email={agreementSendEmail} sms={agreementSendSms} onEmail={setAgreementSendEmail} onSms={setAgreementSendSms} previewEmail={()=>void previewAgreementEmail()} previewSms={()=>setSmsPreview(renderSmsPreview(agreementSmsMessage))}/>
-
-
-
-
-                  {!agreement.tenant_delivery_sent_at && !agreement.requires_landlord_signature && (agreement.tenant_delivery_email || agreement.tenant_delivery_sms) && (
-                    <Button variant="outline" size="sm" onClick={retryAgreementDelivery} disabled={saving}>Retry Agreement Delivery</Button>
-                  )}
-                </div>}
-                {agreement&&<Button variant="outline" size="sm" disabled={saving} onClick={() => {agreementDirty.current=false;void fetchAgreement();setEditingAgreement(value => !value);}}>{editingAgreement ? 'Cancel Editing' : 'Edit Agreement'}</Button>}
+          <StepCard idx={5} step={steps[5]} {...stepCardProps} actions={allPreviousComplete(5) && showAgreementForm && <>
 {showAgreementForm && <>                  {agreementCompliance?.agreementType==='client'&&<div className="space-y-2"><p className="text-sm font-semibold">Landlord Signing Invitation</p><DeliveryChoices email={landlordSendEmail} sms={landlordSendSms} onEmail={setLandlordSendEmail} onSms={setLandlordSendSms} previewEmail={async()=>{try{const p=await api.post(`/api/tenant-enquiries/${enquiryId}/landlord-agreement-preview`,{tenant_delivery:agreementSendEmail||agreementSendSms});setHoldingEmailPreview(p);}catch(e){setReviewError(String(e));}}} previewSms={async()=>{try{const p=await api.post(`/api/tenant-enquiries/${enquiryId}/landlord-agreement-preview`,{});setSmsPreview(p.sms);}catch(e){setReviewError(String(e));}}}/><p className="text-sm font-semibold pt-2">Tenant Signing Invitation</p></div>}
                   {agreementCompliance?.agreementType==='internal'&&<p className="text-sm font-semibold">Tenant Signing Invitation</p>}
                   <DeliveryChoices email={agreementSendEmail} sms={agreementSendSms} onEmail={setAgreementSendEmail} onSms={setAgreementSendSms} previewEmail={()=>void previewAgreementEmail()} previewSms={()=>setSmsPreview(renderSmsPreview(agreementSmsMessage))}/>
-                  <Button className="self-start" variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || complianceLoading || agreementCompliance?.ready !== true || !agreementDetailsComplete}>{saving ? 'Generating...' : editingAgreement ? 'Save Changes & Notify Everyone' : 'Generate & Issue Agreement'}</Button>
+                  <Button className="self-start" variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || complianceLoading || agreementCompliance?.ready !== true || !agreementDetailsComplete}>{saving ? 'Generating...' : editingAgreement ? 'Save Changes & Resend Agreement' : 'Generate & Issue Agreement'}</Button>
 </>}</>}>
             {allPreviousComplete(5) ? (
               <div className="space-y-3">
-                {agreement && <AgreementSigningProgress agreement={agreement} onView={download=>void openAgreementCopy(download)} onError={setReviewError} busy={saving} resendEnabled={agreementSendEmail||agreementSendSms} onResend={async(recipient,name)=>{
-                  if(!await confirmAction(`Resend the existing agreement to ${name} only using the selected channels? Their signing link and existing signatures will be preserved.`))return;
-                  setSaving(true);setReviewError('');try{const result=await api.post(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement/resend`,{agreement_id:agreement.id,recipient,send_email:agreementSendEmail,send_sms:agreementSendSms});const failed=Object.values(result.delivery as Record<string,{success:boolean;error?:string}>).filter(r=>!r.success);if(failed.length)setReviewError(failed.map(r=>r.error).join('; '));await fetchEmailHistory();}catch(e){setReviewError(e instanceof Error?e.message:'Could not resend');}finally{setSaving(false);}
+                {agreement && <AgreementSigningProgress onEdit={()=>setEditingAgreement(value=>!value)} editing={editingAgreement} agreement={agreement} onView={download=>void openAgreementCopy(download)} onError={setReviewError} busy={saving} resendEnabled={true} onResend={async(recipient,name)=>{
+                  if(!await confirmAction(`Resend the existing agreement to ${name} only? Their signing link and existing signatures will be preserved.`))return false;
+                  setSaving(true);setReviewError('');try{const result=await api.post(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement/resend`,{agreement_id:agreement.id,recipient,send_email:true,send_sms:Boolean(agreement.tenant_delivery_sms)});const failed=Object.values(result.delivery as Record<string,{success:boolean;error?:string}>).filter(r=>!r.success);if(failed.length)setReviewError(failed.map(r=>r.error).join('; '));await Promise.all([fetchEmailHistory(),fetchAgreement()]);return Object.keys(result.delivery).length>0&&failed.length===0;}catch(e){setReviewError(e instanceof Error?e.message:'Could not resend');return false;}finally{setSaving(false);}
                 }}/> }
                 {showAgreementForm && <>
                   <div className={`rounded-lg border p-3 ${agreementCompliance?.ready ? 'border-emerald-500/20 bg-emerald-500/10' : 'border-amber-500/20 bg-amber-500/10'}`}>
@@ -1175,7 +1283,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                       <p className="mt-1 text-sm text-[var(--onboarding-warning)]">Link a property before issuing the agreement.</p>
                     ) : (
                       <div className="mt-2 space-y-1">
-                        <AgreementComplianceDocuments enquiryId={enquiryId} propertyId={Number(enquiry.linked_property_id)} items={[...agreementCompliance.items,...(agreementCompliance.attachments||[]).filter(doc=>!agreementCompliance.items.some(item=>item.docType===doc.doc_type)).map(doc=>({docType:doc.doc_type,label:doc.doc_type,expiryDate:null,ready:true,reason:null,document:doc}))]} onView={(id,name)=>void viewDocument(id,name)} onDownload={(id,name)=>void downloadDocument(id,name)} onChange={async()=>{if(!await fetchAgreementCompliance())throw Error("Could not refresh compliance");}}/>
+                        <AgreementComplianceDocuments enquiryId={enquiryId} propertyId={Number(enquiry.linked_property_id)} items={agreementCompliance.items.filter(item=>['EPC','EICR','Gas Safety Certificate'].includes(item.docType))} onView={(id,name)=>void viewDocument(id,name)} onDownload={(id,name)=>void downloadDocument(id,name)} onChange={async()=>{if(!await fetchAgreementCompliance())throw Error("Could not refresh compliance");}}/>
                         {agreementCompliance.ready && <p className="pt-1 text-sm text-[var(--onboarding-success)]">These documents will be merged after the APT agreement and attached to the signing email.</p>}
                       </div>
                     )}
@@ -1205,7 +1313,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     {agreementCompliance?.agreementType==='internal'&&<div role="note" aria-label="APT payment account" className="rounded-lg border border-purple-500/15 bg-purple-500/5 px-3 py-2.5 text-sm leading-relaxed space-y-3"><p>For Fleming Lettings’ own properties, the initial rental payment, holding deposit and future rent are paid directly into Fleming Lettings’ business bank account, not the client money account.</p><AgreementPaymentAccountSummary account={agreementCompliance.initialPaymentAccount} ownPortfolio/></div>}
                     {!agreementServiceComplete&&<p className="text-sm text-[var(--onboarding-warning)]">Set the service type on the property before generating the agreement.</p>}
                   </section>
-                  <section aria-label="Agreement Particulars" className="agreement-particulars rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 space-y-3"><h5 className="text-base font-semibold">Agreement Particulars</h5>
+                  <section aria-label="Agreement Particulars" className="agreement-particulars rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 space-y-3"><div className="flex flex-wrap items-center justify-between gap-2"><h5 className="text-base font-semibold">Agreement Particulars</h5><button type="button" onClick={()=>setShowAgreementData(true)} className="rounded-md bg-[#6b2d7c] px-3 py-2 text-xs font-semibold text-white hover:opacity-90">View Data Changes on APT</button></div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
                     <DatePicker label="Tenancy Start *" value={agreementStartDate} onChange={v=>{agreementDirty.current=true;setAgreementStartDate(v);}} />
                     <div>
@@ -1229,65 +1337,66 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                 {reviewError && <p className="text-sm text-[var(--onboarding-danger)]">{reviewError}</p>}
               </div>
             ) : (
-              <div className="text-sm text-[var(--text-muted)] flex items-center gap-2"><AlertTriangle size={14} className="text-[var(--onboarding-warning)]" />Complete the credit check first</div>
+              <StagePrerequisite>Complete the credit check first.</StagePrerequisite>
             )}
           </StepCard>
 
           {/* Step 7: Final Balance */}
-          <StepCard idx={6} step={steps[6]} {...stepCardProps} actions={allPreviousComplete(6) && <>
-              {!enquiry.balance_payment_received && <DeliveryChoices email={balanceSendEmail} sms={balanceSendSms} onEmail={setBalanceSendEmail} onSms={setBalanceSendSms} previewEmail={()=>void previewBalanceEmail()} previewSms={()=>setSmsPreview(confirmingBalance?`Hi ${name}, we confirm receipt of your final tenancy balance of £${Number(enquiry.balance_due_amount||0).toFixed(2)} on ${balanceReceiptDate}. Thank you. Fleming Lettings.`:renderSmsPreview(balanceSmsMessage))}/>}
-              {!enquiry.balance_payment_requested ? <Button variant="gradient" size="sm" onClick={requestBalance} disabled={saving || !balanceFollowUpDate || (!balanceSendEmail&&!balanceSendSms)}>Request Final Balance</Button>
-                : !enquiry.balance_payment_received ? <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={()=>{setConfirmingBalance(false);void requestBalance();}} disabled={saving || !balanceFollowUpDate || (!balanceSendEmail&&!balanceSendSms)}>Resend Request</Button><Button variant="gradient" size="sm" onClick={()=>confirmingBalance?void confirmBalance():setConfirmingBalance(true)} disabled={saving||(confirmingBalance&&!balanceReceiptDate)}>{confirmingBalance?'Confirm Receipt & Send Selected Notifications':'Confirm Receipt of Funds'}</Button></div>
-                : <p className="text-sm text-[var(--onboarding-success)] flex items-center gap-2"><CheckCircle size={14} /> Final balance received{enquiry.balance_payment_received_at ? ` on ${new Date(enquiry.balance_payment_received_at).toLocaleDateString('en-GB')}` : ''}</p>}
-
-</>}>
-            {allPreviousComplete(6) ? <div className="space-y-3">
+          <StepCard idx={6} step={steps[6]} {...stepCardProps}>
+          {allPreviousComplete(6)?<div className="space-y-4">
+            <section aria-label="Final balance request" className={`rounded-xl border p-4 space-y-3 ${enquiry.balance_payment_requested?'border-emerald-500/30 bg-emerald-500/10':'border-[var(--border-input)] bg-[var(--bg-card)]'}`}>
+              <div className="flex items-center justify-between"><h5 className="font-semibold">Final Balance Request</h5>{Boolean(enquiry.balance_payment_requested)&&<span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--onboarding-success)]"><CheckCircle size={17}/>Sent</span>}</div>
+              <div className={enquiry.balance_payment_requested?'space-y-3':'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_260px] gap-4'}><div className="space-y-3">
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="rounded-lg bg-[var(--bg-subtle)] p-3"><span className="block text-sm text-[var(--text-muted)]">Security Deposit</span><strong>£{Number(enquiry.security_deposit_amount || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
-                <div className="rounded-lg bg-[var(--bg-subtle)] p-3"><span className="block text-sm text-[var(--text-muted)]">First month’s rent</span><strong>£{Number(enquiry.monthly_rent_agreed || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
-                <div className="rounded-lg bg-[var(--bg-subtle)] p-3"><span className="block text-sm text-[var(--text-muted)]">Holding deposit received</span><strong>−£{Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
-                <div className="rounded-lg bg-[#563F6E] p-3 text-white"><span className="block text-sm text-white/70">Remaining balance</span><strong>£{Number(enquiry.balance_due_amount || (Number(enquiry.security_deposit_amount || 0) + Number(enquiry.monthly_rent_agreed || 0) - Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0))).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
+                <div className="rounded-lg bg-[#563F6E] p-3 text-white"><span className="block text-sm text-white/90">Security Deposit</span><strong>£{Number(enquiry.security_deposit_amount || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
+                <div className="rounded-lg bg-[#563F6E] p-3 text-white"><span className="block text-sm text-white/90">First month’s rent</span><strong>£{Number(enquiry.monthly_rent_agreed || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
+                <div className="rounded-lg bg-[#187449] p-3 text-white"><span className="block text-sm text-white/90">Holding deposit received</span><strong>−£{Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
+                <div className="rounded-lg bg-[#b42332] p-3 text-white"><span className="block text-sm text-white/90">Remaining balance</span><strong>£{Number(enquiry.balance_due_amount || (Number(enquiry.security_deposit_amount || 0) + Number(enquiry.monthly_rent_agreed || 0) - Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0))).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></div>
               </div>
-              {Boolean(enquiry.balance_payment_requested)&&<FinalBalanceTransactions enquiryId={enquiryId} enquiry={enquiry} onChanged={onUpdate}/>}
-              {confirmingBalance&&!enquiry.balance_payment_received&&<DatePicker label="Receipt Date *" value={balanceReceiptDate} onChange={setBalanceReceiptDate}/>}
-              {!confirmingBalance&&!enquiry.balance_payment_requested&&!enquiry.balance_payment_received && <DatePicker label="Follow-up Date *" value={balanceFollowUpDate} onChange={setBalanceFollowUpDate} />}
-              {Boolean(enquiry.balance_payment_requested) && !enquiry.balance_payment_received && enquiry.balance_follow_up_date && <p className="text-sm text-[var(--onboarding-warning)]">Request sent. Waiting for funds. Follow-up scheduled for {new Date(`${enquiry.balance_follow_up_date.slice(0,10)}T00:00:00`).toLocaleDateString('en-GB')}.</p>}
-              {reviewError && <p className="text-sm text-[var(--onboarding-danger)]">{reviewError}</p>}
-            </div> : <p className="text-sm text-[var(--text-muted)]">Complete the signed agreement first.</p>}
+              {!enquiry.balance_payment_requested&&<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start"><label className="block text-xs font-medium text-[var(--text-secondary)]"><span className="block mb-1.5">Internal Notes</span><textarea maxLength={10000} value={balanceNotes} onChange={event=>setBalanceNotes(event.target.value)} onBlur={()=>void saveBalanceDraft()} rows={1} className="block h-12 resize-none w-full rounded-xl border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-3 text-sm font-normal text-[var(--text-primary)]" placeholder="Notes for checking or chasing payment"/></label><DatePicker className="[&>div]:h-12 [&_input]:h-full [&_input]:!py-0" label="Follow-up Date *" value={balanceFollowUpDate} onChange={value=>{setBalanceFollowUpDate(value);void saveBalanceDraft(value);}}/></div>}
+              </div>{!enquiry.balance_payment_requested&&<aside className="onboarding-actions rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 space-y-3 self-start [&>button]:w-full [&>button]:h-10 [&>button]:whitespace-nowrap"><h5 className="font-semibold">Actions &amp; Previews</h5><DeliveryChoices email={balanceSendEmail} sms={balanceSendSms} onEmail={setBalanceSendEmail} onSms={setBalanceSendSms} previewEmail={()=>void previewBalanceEmail()} previewSms={()=>setSmsPreview((confirmingBalance||bankReceipt)?`Hi ${name}, we confirm £${Number(receiptAmount||0).toFixed(2)} received towards your final tenancy balance on ${receiptDate}. Thank you. Fleming Lettings.`:renderSmsPreview(balanceSmsMessage))}/><Button variant="gradient" size="sm" onClick={requestBalance} disabled={saving||!balanceFollowUpDate||(!balanceSendEmail&&!balanceSendSms)}>Send Final Balance Request</Button></aside>}</div>
+            </section>
+            {Boolean(enquiry.balance_payment_requested)&&<section aria-label="Record final balance payment" className={`rounded-xl border p-4 space-y-3 ${enquiry.balance_payment_received?'border-emerald-500/30 bg-emerald-500/10':'border-amber-500/40 bg-amber-500/10'}`}>
+              <div className="flex items-center justify-between"><h5 className="font-semibold text-base">Record Payment</h5><span className={enquiry.balance_payment_received?'text-emerald-700':'text-amber-700'}>{enquiry.balance_payment_received?'Received':'Awaiting payment'}</span></div>
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_260px] gap-4"><div className="space-y-3"><FinalBalanceTransactions enquiryId={enquiryId} enquiry={enquiry} onChanged={onUpdate}/>{!enquiry.balance_payment_received&&<section aria-label="Manual payment receipt" className="rounded-xl border border-[var(--border-input)] bg-[var(--bg-card)] p-4 space-y-3"><h5 className="font-semibold">Manual Receipt</h5><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><DatePicker className="[&>div]:h-12 [&_input]:h-full [&_input]:!py-0" label="Payment Date *" value={balanceReceiptDate} onChange={value=>{setBalanceReceiptDate(value);setConfirmingBalance(true);}}/><label className="block text-xs font-medium text-[var(--text-secondary)]"><span className="block mb-1.5">Amount Received (£) *</span><input aria-label="Amount Received (£) *" type="text" inputMode="decimal" value={balanceReceiptAmount.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} onChange={event=>{const amount=event.target.value.replace(/,/g, "");if(!/^\d*(?:\.\d{0,2})?$/.test(amount))return;setBalanceReceiptAmount(amount);setConfirmingBalance(true);}} placeholder="0.00" className="block h-12 w-full rounded-xl border border-[var(--border-input)] bg-[var(--bg-input)] px-3 text-sm font-normal text-[var(--text-primary)]"/></label></div><p className="text-xs text-[var(--text-muted)]">Enter the total received so far, including any linked bank payments. Partial payments keep this stage pending.</p></section>}</div>
+              {!enquiry.balance_payment_received&&<aside className="onboarding-actions rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 space-y-3 self-start [&>button]:w-full [&>button]:h-10 [&>button]:whitespace-nowrap"><h5 className="font-semibold">Actions &amp; Previews</h5><DeliveryChoices email={balanceSendEmail} sms={balanceSendSms} onEmail={setBalanceSendEmail} onSms={setBalanceSendSms} previewEmail={()=>void previewBalanceEmail()} previewSms={()=>setSmsPreview((confirmingBalance||bankReceipt)?`Hi ${name}, we confirm £${Number(receiptAmount||0).toFixed(2)} received towards your final tenancy balance on ${receiptDate}. Thank you. Fleming Lettings.`:renderSmsPreview(balanceSmsMessage))}/><Button variant="outline" size="sm" onClick={()=>{setConfirmingBalance(false);void requestBalance();}} disabled={saving||!balanceFollowUpDate||(!balanceSendEmail&&!balanceSendSms)}>Resend Request</Button><Button variant="gradient" size="sm" onClick={()=>void confirmBalance()} disabled={saving||!receiptDate||!Number.isFinite(Number(receiptAmount))||Number(receiptAmount)<=0||Number(receiptAmount)>Number(enquiry.balance_due_amount||0)}>Confirm Receipt of Funds</Button></aside>}</div>
+            </section>}
+            {reviewError&&<p role="alert" className="text-sm text-[var(--onboarding-danger)]">{reviewError}</p>}
+          </div>:<StagePrerequisite>Complete the signed agreement first.</StagePrerequisite>}
           </StepCard>
 
           {/* Step 8: Handover */}
           <StepCard idx={7} step={steps[7]} {...stepCardProps} actions={allPreviousComplete(7) && <>
-              <DeliveryChoices email={handoverSendEmail} sms={handoverSendSms} onEmail={setHandoverSendEmail} onSms={setHandoverSendSms} previewEmail={()=>void previewHandoverEmail()} previewSms={()=>setSmsPreview(renderSmsPreview(handoverSmsMessage))}/>
+              <p className="text-xs font-medium text-[var(--text-secondary)]">Tenant notification</p><DeliveryChoices email={handoverSendEmail} sms={handoverSendSms} onEmail={setHandoverSendEmail} onSms={setHandoverSendSms} previewEmail={()=>void previewHandoverEmail()} previewSms={()=>void previewHandoverEmail(false,true)}/>{handoverWithLandlord&&<section aria-label="Landlord notification" className="space-y-2 border-t border-[var(--border-input)] pt-3"><p className="text-xs font-medium text-[var(--text-secondary)]">Landlord notification</p><DeliveryChoices email={handoverLandlordEmail} sms={handoverLandlordSms} onEmail={setHandoverLandlordEmail} onSms={setHandoverLandlordSms} previewEmail={()=>void previewHandoverEmail(true)} previewSms={()=>void previewHandoverEmail(true,true)}/></section>}
 
-              <div className="flex flex-col sm:flex-row gap-3">              <div className="flex-1 [&_button]:w-full [&_button]:h-full">
+              <div className="onboarding-action-buttons flex flex-col gap-2">              <div className="[&_button]:w-full">
                 {enquiry.handover_not_required ? <p className="text-sm text-emerald-500">No handover required — confirmed by office.</p> : <Button size="sm" variant="outline" disabled={saving} onClick={async()=>{
                   if(!await confirmAction('Confirm no handover is required? Any existing handover calendar task will be completed.'))return;
-                  setSaving(true);try{await api.post(`/api/tenant-enquiries/${enquiryId}/no-handover`,{confirmed:true});await onUpdate();setActiveStep(8);}catch(error){setReviewError(error instanceof Error?error.message:'Could not save');}finally{setSaving(false);}
+                  setSaving(true);try{await api.post(`/api/tenant-enquiries/${enquiryId}/no-handover`,{confirmed:true});await completeOnboarding();}catch(error){setReviewError(error instanceof Error?error.message:'Could not save');}finally{setSaving(false);}
                 }}>No Handover Required</Button>}
               </div>
-<Button className="flex-1" variant="gradient" size="sm" onClick={scheduleHandover} disabled={saving || !handoverDate || !handoverTime || !handoverAssignedTo || !handoverLocationAddress}>{enquiry.handover_date ? 'Update Handover' : 'Book Appointment & Add to Calendar'}</Button></div>
+<Button variant="gradient" size="sm" onClick={scheduleHandover} disabled={saving || !handoverDate || !handoverTime || !handoverAssignedTo || !handoverLocationAddress}>{enquiry.handover_date ? 'Update Handover' : handoverWithLandlord?'Confirm Landlord Handover':'Book Handover'}</Button></div>
               {reviewError && <p className="text-sm text-[var(--onboarding-danger)]">{reviewError}</p>}
 
 </>}>
             {allPreviousComplete(7) ? <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <DatePicker className="[&>div]:h-12 [&_input]:h-full [&_input]:!py-0" label="Handover Date *" value={handoverDate} onChange={setHandoverDate} />
-                <TimePicker className="[&>button]:h-12" label="Handover Time *" value={handoverTime} onChange={setHandoverTime} />
+                <TimePicker className="[&>button]:h-12 [&>button]:!font-normal [&>button_*]:!font-normal" label="Handover Time *" value={handoverTime} onChange={setHandoverTime} />
               </div>
-              <Select label="Assign Handover To" searchable value={handoverWithLandlord ? '__landlord__' : handoverAssignedTo} onChange={value=>{const landlord=value==='__landlord__';setHandoverWithLandlord(landlord);setHandoverAssignedTo(landlord?(agreementCompliance?.landlordName||'With Landlord'):value);}} options={[{value:'',label:agreementCompliance?.agreementType==='client'?'Choose team member or landlord':'Choose team member'},...(agreementCompliance?.agreementType==='client'?[{value:'__landlord__',label:'With Landlord — '+(agreementCompliance.landlordName||'Landlord')}]:[]),...users.filter(user=>user.name).map(user=>({value:user.name,label:user.name}))]}/>
-              <Select label="Handover Location *" searchable value={handoverLocationType} onChange={setHandoverLocationType} options={[{value:'property',label:'Property Address — '+propertyAddress},{value:'office',label:'Main Office — Creative Industries Centre'},...handoverOffices.filter(office=>office.office_address?.trim()).map(office=>({value:'office:'+office.id,label:office.name+' — '+office.office_address})),{value:'other',label:'Other'}]}/>
+              <Select compact className="[&>button]:!font-normal [&>button_*]:!font-normal" label="Assign Handover To" searchable value={handoverWithLandlord ? '__landlord__' : handoverAssignedTo} onChange={value=>{const landlord=value==='__landlord__';setHandoverWithLandlord(landlord);setHandoverAssignedTo(landlord?(agreementCompliance?.landlordName||'With Landlord'):value);}} options={[{value:'',label:agreementCompliance?.agreementType==='client'?'Choose team member or landlord':'Choose team member'},...(agreementCompliance?.agreementType==='client'?[{value:'__landlord__',label:'With Landlord — '+(agreementCompliance.landlordName||'Landlord')}]:[]),...users.filter(user=>user.name).map(user=>({value:user.name,label:user.name}))]}/>
+              <Select compact className="[&>button]:!font-normal [&>button_*]:!font-normal" label="Handover Location *" searchable value={handoverLocationType} onChange={setHandoverLocationType} options={[{value:'property',label:'Property Address — '+propertyAddress},{value:'office',label:'Main Office — Creative Industries Centre'},...handoverOffices.filter(office=>office.office_address?.trim()).map(office=>({value:'office:'+office.id,label:office.name+' — '+office.office_address})),{value:'other',label:'Other'}]}/>
               {handoverLocationType==='other'?<Input label="Alternative Address *" value={handoverOtherAddress} onChange={setHandoverOtherAddress}/>:<p className="text-sm text-[var(--text-muted)]">{handoverLocationAddress}</p>}
-            </div> : <p className="text-sm text-[var(--text-muted)]">Confirm the final balance first.</p>}
+            </div> : <StagePrerequisite>Confirm the final balance first.</StagePrerequisite>}
           </StepCard>
 
           {/* Step 9: Convert to Tenant */}
           <StepCard idx={8} step={steps[8]} {...stepCardProps}>
-            {allPreviousComplete(8) ? <div className="space-y-3">
-              <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20"><p className="text-sm font-medium text-[var(--onboarding-success)]">All onboarding stages complete</p><p className="text-sm text-[var(--text-muted)] mt-1">{name} is ready to be converted to a tenant.</p></div>
-              <Button variant="gradient" onClick={convertToTenant} disabled={saving}>{saving ? 'Converting...' : 'Convert to Tenant'}</Button>
-              {reviewError && <p role="alert" className="text-sm text-[var(--onboarding-danger)]">{reviewError}</p>}
-            </div> : <p className="text-sm text-[var(--text-muted)]">Complete all previous stages before converting.</p>}
+            <div className="space-y-3">
+              {onboardingComplete ? <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20"><p className="flex items-center gap-2 text-base font-medium text-[var(--onboarding-success)]"><CheckCircle size={20}/>Onboarding Completed</p><p className="text-sm text-[var(--text-secondary)] mt-2">{existingTenancy?`${name}'s new tenancy is linked to the existing tenant record. The previous tenancy is retained in history.`:jointApplication ? 'Both applicant records now exist in the Tenant module.' : `${name}'s record now exists in the Tenant module.`}</p><p className="text-sm text-[var(--text-muted)] mt-1">{existingTenancy?'The tenancy and billing change on the agreed start date. This completed application closes then, so a new application can be started. Previous documents and payments remain in history.':'The agreed tenancy start date is retained. Future tenancies appear as scheduled until their start date.'}</p></div> : <p className="text-sm text-[var(--text-muted)]">{existingTenancy?(allPreviousComplete(8)?'The new tenancy is ready for completion.':'Complete the application, checks and agreement to finish onboarding.') : allPreviousComplete(8)?'Handover is saved. Tenant records still need to be created.':'Complete the handover stage to finish onboarding automatically.'}</p>}
+              {!onboardingComplete&&allPreviousComplete(8)&&<Button variant="outline" disabled={saving} onClick={async()=>{setSaving(true);setReviewError('');try{await completeOnboarding();}catch(error){setReviewError(error instanceof Error?error.message:'Tenant records could not be created. Please retry.');}finally{setSaving(false);}}}>Retry completing onboarding</Button>}
+              {reviewError&&<p role="alert" className="text-sm text-[var(--onboarding-danger)]">{reviewError}</p>}
+            </div>
           </StepCard>
 
           </div>
@@ -1344,6 +1453,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         previewOnly
       />
 
+      {showAgreementData&&<AgreementDataPreview context={{agreementType:agreementCompliance?.agreementType,serviceType:agreementCompliance?.serviceType,holdingDeposit:enquiry.holding_deposit_received_amount||enquiry.holding_deposit_amount||0,bankDetails:agreementCompliance?.initialPaymentAccount}} values={{tenancyStartDate:agreementStartDate,rent:agreementRent,deposit:agreementDeposit,permittedOccupiers:agreementOccupiers,sharedFacilities:agreementFacilities,parking:agreementParking,paymentReference}} previous={agreementCompliance?.defaults||{}} onClose={()=>setShowAgreementData(false)}/>}
       {documentPreview && (
         <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-[70] p-4" onClick={closeDocumentPreview}>
           <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-4xl h-[86vh] overflow-hidden flex flex-col" onClick={event => event.stopPropagation()}>

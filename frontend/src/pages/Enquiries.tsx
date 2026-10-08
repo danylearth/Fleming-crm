@@ -1,3 +1,7 @@
+import {useMemo as usePortfolioMemo} from 'react';
+import {usePortfolioScope} from '../context/PortfolioScope';
+import {enquiryStageLabel,onboardingCardStage,type OnboardingCardRecord} from '../utils/enquiryStage';
+import ApplicantPipelineCard from '../components/ApplicantPipelineCard';
 import {useOnboardingStarted} from '../hooks/useOnboardingStarted';
 import {ToolbarButton} from '../components/ui';
 import { OFFICE_ADDRESS } from '../utils/meetingLocations';
@@ -11,7 +15,7 @@ import CsvImport from '../components/ui/CsvImport';
 import { BookingIcon, AwaitingIcon, OnboardingIcon } from '../components/ui/icons/FlemingIcons';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
-import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
+import { usePortfolio } from '../context/PortfolioContext';
 import { SearchDropdown } from '../components/ui/SearchDropdown';
 import OnboardingWizard from '../components/ui/OnboardingWizard';
 import { calculateSmsSegments } from '../utils/sms';
@@ -21,7 +25,10 @@ import { viewingEmailPreview, viewingSmsPreview } from '../utils/viewingMessages
 import { formatPropertyAddress, formatCardAddress } from '../utils/propertyAddress';
 import { useNotifications } from '../context/NotificationContext';
 
-interface EnquiryRaw {
+interface EnquiryRaw extends OnboardingCardRecord {
+  status: string;
+  existing_tenancy_application?: unknown;
+  source_tenant_id?: unknown;
   id: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
@@ -38,6 +45,10 @@ interface Property {
 
 interface Enquiry {
   id: number;
+  stage: string;
+  onboardingStep?: string;
+  last_agent?:string;
+  workflow_since?:string;
   name: string;
   initials: string;
   email: string;
@@ -56,9 +67,13 @@ interface Enquiry {
   agreement_ready_for_review?: boolean;
 }
 
-function mapEnquiry(raw: EnquiryRaw): Enquiry {
+function mapEnquiry(raw: EnquiryRaw, partner?: EnquiryRaw): Enquiry {
   return {
     id: raw.id,
+    stage: raw.status === 'onboarding' ? 'Onboarding' : enquiryStageLabel(raw.onboarding_stage||statusLabel(raw.status),raw),
+    onboardingStep: onboardingCardStage(raw,partner),
+    last_agent:raw.last_agent,
+    workflow_since:raw.workflow_since,
     name: [raw.first_name_1, raw.last_name_1].filter(Boolean).join(' ') || 'Unknown',
     initials: [raw.first_name_1, raw.last_name_1].map(value=>String(value||'').trim().charAt(0)).join('').toUpperCase(),
     email: raw.email_1 || '',
@@ -275,13 +290,16 @@ function EmploymentFields({ form, setField, suffix, editing }: {
 
 // ─── Main Page ───
 export default function Enquiries() {
+  const {scope} = usePortfolioScope();
   const api = useApi();
   const { confirmAction } = useNotifications();
   const { canDelete, isManager } = usePermissions();
   const navigate = useNavigate();
   const [rawEnquiries, setRawEnquiries] = useState<EnquiryRaw[]>([]);
-  const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [allPortfolioEnquiries, setEnquiries] = useState<Enquiry[]>([]);
+  const enquiries = usePortfolioMemo(() => allPortfolioEnquiries.filter(row => scope.enquiry(row.id)), [allPortfolioEnquiries,scope]);
+  const [allPortfolioProperties, setProperties] = useState<Property[]>([]);
+  const properties = usePortfolioMemo(() => allPortfolioProperties.filter(row => scope.property(row.id)), [allPortfolioProperties,scope]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('active');
@@ -322,6 +340,8 @@ export default function Enquiries() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
+  useEffect(()=>{setPropertyFilter(null);setSelectedIds([]);setWorkflowEnquiry(null);setOnboardingEnquiryId(null);},[portfolioFilter]);
+
   const load = async () => {
     try {
       const [data, props, usersList] = await Promise.all([
@@ -332,7 +352,7 @@ export default function Enquiries() {
       setAllUsers(Array.isArray(usersList) ? usersList : []);
       const raw = Array.isArray(data) ? data : data.enquiries || [];
       setRawEnquiries(raw);
-      setEnquiries(raw.map(mapEnquiry));
+      setEnquiries(raw.map((enquiry: EnquiryRaw) => mapEnquiry(enquiry, raw.find((partner: EnquiryRaw) => partner.id === enquiry.joint_partner_id))));
       setProperties(Array.isArray(props) ? props : []);
     } catch { /* fetch failed, reset state */ setEnquiries([]); setRawEnquiries([]); }
     setLoading(false);
@@ -340,7 +360,7 @@ export default function Enquiries() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [api]);
 
-  const portfolioFiltered = filterByPortfolio(enquiries, portfolioFilter);
+  const portfolioFiltered = enquiries;
   const filtered = portfolioFiltered.filter(e => {
     const matchSearch = !search || [e.name, e.email, e.phone]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
@@ -748,51 +768,15 @@ export default function Enquiries() {
                               {(provided, snapshot) => (
                                 <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
                                   style={provided.draggableProps.style}>
-                                  <GlassCard className={`px-4 pt-4 pb-2 ${editMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} hover:border-[var(--accent-orange)]/30 transition-colors ${selectedIds.includes(e.id) ? 'ring-2 ring-[var(--accent-orange)]/50' : ''} ${snapshot.isDragging ? 'ring-2 ring-[var(--accent-orange)]/40 shadow-lg' : ''}`}
+                                  <GlassCard className={`applicant-pipeline-card ${editMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} hover:border-[var(--accent-orange)]/30 transition-colors ${selectedIds.includes(e.id) ? 'ring-2 ring-[var(--accent-orange)]/50' : ''} ${snapshot.isDragging ? 'ring-2 ring-[var(--accent-orange)]/40 shadow-lg' : ''}`}
                                     onClick={() => {
                                       if (snapshot.isDragging) return;
                                       if (editMode) toggleSelectEnquiry(e.id);
                                       else navigate(`/enquiries/${e.id}`);
                                     }}>
-                                    <div className="flex items-start gap-2">
-                                      {editMode && e.status !== 'converted' && (
-                                        <input type="checkbox" checked={selectedIds.includes(e.id)} onChange={() => toggleSelectEnquiry(e.id)} onClick={ev => ev.stopPropagation()} className="w-4 h-4 mt-1 rounded accent-orange-500" />
-                                      )}
-                                      <Avatar name={e.name} initials={e.initials} size="sm" className="-ml-1 leading-none [&>span]:translate-y-px" />
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          <p className="text-sm font-bold truncate flex-1">{e.name}</p>
-                                          {e.is_joint_application && <span className="rounded-full border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:text-purple-300 shrink-0">Joint App</span>}
-                                        </div>
-                                        {e.application_ready_for_review && <span className="block mt-0.5 text-[10px] font-semibold text-amber-400">Application ready for review</span>}
-                                      </div>
-                                    </div>
-                                    <div className="mt-2 space-y-0.5">
-                                      {e.email && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Mail size={10} className="shrink-0"/><span className="truncate">{e.email}</span></p>}
-                                      {e.phone && <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Phone size={10} className="shrink-0"/>{e.phone}</p>}
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <div className="min-w-0 flex-1">
-                                      {e.cardAddress && <p title={e.address} className="text-xs text-[var(--text-muted)] flex items-start gap-1"><Home size={10} className="mt-0.5 shrink-0"/><span>{e.cardAddress}</span></p>}
-                                      <div className="flex flex-col gap-1 mt-1 pt-1 border-t border-[var(--border-subtle)]">
-                                      {e.follow_up_date && (
-                                        <span className={`text-xs flex items-center gap-1 ${isOverdue(e.follow_up_date) ? 'text-orange-400 font-medium' : 'text-[var(--text-secondary)]'}`}>
-                                          <Calendar size={12} className="shrink-0" />{formatDate(e.follow_up_date)}
-                                        </span>
-                                      )}
-                                      {e.linked_property_id && propertyMap[e.linked_property_id] && (
-                                        <span className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
-                                          <Building2 size={12} className="shrink-0"/><span title={formatPropertyAddress(propertyMap[e.linked_property_id].address,propertyMap[e.linked_property_id].postcode)}>{formatCardAddress(propertyMap[e.linked_property_id].address,propertyMap[e.linked_property_id].postcode)}</span>
-                                        </span>
-                                      )}
-                                      {e.agreement_ready_for_review&&<button className="text-left text-xs font-semibold text-emerald-600 underline" onClick={event=>{event.stopPropagation();navigate(`/enquiries/${e.id}?onboarding=1`);}}>Agreement completed — Final Balance</button>}
-                                      </div>
-                                      </div>
-                                      <button onClick={(ev) => openWorkflow(e, ev)} disabled={editMode}
-                                        className="ml-auto -translate-y-2 shrink-0 whitespace-nowrap text-xs min-h-10 min-w-24 px-4 py-2 rounded-lg bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-[var(--text-primary)] hover:from-orange-500/30 hover:to-pink-500/30 transition-colors font-semibold">
-                                        {e.onboarding_started ? 'Continue' : 'Progress / Reject'}
-                                      </button>
-                                    </div>
+                                    {editMode&&e.status!=='converted'&&<input aria-label="Select applicant record" type="checkbox" checked={selectedIds.includes(e.id)} onChange={()=>toggleSelectEnquiry(e.id)} onClick={ev=>ev.stopPropagation()} className="applicant-card-select"/>}
+                                    <ApplicantPipelineCard name={e.name} address={e.linked_property_id&&propertyMap[e.linked_property_id]?formatPropertyAddress(propertyMap[e.linked_property_id].address,propertyMap[e.linked_property_id].postcode,propertyMap[e.linked_property_id].city):''} stage={e.stage} onboardingStep={e.onboardingStep} followUp={e.follow_up_date} lastAgent={e.last_agent} workflowSince={e.workflow_since}/>
+                                    {!editMode&&!['converted','rejected','closed'].includes(e.status)&&<div className="applicant-card-actions"><button type="button" onClick={ev=>openWorkflow(e,ev)} >Progress <ArrowRight size={14} aria-hidden="true"/></button></div>}
                                   </GlassCard>
                                 </div>
                               )}
@@ -851,7 +835,7 @@ export default function Enquiries() {
                       <div className="flex items-center gap-2">
                         <p className="font-bold truncate">{e.name}</p>
                         {e.is_joint_application && <span className="rounded-full border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:text-purple-300 shrink-0">Joint App</span>}
-                        {e.agreement_ready_for_review&&<button className="block mt-2 text-xs font-semibold text-emerald-600 underline" onClick={event=>{event.stopPropagation();navigate(`/enquiries/${e.id}?onboarding=1`);}}>Agreement completed — Final Balance</button>}{e.application_ready_for_review && <span className="text-[10px] font-semibold text-amber-400 shrink-0">Review application</span>}
+                        {e.agreement_ready_for_review&&<button className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-px text-[11px] leading-4 font-normal text-emerald-700" onClick={event=>{event.stopPropagation();navigate(`/enquiries/${e.id}?onboarding=1`);}}>APT completed</button>}{e.application_ready_for_review && <span className="text-[10px] font-semibold text-amber-400 shrink-0">Review application</span>}
                       </div>
                       <p className="text-xs text-[var(--text-muted)] truncate md:hidden">{e.email || e.phone}</p>
                     </div>
@@ -955,8 +939,8 @@ export default function Enquiries() {
       {workflowEnquiry && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm"
           onClick={() => setWorkflowEnquiry(null)}>
-          <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-2"
-            onClick={e => e.stopPropagation()}>
+          <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-md space-y-2 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain"
+            role="dialog" aria-modal="true" aria-label="Enquiry workflow" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <Avatar name={workflowEnquiry.name} size="md" />
@@ -1035,8 +1019,7 @@ export default function Enquiries() {
                           setSmsBody(generateViewingSms(firstName, wfPropId, v, wfTime));
                         }} />
                         <div>
-                          <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Viewing Time</label>
-                          <TimePicker value={wfTime} onChange={value => { setWfTime(value); setSmsBody(generateViewingSms(firstName, wfPropId, wfDate, value)); }} />
+                          <TimePicker label="Viewing Time" value={wfTime} onChange={value => { setWfTime(value); setSmsBody(generateViewingSms(firstName, wfPropId, wfDate, value)); }} />
                         </div>
                       </div>
                       <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Key collection instructions" />

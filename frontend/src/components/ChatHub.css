@@ -7,3 +7,108 @@
 .chat-avatar{overflow:hidden}.chat-avatar img{width:100%;height:100%;object-fit:cover}.chat-directory .chat-avatar{width:36px;height:36px;border-radius:50%}
 
 .chat-hub-menu{height:auto;max-height:calc(100dvh - 115px)}.chat-hub-menu .chat-header{flex-shrink:0}.chat-hub-menu .chat-menu{min-height:0;overflow-y:auto}
+
+.chat-header,.chat-toolbar,.chat-compose,.chat-menu-back{flex-shrink:0}
+.chat-toolbar{flex-wrap:nowrap;padding:9px 12px;gap:7px}
+.chat-toolbar .chat-back{margin-right:auto}
+.chat-toolbar button{white-space:nowrap;padding:8px 10px;min-height:36px}
+.chat-toolbar select{min-width:0;max-width:125px;flex:0 1 125px;min-height:36px}
+.chat-messages{min-height:0}
+.chat-message-group{display:flex;flex-direction:column;gap:8px;flex-shrink:0}
+.chat-message-meta{display:flex!important;align-items:center;justify-content:flex-end;gap:5px;margin-top:5px}
+.chat-message-meta>span{display:inline-flex}
+.chat-read{color:#2196c7}
+.chat-day{align-self:center;font-size:11px;padding:4px 12px;border-radius:7px;background:#ffffffdf;color:#5b6965;box-shadow:0 1px 2px #0001;margin:3px 0 8px}
+.chat-hub-whatsapp{width:min(540px,calc(100vw - 108px));border-radius:17px}
+.chat-hub-whatsapp .chat-header{background:#eff5f1;padding:13px 16px}
+.chat-hub-whatsapp .chat-header h2{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-hub-whatsapp .chat-brand-whatsapp{color:#168b60;display:grid;place-items:center;border-radius:50%;background:#dcf0e5;width:42px;height:42px;flex-shrink:0}
+.chat-hub-whatsapp .chat-avatar{border-radius:50%;color:#167653;background:#e4f1e9}
+.chat-hub-whatsapp .chat-messages{background:#efeae2 url('/chat-doodles.svg') repeat;padding:18px 20px;gap:9px}
+.chat-hub-whatsapp .chat-message{background:#fff;border:0;border-radius:0 9px 9px 9px;box-shadow:0 1px 1px #0002;padding:8px 11px;max-width:86%;color:#182721}
+.chat-hub-whatsapp .chat-message.chat-own{background:#d9fdd3;border-radius:9px 0 9px 9px}
+.chat-hub-whatsapp .chat-message p{font-size:14px;line-height:1.55;margin:2px 0}
+.chat-hub-whatsapp .chat-message small{color:#66776f;font-size:10px}
+.chat-hub-whatsapp .chat-message .chat-sender{color:#227551;font-weight:600;margin-bottom:4px}
+.chat-hub-whatsapp .chat-compose{background:#f5f7f5;padding:11px 14px;border:0}
+.chat-hub-whatsapp .chat-compose textarea{background:white;border:1px solid #e2e8e4;border-radius:22px;padding:11px 15px}
+.chat-hub-whatsapp .chat-send{background:#168b60;flex-shrink:0;width:40px;height:40px}
+.chat-hub-whatsapp .chat-badge{background:#168b60}
+.chat-message .chat-file{text-decoration:none;border-radius:7px;padding:10px;background:#00000007;text-align:left;max-width:100%;overflow-wrap:anywhere}
+.chat-file>span{min-width:0}.chat-file svg{flex-shrink:0}
+.chat-attachment-hint{font-size:12px;margin:0 0 8px;color:var(--text-secondary)}
+.chat-attachments span{overflow-wrap:anywhere;min-width:0;max-width:100%}
+.chat-link{max-height:220px;overflow:auto;flex-shrink:0}
+[data-theme='dark'] .chat-hub-whatsapp .chat-header,[data-theme='dark'] .chat-hub-whatsapp .chat-compose{background:#202c33}
+[data-theme='dark'] .chat-hub-whatsapp .chat-messages{background-color:#0b141a}
+[data-theme='dark'] .chat-hub-whatsapp .chat-message{background:#202c33;color:#e9edef}
+[data-theme='dark'] .chat-hub-whatsapp .chat-message.chat-own{background:#005c4b}
+[data-theme='dark'] .chat-hub-whatsapp .chat-message small{color:#bdc9c6}
+[data-theme='dark'] .chat-hub-whatsapp .chat-message .chat-sender{color:#86d5b7}
+[data-theme='dark'] .chat-hub-whatsapp .chat-compose textarea{background:#2a3942;border-color:#35444c}
+[data-theme='dark'] .chat-day{background:#26353d;color:#ccd5d9}
+@media(max-width:600px){
+ .chat-hub:not(.chat-hub-menu){right:10px;left:10px;width:auto;bottom:82px;height:min(680px,calc(100dvh - 96px));z-index:65}
+ .chat-toolbar{gap:5px;padding:8px 10px}.chat-toolbar button{padding:8px;min-width:36px}.chat-toolbar select{max-width:115px;flex-basis:115px}
+ .chat-action-label{display:none}.chat-hub-whatsapp .chat-messages{padding:12px}.chat-hub-whatsapp .chat-header{padding:11px;gap:9px}
+ .chat-compose{padding:10px}.chat-header>button{flex-shrink:0}.chat-hub-whatsapp .chat-message{max-width:90%}
+}
+
+.chat-section-icon.chat-section-unread{background:#dc2626;color:#fff;border-color:#fecaca;box-shadow:0 0 0 3px #dc26261a,0 6px 18px #0002}.chat-section-icon.chat-section-unread .chat-count{background:#b91c1c;color:#fff;border-color:#fff}
+
+/* All inboxes share the compact panel and show one pane at a time. */
+.chat-desktop{width:min(510px,calc(100vw - 108px));height:min(680px,calc(100dvh - 115px));border-radius:20px}
+.chat-workspace{display:flex;flex:1;min-height:0;overflow:hidden}.chat-workspace>.chat-list{width:340px;flex:0 0 340px;border-right:1px solid var(--border-subtle);background:var(--bg-card)}
+.chat-inbox-heading{padding:20px 22px 12px}.chat-inbox-heading h3{font-size:24px;font-weight:500}.chat-search-wrap{display:flex;gap:10px;align-items:center;margin:0 16px 12px;background:var(--bg-input);border-radius:24px;padding:11px 15px;color:var(--text-secondary)}.chat-search-wrap input{background:transparent;outline:none;min-width:0;width:100%;font-size:14px}.chat-filters{display:flex;gap:7px;padding:0 16px 12px}.chat-filters button{border:1px solid var(--border-input);padding:6px 12px;border-radius:20px;font-size:13px}.chat-filters button[aria-pressed=true]{background:#e2f8d8;border-color:#bdd9b0;color:#315939}
+.chat-conversation{border:0;margin:3px 10px;width:calc(100% - 20px);border-radius:12px;padding:15px 12px}.chat-conversation-selected{background:var(--bg-input)}.chat-avatar{border-radius:50%;width:46px;height:46px}.chat-row-meta{display:flex;align-items:flex-end;flex-direction:column;gap:6px}.chat-row-meta time{font-size:11px;color:var(--text-secondary)}.chat-row-meta .chat-badge{font-size:11px;font-weight:500;min-width:20px;text-align:center}
+.chat-thread{display:flex;flex:1;min-width:0;min-height:0;flex-direction:column}.chat-thread-empty{align-items:center;justify-content:center;gap:12px;background:#efeae2 url('/chat-doodles.svg') repeat;color:#50625a}.chat-thread-empty h3{font-size:24px;font-weight:500}.chat-hub-whatsapp .chat-compose>div:last-of-type{background:var(--bg-card);border-radius:28px;padding:5px 7px 5px 12px}.chat-hub-whatsapp .chat-compose textarea{border:0;background:transparent}.chat-emoji-picker{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px;padding:8px;border-radius:15px;background:var(--bg-card)}.chat-emoji-picker button{font-size:23px;padding:4px}.chat-toolbar button:hover,.chat-list-actions button:hover,.chat-filters button:hover{background:var(--bg-hover)}
+.chat-hub,.chat-hub button,.chat-hub input,.chat-hub textarea,.chat-hub select{font-family:var(--user-font,'Lufga'),sans-serif}
+.chat-menu strong{font-weight:700}
+.chat-desktop .chat-header{background:var(--bg-card);padding:18px}
+.chat-desktop .chat-workspace>.chat-list{flex:1;width:100%;border:0}
+.chat-desktop.chat-selected .chat-workspace>.chat-list{display:none}
+.chat-desktop .chat-thread-empty{display:none}
+.chat-inbox-heading{padding:14px 18px 10px}.chat-inbox-heading h3{font-size:20px;font-weight:600}
+.chat-conversation{padding:11px 10px}.chat-list-actions{padding:10px 16px}
+@media(max-width:760px){.chat-workspace>.chat-list{flex:1;width:100%;border:0}.chat-selected .chat-workspace>.chat-list{display:none}.chat-thread-empty{display:none}.chat-desktop{width:calc(100vw - 24px);right:12px}.chat-list-actions{gap:5px}.chat-list-actions button{padding:7px 9px}}
+.chat-message .chat-file:has(.chat-photo){display:flex;flex-direction:column;align-items:flex-start;padding:3px}.chat-photo{max-width:320px;max-height:320px;width:100%;object-fit:contain;border-radius:7px}
+
+/* Supplied Fleming artwork, tiled at its intended display size. */
+.chat-hub[data-channel='team']{--chat-wallpaper:url('/chat-backgrounds/team.png');--chat-paper:#eeebf1}
+.chat-hub[data-channel='live']{--chat-wallpaper:url('/chat-backgrounds/live.png');--chat-paper:#eceaf2}
+.chat-hub[data-channel='whatsapp']{--chat-wallpaper:url('/chat-backgrounds/whatsapp.png');--chat-paper:#f6edf1}
+.chat-desktop .chat-messages{background-color:var(--chat-paper);background-image:var(--chat-wallpaper);background-size:320px 320px;background-repeat:repeat}
+.chat-desktop .chat-conversation,.chat-desktop .chat-search-wrap,.chat-desktop .chat-filters button,.chat-desktop .chat-list-actions button{background:var(--bg-card)}
+.chat-desktop .chat-conversation:hover,.chat-desktop .chat-conversation-selected{background:var(--bg-hover)}
+.chat-desktop .chat-filters button[aria-pressed=true]{background:#e2f8d8}
+.chat-desktop .chat-empty{color:#50625a}
+
+/* Keep inboxes plain and honour the selected account font throughout messages. */
+.chat-desktop .chat-list{background:var(--bg-card)}
+.chat-hub :where(p,small,strong,span,time,h2,h3,label){font-family:inherit}
+.chat-filters{flex-wrap:wrap}
+.chat-conversation-markers{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.chat-status,.chat-owner{display:inline-flex;align-items:center;font-size:11px;border-radius:6px;padding:3px 7px;background:var(--bg-input);color:var(--text-secondary)}
+.chat-status-open{background:#e5f3e9;color:#276441}.chat-status-closed{background:var(--bg-input);color:var(--text-secondary)}
+.chat-owner{max-width:100%;overflow-wrap:anywhere}
+.chat-assignment{padding:10px 16px;border-bottom:1px solid var(--border-subtle);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg-card)}
+.chat-assignment-control{position:relative;flex:1;min-width:180px}
+.chat-assignment-control label{display:block;font-size:11px;color:var(--text-secondary);margin-bottom:4px}
+.chat-assignment-control select{appearance:none;width:100%;padding:9px 34px 9px 12px;border:1px solid var(--border-input);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font:inherit}
+.chat-assignment-control>svg{position:absolute;right:11px;bottom:12px;pointer-events:none}
+.chat-assignment>button{font-size:12px;padding:9px 12px;border:1px solid var(--border-input);border-radius:10px;align-self:flex-end}
+.chat-window-notice{padding:13px 16px;background:var(--bg-input);border-top:1px solid var(--border-subtle);font-size:13px;line-height:1.6}
+.chat-window-notice strong{display:block;color:var(--text-primary)}
+.chat-team-directory{margin:12px 0 18px}
+.chat-team-department{border:1px solid var(--border-input);border-radius:14px;margin-bottom:10px;overflow:hidden}
+.chat-team-department h4,.chat-department-toggle{margin:0;padding:13px 14px;font-size:14px;font-weight:600}
+.chat-team-department h4 small,.chat-department-toggle small{display:block;font-size:12px;font-weight:400;color:var(--text-secondary);margin-top:3px}
+.chat-department-toggle{display:flex;width:100%;align-items:center;justify-content:space-between;text-align:left;background:var(--bg-subtle);color:inherit}
+.chat-department-toggle svg{transition:transform .15s}.chat-department-toggle svg.is-open{transform:rotate(180deg)}
+.chat-team-directory .chat-directory{padding:0 6px 6px;margin:0}
+.chat-team-directory .chat-directory>button{width:100%;display:flex;align-items:center;gap:12px;padding:10px;border:0;border-radius:10px;background:transparent;text-align:left}
+.chat-team-directory .chat-directory>button:hover{background:var(--bg-hover)}
+.chat-team-directory .chat-directory strong{font-size:14px;font-weight:500}
+.chat-team-directory .chat-directory small{display:block;font-size:12px;color:var(--text-secondary)}
+.chat-team-directory .chat-avatar{flex-shrink:0;width:38px;height:38px}
+.chat-directory-empty{padding:10px 14px;font-size:13px;color:var(--text-secondary)}

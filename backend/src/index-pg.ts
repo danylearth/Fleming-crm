@@ -1,3 +1,19 @@
+import {flyClientIp} from './client-ip';
+import {agreementConsentSnapshot} from './agreement-consent';
+import {appendSigningCertificate} from './signing-certificate';
+import {holdingDepositBank} from './holding-deposit-bank';
+import {recordFormMarketingChoices,marketingChoicesList} from './form-marketing-choices';
+import {findDuplicateProperty} from './property-duplicates';
+import {retryHoldingDepositEmail} from './holding-deposit-email-retry';
+import {syncLandlordBankApprovalTask} from './landlord-bank-approval-task';
+import {registerGuarantorApplication} from './guarantor-application';
+import {assertGuarantorsReady,assertIssuedAgreementMatchesGuarantees} from './guarantor-gates';
+import {scheduleExistingTenancy,registerTenancyChangeovers,updateTenancyBillingForEdit} from './tenancy-changeover';
+import {registerApplicationProperty} from './application-property';
+import {syncHandoverCalendar} from './handover-calendar';
+import {recordManualFinalBalance} from './final-balance-progress';
+import {saveBalanceFollowUp} from './balance-follow-up';
+import {agreementDeliveryStatus} from './agreement-delivery-status';
 import {checkLoginPassword} from './login-security';
 import {registerTrustedPhone,maskPhone} from './settings-phone-verification';
 import {knownLoginDevice,beginLoginVerification,registerLoginVerification,loginResult} from './login-phone-verification';
@@ -13,7 +29,7 @@ import {registerNotifications} from './notifications';
 import {registerChat} from './chat';
 import {awaitingApplicationResubmission,createApplicationReviewRequest} from './application-review-request';
 import {includeMissingDocumentRequests,missingApplicationApprovals} from './application-missing-documents';
-import {enquiryGroup,refreshHoldingDeposit,refreshDepositApplicationReady} from './holding-deposit-progress';
+import {enquiryGroup,refreshHoldingDeposit,refreshDepositApplicationReady,completeHoldingDepositFollowUps} from './holding-deposit-progress';
 import { registerEnquiryPropertyGate } from './enquiry-property-gate';
 import {propertyEarnings,clientEarningsOverview} from './property-earnings';
 import {completedLandlordAgreementEmail} from './email';
@@ -162,6 +178,7 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 // express-rate-limit v8 either throws per-request or buckets all clients
 // on the proxy IP.
 app.set('trust proxy', 1);
+app.use(flyClientIp);
 
 // Ensure uploads directory exists — UPLOADS_PATH points at the persistent
 // volume in production; the local fallback is ephemeral
@@ -282,7 +299,7 @@ async function sendCompletedAgreementEmails(agreement: any, signedPdf: Buffer): 
       COALESCE(jp.first_name_1, te.first_name_2) AS joint_first_name,
       COALESCE(jp.email_1, te.email_2) AS joint_email,
       l.name AS landlord_name, l.email AS landlord_email,
-      p.address, p.postcode, p.service_type
+      p.address, p.postcode, p.city, p.service_type
     FROM tenant_enquiries te
     LEFT JOIN tenant_enquiries jp ON jp.id = te.joint_partner_id
     LEFT JOIN properties p ON p.id = $2
@@ -296,7 +313,7 @@ async function sendCompletedAgreementEmails(agreement: any, signedPdf: Buffer): 
     ...(agreement.requires_landlord_signature ? (agreementLandlords(agreement.agreement_details).length?agreementLandlords(agreement.agreement_details).map(owner=>({name:owner.name,email:owner.email,isLandlord:true})):[{ name: parseAgreementDetails(agreement.agreement_details).landlordSignerName || contact.landlord_name, email: parseAgreementDetails(agreement.agreement_details).clientLandlord?.landlordEmail || contact.landlord_email, isLandlord:true }]) : []),
   ];
   const sentTo = new Set<string>();
-  const propertyAddress = normalizePropertyAddress(contact.address, contact.postcode);
+  const propertyAddress = normalizePropertyAddress(contact.address, contact.postcode, contact.city);
   for (const recipient of recipients) {
     const email = String(recipient.email || '').trim();
     if (!email || sentTo.has(email.toLowerCase())) continue;
@@ -332,47 +349,23 @@ async function finaliseTenancyAgreement(agreementId: number): Promise<void> {
     || (agreement.requires_landlord_signature && !agreement.landlord_signature)) return;
   const sourcePath = path.join(uploadsDir, agreement.filename);
   const pdf = await PDFDocument.load(fs.readFileSync(sourcePath));
-  let page = pdf.addPage([595.28, 841.89]);
   pdf.registerFontkit(fontkit);
-  const font = await pdf.embedFont(fs.readFileSync(pdfFontPath()), { subset: false });
-  const bold = await pdf.embedFont(fs.readFileSync(pdfFontPath(true)), { subset: false });
-  const agreementAssets = path.join(__dirname, 'agreement-assets');
-  const headerAsset = path.join(agreementAssets, 'letterhead-header.png');
-  const footerAsset = path.join(agreementAssets, 'letterhead-footer.png');
-  if (fs.existsSync(headerAsset)) {
-    const header = await pdf.embedPng(fs.readFileSync(headerAsset));
-    page.drawImage(header, { x: 0, y: 739.5, width: 595.28, height: 102.4 });
-  }
-  if (fs.existsSync(footerAsset)) {
-    const footer = await pdf.embedPng(fs.readFileSync(footerAsset));
-    page.drawImage(footer, { x: 0, y: 0, width: 595.28, height: 77 });
-  }
-  page.drawText('Electronic Signature Certificate', { x: 52, y: 700, size: 20, font: bold, color: rgb(0.15, 0.03, 0.23) });
-  page.drawText('Signatures apply to the tenancy agreement and its addendum.', { x: 52, y: 675, size: 11, font, color: rgb(0.35, 0.35, 0.35) });
-  let y = 625;
-  const drawSignature = async (role: string, name: string, signedAt: string, signature: string, ip: string | null) => {
-    if(y<240){page=pdf.addPage([595.28,841.89]);y=745;page.drawText('Electronic Signature Certificate — continued',{x:52,y:790,size:15,font:bold});}
-    const label = `${role}: ${name}`;
-    const nameSize = Math.min(13, 490 / Math.max(1, bold.widthOfTextAtSize(label, 1)));
-    page.drawText(label, { x: 52, y, size: nameSize, font: bold, color: rgb(0.15, 0.03, 0.23) });
-    page.drawText(`Signed: ${new Date(signedAt).toLocaleString('en-GB', { timeZone: 'Europe/London' })}`, { x: 52, y: y - 22, size: 10, font });
-    page.drawText(`IP address: ${ip || 'Not recorded'}`, {x:52,y:y-40,size:10,font});
-    const image = await pdf.embedPng(signatureDataBytes(signature));
-    const scaled = image.scaleToFit(220, 70);
-    page.drawImage(image, { x: 52, y: y - 125, width: scaled.width, height: scaled.height });
-    y -= 180;
-  };
-  await drawSignature('Tenant', agreement.tenant_signature_name, agreement.tenant_signed_at, agreement.tenant_signature, agreement.tenant_signature_ip);
-  if (agreement.requires_joint_tenant_signature) {
-    await drawSignature('Joint tenant', agreement.joint_tenant_signature_name, agreement.joint_tenant_signed_at, agreement.joint_tenant_signature, agreement.joint_tenant_signature_ip);
-  }
+  const font=await pdf.embedFont(fs.readFileSync(pdfFontPath()),{subset:false});
   const signedDetails=parseAgreementDetails(agreement.agreement_details);
-  if(agreement.requires_landlord_signature){if(owners.length){for(const owner of owners)await drawSignature('Landlord',owner.signature_name||owner.name,owner.signed_at!,owner.signature!,owner.signature_ip||null);}else await drawSignature('Landlord', signedDetails.landlordSignatory || agreement.landlord_signature_name, agreement.landlord_signed_at, agreement.landlord_signature, agreement.landlord_signature_ip);}
-  page.drawText(`Agreement reference: FL-TA-${agreement.id}`, { x: 52, y: 80, size: 9, font, color: rgb(0.45, 0.45, 0.45) });
+  const signingContact=(await client.query(`SELECT te.email_1,COALESCE(jp.email_1,te.email_2) AS joint_email,l.email AS landlord_email FROM tenant_enquiries te LEFT JOIN tenant_enquiries jp ON jp.id=te.joint_partner_id LEFT JOIN properties p ON p.id=$2 LEFT JOIN landlords l ON l.id=p.landlord_id WHERE te.id=$1`,[agreement.enquiry_id,agreement.property_id])).rows[0]||{};
+  const certificateSigners:any[]=[];
+  const certificateSigner=(role:string,name:string,at:string,image:string,ip:string,key:string)=>certificateSigners.push({name:role+': '+name,email:role==='Landlord'?(owners.find(o=>String(o.id)===key)?.email||signedDetails.clientLandlord?.landlordEmail||signingContact.landlord_email):key==='tenant'?signingContact.email_1:signingContact.joint_email,signed_at:at,signature:signatureDataBytes(image),signing_ip:ip,opened_at:signedDetails.signerOpenedAt?.[key]||(role==='Landlord'&&owners.length>1?undefined:agreement[(role==='Landlord'?'landlord':key)+'_opened_at']),consent_snapshot:signedDetails.signingConsents?.[key]||null});
+  certificateSigner('Tenant',agreement.tenant_signature_name,agreement.tenant_signed_at,agreement.tenant_signature,agreement.tenant_signature_ip,'tenant');
+  if(agreement.requires_joint_tenant_signature)certificateSigner('Joint tenant',agreement.joint_tenant_signature_name,agreement.joint_tenant_signed_at,agreement.joint_tenant_signature,agreement.joint_tenant_signature_ip,'joint_tenant');
+  if(agreement.requires_landlord_signature){
+   if(owners.length)for(const owner of owners)certificateSigner('Landlord',owner.signature_name||owner.name,owner.signed_at!,owner.signature!,owner.signature_ip||'',String(owner.id));
+   else certificateSigner('Landlord',agreement.landlord_signature_name,agreement.landlord_signed_at,agreement.landlord_signature,agreement.landlord_signature_ip,'landlord');
+  }
   const tenantSigners=[{name:agreement.tenant_signature_name,date:agreement.tenant_signed_at,image:signatureDataBytes(agreement.tenant_signature)},...(agreement.requires_joint_tenant_signature?[{name:agreement.joint_tenant_signature_name,date:agreement.joint_tenant_signed_at,image:signatureDataBytes(agreement.joint_tenant_signature)}]:[])];
   const companySigner=(signedDetails.companySettings||defaultCompanySettings()).signer;
   const landlordSigner=agreement.requires_landlord_signature?{name:agreement.landlord_signature_name,date:agreement.landlord_signed_at,image:signatureDataBytes(agreement.landlord_signature)}:{name:companySigner.name,date:agreement.issued_at,image:signatureDataBytes(companySigner.signature)};
   await stampAgreementSignatures(pdf,sourcePath,font,tenantSigners,landlordSigner);
+  await appendSigningCertificate(pdf,certificateSigners,crypto.createHash('sha256').update(fs.readFileSync(sourcePath)).digest('hex'),false);
   const bytes = await pdf.save();
   signedFilename = `signed-tenancy-agreement-${agreement.id}-${Date.now()}.pdf`;
   fs.writeFileSync(path.join(uploadsDir, signedFilename), bytes);
@@ -626,6 +619,7 @@ registerFreeAgentRoutes(app);
 registerBankReconciliation(app);
 registerFinancialDocuments(app);
 registerDocumentSigning(app);
+registerGuarantorApplication(app,uploadsDir);
 
 // app.use(express.static(path.join(__dirname, '../../frontend/dist')));
 
@@ -1398,10 +1392,11 @@ app.post('/api/landlords-bdm/:id/convert', authMiddleware, requirePermission('st
       if(!locked || locked.status==='onboarded'){await client.query('ROLLBACK');return res.status(409).json({error:'This enquiry has already been converted'});}
       if(!locked.name?.trim()){await client.query('ROLLBACK');return res.status(400).json({error:'Add the landlord name before converting'});}
       Object.assign(prospect,locked);
+      const marketing=await recordFormMarketingChoices(client,prospect.email,prospect.phone,prospect.intake_data||{});
       const conversionNotes = [prospect.notes, prospect.intake_data && Object.keys(prospect.intake_data).length ? 'Landlord form details: '+JSON.stringify(prospect.intake_data) : null].filter(Boolean).join('\n\n');
       const insertResult = await client.query(
-        'INSERT INTO landlords (name, email, phone, address, notes, landlord_type, referral_source,entity_type,company_number) VALUES ($1, $2, $3, $4, $5, $6, $7,$8,$9) RETURNING id',
-        [prospect.name, prospect.email, prospect.phone, prospect.address, conversionNotes, landlord_type || 'external', prospect.source,prospect.entity_type||'individual',prospect.company_number||null]
+        'INSERT INTO landlords (name, email, phone, address, notes, landlord_type, referral_source,entity_type,company_number,marketing_email,marketing_sms,marketing_phone,marketing_post) VALUES ($1, $2, $3, $4, $5, $6, $7,$8,$9,$10,$11,$12,$13) RETURNING id',
+        [prospect.name, prospect.email, prospect.phone, prospect.address, conversionNotes, landlord_type || 'external', prospect.source,prospect.entity_type||'individual',prospect.company_number||null,+marketing.email,+marketing.sms,+marketing.phone,+marketing.post]
       );
       landlordId = insertResult.rows[0].id;
       await client.query("UPDATE landlords_bdm SET status = 'onboarded', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [req.params.id as string]);
@@ -1452,7 +1447,20 @@ app.get('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) =
       SELECT te.*, (SELECT v.viewing_time FROM property_viewings v WHERE v.enquiry_id IN (te.id,te.joint_partner_id) ORDER BY v.viewing_date DESC,v.id DESC LIMIT 1) AS viewing_time, p.address as property_address,
         (SELECT COALESCE(u.name,a.user_email) FROM audit_log a LEFT JOIN users u ON u.id=a.user_id WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id AND a.user_id IS NOT NULL AND a.action NOT IN ('view','page_view','navigate') ORDER BY a.created_at DESC LIMIT 1) AS previous_agent,
         (SELECT ta.status FROM tenancy_agreements ta WHERE ta.enquiry_id IN (te.id,te.joint_partner_id) AND ta.status<>'void' ORDER BY ta.id DESC LIMIT 1) AS tenancy_agreement_status,
-        COALESCE((SELECT ta.status='completed' FROM tenancy_agreements ta WHERE ta.enquiry_id IN (te.id,te.joint_partner_id) AND ta.status<>'void' ORDER BY ta.id DESC LIMIT 1),false) AS tenancy_agreement_completed
+        COALESCE((SELECT ta.status='completed' FROM tenancy_agreements ta WHERE ta.enquiry_id IN (te.id,te.joint_partner_id) AND ta.status<>'void' ORDER BY ta.id DESC LIMIT 1),false) AS tenancy_agreement_completed,
+        (SELECT u.name FROM audit_log a JOIN users u ON u.id=a.user_id WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id ORDER BY a.created_at DESC,a.id DESC LIMIT 1) AS last_agent,
+        COALESCE((SELECT MAX(a.created_at) FROM audit_log a WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id AND a.action='status_changed' AND a.changes::jsonb->>'to'=te.status),CASE WHEN te.status='onboarding' THEN (SELECT MIN(a.created_at) FROM audit_log a WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id AND a.action='holding_deposit_requested') WHEN te.status='new' THEN te.created_at END) AS workflow_since,
+        CASE WHEN te.status<>'onboarding' THEN NULL
+        WHEN COALESCE(to_jsonb(te)->>'holding_deposit_requested','0') NOT IN ('1','true') AND COALESCE(to_jsonb(te)->>'existing_tenancy_application','0') NOT IN ('1','true') THEN 'Request Holding Deposit'
+        WHEN COALESCE(to_jsonb(te)->>'holding_deposit_received','0') NOT IN ('1','true') AND COALESCE(to_jsonb(te)->>'existing_tenancy_application','0') NOT IN ('1','true') THEN 'Deposit Received & Application'
+        WHEN EXISTS(SELECT 1 FROM tenant_enquiries a WHERE a.id IN(te.id,te.joint_partner_id) AND COALESCE(to_jsonb(a)->>'application_form_completed','0') NOT IN ('1','true')) THEN 'Application Form'
+        WHEN EXISTS(SELECT 1 FROM tenant_enquiries a WHERE a.id IN(te.id,te.joint_partner_id) AND (COALESCE(a.application_review_status,'pending')<>'approved' OR a.guarantor_required IS NULL)) THEN 'Application Review'
+        WHEN EXISTS(SELECT 1 FROM tenant_enquiries a LEFT JOIN guarantor_verifications g ON g.enquiry_id=a.id WHERE a.id IN(te.id,te.joint_partner_id) AND a.guarantor_required=TRUE AND COALESCE(g.status,'draft')<>'verified') THEN 'Guarantor Review'
+        WHEN EXISTS(SELECT 1 FROM tenant_enquiries a WHERE a.id IN(te.id,te.joint_partner_id) AND COALESCE(to_jsonb(a)->>'credit_check_completed','0') NOT IN ('1','true')) THEN 'Run Credit Check'
+        WHEN NOT EXISTS(SELECT 1 FROM tenancy_agreements ta WHERE ta.enquiry_id IN(te.id,te.joint_partner_id) AND ta.status='completed') THEN 'Tenancy Agreement'
+        WHEN COALESCE(to_jsonb(te)->>'balance_payment_received','0') NOT IN ('1','true') AND COALESCE(to_jsonb(te)->>'existing_tenancy_application','0') NOT IN ('1','true') THEN 'Final Balance'
+        WHEN te.handover_date IS NULL AND COALESCE(to_jsonb(te)->>'handover_not_required','0') NOT IN ('1','true') AND COALESCE(to_jsonb(te)->>'existing_tenancy_application','0') NOT IN ('1','true') THEN 'Schedule Handover'
+        ELSE 'Onboarding Completed' END AS onboarding_stage
       FROM tenant_enquiries te
       LEFT JOIN properties p ON p.id = te.linked_property_id
       ORDER BY te.created_at DESC
@@ -1654,7 +1662,9 @@ app.post('/api/public/landlord-enquiries', publicSubmitLimiter, async (req, res)
 
     const uploadToken=crypto.randomBytes(32).toString('hex');
     // Insert into landlords_bdm table
-    const result = await query(`
+    const consentClient=await pool.connect();let result:any[];try{await consentClient.query('BEGIN');
+    const choices=await recordFormMarketingChoices(consentClient,email,phone,{marketing_preferences});
+    result = (await consentClient.query(`
       INSERT INTO landlords_bdm (
         name, email, phone, address, status, source, notes, created_at,intake_data,upload_token_hash,upload_expires_at,entity_type,company_number
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(),$8,$9,NOW()+INTERVAL '24 hours',$10,$11)
@@ -1666,8 +1676,8 @@ app.post('/api/public/landlord-enquiries', publicSubmitLimiter, async (req, res)
       (registration_type==='Limited Company'?[company_address,req.body.companyCity,req.body.companyPostcode]:[address,req.body.address_line_2,req.body.city,postcode]).filter(Boolean).join(', '),
       'new',
       'Website Enquiry Form',
-      notes,JSON.stringify(req.body),crypto.createHash('sha256').update(uploadToken).digest('hex'),registration_type==='Limited Company'?'company':'individual',company_number||null
-    ]);
+      notes,JSON.stringify({...req.body,marketing_preferences:marketingChoicesList(choices),marketing_email:choices.email,marketing_sms:choices.sms,marketing_phone:choices.phone,marketing_post:choices.post}),crypto.createHash('sha256').update(uploadToken).digest('hex'),registration_type==='Limited Company'?'company':'individual',company_number||null
+    ])).rows;await consentClient.query('COMMIT');}catch(error){await consentClient.query('ROLLBACK');throw error;}finally{consentClient.release();}
 
     console.log(`[LANDLORD ENQUIRY] New submission from ${firstName} ${surname} (${email})`);
 
@@ -1919,6 +1929,9 @@ app.post('/api/public/tenant-enquiries', publicSubmitLimiter, async (req, res) =
       await client.query('UPDATE tenant_enquiries SET joint_partner_id = $1 WHERE id = $2', [partnerId, id]);
     }
 
+      const choices=await recordFormMarketingChoices(client,form_email,contactNumber,{marketing_preferences});
+      await client.query('UPDATE tenant_enquiries SET marketing_preferences=$1 WHERE id=$2',[marketingChoicesList(choices),id]);
+      if(partnerId){const jointChoices=await recordFormMarketingChoices(client,form_email2,app2RawFields.phone_1,{marketing_preferences});await client.query('UPDATE tenant_enquiries SET marketing_preferences=$1 WHERE id=$2',[marketingChoicesList(jointChoices),partnerId]);}
       return {id,partnerId};
     });
 
@@ -2182,8 +2195,10 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
     await client.query('BEGIN');
     const enquiryIds = await linkedEntityIds('tenant_enquiry', Number(req.params.id));
     const applicants = await query('SELECT * FROM tenant_enquiries WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE', [enquiryIds]);
+    await assertGuarantorsReady(client,enquiryIds,true);
     const enquiry = await queryOne('SELECT * FROM tenant_enquiries WHERE id = $1', [req.params.id]);
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
+    if(enquiry.existing_tenancy_application){try{const result=await scheduleExistingTenancy(client,enquiry.id,req.user,uploadsDir);await client.query('COMMIT');await syncTenantLifecycle();return res.json(result);}catch(error){await client.query('ROLLBACK');return res.status(409).json({error:error.message});}}
     if (enquiry.status === 'converted') return res.status(400).json({ error: 'Enquiry already converted' });
     if (!enquiry.holding_deposit_received) return res.status(409).json({ error: 'Confirm the holding deposit before conversion' });
     if (enquiry.application_review_status !== 'approved') return res.status(409).json({ error: 'Approve the application and documents before conversion' });
@@ -2227,7 +2242,7 @@ app.post('/api/tenant-enquiries/:id/convert', authMiddleware, async (req: AuthRe
       SELECT is_joint_tenancy, tenancy_start_date, tenancy_end_date
       FROM tenants WHERE property_id=$1 AND COALESCE(status, 'active')='active'
     `, [property_id]);
-    const tenantStatus = property.service_type === 'let_only' ? 'inactive' : tenantPlacementStatus(activeTenants, tenancy_start_date, false);
+    const tenantStatus = tenantPlacementStatus(activeTenants, tenancy_start_date, false);
     if (!tenantStatus) {
       return res.status(409).json({ error: 'This property already has a live tenancy. Schedule its end date before converting the next tenant.' });
     }
@@ -2447,6 +2462,7 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
     const enquiryId = parseInt(req.params.id as string);
     // Fetch old record to detect status and onboarding field changes
     const oldRecord = await queryOne(`SELECT * FROM tenant_enquiries WHERE id=$1`, [enquiryId]);
+    if(oldRecord?.existing_tenancy_application&&'linked_property_id' in d&&Number(d.linked_property_id)!==Number(oldRecord.linked_property_id))return res.status(409).json({error:'Use the property selector in New Application to change its property safely.'});
     if (d.status === 'awaiting_response' && oldRecord?.status !== 'awaiting_response' && !('follow_up_return_status' in d)) {
       d.follow_up_return_status = oldRecord?.status || 'new';
     }
@@ -2508,6 +2524,11 @@ app.put('/api/tenant-enquiries/:id', authMiddleware, async (req: AuthRequest, re
       await run(`UPDATE tenant_enquiries SET ${sFields.join(', ')} WHERE id=$${sIdx}`, sValues);
     }
 
+    if(d.holding_deposit_received===true||Number(d.holding_deposit_received)===1){
+      const client=await pool.connect();
+      try{await client.query('BEGIN');await completeHoldingDepositFollowUps(client,await enquiryGroup(client,enquiryId));await client.query('COMMIT');}
+      catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+    }
     const updated = await queryOne(`
       SELECT te.*, p.address as property_address,
         jp.first_name_1 as partner_first_name, jp.last_name_1 as partner_last_name,
@@ -2658,7 +2679,7 @@ app.get('/api/tenants', authMiddleware, async (req: AuthRequest, res) => {
     await syncTenantLifecycle();
     const { limit, offset } = pageParams(req);
     const tenants = await query(`
-      SELECT t.*, p.address as property_address, p.landlord_id as property_landlord_id, l.name as property_landlord_name, l.landlord_type,
+      SELECT t.*, p.service_type, p.address as property_address, p.landlord_id as property_landlord_id, l.name as property_landlord_name, l.landlord_type,
         lt.name AS linked_tenant_name
       FROM tenants t
       LEFT JOIN properties p ON p.id = t.property_id
@@ -2777,6 +2798,8 @@ registerChat(app);
 registerPropertyPolicies(app);
 registerMarketing(app);
 registerTenantReactivation(app);
+registerTenancyChangeovers(app);
+registerApplicationProperty(app);
 registerInventoryReviewRoutes(app);
 registerPropertyInspections(app);
 registerLandlordAppointments(app);
@@ -2788,7 +2811,7 @@ app.get('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     await syncTenantLifecycle();
     const tenant = await queryOne(`
-      SELECT t.*, p.address as property_address, p.landlord_id as property_landlord_id, l.name as property_landlord_name, l.landlord_type,
+      SELECT t.*, p.service_type, p.address as property_address, p.landlord_id as property_landlord_id, l.name as property_landlord_name, l.landlord_type,
         lt.name AS linked_tenant_name
       FROM tenants t
       LEFT JOIN properties p ON p.id = t.property_id
@@ -2908,6 +2931,8 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      try { await updateTenancyBillingForEdit(client,Number(req.params.id),d); }
+      catch(error) { await client.query('ROLLBACK'); return res.status(409).json({error:error.message}); }
       await client.query(`UPDATE tenants SET ${fields.join(', ')} WHERE id=$${idx}`, values);
 
       // Sync property.tenant_id when tenant changes property
@@ -2927,7 +2952,7 @@ app.put('/api/tenants/:id', authMiddleware, async (req: AuthRequest, res) => {
 
     await logAudit(req.user?.id, req.user?.email, 'update', 'tenant', parseInt(req.params.id as string), req.body);
     const updated = await queryOne(`
-      SELECT t.*, p.address as property_address, p.landlord_id as property_landlord_id, l.name as property_landlord_name, l.landlord_type,
+      SELECT t.*, p.service_type, p.address as property_address, p.landlord_id as property_landlord_id, l.name as property_landlord_name, l.landlord_type,
         lt.name AS linked_tenant_name
       FROM tenants t
       LEFT JOIN properties p ON p.id = t.property_id
@@ -3390,21 +3415,19 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       SELECT action, changes, created_at, ip_address
       FROM audit_log
       WHERE entity_type = 'tenant_enquiry' AND entity_id = $1
-        AND action IN ('application_form_view', 'application_form_submitted')
+        AND (action IN ('application_form_view','application_form_submitted','application_review') OR (action='update' AND changes->>'action' IN ('application_form_revised','application_form_completed')))
       ORDER BY created_at ASC
     `, [enquiry.id]);
     const auditEntries = auditRows.map((row: any) => {
       let changes: Record<string, unknown> = {};
       try { changes = typeof row.changes === 'string' ? JSON.parse(row.changes) : (row.changes || {}); } catch { /* retain empty detail */ }
-      const action = row.action === 'application_form_click' ? 'Clicked form control'
-        : row.action === 'application_form_view' ? 'Opened application form' : 'Uploaded supporting document';
-      const detail = row.action === 'application_form_click'
-        ? `${String(changes.element || 'Form control')}${changes.step ? ` (step ${changes.step})` : ''}`
-        : row.action === 'document_upload'
-          ? String(changes.doc_type || 'Supporting document')
-          : 'Secure application link opened';
-      return { timestamp: new Date(row.created_at), action: row.action==='application_form_submitted'?'Previous submission':action, detail: `${detail}${row.ip_address?' · IP: '+row.ip_address:''}` };
+      const viewed=row.action==='application_form_view',reviewed=row.action==='application_review';
+      const action=viewed?'Opened application form':reviewed?(changes.status==='changes_requested'?'Corrections requested':'Application reviewed'):changes.action==='application_form_revised'?'Revised application submitted':'Previous submission';
+      const detail=viewed?'Secure application link opened':reviewed?String(changes.changes_required||changes.status||'Review recorded'):Array.isArray(changes.changed_fields)?'Updated fields: '+changes.changed_fields.join(', '):'Application submission recorded';
+      return {timestamp:new Date(row.created_at),action,detail:detail+(row.ip_address?' · IP: '+row.ip_address:'')};
     });
+    const changedFields=isRevision?Object.keys(formData).filter(key=>JSON.stringify(formData[key])!==JSON.stringify(enquiry.app_form_data?.[key])).map(key=>key.replace(/_/g,' ')):[];
+    if(changedFields.length)auditEntries.push({timestamp:submittedAt,action:'Application details updated',detail:changedFields.join(', ')});
     auditEntries.push({ timestamp: submittedAt, action: 'Submitted application', detail: `${isRevision ? 'Revised application submitted' : 'Initial application submitted'} · Signed by ${signatureName} · IP: ${req.ip || 'not recorded'}` });
     const completedPdf = await generateCompletedApplicationPdf({
       enquiryId: enquiry.id,
@@ -3414,6 +3437,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       formData,
       signatureName,
       signatureDataUrl: effectiveSignature,
+      signingIp:req.ip,signerEmail:enquiry.email_1,openedAt:auditEntries.find(e=>e.action==='Opened application form')?.timestamp.toISOString(),
       auditEntries,
     });
     const completedPdfFilename = `completed-application-${enquiry.id}-${Date.now()}.pdf`;
@@ -3451,6 +3475,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
         app_decl_gdpr=$45, app_decl_enquiries=$46, app_decl_documents=$47,
         app_decl_credit_check=$48, app_decl_terms=$49, app_decl_marketing=$50,
         app_declaration_agreed=1, application_form_completed=1,
+        status=CASE WHEN status IN ('new','viewing_booked','awaiting_response') THEN 'onboarding' ELSE status END,updated_at=NOW(),
         application_review_status='pending', application_review_notes=NULL, application_section_reviews=CASE WHEN $53 THEN CASE WHEN application_section_reviews ? 'Application Details' THEN application_section_reviews ELSE COALESCE(application_section_reviews,'{}'::jsonb) || '{"Application Details":{"status":"approved"}}'::jsonb END ELSE COALESCE((SELECT jsonb_object_agg(key,value) FROM jsonb_each(COALESCE(application_section_reviews,'{}'::jsonb)) WHERE value->>'status'='approved'),'{}'::jsonb) END,application_changes_sent_at=NULL,
         application_reviewed_at=NULL, application_reviewed_by=NULL
       WHERE id=$51
@@ -3494,6 +3519,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       `, ['tenant-self-service', 'update', 'tenant_enquiry', enquiry.id, JSON.stringify({
         action: enquiry.application_form_completed ? 'application_form_revised' : 'application_form_completed',
         completed_application_pdf: completedPdfFilename,
+        changed_fields:changedFields,
         ip: req.ip || null,
       })]);
       await refreshDepositApplicationReady(client,await enquiryGroup(client,Number(enquiry.id)));
@@ -3516,13 +3542,13 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
 
     if (!enquiry.application_form_completed) {
       (async () => {
-        const { sendEmail, applicationConfirmationEmail, OUTBOUND_EMAIL_ADDRESS } = require('./email');
+        const { sendEmail, applicationConfirmationEmail } = require('./email');
         const content = applicationConfirmationEmail(String(formData.first_name || '').trim());
-        const result = await sendEmail({ to: formData.email, subject: content.subject, html: content.html });
+        const result = await sendEmail({ to: formData.email, ...content });
         await insert(`
           INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
           VALUES ($1, 'tenant_enquiry', $2, $3, $4, $5, 'application_confirmation', $6, $7, NULL, NULL, $8)
-        `, [result.id || null, enquiry.id, formData.email, OUTBOUND_EMAIL_ADDRESS, content.subject, content.html,
+        `, [result.id || null, enquiry.id, formData.email, content.fromEmail, content.subject, content.html,
           result.simulated ? 'simulated' : (result.success ? 'sent' : 'failed'), result.error || null]);
       })().catch(err => console.error('Application confirmation email failed:', err));
     }
@@ -3549,7 +3575,7 @@ app.get('/api/public/tenancy-agreements/:token', publicReadLimiter, async (req, 
         te.first_name_1, te.last_name_1,
         COALESCE(jp.first_name_1, te.first_name_2) AS joint_first_name,
         COALESCE(jp.last_name_1, te.last_name_2) AS joint_last_name,
-        l.name AS landlord_name, p.address, p.postcode
+        l.name AS landlord_name, p.address, p.postcode, p.city
       FROM tenancy_agreements ta
       JOIN tenant_enquiries te ON te.id = ta.enquiry_id
       LEFT JOIN tenant_enquiries jp ON jp.id = te.joint_partner_id
@@ -3568,7 +3594,8 @@ app.get('/api/public/tenancy-agreements/:token', publicReadLimiter, async (req, 
     const signingOwner=owners.find(o=>o.token===req.params.token||o.slug===req.params.token);
     delete agreement.agreement_details;
     const role = agreement.signer_role as 'tenant' | 'joint_tenant' | 'landlord';
-    await run(`UPDATE tenancy_agreements SET ${role}_opened_at = NOW() WHERE id = $1`, [agreement.id]);
+    const openedKey=signingOwner?String(signingOwner.id):role;
+    await run(`UPDATE tenancy_agreements SET ${role}_opened_at = NOW(),agreement_details=jsonb_set(COALESCE(agreement_details,'{}'::jsonb),'{signerOpenedAt}',COALESCE(agreement_details->'signerOpenedAt','{}'::jsonb)||jsonb_build_object($2::text,COALESCE(agreement_details->'signerOpenedAt'->$2::text,to_jsonb(NOW())))) WHERE id = $1`, [agreement.id,openedKey]);
     const signerName = role === 'tenant'
       ? [agreement.first_name_1, agreement.last_name_1].filter(Boolean).join(' ')
       : role === 'joint_tenant'
@@ -3586,7 +3613,7 @@ app.get('/api/public/tenancy-agreements/:token', publicReadLimiter, async (req, 
       signing_on_behalf_of: role === 'landlord' ? savedDetails.clientLandlord?.companyNumber ? savedDetails.clientLandlord.landlordName : null : null,
       signer_signed: Boolean(signingOwner?signingOwner.signed_at:agreement[`${role}_signed_at`]),
       outstanding_signers: outstanding.filter(Boolean),
-      property_address: normalizePropertyAddress(agreement.address, agreement.postcode),
+      property_address: normalizePropertyAddress(agreement.address, agreement.postcode, agreement.city),
       today: new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date()),
     });
   } catch (err) {
@@ -3695,7 +3722,7 @@ app.post('/api/public/tenancy-agreements/:token/sign', publicSubmitLimiter, asyn
     if(role==='landlord'&&currentOwner){
       const c=await pool.connect();try{await c.query('BEGIN');const current=(await c.query('SELECT * FROM tenancy_agreements WHERE id=$1 FOR UPDATE',[agreement.id])).rows[0];if(!current||['void','completed'].includes(current.status))throw Error('This agreement is no longer awaiting signature');
       const result=signTenancyLandlord(agreementLandlords(current.agreement_details),String(req.params.token),{name:signatureName,image:signature,at:new Date().toISOString(),ip:req.ip||'',agent:req.get('user-agent')||''});
-      const details={...parseAgreementDetails(current.agreement_details),landlordSigners:result.signers},primary=result.signers[0];
+      const details={...parseAgreementDetails(current.agreement_details),signingConsents:{...parseAgreementDetails(current.agreement_details).signingConsents,[String(currentOwner.id)]:agreementConsentSnapshot('apt',req.body)},landlordSigners:result.signers},primary=result.signers[0];
       await c.query(`UPDATE tenancy_agreements SET agreement_details=$1,landlord_signature=$2,landlord_signature_name=$3,landlord_signature_ip=$4,landlord_signed_at=$5 WHERE id=$6`,[JSON.stringify(details),primary.signature||null,primary.signature_name||null,primary.signature_ip||null,result.ready?new Date().toISOString():null,agreement.id]);
       await c.query('COMMIT');releaseTenants=result.ready;
       }catch(error){await c.query('ROLLBACK');throw error;}finally{c.release();}
@@ -3704,10 +3731,18 @@ app.post('/api/public/tenancy-agreements/:token/sign', publicSubmitLimiter, asyn
       UPDATE tenancy_agreements SET
         ${role}_signature = $1, ${role}_signature_name = $2, ${role}_signed_at = NOW(),
         ${role}_signature_ip = $3, ${role}_signature_user_agent = $4,
+        agreement_details=jsonb_set(COALESCE(agreement_details,'{}'::jsonb),'{signingConsents}',COALESCE(agreement_details->'signingConsents','{}'::jsonb)||jsonb_build_object($5::text,$7::jsonb)),
         status = CASE WHEN $5 IN ('tenant', 'joint_tenant') THEN 'tenant_signed' ELSE status END
       WHERE id = $6 AND ${role}_signed_at IS NULL AND status NOT IN ('completed', 'void')
-    `, [signature, signatureName, req.ip || null, req.get('user-agent') || null, role, agreement.id]);
+    `, [signature, signatureName, req.ip || null, req.get('user-agent') || null, role, agreement.id,JSON.stringify(agreementConsentSnapshot('apt',req.body))]);
     if (!signatureWrite.rowCount) return res.status(409).json({ error: 'This signature has already been recorded or the agreement has been replaced' });
+    }
+    if(role==='landlord'){
+      const c=await pool.connect();try{await c.query('BEGIN');
+        const owner=(await c.query('SELECT p.landlord_id FROM tenant_enquiries e JOIN properties p ON p.id=e.linked_property_id WHERE e.id=$1',[agreement.enquiry_id])).rows[0];
+        if(owner?.landlord_id)await syncLandlordBankApprovalTask(c,owner.landlord_id);
+        await c.query('COMMIT');
+      }catch(error){await c.query('ROLLBACK');throw error;}finally{c.release();}
     }
     let deliveryWarning: string | null = null;
     if (releaseTenants) {
@@ -3725,7 +3760,7 @@ app.post('/api/public/tenancy-agreements/:token/sign', publicSubmitLimiter, asyn
     await insert(`
       INSERT INTO audit_log (user_email, action, entity_type, entity_id, changes)
       VALUES ($1, 'update', 'tenant_enquiry', $2, $3)
-    `, [`${role}-self-service`, agreement.enquiry_id, JSON.stringify({ action: 'tenancy_agreement_signed', role, agreement_id: agreement.id,accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true })]);
+    `, [`${role}-self-service`, agreement.enquiry_id, JSON.stringify({ action: 'tenancy_agreement_signed', role, signer_name:signatureName, agreement_id: agreement.id,accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true })]);
     res.json({ success: true, status: updated.status, delivery_warning: deliveryWarning });
   } catch (err) {
     console.error('Agreement signing failed:', err);
@@ -3795,6 +3830,8 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
     let id: number;
     try {
       await client.query('BEGIN');
+      const duplicate=await findDuplicateProperty(client,d);
+      if(duplicate){await client.query('ROLLBACK');return res.status(409).json({error:`This property already exists: ${duplicate.address}, ${duplicate.postcode} (property #${duplicate.id}). Open or link the existing property instead.`,existing_property_id:duplicate.id});}
       const result = await client.query(`
         INSERT INTO properties (
           landlord_id, address, postcode, property_type, bedrooms,
@@ -3845,7 +3882,7 @@ app.post('/api/properties', authMiddleware, async (req: AuthRequest, res) => {
         d.tenant_id || null, d.image_url || null, d.address_line_2 || null, d.city.trim()
       ]);
       id = result.rows[0].id;
-      await client.query('UPDATE properties SET service_setup_fee=$2,service_monthly_fee=$3,charge_percentage=$4,total_charge=ROUND((rent_amount*$4::numeric/100)::numeric,2) WHERE id=$1',[id,serviceFees.service_setup_fee,serviceFees.service_monthly_fee,serviceType==='let_only'?serviceFees.service_setup_fee:serviceFees.service_monthly_fee]);
+      await client.query('UPDATE properties SET service_setup_fee=$2,service_monthly_fee=$3,charge_percentage=$4::numeric,total_charge=ROUND((rent_amount*$4::numeric/100)::numeric,2) WHERE id=$1',[id,serviceFees.service_setup_fee,serviceFees.service_monthly_fee,serviceType==='let_only'?serviceFees.service_setup_fee:serviceFees.service_monthly_fee]);
       if (d.tenant_id) {
         await client.query('UPDATE tenants SET property_id = $1 WHERE id = $2', [id, d.tenant_id]);
       }
@@ -3891,7 +3928,8 @@ app.get('/api/properties/:id', authMiddleware, async (req: AuthRequest, res) => 
     const docs=await query("SELECT doc_type FROM documents WHERE entity_type='property' AND entity_id=$1 AND COALESCE(review_status,'pending')<>'rejected'",[property.id]);
     const compliance=propertyCompliance({...property,documents:docs});
     const earnings=property.landlord_type==='external'?(await propertyEarnings(property.id))[0]||{letting_fees:0,ongoing_fees:0,total:0,client_rent:0,missing_rates:0}:null;
-    res.json({...redactPropertyPortalPasswords(property),compliance,earnings});
+    const pendingOnboarding=await query("SELECT id,CONCAT_WS(' ',first_name_1,last_name_1) AS name FROM tenant_enquiries WHERE linked_property_id=$1 AND (status='onboarding' OR (status='follow_up' AND follow_up_return_status='onboarding')) ORDER BY id",[property.id]);
+    res.json({...redactPropertyPortalPasswords(property),compliance,earnings,pending_onboarding:pendingOnboarding});
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch property' });
   }
@@ -4860,8 +4898,8 @@ app.post('/api/tenancies', authMiddleware, async (req: AuthRequest, res) => {
 app.get('/api/rent-payments', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const payments = await query(`
-      SELECT rp.*, (SELECT id FROM tenants jt WHERE jt.id=t.linked_tenant_id AND jt.property_id=t.property_id AND jt.tenancy_start_date=t.tenancy_start_date) AS linked_tenant_id, COALESCE(p.address, 'Unknown property') as address, CONCAT_WS(' & ',t.name,(SELECT name FROM tenants jt WHERE jt.id=t.linked_tenant_id AND jt.property_id=t.property_id AND jt.tenancy_start_date=t.tenancy_start_date)) as tenant_name, (SELECT SUM(a.amount) FROM bank_feed_allocations a WHERE a.rent_payment_id=rp.id AND a.reversed_at IS NULL) AS bank_received, (SELECT MAX(b.booked_at) FROM bank_feed_allocations a JOIN bank_feed_transactions b ON b.id=a.bank_transaction_id WHERE a.rent_payment_id=rp.id AND a.reversed_at IS NULL) AS bank_payment_date FROM rent_payments rp
-      LEFT JOIN properties p ON p.id = rp.property_id LEFT JOIN tenants t ON t.id = rp.tenant_id
+      SELECT rp.*, CASE WHEN rp.tenancy_profile_id IS NOT NULL THEN (SELECT id FROM unnest(profile.tenant_ids) id WHERE id<>rp.tenant_id LIMIT 1) ELSE (SELECT id FROM tenants jt WHERE jt.id=t.linked_tenant_id AND jt.property_id=t.property_id AND jt.tenancy_start_date=t.tenancy_start_date) END AS linked_tenant_id, COALESCE(p.address, 'Unknown property') as address, CASE WHEN rp.tenancy_profile_id IS NOT NULL THEN CONCAT_WS(' & ',profile.invoice_source->>'name',profile.invoice_source->>'joint_name') ELSE CONCAT_WS(' & ',t.name,(SELECT name FROM tenants jt WHERE jt.id=t.linked_tenant_id AND jt.property_id=t.property_id AND jt.tenancy_start_date=t.tenancy_start_date)) END as tenant_name, (SELECT SUM(a.amount) FROM bank_feed_allocations a WHERE a.rent_payment_id=rp.id AND a.reversed_at IS NULL) AS bank_received, (SELECT MAX(b.booked_at) FROM bank_feed_allocations a JOIN bank_feed_transactions b ON b.id=a.bank_transaction_id WHERE a.rent_payment_id=rp.id AND a.reversed_at IS NULL) AS bank_payment_date FROM rent_payments rp
+      LEFT JOIN properties p ON p.id = rp.property_id LEFT JOIN tenants t ON t.id = rp.tenant_id LEFT JOIN tenancy_billing_profiles profile ON profile.id=rp.tenancy_profile_id
       ORDER BY rp.due_date DESC
     `);
     res.json(payments);
@@ -4873,8 +4911,8 @@ app.get('/api/rent-payments', authMiddleware, async (req: AuthRequest, res) => {
 app.get('/api/rent-payments/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const result = await query(`
-      SELECT rp.*, p.address, t.name as tenant_name FROM rent_payments rp
-      LEFT JOIN properties p ON p.id = rp.property_id LEFT JOIN tenants t ON t.id = rp.tenant_id
+      SELECT rp.*, p.address, CASE WHEN rp.tenancy_profile_id IS NOT NULL THEN CONCAT_WS(' & ',profile.invoice_source->>'name',profile.invoice_source->>'joint_name') ELSE t.name END as tenant_name FROM rent_payments rp
+      LEFT JOIN properties p ON p.id = rp.property_id LEFT JOIN tenants t ON t.id = rp.tenant_id LEFT JOIN tenancy_billing_profiles profile ON profile.id=rp.tenancy_profile_id
       WHERE rp.id = $1
     `, [req.params.id]);
     if (result.length === 0) return res.status(404).json({ error: 'Rent payment not found' });
@@ -4886,31 +4924,42 @@ app.get('/api/rent-payments/:id', authMiddleware, async (req: AuthRequest, res) 
   }
 });
 
-app.post('/api/rent-payments', authMiddleware, async (req: AuthRequest, res) => {
+app.post('/api/rent-payments', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
+  const client = await pool.connect();
   try {
     const d = req.body;
     if (!d.property_id || !d.due_date || !d.amount_due) {
       return res.status(400).json({ error: 'property_id, due_date, and amount_due are required' });
     }
-    const id = await insert(
-      'INSERT INTO rent_payments (property_id, tenant_id, due_date, amount_due, status, notes) VALUES ($1, $2, $3, $4, $5, $6)',
-      [d.property_id, d.tenant_id || null, d.due_date, d.amount_due, 'pending', d.notes || null]
-    );
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('finance-daily'))");
+    const profile = (await client.query('SELECT id FROM tenancy_billing_profiles WHERE property_id=$1 AND $2=ANY(tenant_ids) AND start_date<=$3 AND (end_date IS NULL OR end_date>=$3) ORDER BY start_date DESC LIMIT 1', [d.property_id, d.tenant_id || null, d.due_date])).rows[0];
+    const id = (await client.query(
+      'INSERT INTO rent_payments (property_id, tenant_id, due_date, amount_due, status, notes, tenancy_profile_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+      [d.property_id, d.tenant_id || null, d.due_date, d.amount_due, 'pending', d.notes || null, profile?.id || null]
+    )).rows[0].id;
+    await client.query('COMMIT');
     await logAudit(req.user?.id, req.user?.email, 'create', 'rent_payment', id);
     res.json({ id });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'Failed to create rent payment' });
-  }
+  } finally { client.release(); }
 });
 
 app.put('/api/rent-payments/:id', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
   const client=await pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('finance-daily'))");
     const payment=(await client.query('SELECT * FROM rent_payments WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];
     if(!payment){await client.query('ROLLBACK');return res.status(404).json({error:'Rent payment not found'});}
     const d=req.body;
+    if(payment.tenancy_profile_id){
+      const valid=(await client.query('SELECT id FROM tenancy_billing_profiles WHERE id=$1 AND property_id=$2 AND $3=ANY(tenant_ids) AND start_date<=$4 AND (end_date IS NULL OR end_date>=$4)',[payment.tenancy_profile_id,d.property_id??payment.property_id,d.tenant_id??payment.tenant_id,d.due_date??payment.due_date])).rowCount;
+      if(!valid){await client.query('ROLLBACK');return res.status(409).json({error:'Keep this charge within its original tenancy and billing period.'});}
+    }
     const allowed=['property_id','tenant_id','due_date','amount_due','amount_paid','payment_date','status','notes'];
     const keys=allowed.filter(k=>k in d);
     if(!keys.length){await client.query('ROLLBACK');return res.status(400).json({error:'No fields to update'});}
@@ -4941,6 +4990,7 @@ app.delete('/api/rent-payments/:id', authMiddleware, requirePermission('manager'
 });
 
 app.put('/api/rent-payments/:id/pay', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
+  if(req.body.manual_override_confirmed!==true)return res.status(400).json({error:'Confirm the manual payment override before marking rent as paid'});
   const client=await pool.connect();
   try {
     await client.query('BEGIN');
@@ -4952,7 +5002,7 @@ app.put('/api/rent-payments/:id/pay', authMiddleware, requirePermission('staff')
     const paymentDate=req.body.payment_date||new Date().toISOString().slice(0,10);
     const status=amountPaid<Number(payment.amount_due)?'partial':'paid';
     await client.query('UPDATE rent_payments SET amount_paid=$1,opening_balance_amount=0,payment_date=$2,status=$3,notes=COALESCE($4,notes) WHERE id=$5',[amountPaid,paymentDate,status,req.body.notes||null,payment.id]);
-    await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','rent_payment',$3,$4)",[req.user.id,req.user.email,payment.id,JSON.stringify({amount_paid:amountPaid,payment_date:paymentDate,status})]);
+    await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'update','rent_payment',$3,$4)",[req.user.id,req.user.email,payment.id,JSON.stringify({action:'manual_payment_override',confirmed:true,before:{amount_paid:payment.amount_paid,payment_date:payment.payment_date,status:payment.status},amount_paid:amountPaid,payment_date:paymentDate,status})]);
     await client.query('COMMIT');res.json({success:true,status,amount_paid:amountPaid,payment_date:paymentDate});
   }catch{await client.query('ROLLBACK');res.status(500).json({error:'Failed to mark payment as paid'});}finally{client.release();}
 });
@@ -5074,7 +5124,14 @@ const removeTenants = async (req: AuthRequest, res: express.Response) => {
     const retained = tenant.source_enquiry_id || await queryOne('SELECT id FROM tenant_enquiries WHERE source_tenant_id=$1 LIMIT 1',[id]) || await queryOne('SELECT id FROM rent_reviews WHERE $1::int=ANY(tenant_ids) LIMIT 1',[id]) || await queryOne('SELECT id FROM tenancy_agreements WHERE tenant_id=$1 OR joint_tenant_id=$1 LIMIT 1',[id]);
     if (retained) {
       if (req.method !== 'POST') return res.status(409).json({error:'Archive tenants with converted enquiries or issued contract history'});
-      await run("UPDATE tenants SET status='inactive',updated_at=NOW() WHERE id=$1",[id]);
+      const client=await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await updateTenancyBillingForEdit(client,Number(id),{status:'inactive'});
+        await client.query("UPDATE tenants SET status='inactive',updated_at=NOW() WHERE id=$1",[id]);
+        await client.query('COMMIT');
+      } catch(error) { await client.query('ROLLBACK'); return res.status(409).json({error:error.message}); }
+      finally {client.release();}
       await syncTenantLifecycle();
       await logAudit(req.user.id,req.user.email,'archive','tenant',Number(id));
       return res.json({success:true,archived:true});
@@ -5312,14 +5369,8 @@ app.post('/api/import/:entity', authMiddleware, requirePermission('manager'), as
           skipped.push({ row: rowNum, reason: 'duplicate within file' });
           continue;
         }
-        const dup = await client.query(
-          "SELECT id FROM properties WHERE lower(address) = $1 AND lower(coalesce(postcode, '')) = $2 LIMIT 1",
-          [String(data.address).toLowerCase(), String(data.postcode || '').toLowerCase()]
-        );
-        if (dup.rows.length) {
-          skipped.push({ row: rowNum, reason: `duplicate of existing property #${dup.rows[0].id}` });
-          continue;
-        }
+        const duplicate=await findDuplicateProperty(client,data);
+        if(duplicate){skipped.push({row:rowNum,reason:`duplicate of existing property #${duplicate.id}`});continue;}
         seen.add(addrKey);
         const propResult = await client.query(
           `INSERT INTO properties (landlord_id, address, postcode, property_type, bedrooms, rent_amount, notes, status)
@@ -5680,6 +5731,9 @@ app.post('/api/tenant-enquiries/:id/credit-check', authMiddleware, requirePermis
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      const ids=await linkedEntityIds('tenant_enquiry',enquiryId);
+      await client.query('SELECT id FROM tenant_enquiries WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE',[ids]);
+      await assertGuarantorsReady(client,ids,true);
       await client.query(`
         INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by, review_status, credit_check_result)
         VALUES ('tenant_enquiry', $1, 'Credit Check Report', $2, $3, $4, $5, $6, 'approved', $7::jsonb)
@@ -5747,11 +5801,11 @@ async function sendTenantAgreementDelivery(
   resend?: { email: boolean; sms: boolean; recipient?: string; revisionNotice?:boolean },
 ): Promise<Record<string, unknown>> {
   const agreement = await queryOne(`
-    SELECT ta.*, te.first_name_1, te.email_1, te.phone_1, te.joint_partner_id,
+    SELECT ta.*, te.first_name_1, te.email_1, te.phone_1, te.joint_partner_id, te.source_tenant_id, te.existing_tenancy_application,
       COALESCE(jp.first_name_1, te.first_name_2) AS joint_first_name,
       COALESCE(jp.email_1, te.email_2) AS joint_email,
       COALESCE(jp.phone_1, te.phone_2) AS joint_phone,
-      p.address, p.postcode
+      p.address, p.postcode, p.city
     FROM tenancy_agreements ta
     JOIN tenant_enquiries te ON te.id = ta.enquiry_id
     LEFT JOIN tenant_enquiries jp ON jp.id = te.joint_partner_id
@@ -5778,7 +5832,7 @@ async function sendTenantAgreementDelivery(
     contentType: document.mime_type || undefined,
   }));
 
-  const propertyAddress = normalizePropertyAddress(agreement.address, agreement.postcode);
+  const propertyAddress = normalizePropertyAddress(agreement.address, agreement.postcode, agreement.city);
   const details = parseAgreementDetails(agreement.agreement_details);
   if (resend ? resend.email : agreement.tenant_delivery_email) {
     for (const recipient of recipients) {
@@ -5799,7 +5853,8 @@ async function sendTenantAgreementDelivery(
         landlordAddress: details.landlordAddress || null,
         monthlyRent: Number(details.rent || 0),
         securityDeposit: Number(details.deposit || 0),
-        fundsOnAccount: Number(details.holdingDeposit || 0),
+        isExistingTenant: Boolean(agreement.existing_tenancy_application),
+        fundsOnAccount: agreement.existing_tenancy_application ? 0 : Number(details.holdingDeposit || 0),
         balanceDue: Number(details.balanceDue || 0),
         signingUrl,
         customMessage: message,
@@ -5882,7 +5937,7 @@ app.get('/api/tenant-enquiries/:id/tenancy-agreement-compliance', authMiddleware
       landlordName: enquiry.landlord_name,
       fees: {setupPercent:enquiry.service_setup_fee,monthlyPercent:enquiry.service_monthly_fee},
       defaults: {
-        tenancyStartDate: enquiry.app_form_data?.preferred_start_date || '',
+        tenancyStartDate: enquiry.app_form_data?.tenancy_start_date || enquiry.app_form_data?.preferred_start_date || '',
         rent: enquiry.monthly_rent_agreed || '',
         deposit: enquiry.security_deposit_amount || '',
         permittedOccupiers: '',
@@ -5918,7 +5973,12 @@ app.get('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, async (re
       LEFT JOIN landlords l ON l.id = p.landlord_id
       WHERE ta.enquiry_id = ANY($1::int[]) ORDER BY ta.issued_at DESC LIMIT 1
     `, [enquiryIds, Number(req.params.id)]);
-    if(agreement)agreement.landlord_signers=agreementLandlords(agreement.agreement_details).map(({id,name,slug,signed_at})=>({id,name,slug,signed_at}));
+    if(agreement){
+      agreement.landlord_signers=agreementLandlords(agreement.agreement_details).map(({id,name,slug,signed_at})=>({id,name,slug,signed_at}));
+      const parties=[{key:'tenant',slug:agreement.tenant_slug},{key:'joint_tenant',slug:agreement.joint_tenant_slug},...(agreement.landlord_signers.length?agreement.landlord_signers.map(p=>({key:'landlord:'+p.id,slug:p.slug})):[{key:'landlord',slug:agreement.landlord_slug}])];
+      const messages=await query("SELECT id,body_html,status,error_message,to_email FROM email_messages WHERE entity_type='tenant_enquiry' AND entity_id=ANY($1::int[]) AND template IN ('tenancy_agreement','landlord_tenancy_agreement') AND created_at>=$2 ORDER BY id DESC",[enquiryIds,agreement.issued_at]);
+      agreement.delivery_status=agreementDeliveryStatus(parties,messages);
+    }
     res.json(agreement || null);
   } catch (err) {
     res.status(500).json({ error: 'Agreement status could not be loaded' });
@@ -5942,7 +6002,7 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement/email-preview', authMiddle
   try {
     const enquiryIds = await linkedEntityIds('tenant_enquiry', Number(req.params.id));
     const enquiry = await queryOne(`
-      SELECT te.*, p.address, p.postcode, p.rent_amount, p.service_type,
+      SELECT te.*, p.address, p.postcode, p.city, p.rent_amount, p.service_type,
         l.name AS landlord_name, COALESCE(l.home_address, l.address) AS landlord_address, l.landlord_type
       FROM tenant_enquiries te
       LEFT JOIN properties p ON p.id = te.linked_property_id
@@ -5952,8 +6012,8 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement/email-preview', authMiddle
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
     const rent = Number(req.body.rent || enquiry.monthly_rent_agreed || enquiry.rent_amount || 0);
     const deposit = Number(req.body.deposit || enquiry.security_deposit_amount || 0);
-    const holdingDeposit = Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
-    const propertyAddress = normalizePropertyAddress(enquiry.address, enquiry.postcode);
+    const holdingDeposit = enquiry.existing_tenancy_application ? 0 : Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
+    const propertyAddress = normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city);
     const issued=await queryOne("SELECT CASE WHEN enquiry_id=$2 THEN COALESCE(tenant_slug,tenant_token) ELSE COALESCE(joint_tenant_slug,joint_tenant_token) END AS signing_slug,agreement_details FROM tenancy_agreements WHERE enquiry_id=ANY($1::int[]) AND status<>'void' ORDER BY issued_at DESC LIMIT 1",[enquiryIds,Number(req.params.id)]);
     const signingUrl = issued ? `https://apply.fleminglettings.co.uk/${issued.signing_slug}` : 'https://apply.fleminglettings.co.uk/[signing-link-created-on-issue]';
     const customMessage = renderAgreementMessage(req.body.email_message || 'Your tenancy agreement for {{property_address}} is ready to review and sign.', {
@@ -5967,6 +6027,7 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement/email-preview', authMiddle
       landlordAddress: resolveAgreementType(enquiry.landlord_type) === 'internal' ? 'Creative Industries Centre, Wolverhampton Science Park, Wolverhampton, WV10 9TG' : enquiry.landlord_address,
       monthlyRent: rent,
       securityDeposit: deposit,
+      isExistingTenant: Boolean(enquiry.existing_tenancy_application),
       fundsOnAccount: holdingDeposit,
       balanceDue: Math.max(0, rent + deposit - holdingDeposit),
       signingUrl,
@@ -5981,7 +6042,7 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement/email-preview', authMiddle
 app.post('/api/tenant-enquiries/:id/request-balance/email-preview', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const enquiryIds = await linkedEntityIds('tenant_enquiry', Number(req.params.id));
-    const enquiry = await queryOne(`SELECT te.*, p.address, p.postcode, p.service_type, l.landlord_type
+    const enquiry = await queryOne(`SELECT te.*, p.address, p.postcode, p.city, p.service_type, l.landlord_type
       FROM tenant_enquiries te LEFT JOIN properties p ON p.id = te.linked_property_id
       LEFT JOIN landlords l ON l.id = p.landlord_id
       WHERE te.id = ANY($1::int[]) ORDER BY te.id LIMIT 1`, [enquiryIds]);
@@ -5994,9 +6055,9 @@ app.post('/api/tenant-enquiries/:id/request-balance/email-preview', authMiddlewa
     if(enquiry.balance_payment_received) return res.status(409).json({error:"The final balance has already been received"});
     const securityDeposit = Number(enquiry.security_deposit_amount || 0);
     const monthlyRent = Number(enquiry.monthly_rent_agreed || 0);
-    const holdingDeposit = Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
+    const holdingDeposit = enquiry.existing_tenancy_application ? 0 : Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
     const balanceDue = Math.max(0, securityDeposit + monthlyRent - holdingDeposit);
-    const propertyAddress = normalizePropertyAddress(enquiry.address, enquiry.postcode);
+    const propertyAddress = normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city);
     const content = finalBalanceHandoverEmail({
       firstName: enquiry.first_name_1 || 'there', propertyAddress, securityDeposit, monthlyRent, holdingDeposit, balanceDue,
       bankDetails,
@@ -6020,10 +6081,12 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement/resend', authMiddleware, r
     const selected=req.body.recipient?agreementResendRecipient(agreement,req.body.recipient):null;
     let delivery:Record<string,any>={};
     if(selected?.kind==='landlord'){
-      const owner=selected.owner!;
+      const savedOwner=selected.owner!;
+      const currentContact=savedOwner.id?await queryOne('SELECT email,phone FROM landlords WHERE id=$1',[savedOwner.id]):null;
+      const owner={...savedOwner,...(currentContact?{email:currentContact.email,phone:currentContact.phone}:{})};
       if(!owner.slug)throw Error('No signing link is recorded for this landlord');
-      const property=await queryOne('SELECT address,postcode FROM properties WHERE id=$1',[agreement.property_id]);
-      const address=normalizePropertyAddress(property?.address,property?.postcode),signingUrl=`https://apply.fleminglettings.co.uk/${owner.slug}`;
+      const property=await queryOne('SELECT address,postcode,city FROM properties WHERE id=$1',[agreement.property_id]);
+      const address=normalizePropertyAddress(property?.address,property?.postcode,property?.city),signingUrl=`https://apply.fleminglettings.co.uk/${owner.slug}`;
       if(req.body.send_email===true){
         if(!owner.email)throw Error('No email address is recorded for this landlord');
         const compliance=await loadAgreementCompliance(Number(agreement.property_id));
@@ -6067,9 +6130,9 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement/retry-delivery', authMiddl
 });
 
 app.post('/api/tenant-enquiries/:id/landlord-agreement-preview',authMiddleware,requirePermission('staff'),async(req,res)=>{
- const state=await clientAgreementContext(Number(req.params.id));const enquiry=await queryOne('SELECT p.address,p.postcode FROM tenant_enquiries e JOIN properties p ON p.id=e.linked_property_id WHERE e.id=$1',[req.params.id]);
+ const state=await clientAgreementContext(Number(req.params.id));const enquiry=await queryOne('SELECT p.address, p.postcode, p.city FROM tenant_enquiries e JOIN properties p ON p.id=e.linked_property_id WHERE e.id=$1',[req.params.id]);
  if(!state||!enquiry)return res.status(409).json({error:'Link a landlord and property first'});
- const {landlordSignatureEmail}=require('./email');const {subject,html}=landlordSignatureEmail(state.details.landlordName,normalizePropertyAddress(enquiry.address,enquiry.postcode),'https://apply.fleminglettings.co.uk/agreement-preview',req.body.tenant_delivery!==false);res.json({subject,html,body_html:html,to:state.details.landlordEmail,sms:`Hi ${state.details.landlordName}, your tenancy agreement for ${normalizePropertyAddress(enquiry.address,enquiry.postcode)} is ready for your review and signature: [secure signing link]. Please contact us on 01902 212 415 if you have any questions.`});
+ const {landlordSignatureEmail}=require('./email');const {subject,html}=landlordSignatureEmail(state.details.landlordName,normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city),'https://apply.fleminglettings.co.uk/agreement-preview',req.body.tenant_delivery!==false);res.json({subject,html,body_html:html,to:state.details.landlordEmail,sms:`Hi ${state.details.landlordName}, your tenancy agreement for ${normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city)} is ready for your review and signature: [secure signing link]. Please contact us on 01902 212 415 if you have any questions.`});
 });
 
 app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
@@ -6090,7 +6153,7 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
         jp.application_form_completed AS partner_application_form_completed,
         jp.application_review_status AS partner_application_review_status,
         jp.credit_check_completed AS partner_credit_check_completed,
-        p.address, p.postcode, p.service_type, p.has_gas, p.rent_amount, p.amenities,p.total_charge,p.charge_percentage,
+        p.address, p.postcode, p.city, p.service_type, p.has_gas, p.rent_amount, p.amenities,p.total_charge,p.charge_percentage,
         l.name AS landlord_name, l.email AS landlord_email, l.phone AS landlord_phone,
         COALESCE(l.home_address, l.address) AS landlord_address, l.landlord_type
       FROM tenant_enquiries te
@@ -6195,9 +6258,10 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
     if(requiresLandlord&&req.body.landlord_send_sms===true){try{const {normalizeUkPhone}=require('./sms');for(const owner of landlordSigners)normalizeUkPhone(owner.phone||'');}catch{return res.status(400).json({error:'Add a valid mobile number for every landlord before sending SMS'});}}
     const defaultPaymentReference = `${String(enquiry.address || '').match(/^\s*\d+[A-Za-z]?/)?.[0]?.trim() || 'PROPERTY'} ${String(enquiry.postcode || '').replace(/\s/g, '').toUpperCase()} - ${String(enquiry.last_name_1 || 'TENANT').toUpperCase()}`;
     const paymentReference = paymentRoute==='landlord'&&typeof req.body.payment_reference==='string'&&req.body.payment_reference.trim()?req.body.payment_reference.trim().slice(0,100):defaultPaymentReference;
-    const holdingDeposit = Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
+    const holdingDeposit = enquiry.existing_tenancy_application ? 0 : Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
     const balanceDue = Number(Math.max(0, deposit + rent - holdingDeposit).toFixed(2));
     const agreementDetails = {
+      guarantorWorkflowVersion: '2026-10-05',
       companySettings,
       templateVersion: agreementType === 'internal' ? 'supplied-aug26' : enquiry.service_type === 'let_only' ? 'client-let-only-aug26' : 'client-rent-collection-aug26',
       serviceType: enquiry.service_type,
@@ -6232,7 +6296,7 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
       tenancyStartDate,
       rent,
       deposit,
-      propertyAddress: normalizePropertyAddress(enquiry.address, enquiry.postcode),
+      propertyAddress: normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city),
       hasGas: Boolean(enquiry.has_gas),
       landlord: { name: propertyOwners.length>1?propertyOwners.map(o=>o.name).join(' & '):enquiry.landlord_name, email: enquiry.landlord_email, phone: enquiry.landlord_phone, address: enquiry.landlord_address,companyNumber:clientContext?.isCompany?clientLandlord!.companyNumber:undefined,signingName:landlordSignatory,serviceAddress:clientLandlord?.serviceAddress,emergencyContact:clientLandlord?.emergencyContact },
       holdingDeposit,
@@ -6277,6 +6341,7 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
     try {
       await agreementClient.query('BEGIN');
       await agreementClient.query('SELECT id FROM tenant_enquiries WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE', [enquiryIds]);
+      await assertIssuedAgreementMatchesGuarantees(agreementClient,enquiryIds,agreementDetails,tenants.map(person=>person.name),normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city));
       if(req.body.editing_agreement_id){const current=(await agreementClient.query('SELECT id FROM tenancy_agreements WHERE enquiry_id=ANY($1::int[]) ORDER BY issued_at DESC,id DESC LIMIT 1',[enquiryIds])).rows[0];if(!current||current.id!==Number(req.body.editing_agreement_id))throw Error('The agreement has changed. Reload before saving your edits.');}
       agreementId = (await agreementClient.query(`
       INSERT INTO tenancy_agreements (
@@ -6312,7 +6377,7 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
       }));
       const {landlordSignatureEmail}=require('./email');
       for(const owner of landlordSigners){
-      const {subject,html}=req.body.editing_agreement_id?require('./email').revisedAgreementNotice(owner.name,normalizePropertyAddress(enquiry.address,enquiry.postcode),`https://apply.fleminglettings.co.uk/${owner.slug}`,false):landlordSignatureEmail(owner.name,normalizePropertyAddress(enquiry.address,enquiry.postcode),`https://apply.fleminglettings.co.uk/${owner.slug}`,sendEmailRequested||sendSmsRequested);
+      const {subject,html}=req.body.editing_agreement_id?require('./email').revisedAgreementNotice(owner.name,normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city),`https://apply.fleminglettings.co.uk/${owner.slug}`,false):landlordSignatureEmail(owner.name,normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city),`https://apply.fleminglettings.co.uk/${owner.slug}`,sendEmailRequested||sendSmsRequested);
       const result = await sendEmail({ to: owner.email, subject, html, attachments });
       delivery['landlord_'+owner.id+'_email'] = result;
       await insert(`INSERT INTO email_messages (resend_id, entity_type, entity_id, to_email, from_email, subject, template, body_html, status, sent_by, sent_by_email, error_message)
@@ -6324,7 +6389,7 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
     if(requiresLandlord&&req.body.landlord_send_sms===true&&landlordUrl){
       const {sendSms,normalizeUkPhone,SMS_FROM}=require('./sms');
       for(const owner of landlordSigners){
-      const message=`Hi ${owner.name}, your tenancy agreement for ${normalizePropertyAddress(enquiry.address,enquiry.postcode)} is ready for your review and signature: https://apply.fleminglettings.co.uk/${owner.slug}. Please contact us on 01902 212 415 if you have any questions.`;
+      const message=`Hi ${owner.name}, your tenancy agreement for ${normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city)} is ready for your review and signature: https://apply.fleminglettings.co.uk/${owner.slug}. Please contact us on 01902 212 415 if you have any questions.`;
       const phone=normalizeUkPhone(owner.phone||'');const result=await sendSms({to:phone,body:message});delivery['landlord_'+owner.id+'_sms']=result;
       await insert(`INSERT INTO sms_messages(enquiry_id,entity_type,entity_id,to_phone,from_phone,message_body,direction,status,twilio_sid,sent_by,sent_by_email,error_message) VALUES($1,'tenant_enquiry',$1,$2,$3,$4,'outbound',$5,$6,$7,$8,$9)`,[enquiryId,phone,SMS_FROM,message,result.simulated?'simulated':result.success?'sent':'failed',result.sid||null,req.user?.id,req.user?.email,result.error||null]);
       }
@@ -6342,7 +6407,17 @@ app.post('/api/tenant-enquiries/:id/tenancy-agreement', authMiddleware, requireP
   }
 });
 
+app.post('/api/tenant-enquiries/:id/balance-follow-up',authMiddleware,requirePermission('staff'),async(req:AuthRequest,res)=>{
+ const date=String(req.body.follow_up_date||''),notes=String(req.body.internal_notes||'');
+ if(!isValidDateOnly(date)||notes.length>10000)return res.status(400).json({error:'Enter a valid follow-up date and notes of no more than 10,000 characters'});
+ const ids=await linkedEntityIds('tenant_enquiry',Number(req.params.id));
+ const agreement=await queryOne("SELECT status FROM tenancy_agreements WHERE enquiry_id=ANY($1::int[]) AND status<>'void' ORDER BY id DESC LIMIT 1",[ids]);
+ if(agreement?.status!=='completed')return res.status(409).json({error:'Complete the APT before scheduling the final balance follow-up'});
+ try{await saveBalanceFollowUp(ids,date,notes,req.user);res.json({success:true});}catch(error){res.status(409).json({error:error instanceof Error?error.message:'Could not save the follow-up'});}
+});
+
 app.post('/api/tenant-enquiries/:id/request-balance', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
+  if(req.body.internal_notes!==undefined&&(typeof req.body.internal_notes!=='string'||req.body.internal_notes.length>10000))return res.status(400).json({error:'Internal notes must be no more than 10,000 characters'});
   if(req.body.send_email!==true&&req.body.send_sms!==true)return res.status(400).json({error:'Select Email or SMS before sending the request'});
   try {
     const enquiryIds = await linkedEntityIds('tenant_enquiry', Number(req.params.id));
@@ -6352,7 +6427,7 @@ app.post('/api/tenant-enquiries/:id/request-balance', authMiddleware, requirePer
       return res.status(400).json({ error: 'Choose a follow-up date for the final balance' });
     }
     const enquiry = await queryOne(`
-      SELECT te.*, p.address, p.postcode, p.service_type,
+      SELECT te.*, p.address, p.postcode, p.city, p.service_type,
         l.landlord_type,
         COALESCE(jp.first_name_1, te.first_name_2) AS joint_first_name,
         COALESCE(jp.email_1, te.email_2) AS joint_email,
@@ -6369,7 +6444,7 @@ app.post('/api/tenant-enquiries/:id/request-balance', authMiddleware, requirePer
     if(enquiry.balance_payment_received) return res.status(409).json({error:"The final balance has already been received"});
     const securityDeposit = Number(enquiry.security_deposit_amount || 0);
     const monthlyRent = Number(enquiry.monthly_rent_agreed || 0);
-    const holdingDeposit = Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
+    const holdingDeposit = enquiry.existing_tenancy_application ? 0 : Number(enquiry.holding_deposit_received_amount || enquiry.holding_deposit_amount || 0);
     const balance = Number((securityDeposit + monthlyRent - holdingDeposit).toFixed(2));
     if (balance <= 0) return res.status(409).json({ error: 'The calculated balance must be greater than zero' });
     const details = parseAgreementDetails(agreement.agreement_details);
@@ -6378,14 +6453,7 @@ app.post('/api/tenant-enquiries/:id/request-balance', authMiddleware, requirePer
       || `${String(enquiry.address || '').match(/^\s*\d+[A-Za-z]?/)?.[0]?.trim() || 'PROPERTY'} ${String(enquiry.postcode || '').replace(/\s/g, '').toUpperCase()} - ${String(enquiry.last_name_1 || 'TENANT').toUpperCase()}`;
     await run(`UPDATE tenant_enquiries SET balance_due_amount = $1, balance_payment_requested = 1,
       balance_follow_up_date = $2, updated_at = NOW() WHERE id = ANY($3::int[])`, [balance, followUpDate, enquiryIds]);
-    const existingFollowUp = await queryOne("SELECT id FROM tasks WHERE entity_type='tenant_enquiry' AND entity_id=$1 AND task_type='follow_up' AND title LIKE 'Chase final tenancy balance%' AND status<>'completed' LIMIT 1",[enquiryId]);
-    if(existingFollowUp) await run('UPDATE tasks SET due_date=$1,updated_at=NOW() WHERE id=$2',[followUpDate,existingFollowUp.id]);
-    else await insert(`INSERT INTO tasks (title, description, status, priority, entity_type, entity_id, due_date, task_type, assigned_to)
-      VALUES ($1,$2,'pending','high','tenant_enquiry',$3,$4,'follow_up',$5)`, [
-      `Chase final tenancy balance for ${enquiry.first_name_1} ${enquiry.last_name_1}`,
-      `Follow up the outstanding final balance of £${balance.toLocaleString('en-GB', { minimumFractionDigits: 2 })} for ${normalizePropertyAddress(enquiry.address, enquiry.postcode)}.`,
-      enquiryId, followUpDate, req.user?.name || req.user?.email || null,
-    ]);
+    await saveBalanceFollowUp(enquiryIds,followUpDate,typeof req.body.internal_notes==='string'?req.body.internal_notes:undefined,req.user);
     const delivery: Record<string, unknown> = {};
     if (req.body.send_email === true) {
       const recipients = [
@@ -6399,7 +6467,7 @@ app.post('/api/tenant-enquiries/:id/request-balance', authMiddleware, requirePer
         }
         const content = finalBalanceHandoverEmail({
           firstName: recipient.firstName || 'there',
-          propertyAddress: normalizePropertyAddress(enquiry.address, enquiry.postcode),
+          propertyAddress: normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city),
           securityDeposit,
           monthlyRent,
           holdingDeposit,
@@ -6409,7 +6477,7 @@ app.post('/api/tenant-enquiries/:id/request-balance', authMiddleware, requirePer
           customMessage: String(req.body.email_message || '').trim()
             ? renderAgreementMessage(req.body.email_message, {
               first_name: recipient.firstName || 'there',
-              property_address: normalizePropertyAddress(enquiry.address, enquiry.postcode),
+              property_address: normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city),
               balance_due: `£${balance.toLocaleString('en-GB', { minimumFractionDigits: 2 })}`,
             })
             : null,
@@ -6435,7 +6503,7 @@ app.post('/api/tenant-enquiries/:id/request-balance', authMiddleware, requirePer
         const phone = normalizeUkPhone(recipient.phone);
         const smsBody = renderAgreementMessage(String(req.body.sms_message || '').trim() || defaultSms, {
           first_name: recipient.firstName || 'there',
-          property_address: normalizePropertyAddress(enquiry.address, enquiry.postcode),
+          property_address: normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city),
           balance_due: `£${balance.toLocaleString('en-GB', { minimumFractionDigits: 2 })}`,
         });
         const result = await sendSms({ to: phone, body: smsBody });
@@ -6456,9 +6524,9 @@ app.post('/api/tenant-enquiries/:id/request-balance', authMiddleware, requirePer
 });
 
 app.post('/api/tenant-enquiries/:id/confirm-balance/email-preview',authMiddleware,requirePermission('staff'),async(req,res)=>{
- const e=await queryOne('SELECT e.*,p.address,p.postcode FROM tenant_enquiries e LEFT JOIN properties p ON p.id=e.linked_property_id WHERE e.id=$1',[req.params.id]);if(!e)return res.sendStatus(404);
+ const e=await queryOne('SELECT e.*,p.address, p.postcode, p.city FROM tenant_enquiries e LEFT JOIN properties p ON p.id=e.linked_property_id WHERE e.id=$1',[req.params.id]);if(!e)return res.sendStatus(404);
  const date=String(req.body.received_date||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return res.status(400).json({error:'Enter the receipt date'});
- const {finalBalanceReceiptEmail}=require('./email');const {subject,html}=finalBalanceReceiptEmail(e.first_name_1,Number(e.balance_due_amount||0),date,normalizePropertyAddress(e.address,e.postcode));res.json({subject,body_html:html});
+ const {finalBalanceReceiptEmail}=require('./email');const {subject,html}=finalBalanceReceiptEmail(e.first_name_1,Number(req.body.received_amount??e.balance_due_amount??0),date,normalizePropertyAddress(e.address,e.postcode),Math.max(0,Number(e.balance_due_amount||0)-Number(req.body.received_amount??e.balance_due_amount??0)));res.json({subject,body_html:html});
 });
 
 app.post('/api/tenant-enquiries/:id/confirm-balance', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
@@ -6469,32 +6537,26 @@ app.post('/api/tenant-enquiries/:id/confirm-balance', authMiddleware, requirePer
     const enquiryIds = await linkedEntityIds('tenant_enquiry', Number(req.params.id));
     const enquiry = await queryOne('SELECT id, linked_property_id, balance_due_amount, notes FROM tenant_enquiries WHERE id = ANY($1::int[]) ORDER BY id LIMIT 1', [enquiryIds]);
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
-    const amount = Number(enquiry.balance_due_amount || 0);
-    const noteText = `Final tenancy balance received of £${amount.toLocaleString('en-GB', { minimumFractionDigits: 2 })} on ${received.toLocaleDateString('en-GB')}.`;
-    let updated = 0;
-    for (const id of enquiryIds) {
-      const applicant = await queryOne('SELECT notes FROM tenant_enquiries WHERE id = $1', [id]);
-      updated += await run(`UPDATE tenant_enquiries SET balance_payment_received = 1, balance_payment_received_at = $3::date, balance_manual_amount=balance_due_amount, balance_manual_date=$3::date, notes = $2, updated_at = NOW()
-        WHERE id = $1 AND balance_payment_requested = 1 AND COALESCE(balance_payment_received, 0) = 0`, [id, appendSystemNote(applicant?.notes, noteText, 'final-balance'),receivedDate]);
-    }
-    if (!updated) return res.status(409).json({ error: 'Request the final balance before marking it received' });
+    const client=await pool.connect();let progress;
+    try{await client.query('BEGIN');progress=await recordManualFinalBalance(client,enquiryIds,req.body.received_amount,receivedDate,req.body.bank_only===true);await client.query('COMMIT');}
+    catch(error){await client.query('ROLLBACK');return res.status(400).json({error:error instanceof Error?error.message:'Payment could not be recorded'});}finally{client.release();}
+    const amount=progress.received;
+    const noteText = `Total received towards final tenancy balance: £${amount.toFixed(2)} on ${received.toLocaleDateString('en-GB')}. £${progress.remaining.toFixed(2)} remains to pay.`;
+    for(const id of enquiryIds){const applicant=await queryOne('SELECT notes FROM tenant_enquiries WHERE id=$1',[id]);await run('UPDATE tenant_enquiries SET notes=$2 WHERE id=$1',[id,appendSystemNote(applicant?.notes,noteText,'final-balance')]);}
     if (enquiry.linked_property_id) {
       const property = await queryOne('SELECT notes FROM properties WHERE id = $1', [enquiry.linked_property_id]);
       await run('UPDATE properties SET notes = $1, updated_at = NOW() WHERE id = $2', [appendSystemNote(property?.notes, noteText, 'final-balance'), enquiry.linked_property_id]);
     }
-    await run(`UPDATE tasks SET status = 'completed', updated_at = NOW()
-      WHERE entity_type = 'tenant_enquiry' AND entity_id = ANY($1::int[]) AND task_type = 'follow_up'
-        AND title LIKE 'Chase final tenancy balance%'`, [enquiryIds]);
-    for (const id of enquiryIds) await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', id, { action: 'final_balance_received',received_date:receivedDate });
+    for (const id of enquiryIds) await logAudit(req.user?.id, req.user?.email, 'update', 'tenant_enquiry', id, { action: progress.complete?'final_balance_received':'final_balance_part_received',received_date:receivedDate,received_amount:amount,remaining:progress.remaining });
     const delivery:Record<string,unknown>={};
     const {finalBalanceReceiptEmail}=require('./email');
-    const records=await query('SELECT e.*,p.address,p.postcode FROM tenant_enquiries e LEFT JOIN properties p ON p.id=e.linked_property_id WHERE e.id=ANY($1::int[]) ORDER BY e.id',[enquiryIds]);
+    const records=await query('SELECT e.*,p.address, p.postcode, p.city FROM tenant_enquiries e LEFT JOIN properties p ON p.id=e.linked_property_id WHERE e.id=ANY($1::int[]) ORDER BY e.id',[enquiryIds]);
     const recipients=records.map(e=>({...e,key:String(e.id)}));
     if(records.length===1&&(records[0].email_2||records[0].phone_2))recipients.push({...records[0],key:records[0].id+'-joint',first_name_1:records[0].first_name_2,email_1:records[0].email_2,phone_1:records[0].phone_2});
     const sentEmails=new Set<string>(),sentPhones=new Set<string>();
     for(const recipient of recipients){const id=recipient.id;
-      if(req.body.send_email===true&&recipient.email_1&&!sentEmails.has(recipient.email_1.toLowerCase())){sentEmails.add(recipient.email_1.toLowerCase());const content=finalBalanceReceiptEmail(recipient.first_name_1,amount,receivedDate,normalizePropertyAddress(recipient.address,recipient.postcode));const result=await sendEmail({to:recipient.email_1,...content,idempotencyKey:`balance-receipt-${recipient.key}-${receivedDate}`});delivery[recipient.key+'_email']=result;await insert(`INSERT INTO email_messages(resend_id,entity_type,entity_id,to_email,from_email,subject,template,body_html,status,sent_by,error_message) VALUES($1,'tenant_enquiry',$2,$3,$4,$5,'final_balance_receipt',$6,$7,$8,$9)`,[result.id||null,id,recipient.email_1,OUTBOUND_EMAIL_ADDRESS,content.subject,content.html,result.simulated?'simulated':result.success?'sent':'failed',req.user?.id,result.error||null]);}
-      if(req.body.send_sms===true&&recipient.phone_1){const {sendSms,normalizeUkPhone}=require('./sms');const phone=normalizeUkPhone(recipient.phone_1);if(sentPhones.has(phone))continue;sentPhones.add(phone);const message=`Hi ${recipient.first_name_1}, we confirm receipt of your final tenancy balance of £${amount.toFixed(2)} on ${received.toLocaleDateString('en-GB')}. Thank you. Fleming Lettings.`;const result=await sendSms({to:phone,body:message});delivery[recipient.key+'_sms']=result;await insert(`INSERT INTO sms_messages(enquiry_id,entity_type,entity_id,to_phone,from_phone,message_body,status,twilio_sid,error_message,sent_by) VALUES($1,'tenant_enquiry',$1,$2,$3,$4,$5,$6,$7,$8)`,[id,phone,SMS_FROM,message,result.simulated?'simulated':result.success?'sent':'failed',result.sid||null,result.error||null,req.user?.id]);}
+      if(req.body.send_email===true&&recipient.email_1&&!sentEmails.has(recipient.email_1.toLowerCase())){sentEmails.add(recipient.email_1.toLowerCase());const content=finalBalanceReceiptEmail(recipient.first_name_1,amount,receivedDate,normalizePropertyAddress(recipient.address,recipient.postcode),progress.remaining);const result=await sendEmail({to:recipient.email_1,...content,idempotencyKey:`balance-receipt-${recipient.key}-${receivedDate}-${amount}`});delivery[recipient.key+'_email']=result;await insert(`INSERT INTO email_messages(resend_id,entity_type,entity_id,to_email,from_email,subject,template,body_html,status,sent_by,error_message) VALUES($1,'tenant_enquiry',$2,$3,$4,$5,'final_balance_receipt',$6,$7,$8,$9)`,[result.id||null,id,recipient.email_1,OUTBOUND_EMAIL_ADDRESS,content.subject,content.html,result.simulated?'simulated':result.success?'sent':'failed',req.user?.id,result.error||null]);}
+      if(req.body.send_sms===true&&recipient.phone_1){const {sendSms,normalizeUkPhone}=require('./sms');const phone=normalizeUkPhone(recipient.phone_1);if(sentPhones.has(phone))continue;sentPhones.add(phone);const message=`Hi ${recipient.first_name_1}, we confirm £${amount.toFixed(2)} received towards your final tenancy balance on ${received.toLocaleDateString('en-GB')}. £${progress.remaining.toFixed(2)} remains to pay. Thank you. Fleming Lettings.`;const result=await sendSms({to:phone,body:message});delivery[recipient.key+'_sms']=result;await insert(`INSERT INTO sms_messages(enquiry_id,entity_type,entity_id,to_phone,from_phone,message_body,status,twilio_sid,error_message,sent_by) VALUES($1,'tenant_enquiry',$1,$2,$3,$4,$5,$6,$7,$8)`,[id,phone,SMS_FROM,message,result.simulated?'simulated':result.success?'sent':'failed',result.sid||null,result.error||null,req.user?.id]);}
     }
     res.json({ success: true,delivery });
   } catch (err) {
@@ -6504,27 +6566,30 @@ app.post('/api/tenant-enquiries/:id/confirm-balance', authMiddleware, requirePer
 
 app.post('/api/tenant-enquiries/:id/schedule-handover/email-preview', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const enquiry = await queryOne(`SELECT te.first_name_1, p.address, p.postcode, l.landlord_type, l.name AS landlord_name
+    const enquiryIds=await linkedEntityIds('tenant_enquiry',Number(req.params.id));
+    const enquiry = await queryOne(`SELECT te.first_name_1, p.address, p.postcode, p.city, l.landlord_type, l.name AS landlord_name
       FROM tenant_enquiries te LEFT JOIN properties p ON p.id = te.linked_property_id
-      LEFT JOIN landlords l ON l.id = p.landlord_id WHERE te.id = $1`, [req.params.id]);
+      LEFT JOIN landlords l ON l.id = p.landlord_id WHERE te.id = $1`, [Math.min(...enquiryIds)]);
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
     const date = String(req.body.handover_date || '');
     const time = String(req.body.handover_time || '');
     const assigned = String(req.body.assigned_to || '');
     if (!isValidDateOnly(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time) || !assigned) return res.status(400).json({ error: 'Choose the handover date, time and assigned team member' });
     if(req.body.with_landlord && resolveAgreementType(enquiry.landlord_type)!=='client')return res.status(400).json({error:'Assign a team member for a Fleming-owned property'});
-    const address = normalizePropertyAddress(enquiry.address, enquiry.postcode);
+    const address = normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city);
     let location;try{location=handoverLocation(req.body.location_type,req.body.location_address,address,await query('SELECT id,name,office_address FROM departments'));}catch(e){return res.status(400).json({error:(e as Error).message});}
     const withName = req.body.with_landlord ? enquiry.landlord_name : assigned;
+    const landlordPreview=req.body.recipient==='landlord'&&req.body.with_landlord===true;
     const content = handoverAppointmentEmail({
-      firstName: enquiry.first_name_1 || 'there', propertyAddress: address, appointmentLocation:location.address,
+      firstName: landlordPreview?enquiry.landlord_name:enquiry.first_name_1 || 'there', propertyAddress: address, appointmentLocation:location.address,
       appointmentDate: date, appointmentTime: time, appointmentWith: withName,
-      customMessage: renderAgreementMessage(req.body.email_message, {
+      customMessage: landlordPreview?`Your property handover with ${enquiry.first_name_1} is confirmed. Please meet the tenant at the location below.`:renderAgreementMessage(req.body.email_message, {
         first_name: enquiry.first_name_1 || 'there', property_address: address,handover_location:location.address,
         handover_date: date.split('-').reverse().join('/'), handover_time: time, appointment_with: withName,
       }),
     });
-    res.json({ subject: content.subject, body_html: content.html });
+    const smsBody=landlordPreview?`Hi ${enquiry.landlord_name||'there'}, your property handover with ${enquiry.first_name_1} is confirmed for ${date.split('-').reverse().join('/')} at ${time} at ${location.address}. If you need to rearrange then please contact us on 01902 212 415.`:`Hi ${enquiry.first_name_1||'there'}, your move in and handover appointment is confirmed for ${date.split('-').reverse().join('/')} at ${time} at ${location.address} with ${withName}. If you are running late or need to rearrange then please contact us on 01902 212 415.`;
+    res.json({ subject: content.subject, body_html: content.html,sms_body:smsBody });
   } catch { res.status(500).json({ error: 'Handover email preview could not be prepared' }); }
 });
 
@@ -6558,7 +6623,7 @@ app.post('/api/tenant-enquiries/:id/schedule-handover', authMiddleware, requireP
       return res.status(400).json({ error: 'Choose the handover date, time and assigned team member' });
     }
     const enquiry = await queryOne(`
-      SELECT te.*, p.address, p.postcode, p.landlord_id,
+      SELECT te.*, p.address, p.postcode, p.city, p.landlord_id,
         COALESCE(jp.first_name_1, te.first_name_2) AS joint_first_name,
         COALESCE(jp.email_1, te.email_2) AS joint_email,
         COALESCE(jp.phone_1, te.phone_2) AS joint_phone,
@@ -6574,33 +6639,27 @@ app.post('/api/tenant-enquiries/:id/schedule-handover', authMiddleware, requireP
     if(withLandlord && resolveAgreementType(enquiry.landlord_type)!=='client')return res.status(400).json({error:'Assign a team member for a Fleming-owned property'});
     const currentAgreement=await queryOne("SELECT status FROM tenancy_agreements WHERE enquiry_id=ANY($1::int[]) AND status<>'void' ORDER BY id DESC LIMIT 1",[enquiryIds]);
     if(currentAgreement?.status!=='completed')return res.status(409).json({error:'All parties must sign the current agreement before handover'});
-    let location;try{location=handoverLocation(req.body.location_type,req.body.location_address,normalizePropertyAddress(enquiry.address,enquiry.postcode),await query('SELECT id,name,office_address FROM departments'));}catch(e){return res.status(400).json({error:(e as Error).message});}
+    let location;try{location=handoverLocation(req.body.location_type,req.body.location_address,normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city),await query('SELECT id,name,office_address FROM departments'));}catch(e){return res.status(400).json({error:(e as Error).message});}
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       await client.query('SELECT id FROM tenant_enquiries WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE', [enquiryIds]);
       await client.query(`UPDATE tenant_enquiries SET handover_not_required=false, handover_date = $1, handover_time = $2, handover_assigned_to = $3, handover_with_landlord = $4,handover_location_type=$6,handover_location_address=$7, updated_at = NOW() WHERE id = ANY($5::int[])`, [handoverDate, handoverTime, assignedTo, withLandlord ? 1 : 0, enquiryIds,location.type,location.address]);
-      const existingTask = (await client.query(`SELECT id FROM tasks WHERE entity_type='tenant_enquiry' AND entity_id=ANY($1::int[]) AND task_type='handover' ORDER BY id LIMIT 1`, [enquiryIds])).rows[0];
-      const taskValues = [`Tenancy handover: ${enquiry.first_name_1} ${enquiry.last_name_1}`.trim(), `${handoverTime} at ${location.address}`, assignedTo, enquiryId, handoverDate];
-      if (existingTask) {
-        await client.query(`UPDATE tasks SET title=$1, description=$2, assigned_to=$3, entity_id=$4, due_date=$5, status='pending', updated_at=NOW() WHERE id=$6`, [...taskValues, existingTask.id]);
-      } else {
-        await client.query(`INSERT INTO tasks (title, description, status, priority, assigned_to, entity_type, entity_id, due_date, task_type)
-          VALUES ($1,$2,'pending','high',$3,'tenant_enquiry',$4,$5,'handover')`, taskValues);
-      }
+      await syncHandoverCalendar(client,enquiryIds,{withLandlord,name:`${enquiry.first_name_1} ${enquiry.last_name_1}`,time:handoverTime,location:location.address,assignedTo,enquiryId,date:handoverDate});
       await client.query('COMMIT');
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }
     const delivery: Record<string, unknown> = {};
-    const propertyAddress = normalizePropertyAddress(enquiry.address, enquiry.postcode);
+    const propertyAddress = normalizePropertyAddress(enquiry.address, enquiry.postcode, enquiry.city);
     const appointmentWith = withLandlord ? (enquiry.landlord_name || 'your landlord') : assignedTo;
     const recipients = [
       { key: 'tenant', firstName: enquiry.first_name_1, email: enquiry.email_1, phone: enquiry.phone_1 },
       ...(enquiry.joint_email || enquiry.joint_phone ? [{ key: 'joint_tenant', firstName: enquiry.joint_first_name, email: enquiry.joint_email, phone: enquiry.joint_phone }] : []),
       ...(withLandlord ? [{ key: 'landlord', firstName: enquiry.landlord_name, email: enquiry.landlord_email, phone: enquiry.landlord_phone }] : []),
     ];
-    if (req.body.send_email === true) {
+    if (req.body.send_email === true || (withLandlord && req.body.landlord_send_email === true)) {
       for (const recipient of recipients) {
+        if (!(recipient.key==='landlord'?req.body.landlord_send_email===true:req.body.send_email===true)) continue;
         if (!recipient.email) {
           delivery[`${recipient.key}_email`] = { success: false, error: `No ${recipient.key.replace('_', ' ')} email address is recorded` };
           continue;
@@ -6608,7 +6667,7 @@ app.post('/api/tenant-enquiries/:id/schedule-handover', authMiddleware, requireP
         const content = handoverAppointmentEmail({
           firstName: recipient.firstName || 'there', propertyAddress,appointmentLocation:location.address,
           appointmentDate: handoverDate, appointmentTime: handoverTime,
-          appointmentWith, customMessage: String(req.body.email_message || '').trim()
+          appointmentWith, customMessage: recipient.key==='landlord'?`Your property handover with ${enquiry.first_name_1} is confirmed. Please meet the tenant at the location below.`:String(req.body.email_message || '').trim()
             ? renderAgreementMessage(req.body.email_message, {
               first_name: recipient.firstName || 'there', property_address: propertyAddress,handover_location:location.address,
               handover_date: handoverDate.split('-').reverse().join('/'), handover_time: handoverTime,
@@ -6622,16 +6681,17 @@ app.post('/api/tenant-enquiries/:id/schedule-handover', authMiddleware, requireP
           VALUES ($1,'tenant_enquiry',$2,$3,$4,$5,'tenancy_handover',$6,$7,$8,$9,$10)`, [result.id || null, enquiryId, recipient.email, OUTBOUND_EMAIL_ADDRESS, content.subject, content.html, result.simulated ? 'simulated' : result.success ? 'sent' : 'failed', req.user?.id || null, req.user?.email || null, result.error || null]);
       }
     }
-    if (req.body.send_sms === true) {
+    if (req.body.send_sms === true || (withLandlord && req.body.landlord_send_sms === true)) {
       const defaultSms = 'Hi {{first_name}}, your move in and handover appointment is confirmed for {{handover_date}} at {{handover_time}} at {{handover_location}} with {{appointment_with}}. If you are running late or need to rearrange then please contact us on 01902 212 415.';
       for (const recipient of recipients) {
+        if (!(recipient.key==='landlord'?req.body.landlord_send_sms===true:req.body.send_sms===true)) continue;
         if (!recipient.phone) {
           delivery[`${recipient.key}_sms`] = { success: false, error: `No ${recipient.key.replace('_', ' ')} phone number is recorded` };
           continue;
         }
         const { sendSms, normalizeUkPhone } = require('./sms');
         const phone = normalizeUkPhone(recipient.phone);
-        const smsBody = renderAgreementMessage(String(req.body.sms_message || '').trim() || defaultSms, {
+        const smsBody = renderAgreementMessage(recipient.key==='landlord'?`Hi {{first_name}}, your property handover with ${enquiry.first_name_1} is confirmed for {{handover_date}} at {{handover_time}} at {{handover_location}}. If you need to rearrange then please contact us on 01902 212 415.`:String(req.body.sms_message || '').trim() || defaultSms, {
           first_name: recipient.firstName || 'there', property_address: propertyAddress,handover_location:location.address,
           handover_date: handoverDate.split('-').reverse().join('/'), handover_time: handoverTime,
           appointment_with: appointmentWith,
@@ -6871,7 +6931,7 @@ app.post('/api/tenant-enquiries/:id/confirm-holding-deposit', authMiddleware, as
 
 async function applicationRecipients(enquiryId: number) {
   const ids = await linkedEntityIds('tenant_enquiry', enquiryId);
-  const records = await query(`SELECT te.*,p.address AS property_address,p.postcode AS property_postcode FROM tenant_enquiries te LEFT JOIN properties p ON p.id=te.linked_property_id WHERE te.id=ANY($1::int[]) ORDER BY te.id`,[ids]);
+  const records = await query(`SELECT te.*,p.address AS property_address,p.postcode AS property_postcode,p.city AS property_city,l.landlord_type AS property_landlord_type FROM tenant_enquiries te LEFT JOIN properties p ON p.id=te.linked_property_id LEFT JOIN landlords l ON l.id=p.landlord_id WHERE te.id=ANY($1::int[]) ORDER BY te.id`,[ids]);
   if (!records.length) throw new Error('Enquiry not found');
   for (const record of records) {
     if (!record.application_form_token || !record.application_form_slug) {
@@ -6883,30 +6943,45 @@ async function applicationRecipients(enquiryId: number) {
   return records;
 }
 async function sendApplicationMessages(records:any[],req:AuthRequest,kind:'holding'|'reminder') {
-  const {holdingDepositRequestEmail,applicationReminderEmail,sendEmail}=require('./email');
+  const {holdingDepositRequestEmail,applicationReminderEmail,newTenancyApplicationEmail,sendEmail}=require('./email');
   const {sendSms,normalizeUkPhone}=require('./sms');
   const delivery:Record<string,any>={};
   for (const recipient of records) {
-    const address=normalizePropertyAddress(recipient.property_address,recipient.property_postcode);
+    const address=normalizePropertyAddress(recipient.property_address,recipient.property_postcode,recipient.property_city);
     const link=`https://apply.fleminglettings.co.uk/${recipient.application_form_slug}`;
     const name=recipient.first_name_1 || 'there';
-    const content=kind==='holding' ? holdingDepositRequestEmail(name,address,Number(req.body.monthly_rent),Number(req.body.security_deposit || 0),Number(req.body.holding_deposit),link) : applicationReminderEmail(name,link);
+    const content=kind==='holding' ? holdingDepositRequestEmail(name,address,Number(req.body.monthly_rent),Number(req.body.security_deposit || 0),Number(req.body.holding_deposit),link,recipient.holding_payment) : recipient.existing_tenancy_application?newTenancyApplicationEmail(name,link):applicationReminderEmail(name,link);
     if(req.body.send_email!==false) {
       const result=recipient.email_1 ? await sendEmail({to:recipient.email_1,subject:content.subject,html:content.html}) : {success:false,error:'No email address recorded'};
       await insert(`INSERT INTO email_messages(resend_id,entity_type,entity_id,to_email,from_email,subject,template,body_html,status,sent_by,sent_by_email,error_message) VALUES($1,'tenant_enquiry',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[result.id||null,recipient.id,recipient.email_1||'',OUTBOUND_EMAIL_ADDRESS,content.subject,kind==='holding'?'holding_deposit_request':'tenancy_application',content.html,result.simulated?'simulated':result.success?'sent':'failed',req.user.id,req.user.email,result.error||null]);
       delivery[`${recipient.id}_email`]={success:result.success,error:result.error,recipient:recipient.email_1};
-      if(result.success) await run('UPDATE tenant_enquiries SET application_form_sent=1,onboarding_email_sent_at=NOW() WHERE id=$1',[recipient.id]);
+      if(result.success) { await run(`UPDATE tenant_enquiries SET status=CASE WHEN status IN ('new','viewing_booked','awaiting_response') THEN 'onboarding' ELSE status END,updated_at=NOW(),application_form_sent=1,onboarding_email_sent_at=NOW() WHERE id=$1`,[recipient.id]); await logAudit(req.user.id,req.user.email,'application_message_sent','tenant_enquiry',recipient.id,{channel:'email',application_form_sent:true}); }
     }
     if(req.body.send_sms===true) {
-      const body=kind==='holding' ? `Hi ${name}, we have just emailed you the details to pay and place your holding deposit on ${address}. Please ensure that you contact your lettings manager once the funds have been transferred so we can confirm receipt and continue with your application screening.` : `Hi ${name}, please complete your Fleming Lettings application here: ${link}`;
+      const body=kind==='holding' ? `Hi ${name}, we have just emailed you the details to pay and place your holding deposit on ${address}. Please ensure that you contact your lettings manager once the funds have been transferred so we can confirm receipt and continue with your application screening.` : `Hi there${name === 'there' ? '' : ' ' + name}, your application form for your new tenancy request with Fleming Lettings has been sent to you on your registered email address. If you have not received this or need any help completing it, then please contact the office on 01902 212 415.`;
       const phone=normalizeUkPhone(recipient.phone_1||'');
       const result=phone ? await sendSms({to:phone,body}) : {success:false,error:'No phone number recorded'};
       await insert(`INSERT INTO sms_messages(enquiry_id,entity_type,entity_id,to_phone,from_phone,message_body,status,twilio_sid,error_message,sent_by,sent_by_email) VALUES($1,'tenant_enquiry',$1,$2,$3,$4,$5,$6,$7,$8,$9)`,[recipient.id,phone,SMS_FROM,body,result.simulated?'simulated':result.success?'sent':'failed',result.sid||null,result.error||null,req.user.id,req.user.email]);
       delivery[`${recipient.id}_sms`]={success:result.success,error:result.error,recipient:phone};
+      if(result.success&&kind==='reminder'){ await run(`UPDATE tenant_enquiries SET status=CASE WHEN status IN ('new','viewing_booked','awaiting_response') THEN 'onboarding' ELSE status END,updated_at=NOW(),application_form_sent=1 WHERE id=$1`,[recipient.id]); await logAudit(req.user.id,req.user.email,'application_message_sent','tenant_enquiry',recipient.id,{channel:'sms',application_form_sent:true}); }
     }
   }
   return delivery;
 }
+app.post('/api/tenant-enquiries/:id/retry-holding-deposit-email',authMiddleware,requirePermission('staff'),async(req:AuthRequest,res)=>{
+ const messageId=Number(req.body.message_id);
+ if(!Number.isInteger(messageId)||messageId<=0)return res.status(400).json({error:'Choose a failed email to resend'});
+ const client=await pool.connect();
+ try{
+  await client.query('BEGIN');
+  const ids=await linkedEntityIds('tenant_enquiry',Number(req.params.id));
+  const result=await retryHoldingDepositEmail(client,ids,messageId,req.user);
+  await client.query('COMMIT');
+  await logAudit(req.user.id,req.user.email,'holding_deposit_email_retried','tenant_enquiry',Number(req.params.id),{originalMessageId:messageId,messageId:result.messageId,status:result.status});
+  res.json(result);
+ }catch(error){await client.query('ROLLBACK');res.status(409).json({error:error instanceof Error?error.message:'Email retry failed'});}
+ finally{client.release();}
+});
 app.post('/api/tenant-enquiries/:id/request-holding-deposit',authMiddleware,async(req:AuthRequest,res)=>{
   try {
     const {monthly_rent,security_deposit,holding_deposit,follow_up_date}=req.body;
@@ -6915,6 +6990,9 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit',authMiddleware,asyn
     const records=await applicationRecipients(Number(req.params.id));
     if(records.some(r=>r.holding_deposit_received))return res.status(409).json({error:'The holding deposit has already been received. Send an application reminder instead.'});
     if(records.some(r=>r.status==='converted'))return res.status(409).json({error:'This application has already converted to a tenancy'});
+    const {data:company}=await getCompanySettings();
+    try { for(const record of records) record.holding_payment=holdingDepositBank(record.property_landlord_type,company); }
+    catch(error){return res.status(409).json({error:error.message});}
     const ids=records.map(r=>r.id);
     await run(`UPDATE tenant_enquiries SET monthly_rent_agreed=$1,security_deposit_amount=$2,holding_deposit_amount=$3,holding_deposit_requested=1,status='onboarding',follow_up_date=$4,follow_up_return_status='onboarding',updated_at=NOW() WHERE id=ANY($5::int[])`,[monthly_rent,security_deposit||0,holding_deposit,follow_up_date||null,ids]);
     const delivery=await sendApplicationMessages(records,req,'holding');
@@ -6923,14 +7001,19 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit',authMiddleware,asyn
     res.json({success:true,delivery,application_form_url:`https://apply.fleminglettings.co.uk/${records.find(r=>r.id===Number(req.params.id)).application_form_slug}`});
   }catch(error){res.status(500).json({error:'Holding deposit request could not be completed'});}
 });
-app.post('/api/tenant-enquiries/:id/send-application-email',authMiddleware,async(req:AuthRequest,res)=>{
+app.post('/api/tenant-enquiries/:id/send-application-email/email-preview',authMiddleware,requirePermission('staff'),async(req:AuthRequest,res)=>{
+ try{const records=await applicationRecipients(Number(req.params.id));const record=records.find((r:any)=>r.id===Number(req.params.id));const link='https://apply.fleminglettings.co.uk/'+record.application_form_slug;const name=record.first_name_1||'there';const {newTenancyApplicationEmail,applicationReminderEmail}=require('./email');const content=record.existing_tenancy_application?newTenancyApplicationEmail(name,link):applicationReminderEmail(name,link);res.json({...content,to:record.email_1,sms:`Hi there${name === 'there' ? '' : ' ' + name}, your application form for your new tenancy request with Fleming Lettings has been sent to you on your registered email address. If you have not received this or need any help completing it, then please contact the office on 01902 212 415.`});}catch(error){res.status(409).json({error:error.message});}
+});
+app.post('/api/tenant-enquiries/:id/send-application-email',authMiddleware,requirePermission('staff'),async(req:AuthRequest,res)=>{
   try{const records=await applicationRecipients(Number(req.params.id));const delivery=await sendApplicationMessages(records,req,'reminder');res.json({success:true,delivery});}
   catch(error){res.status(500).json({error:'Application reminder could not be sent'});}
 });
 app.post('/api/tenant-enquiries/:id/holding-deposit/email-preview',authMiddleware,async(req:AuthRequest,res)=>{
- const record=await queryOne('SELECT te.*,p.address,p.postcode FROM tenant_enquiries te LEFT JOIN properties p ON p.id=te.linked_property_id WHERE te.id=$1',[req.params.id]);if(!record)return res.sendStatus(404);
+ const record=await queryOne('SELECT te.*,p.address, p.postcode, p.city,l.landlord_type AS property_landlord_type FROM tenant_enquiries te LEFT JOIN properties p ON p.id=te.linked_property_id LEFT JOIN landlords l ON l.id=p.landlord_id WHERE te.id=$1',[req.params.id]);if(!record)return res.sendStatus(404);
  const {holdingDepositRequestEmail,holdingDepositReceiptEmail}=require('./email');
- const content=req.body.receipt ? holdingDepositReceiptEmail(record.first_name_1,Number(req.body.amount),req.body.received_date) : holdingDepositRequestEmail(record.first_name_1,normalizePropertyAddress(record.address,record.postcode),Number(req.body.monthly_rent||0),Number(req.body.security_deposit||0),Number(req.body.holding_deposit||0),record.application_form_slug?`https://apply.fleminglettings.co.uk/${record.application_form_slug}`:'https://apply.fleminglettings.co.uk');
+ let payment;
+ if(!req.body.receipt){try{payment=holdingDepositBank(record.property_landlord_type,(await getCompanySettings()).data);}catch(error){return res.status(409).json({error:error.message});}}
+ const content=req.body.receipt ? holdingDepositReceiptEmail(record.first_name_1,Number(req.body.amount),req.body.received_date) : holdingDepositRequestEmail(record.first_name_1,normalizePropertyAddress(record.address,record.postcode,record.city),Number(req.body.monthly_rent||0),Number(req.body.security_deposit||0),Number(req.body.holding_deposit||0),record.application_form_slug?`https://apply.fleminglettings.co.uk/${record.application_form_slug}`:'https://apply.fleminglettings.co.uk',payment);
  res.json(content);
 });
 

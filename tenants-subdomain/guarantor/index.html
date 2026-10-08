@@ -1,0 +1,46 @@
+<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Guarantor Application | Fleming Lettings</title><link rel="icon" type="image/png" href="/logo-icon.png"><link rel="stylesheet" href="application-base.css"><link rel="stylesheet" href="../signing-layout.css"><link rel="stylesheet" href="../signature-controls.css"><link rel="stylesheet" href="public-form.css?v=live-1"><link rel="stylesheet" href="../form-typography.css"></head><body><div id="app"></div>    <!-- Date Picker Overlay (mobile) -->
+    <div class="dp-overlay" id="dpOverlay" onclick="closeDatePicker()"></div>
+
+    <!-- Date Picker Dropdown -->
+    <div class="date-picker-dropdown" id="datePicker" role="dialog" aria-modal="true" aria-label="Choose date">
+        <div class="dp-header">
+            <button type="button" class="dp-nav" onclick="dpPrevMonth()">&#x2039;</button>
+            <div class="dp-header-center">
+                <button type="button" class="dp-month-btn" aria-label="Choose month" id="dpMonthBtn" onclick="showMonthSelector()">January</button>
+                <button type="button" class="dp-year-btn" aria-label="Choose year" id="dpYearBtn" onclick="showYearSelector()">2026</button>
+            </div>
+            <button type="button" class="dp-nav" onclick="dpNextMonth()">&#x203A;</button>
+        </div>
+        <div class="dp-weekdays">
+            <span class="dp-weekday">Mo</span>
+            <span class="dp-weekday">Tu</span>
+            <span class="dp-weekday">We</span>
+            <span class="dp-weekday">Th</span>
+            <span class="dp-weekday">Fr</span>
+            <span class="dp-weekday">Sa</span>
+            <span class="dp-weekday">Su</span>
+        </div>
+        <div class="dp-days" id="dpDays"></div>
+        <div class="dp-footer">
+            <button type="button" class="dp-clear" onclick="dpClear()">Clear</button>
+            <button type="button" class="dp-today-btn" onclick="dpSelectToday()">Today</button>
+        </div>
+        <div class="dp-selector" id="monthSelector">
+            <h4>Select Month</h4>
+            <div class="dp-selector-grid" id="monthGrid"></div>
+        </div>
+        <div class="dp-selector" id="yearSelector">
+            <h4>Select Year</h4>
+            <div class="dp-year-grid" id="yearGrid"></div>
+        </div>
+    </div>
+
+    <dialog id="document-guide" class="document-guide" aria-labelledby="document-guide-title">
+        <header><h2 id="document-guide-title"></h2><button type="button" class="document-guide-close" aria-label="Close document guidance" onclick="document.getElementById('document-guide').close()">&times;</button></header>
+        <p id="document-guide-intro"></p>
+        <ul id="document-guide-list"></ul>
+        <p id="document-guide-note" class="document-guide-note"></p>
+        <p>Documents are reviewed by our team. We may request additional evidence or original-document checks before verification is complete.</p>
+    </dialog>
+
+<script src="document-guides.js"></script><script src="date-picker.js"></script><script type="module" src="public-form.mjs?v=live-1"></script></body></html>

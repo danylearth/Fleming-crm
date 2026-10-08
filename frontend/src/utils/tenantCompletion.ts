@@ -17,8 +17,8 @@ export function tenantCompletion(form: Record<string, unknown>, linkedTenantId?:
       const type = document.doc_type.toLowerCase().replace(/[_-]/g, ' ').trim();
       switch (key) {
         case 'kyc_primary_id': return ['primary identification', 'primary id'].includes(type);
-        case 'kyc_secondary_id': return ['secondary identification', 'secondary id'].includes(type);
-        case 'kyc_address_verification': return ['proof of address', 'address verification', 'utility bill'].includes(type)
+        case 'kyc_secondary_id': return ['secondary identification', 'secondary id', 'bank statement', 'bank statements'].includes(type);
+        case 'kyc_address_verification': return ['proof of address', 'address verification', 'utility bill', 'bank statement', 'bank statements'].includes(type)
           // Legacy imports filed utility bills under secondary identification.
           || (type === 'secondary identification' && /\butility bill\b/i.test(document.original_name || ''));
         case 'application_forms_completed': return ['application form(s)', 'application form', 'application forms'].includes(type);

@@ -1,0 +1,12 @@
+{
+  "url": "https://crm.fleminglettings.co.uk",
+  "deployment": "dpl_HPtKYukBfUaEujNMbBGanUENVtGV",
+  "baselineDeployment": "dpl_FuEsGBdhMmm1nxaMDNucrzifkvFZ",
+  "source": "tmp/release-2026-10-07-dashboard/frontend-source",
+  "files": ["src/pages/Dashboard.tsx", "src/components/DashboardWorkPanels.tsx", "src/components/DashboardWorkPanels.css"],
+  "changes": ["Restore Compliance and Maintenance subtitles", "Reduce enquiry pipeline row padding", "Equal-size View and Continue pill buttons with arrows", "Remove enquiry from current view without deleting the record"],
+  "validation": ["TypeScript and Vite build passed", "Local and live browser checks with intercepted fictional data passed", "Independent filters, reminder dismissal and mobile layout verified"],
+  "backendChanged": false,
+  "liveRecordsChanged": false,
+  "previewOnly": ["Tenant tab regrouping", "Reminder task assignment, follow-up, notes, close and delete"]
+}

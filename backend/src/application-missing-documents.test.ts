@@ -34,3 +34,11 @@ it('requires review when a document is uploaded for a previously overridden cate
  expect(missingApplicationApprovals('Employed',documents,overrides)).toEqual([]);
  expect(missingApplicationApprovals('Employed',documents.slice(0,3),{})).toEqual(['Proof of Income or Employment']);
 });
+it('requires every bank statement and optional supporting upload to be reviewed',()=>{
+ const approved=docs.map(doc=>({...doc,review_status:'approved'}));
+ const extra={doc_type:'Bank Statements',review_status:'pending'};
+ expect(missingApplicationApprovals('Employed',[...approved,extra])).toEqual(['Bank Statements']);
+ extra.review_status='approved';expect(missingApplicationApprovals('Employed',[...approved,extra])).toEqual([]);
+ expect(missingApplicationApprovals('Employed',[...approved,{doc_type:'Other',review_status:'pending'}])).toEqual(['Other']);
+ expect(missingApplicationApprovals('Employed',[...approved,{doc_type:'Credit Check Report',review_status:'pending'}])).toEqual([]);
+});

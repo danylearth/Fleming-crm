@@ -12,8 +12,8 @@ describe('FreeAgent account integration',()=>{
   vi.stubGlobal('fetch',fetch);
   await expect(freeAgentPages('https://api.freeagent.com/v2/bank_transactions','bank_transactions','secret')).rejects.toThrow('Invalid FreeAgent pagination');expect(fetch).toHaveBeenCalledTimes(2);
  });
- it('combines paginated results',async()=>{
-  vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({bank_accounts:[1]}),{headers:{link:'<https://api.freeagent.com/v2/bank_accounts?page=2>; rel="next"'}})).mockResolvedValueOnce(new Response(JSON.stringify({bank_accounts:[2]}))));
-  expect(await freeAgentPages('https://api.freeagent.com/v2/bank_accounts','bank_accounts','secret')).toEqual([1,2]);
+ it.each(['"next"',"'next'",'next'])('combines paginated results using relation %s',relation=>{
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({bank_accounts:[1]}),{headers:{link:`<https://api.freeagent.com/v2/bank_accounts?page=2>; rel=${relation}`}})).mockResolvedValueOnce(new Response(JSON.stringify({bank_accounts:[2]}))));
+  return expect(freeAgentPages('https://api.freeagent.com/v2/bank_accounts','bank_accounts','secret')).resolves.toEqual([1,2]);
  });
 });

@@ -1,3 +1,5 @@
+import {useMemo as usePortfolioMemo} from 'react';
+import {usePortfolioScope} from '../context/PortfolioScope';
 import {ToolbarButton} from '../components/ui';
 import CsvImport from '../components/ui/CsvImport';
 import {usePermissions} from '../hooks/usePermissions';
@@ -12,13 +14,13 @@ import { Plus, X, Mail, Phone, Building2, Calendar, Search, ChevronDown, LayoutG
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
+import { usePortfolio } from '../context/PortfolioContext';
 import { useNotifications } from '../context/NotificationContext';
 
 interface Tenant {
   id: number; name: string; email: string; phone: string; property_id: number;
   property_address: string; property_landlord_name?: string; tenancy_start_date?: string; tenancy_end_date: string; monthly_rent: number;
-  status: string; nok_name: string; landlord_type?: string; created_at?: string;
+  service_type?: string | null; status: string; nok_name: string; landlord_type?: string; created_at?: string;
   is_joint_tenancy?: number; linked_tenant_name?: string;
 }
 
@@ -48,6 +50,7 @@ function MapAutoFit({ tenants, coords }: {
 }
 
 export default function Tenants() {
+  const {scope} = usePortfolioScope();
   const {isManager}=usePermissions();
   const [showImport,setShowImport]=useState(false);
   const { user } = useAuth();
@@ -55,18 +58,22 @@ export default function Tenants() {
   const [searchParams, setSearchParams] = useSearchParams();
   const api = useApi();
   const { confirmAction } = useNotifications();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [allPortfolioTenants, setTenants] = useState<Tenant[]>([]);
+  const tenants = usePortfolioMemo(() => allPortfolioTenants.filter(row => scope.tenant(row.id)), [allPortfolioTenants,scope]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [serviceFilter, setServiceFilter] = useState('ongoing');
   const [landlordFilter, setLandlordFilter] = useState<number | null>(null);
   const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', property_id: '', status: 'active', notes: '' });
   const [saving, setSaving] = useState(false);
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [landlords, setLandlords] = useState<Landlord[]>([]);
+  const [allPortfolioProperties, setProperties] = useState<Property[]>([]);
+  const properties = usePortfolioMemo(() => allPortfolioProperties.filter(row => scope.property(row.id)), [allPortfolioProperties,scope]);
+  const [allPortfolioLandlords, setLandlords] = useState<Landlord[]>([]);
+  const landlords = usePortfolioMemo(() => allPortfolioLandlords.filter(row => scope.landlord(row.id)), [allPortfolioLandlords,scope]);
   const [propertySearch, setPropertySearch] = useState('');
   const [propertyDropdownOpen, setPropertyDropdownOpen] = useState(false);
   const propertyDropdownRef = useRef<HTMLDivElement>(null);
@@ -87,6 +94,8 @@ export default function Tenants() {
   const [isArchiving, setIsArchiving] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
+  useEffect(()=>{setLandlordFilter(null);setPropertyFilter(null);setServiceFilter('all');setSelectedIds([]);setShowModal(false);},[portfolioFilter]);
+
   const load = async () => {
     try {
       const [data, props, lls] = await Promise.all([
@@ -106,7 +115,7 @@ export default function Tenants() {
   // Auto-open modal when navigated from property page
   useEffect(() => {
     const createFor = searchParams.get('createFor');
-    if (createFor && properties.length > 0) {
+    if (createFor && properties.some(p=>String(p.id)===createFor)) {
       queueMicrotask(() => {
         setForm(f => ({ ...f, property_id: createFor }));
         setShowModal(true);
@@ -151,7 +160,7 @@ export default function Tenants() {
     ? new Set(properties.filter(p => p.landlord_id === landlordFilter).map(p => p.id))
     : null;
 
-  const portfolioFiltered = filterByPortfolio(tenants, portfolioFilter);
+  const portfolioFiltered = tenants.filter(t => serviceFilter === 'all' || (serviceFilter === 'ongoing' ? t.service_type !== 'let_only' : serviceFilter === 'internal' ? t.landlord_type === 'internal' : t.service_type === serviceFilter));
   const filtered = portfolioFiltered.filter(t => {
     const matchSearch = !search || [t.name, t.email, t.phone, t.property_address]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()));
@@ -165,13 +174,13 @@ export default function Tenants() {
     return matchSearch;
   });
 
-  const statusCounts = tenants.reduce((acc, t) => {
+  const statusCounts = portfolioFiltered.reduce((acc, t) => {
     const s = t.status || 'active';
     acc[s] = (acc[s] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  const endingSoon = tenants.filter(t => {
+  const endingSoon = portfolioFiltered.filter(t => {
     if (!t.tenancy_end_date) return false;
     const days = Math.ceil((new Date(t.tenancy_end_date).getTime() - now) / (1000 * 60 * 60 * 24));
     return days > 0 && days <= 60;
@@ -238,7 +247,7 @@ export default function Tenants() {
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Total Tenants', value: tenants.length, accent: true },
+            { label: 'Total Tenants', value: portfolioFiltered.length, accent: true },
             { label: 'Active', value: statusCounts['active'] || 0 },
             { label: 'Ending Soon', value: endingSoon, warn: endingSoon > 0 },
           ].map(s => (
@@ -281,6 +290,7 @@ export default function Tenants() {
 
         {/* Filter dropdowns row */}
         <div className="flex flex-wrap items-center gap-3">
+          <Select inlineLabel label="Service Type" className="w-80 max-w-full" value={serviceFilter} onChange={value=>{setServiceFilter(value);setSelectedIds([]);}} options={[{value:'ongoing',label:'All except Let Only'},{value:'all',label:'All Service Types'},{value:'full_management',label:'Full Management'},{value:'rent_collection',label:'Rent Collection'},{value:'let_only',label:'Let Only'},{value:'internal',label:'Own Portfolio'}]} />
           {/* Landlord filter dropdown */}
           <div className="relative" ref={landlordFilterRef}>
             <button
@@ -400,8 +410,8 @@ export default function Tenants() {
 
           {/* Status filter tags */}
           {[
-            { key: 'all', label: `All (${tenants.length})` },
-            { key: 'new', label: `New (${tenants.filter(t => { const days = (now - new Date(t.created_at || 0).getTime()) / 86400000; return days <= 30 && (t.status || 'active') === 'active'; }).length})` },
+            { key: 'all', label: `All (${portfolioFiltered.length})` },
+            { key: 'new', label: `New (${portfolioFiltered.filter(t => { const days = (now - new Date(t.created_at || 0).getTime()) / 86400000; return days <= 30 && (t.status || 'active') === 'active'; }).length})` },
             { key: 'active', label: `Active (${statusCounts['active'] || 0})` },
             { key: 'scheduled', label: `Scheduled (${statusCounts['scheduled'] || 0})` },
             { key: 'onboarding', label: `Onboarding (${statusCounts['onboarding'] || 0})` },

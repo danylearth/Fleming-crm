@@ -7,7 +7,9 @@ import fs from 'fs';
 import path from 'path';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-export const OUTBOUND_EMAIL_ADDRESS = 'contact@tenancies.fleminglettings.co.uk';
+const configuredSender = process.env.EMAIL_FROM?.trim() || 'contact@tenancies.fleminglettings.co.uk';
+export const OUTBOUND_EMAIL_ADDRESS = configuredSender.match(/<([^<>]+)>/)?.[1]?.trim() || configuredSender;
+if (!/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(OUTBOUND_EMAIL_ADDRESS)) throw new Error('EMAIL_FROM must contain a valid email address');
 export const EMAIL_FROM = `Fleming Lettings <${OUTBOUND_EMAIL_ADDRESS}>`;
 export const SECURITY_EMAIL_ADDRESS = 'no-reply@fleminglettings.co.uk';
 const ALLOW_SIMULATED_MESSAGES = process.env.ALLOW_SIMULATED_MESSAGES === 'true' && process.env.NODE_ENV !== 'production';
@@ -115,6 +117,7 @@ export interface TenancyAgreementEmailInput {
   balanceDue: number;
   signingUrl: string;
   customMessage?: string | null;
+  isExistingTenant?: boolean;
 }
 
 export function revisedAgreementNotice(firstName:string,propertyAddress:string,signingUrl:string,waitingForLandlord:boolean){
@@ -123,9 +126,9 @@ export function revisedAgreementNotice(firstName:string,propertyAddress:string,s
 
 export function tenancyAgreementEmail(input: TenancyAgreementEmailInput): { subject: string; html: string } {
   const address = addressParts(input.propertyAddress);
-  return {
-    subject: 'Your tenancy agreement is ready to sign',
-    html: renderFinalEmailTemplate('06-tenancy-agreement.html', {
+  const landlordAddress = (input.landlordAddress || '').replace(/,?\s*(?:West Midlands|Glaisher Drive),?/gi, /fleming/i.test(input.landlordName)?',':'$&');
+  const landlordAddressHtml = escapeHtml(landlordAddress).replace(/([^,]+),\s*([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})$/i, (_match, town, postcode) => ` <span style="white-space:nowrap">${town.trim()}, ${postcode}</span>`);
+  let html = renderFinalEmailTemplate('06-tenancy-agreement.html', {
       FIRST_NAME: escapeHtml(input.firstName || 'there'),
       PROPERTY_ADDRESS: escapeHtml(address.full),
       PROPERTY_SHORT_ADDRESS: escapeHtml(address.short),
@@ -133,14 +136,15 @@ export function tenancyAgreementEmail(input: TenancyAgreementEmailInput): { subj
       INTRO_MESSAGE: escapeHtml(input.customMessage || `Your tenancy agreement for ${address.full} is ready to review and sign.`).replace(/\r?\n/g, '<br>'),
       TENANCY_START_DATE: emailDate(input.tenancyStartDate),
       LANDLORD_NAME: escapeHtml(input.landlordName),
-      LANDLORD_ADDRESS: escapeHtml((input.landlordAddress || '').replace(/,?\s*West Midlands,?/gi, /fleming/i.test(input.landlordName)?',':'$&')).replace(/([A-Z]{1,2}\d[A-Z\d]?)\s+(\d[A-Z]{2})/gi,'<span style="white-space:nowrap">$1 $2</span>'),
+      LANDLORD_ADDRESS: landlordAddressHtml,
       MONTHLY_RENT: emailMoneyCompact(input.monthlyRent),
       SECURITY_DEPOSIT: emailMoneyCompact(input.securityDeposit),
       FUNDS_ON_ACCOUNT: emailMoneyCompact(input.fundsOnAccount),
-      BALANCE_DUE: emailMoneyCompact(input.balanceDue),
+      BALANCE_DUE: emailMoneyCompact(input.isExistingTenant ? Math.max(0, input.monthlyRent + input.securityDeposit) : input.balanceDue),
       SIGNING_URL: escapeHtml(input.signingUrl),
-    }),
-  };
+    });
+  if(input.isExistingTenant)html=html.replace(/<!-- HOLDING_DEPOSIT_START -->[\s\S]*?<!-- HOLDING_DEPOSIT_END -->/,'');
+  return {subject: 'Your tenancy agreement is ready to sign',html};
 }
 
 export function completedTenancyAgreementEmail(firstName: string, propertyAddress: string): { subject: string; html: string } {
@@ -386,7 +390,7 @@ export function referenceChaseEmail(landlordName: string, tenantName: string, pr
 export function rentReminderEmail(tenantName: string, amount: number, address: string, dueDate: string): { subject: string; html: string } {
   return {
     subject: `Rent Payment Reminder - ${address}`,
-    html: renderFinalEmailTemplate('14-rent-overdue.html', { FIRST_NAME:escapeHtml(tenantName), AMOUNT:escapeHtml(amount.toFixed(2)), PROPERTY_ADDRESS:escapeHtml(address), DUE_DATE:escapeHtml(new Date(dueDate.slice(0,10)+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})), PROPERTY_SUBJECT:encodeURIComponent(address) }).replace('your rent payment has not been received','your rent payment has an outstanding balance').replace(/overdue/gi, dueDate.slice(0,10)===new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date())?'due today':'overdue'),
+    html: renderFinalEmailTemplate('14-rent-overdue.html', { FIRST_NAME:escapeHtml(tenantName), AMOUNT:escapeHtml(amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})), PROPERTY_ADDRESS:escapeHtml(address), DUE_DATE:escapeHtml(new Date(dueDate.slice(0,10)+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})), PROPERTY_SUBJECT:encodeURIComponent(address) }).replace('your rent payment has not been received','your rent payment has an outstanding balance').replace(/overdue/gi, dueDate.slice(0,10)===new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date())?'due today':'overdue'),
   };
 }
 
@@ -411,7 +415,7 @@ export function statusUpdateEmail(name: string, address: string, status: string)
 
 export function holdingDepositRequestEmail(
   name: string, address: string, monthlyRent: number, securityDeposit: number,
-  holdingDeposit: number, applicationFormUrl: string, customMessage?: string | null
+  holdingDeposit: number, applicationFormUrl: string, payment: ReturnType<typeof import('./holding-deposit-bank').holdingDepositBank>, customMessage?: string | null
 ): { subject: string; html: string } {
   const propertyAddress = addressParts(address);
   return {
@@ -423,6 +427,12 @@ export function holdingDepositRequestEmail(
       MONTHLY_RENT: emailMoneyCompact(monthlyRent),
       SECURITY_DEPOSIT: emailMoneyCompact(securityDeposit),
       HOLDING_DEPOSIT: emailMoneyCompact(holdingDeposit),
+      PAYMENT_ACCOUNT_LABEL: escapeHtml(payment.accountLabel),
+      PAYMENT_ACCOUNT_NAME: escapeHtml(payment.accountName),
+      PAYMENT_BANK_NAME: escapeHtml(payment.bankName),
+      PAYMENT_SORT_CODE: escapeHtml(payment.sortCode),
+      PAYMENT_ACCOUNT_NUMBER: escapeHtml(payment.accountNumber),
+      PAYMENT_REFERENCE: escapeHtml(propertyAddress.short),
       APPLICATION_URL: escapeHtml(applicationFormUrl),
       INTRO_MESSAGE: escapeHtml(customMessage || `Thank you for your interest in ${propertyAddress.full}. We are pleased to confirm that we would like to proceed with your application.\n\nTo secure this property, we require an initial holding deposit. Please see the financial summary below:`).replace(/\r?\n/g, '<br>'),
     }),
@@ -537,9 +547,10 @@ export function enquiryConfirmationEmail(name: string, reference: string, proper
   };
 }
 
-export function applicationConfirmationEmail(name: string): { subject: string; html: string } {
+export function applicationConfirmationEmail(name: string): { subject: string; html: string; fromEmail: string } {
   const firstName = String(name || '').trim().split(/\s+/)[0] || 'there';
   return {
+    fromEmail: 'tenancies@fleminglettings.co.uk',
     subject: 'Thank you for completing your application form',
     html: renderFinalEmailTemplate('04-application-received.html', {
       FIRST_NAME: escapeHtml(firstName),
@@ -589,6 +600,12 @@ export function propertyInventoryEmail(name: string, address: string, dueDate: s
   });
 }
 
+export function newTenancyApplicationEmail(name:string,link:string){
+ return {subject:'Your new tenancy application',html:renderFinalEmailTemplate('new-tenancy-application.html',{
+  FIRST_NAME:escapeHtml(String(name||'').trim().split(/\s+/)[0]||'there'),APPLICATION_LINK:escapeHtml(link),
+ })};
+}
+
 export function applicationReminderEmail(name: string, link: string) {
  return {subject:'Complete your Fleming Lettings application',html:renderFinalEmailTemplate('13-application-reminder.html',{FIRST_NAME:escapeHtml(name),APPLICATION_LINK:escapeHtml(link)})};
 }
@@ -601,7 +618,13 @@ export function landlordSignatureEmail(name:string,address:string,signingUrl:str
  return {subject:'Landlord signature required on a tenancy agreement',html:renderFinalEmailTemplate('landlord-signature.html',{LANDLORD_NAME:escapeHtml(name),PROPERTY_ADDRESS:escapeHtml(address),SIGNING_URL:escapeHtml(signingUrl),DELIVERY_DESCRIPTION:automaticDelivery?'After you sign, the tenant will automatically receive their signing link.':'After you sign, the office will arrange the tenant signing link.'})};
 }
 
-export function finalBalanceReceiptEmail(name:string,amount:number,date:string,address:string){return {subject:'Your final tenancy balance has been received',html:brandedEmailHtml('Payment Received',`<p>Hi ${escapeHtml(name)},</p><p>We confirm receipt of your final tenancy balance of <strong>£${emailMoney(amount)}</strong> on <strong>${emailDate(date)}</strong> for ${escapeHtml(address)}.</p><p>Thank you. The office will confirm the handover arrangements with you.</p>`) };}
+export function finalBalanceReceiptEmail(name:string,amount:number,date:string,address:string,remaining=0){
+ return {subject:remaining>0?'Payment received towards your final tenancy balance':'Your final tenancy balance has been received',html:renderFinalEmailTemplate('final-balance-receipt.html',{
+  FIRST_NAME:escapeHtml(name),AMOUNT:emailMoney(amount),RECEIVED_DATE:escapeHtml(emailDate(date)),
+  INTRO_MESSAGE:'We confirm receipt of '+(remaining>0?'a total payment towards your final tenancy balance':'your final tenancy balance')+' for <strong>'+escapeHtml(address)+'</strong>.',
+  NEXT_STEPS:remaining>0?'The remaining balance is <strong>£'+emailMoney(remaining)+'</strong>.':'Thank you. The office will confirm the handover arrangements with you.',
+ })};
+}
 
 export function completedLandlordAgreementEmail(name:string,propertyAddress:string,serviceName:string,signedAt:string){
  const date=new Date(signedAt);if(Number.isNaN(date.getTime()))throw Error('Invalid signing date');
@@ -618,5 +641,52 @@ export function signatureRequestPreview(name:string,documentName:string,message:
  const inline=inlineEmailImages(signatureRequestEmail(name,documentName,message,'#preview-only'));
  let html=inline.html;
  for(const asset of inline.attachments)html=html.split('cid:'+asset.contentId).join('data:'+asset.contentType+';base64,'+asset.content.toString('base64'));
- return html;
+  return html;
 }
+
+interface GuarantorEmailDetails {
+  guarantorName:string;
+  tenantNames:string[];
+  propertyAddress:string;
+}
+function guarantorEmailValues(details:GuarantorEmailDetails){
+  const names=details.tenantNames.map(name=>name.trim()).filter(Boolean);
+  if(!names.length)throw Error('At least one tenant name is required');
+  return {
+    FIRST_NAME:escapeHtml(details.guarantorName.trim().replace(/^(mr|mrs|ms|miss|dr|prof)\.?\s+/i,'').split(/\s+/)[0]||'there'),
+    GUARANTOR_NAME:escapeHtml(details.guarantorName),
+    TENANT_NAMES:escapeHtml(names.join(' and ')),
+    TENANT_LABEL:names.length===1?'Tenant':'Tenants',
+    HAVE_HAS:names.length===1?'has':'have',
+    PROPERTY_ADDRESS:escapeHtml(normalizePropertyAddress(details.propertyAddress)),
+  };
+}
+export function guarantorRequestEmail(details:GuarantorEmailDetails&{monthlyRent:number;applicationUrl:string}){
+  if(!Number.isFinite(details.monthlyRent)||details.monthlyRent<=0)throw Error('A valid monthly rent is required');
+  return {subject:'Your guarantor application and deed of guarantee',html:renderFinalEmailTemplate('guarantor-request.html',{
+    ...guarantorEmailValues(details),MONTHLY_RENT:escapeHtml('£'+emailMoney(details.monthlyRent)),APPLICATION_URL:escapeHtml(details.applicationUrl),
+  })};
+}
+export function guarantorWitnessEmail(details:GuarantorEmailDetails&{witnessName:string;applicationUrl:string}){
+  return {subject:'Please witness the Deed of Guarantee',html:renderFinalEmailTemplate('guarantor-witness.html',{
+    ...guarantorEmailValues(details),FIRST_NAME:escapeHtml(details.witnessName.trim().split(/\s+/)[0]||'there'),APPLICATION_URL:escapeHtml(details.applicationUrl),
+  })};
+}
+export function guarantorCompletedEmail(details:GuarantorEmailDetails&{witnessName:string;tenancyStartDate:string;completedAt:string;guarantorNames?:string[]}){
+  const start=new Date(details.tenancyStartDate.slice(0,10)+'T12:00:00Z'),completed=new Date(details.completedAt);
+  if(!Number.isFinite(start.getTime())||!Number.isFinite(completed.getTime()))throw Error('Valid tenancy start and completion dates are required');
+  const names=(details.guarantorNames||[details.guarantorName]).map(name=>name.trim()).filter(Boolean);
+  if(!names.length)throw Error('At least one guarantor name is required');
+  const address=addressParts(details.propertyAddress);
+  return {subject:'Your completed Deed of Guarantee',html:renderFinalEmailTemplate('guarantor-completed.html',{
+    ...guarantorEmailValues(details),PROPERTY_SHORT_ADDRESS:escapeHtml(address.short),PROPERTY_ADDRESS_REMAINDER:escapeHtml(address.remainder),
+    TENANCY_START_DATE:emailDate(start),GUARANTOR_LABEL:names.length===1?'Guarantor':'Guarantors',GUARANTOR_NAME:escapeHtml(names.join(' and ')),
+    WITNESS_NAME:escapeHtml(details.witnessName),COMPLETED_DATE:escapeHtml(completed.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'Europe/London'})),
+  })};
+}
+export function guarantorChangesEmail(name:string,changes:string,applicationUrl:string){
+  return {subject:'Your guarantor application needs an update',html:renderFinalEmailTemplate('guarantor-changes.html',{
+    FIRST_NAME:escapeHtml(name.trim().split(/\s+/)[0]||'there'),REQUESTED_CHANGES:escapeHtml(changes).replace(/\r?\n/g,'<br>'),APPLICATION_URL:escapeHtml(applicationUrl),
+  })};
+}
+

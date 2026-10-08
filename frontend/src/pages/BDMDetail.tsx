@@ -1,3 +1,4 @@
+import { newestNotesFirst } from '../utils/notes';
 import LandlordIntakeSections from '../components/LandlordIntakeSections';
 import LandlordAppointmentForm from '../components/LandlordAppointmentForm';
 import SectionEditButton from '../components/ui/SectionEditButton';
@@ -301,7 +302,7 @@ export default function BDMDetail() {
               <SectionHeader title="Notes" icon={<MessageSquare size={16} />} />
               <div className="space-y-3 max-h-64 overflow-y-auto" style={{ paddingRight: 0, scrollbarGutter: 'auto' }}>
                 {prospect.source && !notes.some(note=>note.text.includes(prospect.source)) && <div className="rounded-xl bg-[var(--bg-subtle)] p-3 text-sm"><p>{prospect.source}</p><p className="text-xs text-[var(--text-muted)] mt-1">Source</p></div>}{notes.length === 0 && !prospect.source && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
-                {notes.map(note => (
+                {newestNotesFirst(notes).map(note => (
                   <div key={note.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
                     <div className="flex items-start justify-between gap-2">
                       <p className="min-w-0 flex-1 break-words text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p>

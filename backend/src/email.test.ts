@@ -1,3 +1,6 @@
+import {holdingDepositBank} from './holding-deposit-bank';
+import {defaultCompanySettings} from './company-settings-values';
+const holdingPayment=holdingDepositBank('client',defaultCompanySettings());
 import { describe, it, expect, vi } from 'vitest';
 vi.mock('./email-preferences',()=>({emailPreferencesUrl:async(email:string)=>'https://example.test/preferences/'+encodeURIComponent(email)}));
 
@@ -41,6 +44,10 @@ describe('email provider safety', () => {
     expect(sentPayload.attachments).toEqual(expect.arrayContaining(attachments));
     expect(sentPayload.html).toContain('https://example.test/preferences/applicant%40example.test');
     expect(sentPayload.attachments.filter((a:any)=>a.filename.startsWith('social-'))).toHaveLength(5);
+    const confirmation=(await import('./email')).applicationConfirmationEmail('Alex');
+    await sendEmail({to:'applicant@example.test',...confirmation});
+    expect(sentPayload.from).toBe('Fleming Lettings <tenancies@fleminglettings.co.uk>');
+    expect(sentPayload.replyTo).toBe('tenancies@fleminglettings.co.uk');
     vi.doUnmock('resend');
     vi.unstubAllEnvs();
     vi.resetModules();
@@ -77,25 +84,28 @@ describe('email provider safety', () => {
 
   it('tells applicants that their holding-deposit application can be resumed', async () => {
     const { holdingDepositRequestEmail } = await import('./email');
-    const email = holdingDepositRequestEmail('Alex', '10 High Street', 900, 1038, 208, 'https://apply.example.test/token');
+    const email = holdingDepositRequestEmail('Alex', '10 High Street', 900, 1038, 208, 'https://apply.example.test/token', holdingPayment);
     expect(email.html).toContain('save your application and pick up where you left off');
   });
 
   it('renders and escapes an edited holding-deposit request message', async () => {
     const { holdingDepositRequestEmail } = await import('./email');
     const email = holdingDepositRequestEmail(
-      'Alex', '10 High Street', 900, 1038, 208, 'https://apply.example.test/token',
+      'Alex', '10 High Street', 900, 1038, 208, 'https://apply.example.test/token', holdingPayment,
       'Please check <your details>.\nThen continue.',
     );
     expect(email.html).toContain('Please check &lt;your details&gt;.<br>Then continue.');
     expect(email.html).not.toContain('Please check <your details>');
   });
 
-  it('uses the verified mailbox for application confirmations', async () => {
+  it('uses the tenancy mailbox for application confirmations and reply links', async () => {
     const { applicationConfirmationEmail, EMAIL_FROM, OUTBOUND_EMAIL_ADDRESS } = await import('./email');
     const email = applicationConfirmationEmail('Alex Smith');
     expect(EMAIL_FROM).toBe('Fleming Lettings <contact@tenancies.fleminglettings.co.uk>');
     expect(OUTBOUND_EMAIL_ADDRESS).toBe('contact@tenancies.fleminglettings.co.uk');
+    expect(email.fromEmail).toBe('tenancies@fleminglettings.co.uk');
+    expect(email.html).toContain('mailto:tenancies@fleminglettings.co.uk');
+    expect(email.html).not.toContain('mailto:enquiries@fleminglettings.co.uk');
     expect(email.subject).toBe('Thank you for completing your application form');
     expect(email.html).toContain('within the next 48 hours');
     expect(email.html).toContain('additional information or documentation');

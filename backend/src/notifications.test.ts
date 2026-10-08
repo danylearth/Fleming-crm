@@ -28,6 +28,15 @@ describe('notification lifecycle',()=>{
 
 import {query,run} from './db-pg';
 const testUser={id:44,name:'Sample Staff',email:'staff@example.test',role:'staff'};
+it('orders mixed notifications by displayed date, newest first, with undated items last',async()=>{
+ vi.mocked(query).mockImplementation(async(sql:string)=>{
+  if(sql.includes('SELECT t.*,e.label'))return [{...base,id:2,task_type:'gas_reminder',due_date:'2026-10-29',property_data:{has_gas:true}},{...base,id:3,task_type:'epc_reminder',due_date:'2026-10-16'},{...base,id:4,task_type:'epc_reminder',due_date:null}];
+  if(sql.includes('SELECT event.id'))return [{id:5,action:'document_signed',created_at:'2026-10-05',href:'/tenants/12'}];
+  if(sql.includes('SELECT m.*'))return [{id:6,channel:'email',created_at:'2026-09-22',status:'failed'}];
+  return [];
+ });
+ expect((await userNotifications(testUser)).map(n=>n.date)).toEqual(['2026-10-29','2026-10-16','2026-10-05','2026-09-22','']);
+});
 it('groups both completed applicants into one review item and resurfaces a later resubmission',()=>{
  const jamie={id:83,joint_partner_id:84,first_name_1:'Jamie',last_name_1:'Taylor',application_form_completed:1,application_review_status:'pending'};
  const casey={...jamie,id:84,joint_partner_id:83,first_name_1:'Casey'};
@@ -64,4 +73,15 @@ it('does not reveal an older joint completion after dismissal, but shows a new r
  expect(await userNotifications(testUser)).toEqual([]);
  events=[...events,{...event,id:12,changes:{action:'application_form_revised'}}];
  expect(await userNotifications(testUser)).toMatchObject([{key:'activity:12'}]);
+});
+
+it('links delivery failures back to the recipient with a useful retry reason',async()=>{const {notificationForFailure}=await import('./notifications');const failed=notificationForFailure({id:39,channel:'sms',status:'undelivered',entity_type:'tenant',entity_id:18,error_message:'ErrorCode:30008',recipient:'+447700900001',created_at:'2026-10-05'});expect(failed).toMatchObject({key:'delivery:sms:39',title:'SMS not delivered',href:'/tenants/18',priority:'high',canDismiss:true});expect(failed.detail).toContain('unspecified delivery failure');expect(failed.detail).toContain('retry from Communications');});
+
+describe('guarantor workflow notifications',()=>{
+ const row={id:77,action:'guarantor_application_submitted',changes:{execution_id:9},created_at:'2026-10-05',label:'Jamie Taylor',href:'/enquiries/83',workflow:'external',guarantor:{name:'Robin Example',status:'awaiting_witness',required:true,execution_id:9,workflow:{}}};
+ it('shows the guarantor and applicant in the correct onboarding workflow',()=>{expect(notificationForEvent(row)).toMatchObject({title:'Guarantor signed — waiting for witness',detail:'Robin Example · Jamie Taylor',href:'/enquiries/83?onboarding=1',category:'tenant',workflow:'external'});});
+ it('replaces waiting with a review notification after witness completion',()=>{const completed={...row,guarantor:{...row.guarantor,status:'submitted'}};expect(notificationForEvent(completed)).toBeNull();expect(notificationForEvent({...completed,action:'guarantor_deed_witnessed'})).toMatchObject({title:'Guarantor application ready for review'});});
+ it('clears approved, reset, replaced and no-longer-required guarantors',()=>{for(const patch of [{status:'verified'},{status:'draft'},{required:false},{execution_id:10},{workflow:{reviewStatus:'approved'}},{workflow:{deedNeedsResigning:true}}])expect(notificationForEvent({...row,guarantor:{...row.guarantor,...patch}})).toBeNull();});
+ it('highlights witness declines only while they need action',()=>{const declined={...row,action:'guarantor_witness_declined',guarantor:{...row.guarantor,status:'witness_declined'}};expect(notificationForEvent(declined)).toMatchObject({title:'Guarantor witness declined',priority:'high'});expect(notificationForEvent({...declined,guarantor:row.guarantor})).toBeNull();});
+ it('resurfaces corrections after resubmission',()=>{expect(notificationForEvent({...row,action:'guarantor_corrections_resubmitted',changes:{},guarantor:{...row.guarantor,status:'submitted'}})).toMatchObject({title:'Guarantor corrections ready for review'});});
 });

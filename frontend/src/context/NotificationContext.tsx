@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
+import {createNotificationAttention} from '../utils/notificationAttention';
 
 type NoticeKind = 'info' | 'success' | 'error';
 
@@ -10,6 +11,7 @@ interface Notice {
 }
 
 interface NotificationContextValue {
+  inboxAttention: ReturnType<typeof createNotificationAttention>;
   notify: (message: string, kind?: NoticeKind) => void;
   confirmAction: (message: string, title?: string) => Promise<boolean>;
 }
@@ -21,6 +23,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [confirmation, setConfirmation] = useState<{ message: string; title: string } | null>(null);
   const resolver = useRef<((accepted: boolean) => void) | null>(null);
   const nextId = useRef(1);
+  const inboxAttention = useRef(createNotificationAttention());
 
   const notify = useCallback((message: string, kind: NoticeKind = 'info') => {
     const id = nextId.current++;
@@ -49,7 +52,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => () => resolver.current?.(false), []);
 
   return (
-    <NotificationContext.Provider value={{ notify, confirmAction }}>
+    <NotificationContext.Provider value={{ notify, confirmAction, inboxAttention: inboxAttention.current }}>
       {children}
       <div className="fixed right-4 top-4 z-[120] w-[min(380px,calc(100vw-2rem))] space-y-2" aria-live="polite">
         {notices.map(notice => {

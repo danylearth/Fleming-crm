@@ -15,7 +15,7 @@ beforeEach(async()=>{
   if(sql.startsWith('SELECT * FROM tenant_enquiries'))return {rows:applicants};
   if(sql.startsWith('SELECT * FROM bank_feed_transactions'))return {rows:[mock.bank]};
   if(sql.startsWith('SELECT id,booked_at,description'))return {rows:[mock.bank,{...mock.bank,id:92,amount:999,description:'Unrelated Person'}]};
-  if(sql.startsWith('SELECT id FROM bank_feed_allocations'))return {rows:mock.allocated?[{id:3}]:[]};
+  if(/^SELECT id(?:,kind)? FROM bank_feed_allocations/.test(sql))return {rows:mock.allocated?[{id:3}]:[]};
   if(sql.startsWith('SELECT id,linked_property_id'))return {rows:[{id:values[0],property_id:26}]};
   if(sql.startsWith('INSERT INTO bank_feed_allocations('))return {rows:[{id:100}]};
   return {rows:[]};

@@ -1,8 +1,27 @@
-# Fleming Lettings CRM — Sam's local setup
+# Fleming Lettings CRM
+
+Source repository: [danylearth/Fleming-crm](https://github.com/danylearth/Fleming-crm). The current source handover is on **`codex/sept25-crm-feedback`**; `main` is older. Use [this branch](https://github.com/danylearth/Fleming-crm/tree/codex/sept25-crm-feedback) when sharing or downloading the latest work.
+
+This monorepo contains the staff CRM, PostgreSQL API, tenant and landlord public forms, and mobile app. It covers properties, landlords, tenants, enquiries, onboarding, guarantor and witness signing, documents, maintenance, finance, communications and team tasks.
+
+| Directory | Purpose |
+| --- | --- |
+| `frontend/` | React 19 / TypeScript staff CRM, built with Vite |
+| `backend/` | Express / TypeScript API, PostgreSQL migrations, document generation and integrations |
+| `tenants-subdomain/` | Public applications, agreements and guarantor/witness pages |
+| `landlords-subdomain/` | Public landlord intake |
+| `mobile/` | React Native / Expo client |
+| `scripts/` | Local setup and maintenance tools |
+| `docs/releases/` | Release records and verification notes |
+| `prototypes/` | Design experiments, separate from the production app |
+
+Production runs at [crm.fleminglettings.co.uk](https://crm.fleminglettings.co.uk), with the API on Fly.io and static sites on Vercel. GitHub contains source code, not the production database, uploaded customer documents or credentials. Publishing a source handover is separate from deploying it. Recent live releases were built from isolated snapshots; see `docs/releases/` for their scope and deployment references. The combined working source must pass checks before a full production deployment.
+
+## Local setup
 
 This runs a separate copy of the CRM on your computer with sample records. Your normal live login and the office's live records are not copied into it. Allow about 30–45 minutes for the first installation; starting it afterwards takes about two minutes.
 
-The latest handover is on **`codex/sept15-office-feedback`**. Use that branch rather than `main`.
+Use the current handover branch below rather than `main`.
 
 ## 1. Install the tools and download the project
 
@@ -11,7 +30,7 @@ Install **Git**, **Node.js 24.x**, and **Docker Desktop** for your computer. Sta
 Open Terminal on Mac or PowerShell on Windows and run:
 
 ```sh
-git clone --branch codex/sept15-office-feedback https://github.com/danylearth/Fleming-crm.git
+git clone --branch codex/sept25-crm-feedback https://github.com/danylearth/Fleming-crm.git
 cd Fleming-crm
 node --version
 docker compose version
@@ -129,4 +148,4 @@ npm --prefix frontend run lint
 
 Use these package-specific build commands for local work. The root `npm run build` is a deployment script, not the local setup command. Database integration checks have additional requirements documented in `backend/tests/production-readiness.mjs`; never aim tests at the live database.
 
-Handover checked on 24 September 2026 with Node 24 and a fresh native PostgreSQL 16 database: dependency installation, all 30 migrations, demo seed, development startup, administrator API login, dashboard/property/enquiry requests and both builds passed. Nine authentication tests passed. Docker Compose configuration was validated; the Docker database itself was not started on the handover machine. Windows instructions have not been tested on a Windows machine.
+The original local setup was checked on 24 September 2026 with Node 24 and a fresh native PostgreSQL 16 database. Later source and release checks are recorded in [the October source handover](docs/releases/2026-10-08-source-handover.md). Run every pending migration from this branch; do not assume the earlier migration count is current. Docker Compose configuration was validated during the original handover, but a fresh Docker-based installation has not been repeated for the October source handover.

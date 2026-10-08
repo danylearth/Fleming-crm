@@ -1,0 +1,12 @@
+{
+  "url": "https://fleminglettings.co.uk/crm-admin/",
+  "files": {
+    "lettings-board.png": "c0c06d91cf4c1919327dad96ddf2c6e07e4cd47cfb6fecc38109bad6dd503898",
+    "fleming-icon.png": "aa6933e498bdd82d2f7a2547d35e2325d13e889da82e63b467247a5236559c0b",
+    "portal.css": "13d814f453dd73b883bb9959429fd3cbb6adf4c05c6d49b74d2ea3fde85fce95",
+    "portal.js": "2d9ad78bc1cd4d6a733fd47256eef9533121d2d0c57040b7ccfe088318195e59",
+    "index.html": "78630eb97701142c824c1db81de49025fe49ff36ea558f30109c06969f10e754"
+  },
+  "backup": "tmp\\website-preview-backup-20261006-145154",
+  "crmConnected": false
+}

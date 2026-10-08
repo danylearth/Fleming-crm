@@ -1,3 +1,4 @@
+vi.mock('./tenancy-changeover',()=>({applyDueTenancyChangeovers:vi.fn()}));
 import {describe,it,expect,vi,beforeEach} from 'vitest';
 const invoices=vi.hoisted(()=>({issueFinancialDocument:vi.fn(),rentInvoiceSource:vi.fn(),rentInvoiceSnapshot:vi.fn()}));
 vi.mock('./financial-documents',()=>invoices);

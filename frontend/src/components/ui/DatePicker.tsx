@@ -161,24 +161,26 @@ export function DatePicker({ label, value, onChange, placeholder = 'DD/MM/YYYY',
   const dropdown = open ? createPortal(
     <div
       ref={dropdownRef}
-      className="fixed bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl shadow-2xl p-3"
+      className="crm-workspace fixed bg-[var(--bg-card)] text-[var(--text-primary)] font-[family-name:var(--user-font)] border border-[var(--border-input)] rounded-xl shadow-2xl p-3"
       role="dialog"
       aria-label="Choose date"
       style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: 'calc(100dvh - 24px)', overflowY: 'auto', zIndex: 9999 }}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <button type="button" onClick={prevMonth} className="p-1 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+        <button type="button" aria-label="Previous month" onClick={prevMonth} className="p-1 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
           <ChevronLeft size={16} />
         </button>
         <button
           type="button"
+          aria-label="Choose month and year"
+          aria-expanded={yearPicker}
           onClick={() => setYearPicker(!yearPicker)}
           className="text-sm font-medium text-[var(--text-primary)] hover:text-[var(--text-primary)] transition-colors px-2 py-0.5 rounded-lg hover:bg-[var(--bg-hover)]"
         >
           {MONTHS[viewMonth]} {viewYear}
         </button>
-        <button type="button" onClick={nextMonth} className="p-1 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+        <button type="button" aria-label="Next month" onClick={nextMonth} className="p-1 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
           <ChevronRight size={16} />
         </button>
       </div>
@@ -187,11 +189,11 @@ export function DatePicker({ label, value, onChange, placeholder = 'DD/MM/YYYY',
         <>
           {/* Year selector */}
           <div className="flex items-center justify-between mb-2">
-            <button type="button" onClick={() => setViewYear(y => y - 1)} className="p-1 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+            <button type="button" aria-label="Previous year" onClick={() => setViewYear(y => y - 1)} className="p-1 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
               <ChevronLeft size={14} />
             </button>
             <span className="text-sm font-semibold text-[var(--text-primary)]">{viewYear}</span>
-            <button type="button" onClick={() => setViewYear(y => y + 1)} className="p-1 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+            <button type="button" aria-label="Next year" onClick={() => setViewYear(y => y + 1)} className="p-1 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
               <ChevronRight size={14} />
             </button>
           </div>
@@ -281,6 +283,8 @@ export function DatePicker({ label, value, onChange, placeholder = 'DD/MM/YYYY',
           inputMode="numeric"
           value={draft}
           onChange={e => handleTypedChange(e.target.value)}
+          onClick={() => { if (!open) handleToggleOpen(); }}
+          onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); if (!open) handleToggleOpen(); } if (event.key === 'Enter') { event.preventDefault(); const iso=parseTypedDate(draft); if(iso){onChange(iso);setOpen(false);}else if(!open)handleToggleOpen(); } }}
           placeholder={placeholder}
           aria-label={label || placeholder}
           className="min-w-0 flex-1 bg-transparent pl-3 pr-1 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"

@@ -1,3 +1,4 @@
+import {useNotifications} from '../../context/NotificationContext';
 import {rentStatus} from '../../utils/rentStatus';
 import {RentInvoiceButton} from '../FinancialDocuments';
 import RentBankTransactions from '../RentBankTransactions';
@@ -33,6 +34,8 @@ interface Props {
 
 export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   const api = useApi();
+  const {confirmAction}=useNotifications();
+  const [paying,setPaying]=useState<number|null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [year,setYear]=useState('all');
@@ -91,8 +94,11 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   };
 
   const handlePay = async (payment: Payment) => {
+    if(paying!==null||!await confirmAction(`Manually mark £${money(payment.amount_due)} as paid for the rent due ${payment.due_date.slice(0,10)}? This overrides the rent record without linking a bank transaction. Use Link Bank Payment if the receipt is in the bank feed.`,'Confirm Manual Payment Override'))return;
+    setPaying(payment.id);
     try {
       const response = await api.put(`/api/rent-payments/${payment.id}/pay`, {
+        manual_override_confirmed:true,
         amount_paid: payment.amount_due,
         payment_date: new Date().toISOString().split('T')[0],
       });
@@ -198,6 +204,8 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
                   {payment.notes?.includes('Final scheduled monthly rent charge')&&<span className="ml-2 text-xs font-normal">Final invoice</span>}
                   {!compact && payment.address && <span className="text-[var(--text-muted)] ml-2">· {payment.address}</span>}
                 </p>
+                {propertyId && payment.tenant_name && <p className="text-xs text-[var(--text-secondary)]">{payment.tenant_name}</p>}
+                {payment.notes?.startsWith('Office opening balance:') && !Number(payment.bank_received) && !Number(payment.bank_transaction_count) && <p className="text-xs text-[var(--text-muted)]">Historic opening balance · no linked bank receipt</p>}
                 <p className="text-xs text-[var(--text-muted)]">
                   Due {(() => { const d = new Date(payment.due_date); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })()}
                   {payment.payment_date && ` · Paid ${(() => { const d = new Date(payment.payment_date); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })()}`}
@@ -208,10 +216,10 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
                 {Number(payment.amount_paid)>Number(payment.amount_due)?`Credit £${money(Number(payment.amount_paid)-Number(payment.amount_due))}`:payment.status==='pending'?'Unpaid · Not yet due':payment.status}
               </span>
               <RentInvoiceButton paymentId={payment.id}/>
-              {(Number(payment.bank_transaction_count)>0||Number(payment.bank_received)>0)&&<RentBankTransactions paymentId={payment.id} onChanged={reloadPayments}/>}
+              <RentBankTransactions paymentId={payment.id} onChanged={reloadPayments} hasLinked={Number(payment.bank_transaction_count)>0||Number(payment.bank_received)>0}/ >
               {payment.status !== 'paid' && ['overdue','due today'].includes(payment.status) && <TenantMessageTemplates tenantId={payment.tenant_id} rentPaymentId={payment.id} onSent={()=>{}}/>}
               {payment.status !== 'paid' && (
-                <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => handlePay(payment)}>
+                <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" disabled={paying!==null} onClick={() => handlePay(payment)}>
                   Mark Paid
                 </Button>
               )}

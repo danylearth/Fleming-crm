@@ -119,7 +119,7 @@ describe('31 August CRM feedback regressions', () => {
 
   it('allows dashboard reminders to be deleted and uploaded property photos to become thumbnails', () => {
     expect(dashboardSource).toContain("api.delete(`/api/tasks/${task.id}`)");
-    expect(dashboardSource).toContain('getPropertyPlaceholder(prop.id, 400, 240, prop.landlord_name, prop.landlord_id)');
+    expect(dashboardSource).toContain('getPropertyPlaceholder(prop.id, 400, 240, prop.landlord_name, prop.landlord_id, cardColours.get(prop.id))');
     expect(propertyImagesSource).toContain('landlordInitials(landlordName)');
     expect(apiSource).toContain("doc_type='Property Photo'");
     expect(apiSource).toContain("app.get('/api/public/properties/:id/thumbnail'");

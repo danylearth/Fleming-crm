@@ -1,0 +1,31 @@
+.applicant-pipeline-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 280px;
+  padding: 15px;
+  border-radius: 16px;
+  background: var(--bg-card, #fff);
+  font-family: Arial, sans-serif;
+}
+.applicant-card-content { display: grid; grid-template-rows: 40px 36px 40px 68px; gap: 8px; min-width: 0; }
+.applicant-card-name, .applicant-card-property, .applicant-card-meta p { display: flex; align-items: flex-start; gap: 7px; min-width: 0; }
+.applicant-card-content svg { flex-shrink: 0; color: var(--text-secondary, #686b72); margin-top: 2px; }
+.applicant-card-name p { font-size: 14px; font-weight: 500; line-height: 20px; }
+.applicant-card-property p { font-size: 12px; line-height: 18px; color: var(--text-secondary, #686b72); }
+.applicant-card-name p, .applicant-card-property p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.applicant-card-stage { display: inline-block; max-width: 100%; padding: 3px 9px; border-radius: 999px; font-size: 12px; line-height: 16px; color: #39846a; background: #3a947412; border: 1px solid #3a94742e; }
+.applicant-card-existing { color: #8f2e70; background: #8f2e700d; border-color: #8f2e7027; }
+.applicant-card-stage-slot { display: flex; align-items: flex-start; gap: 7px; }
+.applicant-card-stage-slot > .applicant-card-stage { min-width: 0; }
+.applicant-card-meta { border-top: 1px solid var(--border-subtle, #e6e6ea); padding-top: 8px; display: flex; flex-direction: column; gap: 5px; color: var(--text-secondary, #686b72); }
+.applicant-card-meta p { font-size: 12px; line-height: 16px; }
+.applicant-card-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.applicant-card-actions { margin-top: auto; display: flex; justify-content: flex-end; }
+.applicant-card-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100px; height: 32px; border-radius: 999px; color: #fff; background: #8f2e70; font-size: 14px; font-weight: 600; }
+.applicant-card-actions button:hover { background: #79245e; }
+.applicant-card-actions button:focus-visible { outline: 2px solid #8f2e70; outline-offset: 3px; }
+.applicant-card-select { position: absolute; top: 15px; right: 15px; width: 16px; height: 16px; accent-color: #8f2e70; }
+.applicant-pipeline-card:has(.applicant-card-select) .applicant-card-name { padding-right: 24px; }
+@media (pointer: coarse) { .applicant-pipeline-card { height: 292px; } .applicant-card-actions button { height: 44px; } }

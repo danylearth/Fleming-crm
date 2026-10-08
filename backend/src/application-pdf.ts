@@ -1,3 +1,5 @@
+import {appendSigningCertificate} from './signing-certificate';
+import {createHash} from 'node:crypto';
 import PDFDocument from 'pdfkit';
 import { PDFDocument as EditablePdf } from 'pdf-lib';
 import fs from 'fs';
@@ -11,6 +13,9 @@ export interface CompletedApplicationPdfInput {
   submittedAt: Date;
   formData: Record<string, unknown>;
   signatureName: string;
+  signingIp?:string|null;
+  openedAt?:string|null;
+  signerEmail?:string;
   signatureDataUrl: string;
   auditEntries?: Array<{ timestamp: Date; action: string; detail: string }>;
 }
@@ -34,10 +39,9 @@ const DECLARATION_LABELS: Record<string, string> = {
   marketing_consent: 'I consent to marketing communications.',
 };
 
-const labelFor = (key: string) => key==='ni_number' ? 'National Insurance Number' : key
-  .replace(/^declaration_/, '')
-  .replace(/_/g, ' ')
-  .replace(/\b\w/g, character => character.toUpperCase());
+const titleCase = (value: string) => value.replace(/\b\w+/g, (word, index) => index > 0 && /^(of|and|at|in|on|to|for|the|a|an)$/i.test(word) ? word.toLowerCase() : word[0].toUpperCase() + word.slice(1));
+
+const labelFor = (key: string) => key==='ni_number' ? 'National Insurance Number' : titleCase(key.replace(/^declaration_/, '').replace(/_/g, ' '));
 
 const valueFor = (value: unknown): string => {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -84,7 +88,7 @@ export function buildCompletedApplicationSections(formData: Record<string, unkno
     answers.push({ key, label: labelFor(key), value: /income|rent|deposit|salary|amount/.test(key) && /^\d+(\.\d+)?$/.test(String(value)) ? Number(value).toLocaleString('en-GB') : valueFor(value) });
     grouped.set(title, answers);
   }
-  return SECTION_ORDER.flatMap(title => grouped.has(title) ? [{ title, answers: grouped.get(title)! }] : []);
+  return SECTION_ORDER.flatMap(title => grouped.has(title) ? [{ title: titleCase(title), answers: grouped.get(title)! }] : []);
 }
 
 export function generateCompletedApplicationPdf(input: CompletedApplicationPdfInput): Promise<Buffer> {
@@ -110,6 +114,8 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
         const pages=await output.embedPages(body.getPages());
         for(const content of pages){const page=output.addPage([595.28,841.89]);page.drawPage(background,{x:0,y:0,width:595.28,height:841.89});page.drawPage(content,{x:0,y:0,width:595.28,height:841.89});}
         output.setTitle(`Completed Tenancy Application - ${input.applicantName}`);
+        const accepted=Object.entries(DECLARATION_LABELS).filter(([key])=>input.formData[key]===true).map(([key,text])=>({key,text,accepted:true as const}));
+        await appendSigningCertificate(output,[{name:input.signatureName,email:input.signerEmail,signed_at:input.submittedAt.toISOString(),opened_at:input.openedAt,signing_ip:input.signingIp,signature:Buffer.from(input.signatureDataUrl.split(',')[1],'base64'),consent_snapshot:accepted.length?{version:'application-2026-10-05',statements:accepted}:null}],createHash('sha256').update(Buffer.concat(chunks)).digest('hex'),false);
         resolve(Buffer.from(await output.save()));
       }catch(error){reject(error);}
     });
@@ -119,12 +125,13 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
     doc.registerFont('Arial-Bold',pdfFontPath(true));
     const contentWidth = doc.page.width - 100;
     const ensureSpace = (height: number) => {
-      if (doc.y + height > doc.page.height - 78) doc.addPage();
+      if (doc.y + height > doc.page.height - doc.page.margins.bottom) doc.addPage();
     };
-    const section = (title: string) => {
-      ensureSpace(42);
+    const section = (title: string, firstBlockHeight = 60) => {
+      // Keep the heading, rule and first answer/paragraph on the same page.
+      ensureSpace(52 + firstBlockHeight);
       doc.moveDown(0.7)
-        .font('Arial-Bold').fontSize(13).fillColor('#91236f').text(title)
+        .font('Arial-Bold').fontSize(13).fillColor('#91236f').text(titleCase(title))
         .moveDown(0.35);
       doc.moveTo(50, doc.y).lineTo(50 + contentWidth, doc.y).strokeColor('#e8d8ce').stroke();
       doc.moveDown(0.55);
@@ -139,25 +146,31 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
 
 
     for (const applicationSection of buildCompletedApplicationSections(input.formData)) {
-      section(applicationSection.title);
+      const first=applicationSection.answers[0];
+      doc.font('Arial').fontSize(10);
+      section(applicationSection.title, 24 + doc.heightOfString(first.value, {width:contentWidth}));
       for (const answer of applicationSection.answers) {
-        ensureSpace(40);
+        doc.font('Arial').fontSize(10);
+        ensureSpace(24 + doc.heightOfString(answer.value, {width:contentWidth}));
         doc.font('Arial-Bold').fontSize(9).fillColor('#555555').text(answer.label);
         doc.font('Arial').fontSize(10).fillColor('#20201f').text(answer.value, { width: contentWidth });
         doc.moveDown(0.45);
       }
     }
 
-    section('Holding Deposit Terms');
+    doc.font('Arial').fontSize(9);
+    section('Holding Deposit Terms', doc.heightOfString(HOLDING_DEPOSIT_TERMS[0], {width:contentWidth,lineGap:2}) + 12);
     for (const paragraph of HOLDING_DEPOSIT_TERMS) {
-      ensureSpace(58);
+      doc.font('Arial').fontSize(9);
+      ensureSpace(doc.heightOfString(paragraph, {width:contentWidth,lineGap:2}) + 12);
       doc.font('Arial').fontSize(9).fillColor('#20201f').text(paragraph, { width: contentWidth, lineGap: 2 });
       doc.moveDown(0.55);
     }
 
     section('Applicant declarations');
     for (const [key, declaration] of Object.entries(DECLARATION_LABELS)) {
-      ensureSpace(38);
+      doc.font('Arial').fontSize(10);
+      ensureSpace(doc.heightOfString('NOT ACCEPTED  '+declaration, {width:contentWidth}) + 12);
       const accepted = input.formData[key] === true;
       doc.font('Arial-Bold').fontSize(10).fillColor(accepted ? '#23744b' : '#a33b32')
         .text(accepted ? 'ACCEPTED' : 'NOT ACCEPTED', { continued: true });
@@ -174,29 +187,6 @@ export function generateCompletedApplicationPdf(input: CompletedApplicationPdfIn
         doc.font('Arial').fontSize(8.5).fillColor('#20201f').text(entry.detail, { width: contentWidth });
         doc.moveDown(0.35);
       }
-    }
-
-    ensureSpace(180);
-    section('Electronic signature');
-    doc.font('Arial').fontSize(10).fillColor('#555555').text(`Signed by: ${input.signatureName}`);
-    doc.text(`Date: ${input.submittedAt.toLocaleDateString('en-GB', { timeZone: 'Europe/London' })}`);
-    doc.moveDown(0.5);
-    try {
-      doc.image(input.signatureDataUrl, { fit: [240, 90] });
-    } catch {
-      doc.font('Arial').fillColor('#a33b32').text('Signature image could not be rendered.');
-    }
-
-    const range = doc.bufferedPageRange();
-    for (let pageIndex = range.start; pageIndex < range.start + range.count; pageIndex += 1) {
-      doc.switchToPage(pageIndex);
-      doc.page.margins.bottom = 0;
-      doc.font('Arial').fontSize(8).fillColor('#777777')
-        .text(`Fleming Lettings - Page ${pageIndex + 1} of ${range.count}`, 50, doc.page.height - 73, {
-          width: contentWidth,
-          align: 'center',
-          lineBreak: false,
-        });
     }
 
     doc.end();

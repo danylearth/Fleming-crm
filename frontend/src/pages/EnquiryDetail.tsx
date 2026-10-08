@@ -1,3 +1,4 @@
+import { newestNotesFirst } from '../utils/notes';
 import {useOnboardingStarted} from '../hooks/useOnboardingStarted';
 import { OFFICE_ADDRESS } from '../utils/meetingLocations';
 import SectionEditButton from '../components/ui/SectionEditButton';
@@ -1050,7 +1051,7 @@ export default function EnquiryDetail() {
               <SectionHeader title="Notes" icon={<MessageSquare size={16} />} />
               <div className="space-y-3 max-h-64 overflow-y-auto" style={{ paddingRight: 0, scrollbarGutter: 'auto' }}>
                 {notes.length === 0 && <p className="text-xs text-[var(--text-muted)]">No notes yet</p>}
-                {notes.map(note => (
+                {newestNotesFirst(notes).map(note => (
                   <div key={note.id} className="bg-[var(--bg-hover)]/50 rounded-xl px-3 py-2.5">
                     <div className="flex items-start justify-between gap-2">
                       <p className="min-w-0 flex-1 break-words text-sm text-[var(--text-primary)] whitespace-pre-wrap">{note.text}</p>
@@ -1154,7 +1155,7 @@ export default function EnquiryDetail() {
       {/* ==================== WORKFLOW MODAL ==================== */}
       {showWorkflow && (
         <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowWorkflow(false)}>
-          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-md p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <Avatar name={name} initials={[data.first_name_1,data.last_name_1].filter(Boolean).map(part=>String(part).trim().charAt(0)).join('').toUpperCase()} size="md" />
@@ -1240,8 +1241,8 @@ export default function EnquiryDetail() {
                           setSmsBody(genSms(wfPropId, v, wfTime));
                         }} />
                         <div>
-                          <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Viewing Time</label>
-                          <TimePicker value={wfTime} onChange={value => { setWfTime(value); setSmsBody(genSms(wfPropId, wfDate, value)); }} />
+                          
+                          <TimePicker label="Viewing Time" value={wfTime} onChange={value => { setWfTime(value); setSmsBody(genSms(wfPropId, wfDate, value)); }} />
                         </div>
                       </div>
                       <Input label="Additional Notes" value={wfViewingWith} onChange={setWfViewingWith} placeholder="e.g. Key collection instructions" />

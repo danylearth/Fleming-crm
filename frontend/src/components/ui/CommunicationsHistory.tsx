@@ -34,10 +34,10 @@ export default function CommunicationsHistory({ messages,tenantId,onSent }: { me
             {message.channel === 'email' ? <Mail size={12} /> : <MessageSquare size={12} />}{message.channel === 'email' ? 'Email' : 'SMS'} · {message.direction === 'inbound' ? 'Received' : 'Outgoing'}
           </p><p className="mt-1 text-sm font-medium break-words">{message.subject || (message.channel === 'sms' ? 'Text message' : 'Email')}</p>
           <p className="text-xs text-[var(--text-muted)] break-all">{message.direction === 'inbound' ? message.sender : message.recipient}</p></div>
-          <span className="text-[10px] capitalize text-[var(--text-muted)]">{message.status || 'Recorded'}</span>
+          <span className={`text-[10px] capitalize font-semibold shrink-0 rounded-full px-2 py-1 ${['failed','undelivered','bounced'].includes((message.status||'').toLowerCase())?'bg-red-500/10 text-red-700 dark:text-red-400':['sent','delivered','opened','clicked'].includes((message.status||'').toLowerCase())?'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400':'text-[var(--text-muted)]'}`}>{message.status || 'Recorded'}</span>
         </div>
         <p className="mt-2 text-xs leading-relaxed whitespace-pre-wrap break-words text-[var(--text-secondary)] line-clamp-4">{message.channel === 'email' ? emailPlainText(message.body) || 'Email body unavailable.' : message.body || 'Message body unavailable.'}</p>
-        {message.error_message && <p className="mt-2 text-xs text-red-400">{message.error_message}</p>}
+        {message.error_message && <details className="mt-2 text-xs text-red-700 dark:text-red-400"><summary className="cursor-pointer">This sending attempt failed — view details</summary><p className="mt-1">{message.error_message}</p></details>}
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] text-[var(--text-muted)]">{new Date(message.created_at).toLocaleString('en-GB')}{message.opened_at ? ' · Open recorded' : ''}{message.clicked_at ? ' · Link clicked' : ''}</p>
           {message.channel === 'email' && message.body && <Button size="sm" variant="ghost" onClick={() => setPreview(message)}>View Email</Button>}
         </div>

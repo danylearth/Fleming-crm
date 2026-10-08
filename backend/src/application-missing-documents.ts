@@ -12,10 +12,12 @@ export function missingApplicationDocuments(employmentStatus: unknown, documents
   return requiredApplicationDocuments(employmentStatus).filter(type => !documents.some(document=>document.doc_type===type)&&overrides[type]?.status!=='overridden');
 }
 export function missingApplicationApprovals(employmentStatus:unknown,documents:{doc_type:string;review_status?:string}[],overrides:DocumentOverrides={}):string[] {
-  return requiredApplicationDocuments(employmentStatus).filter(type=>{
+  const missing=requiredApplicationDocuments(employmentStatus).filter(type=>{
     const matches=documents.filter(document=>document.doc_type===type);
-    return matches.length ? !matches.some(document=>document.review_status==='approved') : overrides[type]?.status!=='overridden';
+    return matches.length ? !matches.every(document=>document.review_status==='approved') : overrides[type]?.status!=='overridden';
   });
+ const supporting=documents.filter(doc=>!['Completed Tenancy Application','Tenancy Agreement','Signed Tenancy Agreement','Signed Deed of Guarantee','Credit Check Report'].includes(doc.doc_type));
+ return [...new Set([...missing,...supporting.filter(doc=>doc.review_status!=='approved').map(doc=>doc.doc_type)])];
 }
 export function includeMissingDocumentRequests(changes:string,employmentStatus:unknown,documents:{doc_type:string}[],overrides:DocumentOverrides={}):string {
   const lines=changes.trim()?changes.trim().split(/\n\s*\n/):[];

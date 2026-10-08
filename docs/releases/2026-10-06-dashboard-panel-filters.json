@@ -1,0 +1,18 @@
+{
+  "frontendDeployment": "dpl_BfCPEnZoZaa9gBEWx6fzkV1EqE1V",
+  "url": "https://crm.fleminglettings.co.uk",
+  "source": "tmp/release-2026-10-06-panel-filters/frontend-source",
+  "baseline": "tmp/release-2026-10-06-workflows/frontend-source",
+  "files": ["src/pages/Dashboard.tsx", "src/components/DashboardWorkPanels.tsx", "src/components/DashboardWorkPanels.css"],
+  "changes": ["Independent user filters inside reminder panels", "Removed compliance and maintenance subtitles", "Compact rows with date alongside certificate name", "Days left and overdue badges", "EICR lightning, gas flame, EPC house icons", "Accessible red bin dismissal controls"],
+  "validation": {
+    "build": "passed",
+    "browser": "passed locally and against live frontend with fictional intercepted API data",
+    "complianceRowHeight": 60,
+    "visibleComplianceRows": 7,
+    "checks": ["Independent filters", "Unassigned and empty selection reset", "Date position", "All three certificate icons", "Overdue badge", "Red bin clears only selected dashboard item", "Desktop and mobile layout", "No browser errors"],
+    "evidence": "docs/reviews/2026-10-06/panel-filter-browser-checks.json"
+  },
+  "backendChanged": false,
+  "liveRecordsChanged": false
+}

@@ -17,10 +17,13 @@ export function registerTenancyEndRoutes(app: Express) {
     if (!validEndDate(endDate)) return res.status(400).json({ error: 'Choose a valid tenancy end date' });
     const notes = String(req.body?.notes || '').trim();
     if (notes.length > 10000) return res.status(400).json({ error: 'Internal notes must be under 10,000 characters' });
+    await syncTenantLifecycle();
     const client = await pool.connect();
     let lockId: number | null = null;
     try {
       await client.query('BEGIN');
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('finance-daily'))");
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('tenancy-changeovers'))");
       // Serialize scheduling and message retries for this tenancy, including either joint tenant.
       const original = (await client.query('SELECT * FROM tenants WHERE id=$1', [req.params.id])).rows[0];
       if (!original) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Tenant not found' }); }
@@ -30,6 +33,8 @@ export function registerTenancyEndRoutes(app: Express) {
         [original.id, original.linked_tenant_id || null, original.property_id])).rows;
       if (tenants.some(t => t.status === 'inactive')) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This tenancy is already archived' }); }
       if (tenants.some(t => dateOnly(t.tenancy_start_date) > endDate)) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'The end date cannot be before the tenancy start date' }); }
+      const transition = (await client.query("SELECT previous_end_date FROM tenancy_changeovers WHERE status='scheduled' AND previous_tenant_ids && $1::int[]", [tenants.map(t => t.id)])).rows[0];
+      if (transition && dateOnly(transition.previous_end_date) !== endDate) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'A signed replacement tenancy is scheduled. Its current tenancy end date must remain the day before the new tenancy starts.' }); }
       const property = (await client.query('SELECT address, postcode FROM properties WHERE id=$1', [original.property_id])).rows[0];
       if (!property) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Link a property before scheduling the tenancy end' }); }
       const previews = tenants.map(t => ({ tenant_id: t.id, name: t.name, to: t.email, phone: t.phone,
@@ -46,6 +51,7 @@ export function registerTenancyEndRoutes(app: Express) {
         try { const parsed = JSON.parse(tenant.notes || '[]'); if (Array.isArray(parsed)) previousNotes = parsed; } catch { if (tenant.notes) previousNotes = [{ id: 'legacy', text: tenant.notes, author: 'System', created_at: new Date().toISOString() }]; }
         if (notes && !previousNotes.some(n => n.text === notes && n.tenancy_end_date === endDate)) previousNotes.push({ id: `tenancy-end-${Date.now()}`, text: notes, author: req.user?.email || 'Staff', created_at: new Date().toISOString(), tenancy_end_date: endDate });
         await client.query('UPDATE tenants SET has_end_date=1, tenancy_end_date=$1, notes=$2, updated_at=NOW() WHERE id=$3', [endDate, JSON.stringify(previousNotes), tenant.id]);
+        await client.query('UPDATE tenancy_billing_profiles SET end_date=$1 WHERE property_id=$2 AND $3=ANY(tenant_ids) AND start_date=$4', [endDate, tenant.property_id, tenant.id, dateOnly(tenant.tenancy_start_date)]);
         await client.query(`INSERT INTO audit_log (user_id,user_email,action,entity_type,entity_id,changes) VALUES ($1,$2,'update','tenant',$3,$4)`, [req.user?.id, req.user?.email, tenant.id, JSON.stringify({ action: 'schedule_tenancy_end', end_date: endDate })]);
       }
       await client.query('COMMIT');

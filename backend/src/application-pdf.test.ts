@@ -6,13 +6,14 @@ import { buildCompletedApplicationSections, generateCompletedApplicationPdf } fr
 describe('completed tenancy application PDF', () => {
   it('groups answered fields and omits blank answers', () => {
     const sections = buildCompletedApplicationSections({
-      first_name: 'Test', gross_annual_income: '32000', next_of_kin_name: 'Taylor',
+      date_of_birth: '1984-09-20', first_name: 'Test', gross_annual_income: '32000', next_of_kin_name: 'Taylor',
       next_of_kin_email: '', supporting_information: '', has_pets: false,
       declaration_privacy: true,
     });
     expect(sections.map(section => section.title)).toEqual([
-      'Personal details', 'Employment and income', 'References and next of kin', 'Tenancy information',
+      'Personal Details', 'Employment and Income', 'References and Next of Kin', 'Tenancy Information',
     ]);
+    expect(sections[0].answers.find(answer=>answer.key==='date_of_birth')?.label).toBe('Date of Birth');
     const keys = sections.flatMap(section => section.answers.map(answer => answer.key));
     expect(keys).not.toContain('next_of_kin_email');
     expect(keys).not.toContain('supporting_information');
@@ -21,9 +22,7 @@ describe('completed tenancy application PDF', () => {
   });
 
   it('creates a valid multi-section PDF with the signed application', async () => {
-    const signature = await sharp({
-      create: { width: 120, height: 40, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } },
-    }).png().toBuffer();
+    const signature = await sharp(Buffer.from('<svg width="120" height="40"><path d="M5 30 Q30 2 55 24 T110 10" fill="none" stroke="#27083d" stroke-width="3"/></svg>')).png().toBuffer();
     const result = await generateCompletedApplicationPdf({
       enquiryId: 71,
       applicantName: 'Test Applicant',

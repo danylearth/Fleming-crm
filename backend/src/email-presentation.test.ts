@@ -62,3 +62,13 @@ it('removes the earlier layout overrides from saved prepared drafts',()=>{
  expect(updated).toContain('name="fleming-presentation" content="2"');
  expect(prepareEmailHtml(updated)).toBe(updated);
 });
+
+it('all action buttons use table-cell padding for Outlook and remain idempotent',()=>{
+ for(const t of emailTemplateLibrary()){
+  expect(prepareEmailHtml(t.html),t.id).toBe(t.html);
+  for(const m of t.html.matchAll(/<td\b([^>]*)>\s*<a\b([^>]*)>([\s\S]*?)<\/a>\s*<\/td>/gi)){
+   if(!/bgcolor=|background(?:-color)?\s*:/i.test(m[1])||!/(?:font-weight\s*:\s*bold|color\s*:\s*#fff)/i.test(m[2]))continue;
+   expect(m[1],t.id).toMatch(/padding\s*:\s*\d+px \d+px/);expect(m[2],t.id).not.toMatch(/(?:^|;)\s*padding\s*:/);expect(m[2],t.id).toContain('href=');
+  }
+ }
+});

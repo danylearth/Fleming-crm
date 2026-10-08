@@ -8,8 +8,8 @@ interface PreviewTask {
   id:number;title:string;description:string;status:string;priority:string;
   due_date:string;property_address?:string;assigned_to?:string;entity_type?:string;
 }
-export default function DashboardTaskPreview({task,members,onClose,onUpdated}:{
-  task:PreviewTask;members:{id:number;name:string}[];onClose:()=>void;onUpdated:(task:PreviewTask)=>void;
+export default function DashboardTaskPreview({task,members,onClose,onUpdated,onClear}:{
+  task:PreviewTask;members:{id:number;name:string}[];onClose:()=>void;onUpdated:(task:PreviewTask)=>void;onClear?:()=>void;
 }) {
   const api=useApi(),navigate=useNavigate();
   const [assigning,setAssigning]=useState(false),[assignee,setAssignee]=useState('');
@@ -31,6 +31,7 @@ export default function DashboardTaskPreview({task,members,onClose,onUpdated}:{
       <div className="border-t border-[var(--border-subtle)] pt-4 space-y-4">
         {assigning&&<div className="ml-auto max-w-sm space-y-3"><Select label="Assign To" value={assignee} onChange={setAssignee} disabled={busy} options={[{value:'',label:'Unassigned'},...members.map(m=>({value:String(m.id),label:m.name}))]}/><div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={()=>setAssigning(false)}>Cancel</Button><Button disabled={busy} onClick={()=>void update({assigned_to:assignee||null})}>Save Assignment</Button></div></div>}
         <div className="flex flex-wrap justify-end gap-2">
+          {onClear&&<Button variant="outline" disabled={busy} onClick={onClear}>Clear</Button>}
           <Button className="gap-2" variant="outline" disabled={busy} onClick={()=>{setAssignee(String(members.find(m=>String(m.id)===String(task.assigned_to)||m.name===task.assigned_to)?.id||''));setAssigning(!assigning);setError('');}}><UserPlus size={16}/>Assign Task</Button>
           <Button className={`gap-2 ${closed?'':'!bg-red-600 !text-white !border-red-600 hover:!bg-red-700'}`} variant="outline" disabled={busy} onClick={()=>void update({status:closed?'pending':'completed'})}>{closed?<RotateCcw size={16}/>:<CheckCircle2 size={16}/>} {closed?'Reopen Task':'Close Task'}</Button>
           <Button className="gap-2" disabled={busy} onClick={()=>navigate(`/tasks/${task.id}`)}><ArrowRight size={16}/>Open Task</Button>

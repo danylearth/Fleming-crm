@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {type LoginChallenge,type LoginDeliveryOptions, useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import {  CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 
 export default function Login() {
@@ -74,42 +74,42 @@ export default function Login() {
         </div>
 
         {/* Card */}
-        <div className="bg-[var(--bg-card)] text-[var(--text-primary)] rounded-2xl border border-[var(--border-color)] p-8">
+        <div className="bg-[var(--bg-card)] text-[var(--text-primary)] rounded-2xl border border-[var(--border-color)] p-6 sm:p-8">
           <div className="text-center mb-6">
             <span aria-hidden="true" className="block text-6xl leading-none mb-4">👋</span>
-            <h2 className="text-3xl font-semibold text-[var(--text-primary)] mb-2">Hey there team!</h2>
+            <h2 className="text-2xl font-semibold text-[var(--text-primary)] mb-2">Hey there team!</h2>
             <p className="text-sm text-[var(--text-muted)]">Sign in to get started.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {!challenge&&!delivery&&<>
             <div>
-              <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Email</label>
+              <label className="block text-sm text-[var(--text-secondary)] mb-1.5 font-medium">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors"
+                className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 text-base text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">Password</label>
+              <label className="block text-sm text-[var(--text-secondary)] mb-1.5 font-medium">Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 pr-11 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors"
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-3 pr-11 text-base text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors"
                   required
                 />
-                <div className="flex flex-wrap justify-between items-center gap-2 mt-3"><button type="button" disabled={loading} onClick={()=>navigate('/forgot-password')} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50">Psst.. Forgot Password?</button><button
+                <div className="flex flex-wrap justify-between items-center gap-2 mt-3"><button type="button" disabled={loading} onClick={()=>navigate('/forgot-password')} className="rounded-full bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50">Psst.. Forgot Password?</button><button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="ml-auto flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                  className="ml-auto flex items-center gap-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}{showPassword ? 'Hide Password' : 'Show Password'}
                 </button></div>
@@ -125,7 +125,7 @@ export default function Login() {
                 <span className="min-w-0 text-sm"><span className="block font-semibold">{option.label}</span><span className="block break-words text-[var(--text-secondary)]">{option.destination}</span></span>
               </label>)}
             </fieldset>}
-            {challenge&&<section className="space-y-4"><h3 className="font-semibold">Verify your sign-in</h3><p className="text-sm">We sent a code by {challenge.methods?.[0]||'text message'} to {challenge.destinations[0]}. It expires after {Math.ceil(challenge.expiresInSeconds/60)} minutes.</p><label className="block text-sm">Verification Code<input aria-label="Verification Code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,''))} className="mt-2 w-full rounded-xl border border-[var(--border-input)] bg-[var(--bg-input)] p-3 tracking-[.3em]"/></label><label className="flex items-center justify-center gap-1 text-center text-[10px] text-[var(--text-secondary)]"><input type="checkbox" checked={rememberDevice} onChange={e=>setRememberDevice(e.target.checked)} className="h-4 w-4 shrink-0 accent-[#853477]"/><span className="sm:whitespace-nowrap">Click to remember this device for 30 days. Only choose this on a device you trust.</span></label></section>}
+            {challenge&&<section className="space-y-4"><h3 className="font-semibold">Verify your sign-in</h3><p className="text-sm">We sent a code by {challenge.methods?.[0]||'text message'} to {challenge.destinations[0]}. It expires after {Math.ceil(challenge.expiresInSeconds/60)} minutes.</p><label className="block text-sm">Verification Code<input aria-label="Verification Code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,''))} className="mt-2 w-full rounded-xl border border-[var(--border-input)] bg-[var(--bg-input)] p-3 tracking-[.3em]"/></label><label className="flex items-center justify-center gap-1 text-center text-sm text-[var(--text-secondary)]"><input type="checkbox" checked={rememberDevice} onChange={e=>setRememberDevice(e.target.checked)} className="h-4 w-4 shrink-0 accent-[#853477]"/><span className="">Click to remember this device for 30 days. Only choose this on a device you trust.</span></label></section>}
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5 text-sm text-red-400">
                 {error}
@@ -139,11 +139,11 @@ export default function Login() {
               disabled={loading||resending||lockSeconds===0}
               className="flex items-center justify-center w-full bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] font-semibold py-3 rounded-full hover:opacity-90 transition-colors disabled:opacity-40 text-sm"
             >
-              {challenge&&!loading&&<span aria-hidden="true" className="mr-2 text-lg leading-none">✅</span>}{loading ? delivery?'Sending code…':'Signing in…' : challenge?'Verify & Sign In':delivery?'Send Verification Code':'Sign In'}
+              {challenge&&!loading&&<CheckCircle2 size={18} aria-hidden="true" className="mr-2"/>}{loading ? delivery?'Sending code…':'Signing in…' : challenge?'Verify & Sign In':delivery?'Send Verification Code':'Sign In'}
             </button>
           </form>
           {challenge&&<button type="button" disabled={loading||resending||resendSeconds>0||(challenge.codesSent||0)>=3} onClick={()=>void handleResend()} className="w-full rounded-full bg-amber-100 text-amber-900 py-3 text-sm font-semibold mt-3 hover:bg-amber-200 transition-colors disabled:cursor-not-allowed disabled:opacity-70">{(challenge.codesSent||0)>=3?'No Further Codes Available':resending?'⏳ Requesting New Code…':resendSeconds>0?`⏳ Request Another in ${Math.floor(resendSeconds/60)}:${String(resendSeconds%60).padStart(2,'0')}`:'Request a New Code'}</button>}
-          {(delivery||challenge)&&<button type="button" disabled={loading||resending} onClick={()=>{setChallenge(null);setDelivery(null);setCode('');setPassword('');setError('');setNotice('');}} className="flex w-full items-center justify-center rounded-full bg-[var(--bg-input)] text-[var(--text-primary)] ring-1 ring-inset ring-[var(--border-input)] py-3 text-sm font-semibold mt-3 hover:opacity-80 transition-opacity disabled:opacity-50"><span aria-hidden="true" className="mr-2 text-lg leading-none">👈</span>Back to Sign In</button>}
+          {(delivery||challenge)&&<button type="button" disabled={loading||resending} onClick={()=>{setChallenge(null);setDelivery(null);setCode('');setPassword('');setError('');setNotice('');}} className="flex w-full items-center justify-center rounded-full bg-[var(--bg-input)] text-[var(--text-primary)] ring-1 ring-inset ring-[var(--border-input)] py-3 text-sm font-semibold mt-3 hover:opacity-80 transition-opacity disabled:opacity-50"><span aria-hidden="true" className="mr-2">👉</span>Back to Sign In</button>}
         </div>
       </div>
     </div>

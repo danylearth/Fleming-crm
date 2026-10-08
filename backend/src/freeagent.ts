@@ -3,6 +3,7 @@ import type {Express} from 'express';
 import pool, {queryOne} from './db-pg';
 import {authMiddleware, requirePermission, requireFinance, type AuthRequest} from './auth';
 import {encryptToken, decryptToken} from './bank-feed';
+import {syncFreeAgentInvoiceReferences} from './freeagent-invoice-sync';
 
 const base = 'https://api.freeagent.com/v2';
 export function freeAgentConfig() {
@@ -13,7 +14,7 @@ export function freeAgentAuthUrl(state:string) {
   const c=freeAgentConfig(); if(!c) throw new Error('FreeAgent is not configured');
   return `${base}/approve_app?${new URLSearchParams({client_id:c.clientId,response_type:'code',redirect_uri:c.redirectUri,state})}`;
 }
-async function tokenRequest(params:Record<string,string>) {
+export async function tokenRequest(params:Record<string,string>) {
   const c=freeAgentConfig(); if(!c) throw new Error('FreeAgent is not configured');
   const response=await fetch(`${base}/token_endpoint`,{method:'POST',headers:{Authorization:`Basic ${Buffer.from(`${c.clientId}:${c.clientSecret}`).toString('base64')}`,'Content-Type':'application/x-www-form-urlencoded',Accept:'application/json'},body:new URLSearchParams(params),signal:AbortSignal.timeout(20000)});
   if(!response.ok) throw new Error('FreeAgent authorisation could not be completed. Reconnect the account.');
@@ -33,7 +34,7 @@ export async function freeAgentPages<T>(url:string,key:string,accessToken:string
     const data=await response.json() as Record<string,T[]>;
     if(!Array.isArray(data[key]))throw new Error('FreeAgent returned an unexpected response');
     rows.push(...data[key]);
-    url=response.headers.get('link')?.split(',').map(v=>v.trim()).find(v=>/rel="next"/.test(v))?.match(/<([^>]+)>/)?.[1] || '';
+    url=response.headers.get('link')?.split(',').map(v=>v.trim()).find(v=>/rel\s*=\s*["']?next["']?(?:\s|$)/i.test(v))?.match(/<([^>]+)>/)?.[1] || '';
   }
   return rows;
 }
@@ -90,9 +91,10 @@ export async function syncFreeAgent(actor?:{id:number;email:string}) {
           imported+=result.rowCount || 0;
         }
       }
+      const invoiceReferences=await syncFreeAgentInvoiceReferences(client,token.access_token,actor);
       await client.query('UPDATE bank_feed_connections SET last_synced_at=NOW(),last_error=NULL,updated_at=NOW() WHERE id=$1',[connection.id]);
       await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'sync','bank_feed_connection',$3,$4)",[actor?.id || null,actor?.email || 'system@scheduler',connection.id,JSON.stringify({provider:'freeagent',imported})]);
-      await client.query('COMMIT');return {imported,message:'Transactions imported into Bank Feed for review.'};
+      await client.query('COMMIT');return {imported,invoiceReferences,message:'Transactions imported into Bank Feed for review. Matching invoices use their original FreeAgent reference.'};
     }catch(error){
       await client.query('ROLLBACK');const message=error instanceof Error?error.message:'FreeAgent sync failed';
       if(connection)await client.query('UPDATE bank_feed_connections SET last_error=$1 WHERE id=$2',[message,connection.id]);

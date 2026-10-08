@@ -21,7 +21,7 @@ describe('7 September CRM feedback', () => {
     expect(backend).toContain("crypto.randomBytes(16).toString('hex')");
     expect(backend).toContain('agreement.tenant_slug || agreement.tenant_token');
     expect(backend).toContain('SET ${role}_opened_at = NOW()');
-    expect(wizard).toContain('Edit Agreement');
+    expect(read('../../frontend/src/components/AgreementSigningProgress.tsx')).toContain('Edit Agreement');
     expect(read('../../frontend/src/components/AgreementSigningProgress.tsx')).toContain('Last opened ');
     expect(read('../../frontend/src/components/AgreementSigningProgress.tsx')).toContain('Waiting on ${waiting.map');
   });
@@ -46,7 +46,8 @@ describe('7 September CRM feedback', () => {
     expect(signingForm).toContain('Your agreement has already been signed');
     expect(signingForm).toContain('outstanding_signers');
     expect(signingForm).toContain("value=d.signer_name||''");
-    expect(signingForm).toContain("value=d.today||new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date())");
+    expect(signingForm).toContain("new Date(d.today+'T12:00:00Z')");
+    expect(signingForm).toContain('id="signature-date" type="text" readonly aria-readonly="true"');
     expect(signingForm).toContain('/signing-layout.css');
     expect(read('../../tenants-subdomain/signing-layout.css')).toMatch(/@media\s*\(max-width:\s*820px\)/);
     expect(signingForm).not.toContain('Privacy Policy');
@@ -96,7 +97,7 @@ describe('7 September CRM feedback', () => {
     expect(wizard).toContain('Hi there {{first_name}}, your tenancy agreement is ready to view and for your digital signature.');
     expect(wizard).toContain('Hi {{first_name}}, thank you for signing your tenancy agreement and completing our application and screening process.');
     expect(wizard).toContain('Follow-up Date *');
-    expect(backend).toContain('Chase final tenancy balance for');
+    expect(backend).toContain('saveBalanceFollowUp(enquiryIds,followUpDate');
     expect(backend).toContain('balance_follow_up_date = $2');
   });
 

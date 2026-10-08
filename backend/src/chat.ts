@@ -7,6 +7,8 @@ import {rateLimit} from 'express-rate-limit';
 import pool,{query,queryOne,run} from './db-pg';
 import {authMiddleware,requirePermission,type AuthRequest} from './auth';
 import {validateTwilioWebhook} from './sms';
+import {findChatContact} from './chat-record-matching';
+import {whatsappMediaError,whatsappMediaUrl,validWhatsAppMediaToken} from './chat-whatsapp-media';
 
 type ChatUser={id:number;name:string;role:string;department?:string;email?:string};
 export const chatFileTypes:Record<string,string>={'.pdf':'application/pdf','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.csv':'text/csv','.txt':'text/plain'};
@@ -77,19 +79,35 @@ export function registerChat(app:Express){
   const c=await access(String(req.params.id),req.user);if(!c)return res.sendStatus(404);if(!validChatMessage(req.body))return res.status(400).json({error:'Enter a message up to 8,000 characters or attach up to five files.'});
   let providerId:string|null=null;
   if(c.kind==='whatsapp'){
-   if(req.body.file_ids?.length)return res.status(400).json({error:'WhatsApp currently supports text replies here.'});
+   if(req.body.file_ids?.length>1)return res.status(400).json({error:'Send one WhatsApp attachment at a time.'});
    if(c.status==='closed')return res.status(409).json({error:'Reopen the conversation before replying.'});
    if(!c.last_customer_message_at||Date.now()-new Date(c.last_customer_message_at).getTime()>86400000)return res.status(409).json({error:'The WhatsApp reply window has ended. An approved WhatsApp template is required.'});
    if(!(await whatsappStatus()).ready)return res.status(409).json({error:'The outbound number is awaiting WhatsApp approval.'});
-   const claimed=await queryOne("INSERT INTO chat_messages(conversation_id,sender_id,sender_name,body,client_id,status) VALUES($1,$2,$3,$4,$5,'sending') ON CONFLICT(conversation_id,client_id) DO NOTHING RETURNING id",[c.id,req.user.id,req.user.name,req.body.body.trim(),req.body.client_id]);
-   if(!claimed)return res.status(409).json({error:'This message was already submitted. Check its status before sending again.'});
-   try{const client=require('twilio')(process.env.TWILIO_ACCOUNT_SID,process.env.TWILIO_AUTH_TOKEN);const sent=await client.messages.create({from:'whatsapp:'+process.env.TWILIO_PHONE_NUMBER,to:'whatsapp:'+c.visitor_phone,body:req.body.body.trim(),statusCallback:(process.env.BASE_URL||'https://fleming-crm-api.fly.dev')+'/api/public/chat/whatsapp/status'});await run("UPDATE chat_messages SET provider_id=$2,status='sent' WHERE id=$1",[claimed.id,sent.sid]);await run('UPDATE chat_conversations SET updated_at=NOW() WHERE id=$1',[c.id]);return res.json(claimed);}catch(e){await run("UPDATE chat_messages SET status='failed' WHERE id=$1",[claimed.id]);return res.status(502).json({error:'WhatsApp delivery was not confirmed. Check the message status in Twilio before retrying.'});}
+   const db=await pool.connect();let claimed:any,attachment:any;
+   try{await db.query('BEGIN');
+    const locked=(await db.query('SELECT status FROM chat_conversations WHERE id=$1 FOR UPDATE',[c.id])).rows[0];
+    if(locked?.status!=='open')throw Error('Reopen the conversation before replying.');
+    if(req.body.file_ids?.length){
+     attachment=(await db.query('SELECT * FROM chat_files WHERE id=$1 AND conversation_id=$2 AND uploaded_by=$3 AND message_id IS NULL FOR UPDATE',[req.body.file_ids[0],c.id,req.user.id])).rows[0];
+     const error=whatsappMediaError(attachment);if(error)throw Error(error);
+     if(!attachment.mime_type.startsWith('image/')&&req.body.body.trim())throw Error('Send the document and your text as separate messages.');
+    }
+    claimed=(await db.query("INSERT INTO chat_messages(conversation_id,sender_id,sender_name,body,client_id,status) VALUES($1,$2,$3,$4,$5,'sending') ON CONFLICT(conversation_id,client_id) DO NOTHING RETURNING id",[c.id,req.user.id,req.user.name,req.body.body.trim(),req.body.client_id])).rows[0];
+    if(!claimed)throw Error('This message was already submitted. Check its status before sending again.');
+    if(attachment)await db.query('UPDATE chat_files SET message_id=$1 WHERE id=$2',[claimed.id,attachment.id]);
+    await db.query('COMMIT');
+   }catch(e:any){await db.query('ROLLBACK');return res.status(409).json({error:e.message});}finally{db.release();}
+   try{const client=require('twilio')(process.env.TWILIO_ACCOUNT_SID,process.env.TWILIO_AUTH_TOKEN);const base=process.env.BASE_URL||'https://fleming-crm-api.fly.dev';
+    const sent=await client.messages.create({from:'whatsapp:'+process.env.TWILIO_PHONE_NUMBER,to:'whatsapp:'+c.visitor_phone,...(req.body.body.trim()?{body:req.body.body.trim()}:{}),...(attachment?{mediaUrl:[whatsappMediaUrl(attachment.id,base,process.env.JWT_SECRET||'')]}:{}),statusCallback:base+'/api/public/chat/whatsapp/status'});
+    await run("UPDATE chat_messages SET provider_id=$2,status='sent' WHERE id=$1",[claimed.id,sent.sid]);await run('UPDATE chat_conversations SET updated_at=NOW() WHERE id=$1',[c.id]);return res.json({...claimed,status:'sent'});
+   }catch(e){await run("UPDATE chat_messages SET status='failed' WHERE id=$1",[claimed.id]);return res.status(502).json({error:'WhatsApp delivery was not confirmed. Check the message status in Twilio before retrying.'});}
   }
   try{res.json(await saveMessage(c,req.user,req.body.body.trim(),req.body.client_id,req.body.file_ids||[],providerId));}catch(e:any){res.status(409).json({error:e.message});}
  });
  const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:15*1024*1024,files:1}}).single('file');
- app.post('/api/chat/conversations/:id/files',authMiddleware,async(req:AuthRequest,res,next)=>{const c=await access(String(req.params.id),req.user);if(!c||c.status!=='open')return res.sendStatus(404);if(c.kind==='whatsapp')return res.status(400).json({error:'WhatsApp file uploads are not enabled.'});next();},(req,res,next)=>upload(req,res,e=>e?res.status(400).json({error:'Choose one file up to 15 MB.'}):next()),async(req:AuthRequest,res)=>{
+ app.post('/api/chat/conversations/:id/files',authMiddleware,async(req:AuthRequest,res,next)=>{const c=await access(String(req.params.id),req.user);if(!c||c.status!=='open')return res.sendStatus(404);(req as any).chatKind=c.kind;next();},(req,res,next)=>upload(req,res,e=>e?res.status(400).json({error:'Choose one file up to 15 MB.'}):next()),async(req:AuthRequest,res)=>{
   const f=req.file,ext=path.extname(f?.originalname||'').toLowerCase();if(!f||!validChatFile(ext,f.buffer))return res.status(400).json({error:'Choose a valid PDF, Office document, image, CSV or text file.'});
+  if((req as any).chatKind==='whatsapp'){const error=whatsappMediaError({mime_type:chatFileTypes[ext],size:f.size});if(error)return res.status(400).json({error});}
   const id=crypto.randomUUID(),filename=id+ext,name=path.basename(f.originalname).replace(/[\r\n\x00-\x1f]/g,'').slice(0,180);fs.mkdirSync(chatRoot(),{recursive:true});fs.writeFileSync(path.join(chatRoot(),filename),f.buffer,{mode:0o600});
   try{await run('INSERT INTO chat_files(id,conversation_id,uploaded_by,filename,original_name,mime_type,size) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,req.params.id,req.user.id,filename,name,chatFileTypes[ext],f.size]);res.json({id,name,size:f.size});}catch(e){fs.unlinkSync(path.join(chatRoot(),filename));throw e;}
  });
@@ -99,16 +117,23 @@ export function registerChat(app:Express){
   const {assigned_to,status,entity_type,entity_id}=req.body;
   if(assigned_to!==undefined&&assigned_to!==null&&!await queryOne("SELECT id FROM users WHERE id=$1 AND is_active=1 AND role IN ('staff','manager','admin')",[Number(assigned_to)||0]))return res.status(400).json({error:'Choose an active support colleague.'});
   if(status!==undefined&&!['open','closed'].includes(status))return res.status(400).json({error:'Choose Open or Closed.'});
-  const tables:Record<string,string>={tenant:'tenants',landlord:'landlords',tenant_enquiry:'tenant_enquiries',landlord_bdm:'landlords_bdm'};
+  const tables:Record<string,string>={tenant:'tenants',landlord:'landlords',tenant_enquiry:'tenant_enquiries',landlord_bdm:'landlords_bdm',user:'users'};
   if(entity_type!==undefined&&(!tables[entity_type]||!Number.isInteger(entity_id)||!await queryOne(`SELECT id FROM ${tables[entity_type]} WHERE id=$1`,[entity_id])))return res.status(400).json({error:'Choose an existing tenant or landlord record.'});
-  const updated=await queryOne('UPDATE chat_conversations SET assigned_to=$2,status=$3,entity_type=$4,entity_id=$5,updated_at=NOW() WHERE id=$1 RETURNING *',[c.id,assigned_to===undefined?c.assigned_to:assigned_to,status||c.status,entity_type||c.entity_type,entity_type?entity_id:c.entity_id]);await auditChat(updated,req.user,status==='closed'?'chat_completed':'chat_updated');res.json(publicConversation(updated));
+  const updated=await queryOne('UPDATE chat_conversations SET assigned_to=$2,status=$3,entity_type=$4,entity_id=$5,updated_at=NOW() WHERE id=$1 RETURNING *',[c.id,assigned_to===undefined?c.assigned_to:assigned_to,status||c.status,entity_type||c.entity_type,entity_type?entity_id:c.entity_id]);
+  if(entity_type&&c.kind==='whatsapp'){const record=await queryOne(`SELECT ${entity_type==='tenant_enquiry'?"CONCAT_WS(' ',first_name_1,last_name_1)":'name'} AS name FROM ${tables[entity_type]} WHERE id=$1`,[entity_id]);if(record?.name){updated.title=record.name;updated.visitor_name=record.name;await run('UPDATE chat_conversations SET title=$2,visitor_name=$2 WHERE id=$1',[c.id,record.name]);}}
+  await auditChat(updated,req.user,status==='closed'?'chat_completed':'chat_updated');res.json(publicConversation(updated));
  });
- app.get('/api/chat/records',...staff,async(req,res)=>{const tables:Record<string,{table:string;name:string}>={tenant:{table:'tenants',name:'name'},landlord:{table:'landlords',name:'name'},tenant_enquiry:{table:'tenant_enquiries',name:"CONCAT_WS(' ',first_name_1,last_name_1)"},landlord_bdm:{table:'landlords_bdm',name:'name'}};const type=String(req.query.type||''),t=tables[type];if(!t)return res.sendStatus(400);res.json(await query(`SELECT id,${t.name} AS name FROM ${t.table} WHERE ${t.name} ILIKE $1 ORDER BY name LIMIT 30`,['%'+String(req.query.search||'').slice(0,100)+'%']));});
+ app.get('/api/chat/records',...staff,async(req,res)=>{const tables:Record<string,{table:string;name:string}>={tenant:{table:'tenants',name:'name'},landlord:{table:'landlords',name:'name'},tenant_enquiry:{table:'tenant_enquiries',name:"CONCAT_WS(' ',first_name_1,last_name_1)"},landlord_bdm:{table:'landlords_bdm',name:'name'},user:{table:'users',name:'name'}};const type=String(req.query.type||''),t=tables[type];if(!t)return res.sendStatus(400);res.json(await query(`SELECT id,${t.name} AS name FROM ${t.table} WHERE ${t.name} ILIKE $1 ORDER BY name LIMIT 30`,['%'+String(req.query.search||'').slice(0,100)+'%']));});
  app.get('/api/chat/conversations/:id/transcript',authMiddleware,async(req:AuthRequest,res)=>{const c=await access(String(req.params.id),req.user);if(!c)return res.sendStatus(404);res.json({title:c.title,status:c.status,messages:await messages(c.id)});});
  registerPublicChat(app,sendLimit);
 }
 
 function registerPublicChat(app:Express,sendLimit:any){
+ app.get('/api/public/chat/whatsapp/media/:id',async(req,res)=>{
+  const id=String(req.params.id);if(!validWhatsAppMediaToken(id,req.query.expires,req.query.signature,process.env.JWT_SECRET||''))return res.sendStatus(403);
+  const file=await queryOne("SELECT f.* FROM chat_files f JOIN chat_conversations c ON c.id=f.conversation_id WHERE f.id=$1 AND c.kind='whatsapp' AND f.message_id IS NOT NULL",[id]);if(!file)return res.sendStatus(404);
+  res.set({'Content-Type':file.mime_type,'X-Content-Type-Options':'nosniff','Cache-Control':'private, no-store'});res.sendFile(path.resolve(chatRoot(),file.filename));
+ });
  app.post('/api/public/chat/whatsapp/status',validateTwilioWebhook,async(req,res)=>{const status=String(req.body.MessageStatus||'');if(['sent','delivered','read','failed','undelivered'].includes(status))await run('UPDATE chat_messages SET status=$2 WHERE provider_id=$1',[String(req.body.MessageSid||''),status]);res.sendStatus(204);});
  const visitor=async(req:Request,res:Response,next:NextFunction)=>{const token=String(req.headers['x-chat-token']||'');if(!/^[a-f0-9]{64}$/.test(token))return res.sendStatus(401);const c=await queryOne("SELECT * FROM chat_conversations WHERE visitor_token_hash=$1 AND kind='live'",[tokenHash(token)]);if(!c)return res.sendStatus(401);(req as any).conversation=c;next();};
  app.get('/api/public/chat/status',rateLimit({windowMs:60000,limit:60}),async(_req,res)=>res.json({online:Boolean(await queryOne("SELECT p.user_id FROM chat_presence p JOIN users u ON u.id=p.user_id WHERE p.last_seen>NOW()-INTERVAL '75 seconds' AND u.is_active=1 AND u.role IN ('staff','manager','admin') LIMIT 1"))}));
@@ -123,6 +148,8 @@ function registerPublicChat(app:Express,sendLimit:any){
  app.post('/api/public/chat/whatsapp/inbound',validateTwilioWebhook,async(req,res)=>{
   const from=String(req.body.From||''),to=String(req.body.To||''),sid=String(req.body.MessageSid||'');if(!/^whatsapp:\+\d{10,15}$/.test(from)||to!=='whatsapp:'+process.env.TWILIO_PHONE_NUMBER||!/^SM[a-f0-9]{32}$/i.test(sid))return res.sendStatus(400);
   if(await queryOne('SELECT id FROM chat_messages WHERE provider_id=$1',[sid]))return res.type('text/xml').send('<Response/>');
-  const phone=from.slice(9),name=String(req.body.ProfileName||phone).slice(0,100);const c=await queryOne("INSERT INTO chat_conversations(id,kind,title,visitor_name,visitor_phone) VALUES($1,'whatsapp',$2,$3,$4) ON CONFLICT(visitor_phone) WHERE kind='whatsapp' DO UPDATE SET status='open' RETURNING *",[crypto.randomUUID(),'WhatsApp — '+name,name,phone]);await saveMessage(c,null,String(req.body.Body||'Attachment received in WhatsApp').slice(0,8000),crypto.randomUUID(),[],sid);res.type('text/xml').send('<Response/>');
+  const phone=from.slice(9),name=String(req.body.ProfileName||phone).slice(0,100);const c=await queryOne("INSERT INTO chat_conversations(id,kind,title,visitor_name,visitor_phone) VALUES($1,'whatsapp',$2,$3,$4) ON CONFLICT(visitor_phone) WHERE kind='whatsapp' DO UPDATE SET status='open' RETURNING *",[crypto.randomUUID(),name,name,phone]);
+  if(!c.entity_id){const contact=await findChatContact(phone);if(contact){const linked=await queryOne('UPDATE chat_conversations SET entity_type=$2,entity_id=$3,title=$4,visitor_name=$4 WHERE id=$1 AND entity_id IS NULL RETURNING *',[c.id,contact.entity_type,contact.entity_id,contact.name]);if(linked){Object.assign(c,linked);await run("INSERT INTO audit_log(user_email,action,entity_type,entity_id,changes) VALUES('System','chat_linked',$1,$2,$3)",[contact.entity_type,contact.entity_id,JSON.stringify({conversation_id:c.id,channel:'whatsapp',source:'known_phone_number'})]);}}}
+  await saveMessage(c,null,String(req.body.Body||'Attachment received in WhatsApp').slice(0,8000),crypto.randomUUID(),[],sid);res.type('text/xml').send('<Response/>');
  });
 }

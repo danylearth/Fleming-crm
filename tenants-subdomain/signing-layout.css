@@ -26,3 +26,16 @@
 .panel .document-open{display:flex;align-items:center;justify-content:center;gap:9px;font-weight:700;text-align:center;line-height:1.4}.document-open svg{flex-shrink:0}
 .panel>h1{text-align:center}
 .service-bank .bank-card #bank-heading{font-size:16px;font-weight:700;color:#27083d;margin:0 0 12px;line-height:1.4}
+
+/* Shared completion treatment: consistent card and an unbroken desktop notice. */
+body{min-height:100dvh;background-attachment:fixed}
+.shell:has(.state:not([hidden])){max-width:1000px;padding:0 16px;margin:32px auto}
+.state{padding:48px 28px}.state p{line-height:1.6}.state .outstanding{width:fit-content;max-width:100%;padding:14px 20px;line-height:1.6}
+@media(max-width:600px){.shell:has(.state:not([hidden])){margin:20px auto}.state{padding:32px 20px}.state .outstanding{padding:12px;overflow-wrap:anywhere}}
+
+/* Actual APT sheets remain separate in the signing viewer. */
+#tenancy-document{background:#e7e4e9;padding:12px}
+#agreement-pdf{display:flex;flex-direction:column;gap:30px;padding-bottom:22px}
+#agreement-pdf .pdf-page{position:relative;flex:none;background:#fff;box-shadow:0 1px 5px #25073b35;margin:0}
+#agreement-pdf .pdf-page::after{content:attr(data-page-label);position:absolute;top:100%;left:0;right:0;height:24px;display:grid;place-items:center;font:12px Arial,sans-serif;color:#62596a}
+#agreement-pdf .pdf-page canvas{display:block;width:100%;height:auto;margin:0}

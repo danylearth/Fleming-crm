@@ -1,3 +1,4 @@
+import { newestNotesFirst } from '../utils/notes';
 import {noteDisplayText} from '../utils/noteDisplay';
 import {showDocumentTab} from '../utils/documentViewer';
 import SignatureRequests from '../components/SignatureRequests';
@@ -6,6 +7,7 @@ import {ToolbarButton} from '../components/ui';
 import ServiceFeeFields,{validServiceFees} from '../components/ServiceFeeFields';
 import SectionEditButton from '../components/ui/SectionEditButton';
 import PropertyContractStep from '../components/PropertyContractStep';
+import PropertyOnboardingWizard from '../components/PropertyOnboardingWizard';
 import {Check} from 'lucide-react';
 import LandlordBankDetails from '../components/LandlordBankDetails';
 import ContextualDocSlot from '../components/ui/ContextualDocSlot';
@@ -132,6 +134,8 @@ export default function LandlordDetail() {
     name: '', email: '', phone: '', date_of_birth: '', role: '', kyc_completed: false, notes: ''
   });
   const [directorSaving, setDirectorSaving] = useState(false);
+  const [hasPrimaryId,setHasPrimaryId]=useState(false);
+  const [approvingKyc,setApprovingKyc]=useState(false);
 
   // SMS
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -222,6 +226,10 @@ export default function LandlordDetail() {
   }, [api, id]);
 
   useEffect(() => { loadSmsHistory(); loadEmailHistory(); }, [id, loadSmsHistory, loadEmailHistory]);
+
+  useEffect(()=>{const refresh=()=>{if(!editing)void loadDetail();};window.addEventListener('focus',refresh);return()=>window.removeEventListener('focus',refresh);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[api,id,editing]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -327,7 +335,7 @@ export default function LandlordDetail() {
     }
   };
 
-  const filteredNotes = getFilteredNotes();
+  const filteredNotes = newestNotesFirst(getFilteredNotes());
 
   if (loading) return <Layout title="Loading..."><div className="p-8 text-[var(--text-muted)] text-sm">Loading...</div></Layout>;
   if (!landlord) return <Layout title="Not Found"><div className="p-8 text-[var(--text-muted)]">Landlord not found</div></Layout>;
@@ -421,7 +429,7 @@ export default function LandlordDetail() {
             {/* Properties */}
             <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <SectionHeader title="Properties" icon={<Building2 size={16}/>} />
+                <SectionHeader title="Properties" icon={<Building2 size={16}/>} /><div className="ml-auto flex flex-wrap justify-end gap-2">
                 <ToolbarButton variant="outline" size="sm" onClick={async () => {
                   setPropForm(f => ({ ...f, landlord_id: String(id) }));
                   setPropMode('create');
@@ -436,7 +444,7 @@ export default function LandlordDetail() {
                   setShowAddProp(true);
                 }}>
                   <Plus size={14} className="mr-1.5" /> Add Property
-                </ToolbarButton>
+                </ToolbarButton><ToolbarButton variant="outline" size="sm" onClick={async()=>{setPropMode('link');setSelectedPropertyId('');try{setAllProperties(await api.get('/api/properties'));setShowAddProp(true);}catch(e){alert(e instanceof Error?e.message:'Properties could not be loaded');}}}>Link Existing Property</ToolbarButton></div>
               </div>
               {properties.length === 0 ? (
                 <EmptyState message="No properties linked" />
@@ -686,7 +694,7 @@ export default function LandlordDetail() {
             </GlassCard>
 
             {/* KYC */}
-            <GlassCard className="p-6">
+            <GlassCard className={"p-6 "+(landlord.kyc_completed?"!border-emerald-500/30 !bg-emerald-500/10":"")}>
               <div className="flex items-center justify-between gap-3"><SectionHeader title="KYC Compliance" icon={<ShieldCheck size={16}/>} />{user?.role==='admin'&&sectionActions('kyc')}</div>
               {editingSection==='kyc'&&<div className="my-3"><Toggle label="KYC Approved" checked={form.kyc_completed} onChange={v=>setForm({...form,kyc_completed:v})}/><p className="text-xs text-[var(--text-muted)] mt-2">Review the supporting documents before saving approval.</p></div>}
               <div className="space-y-4">
@@ -740,10 +748,11 @@ export default function LandlordDetail() {
                   </div>
                 )}
 
-                <div className="grid xl:grid-cols-3 gap-3 items-stretch"><div className="rounded-xl border border-[var(--border-input)] p-3 [&>*]:h-full [&>*]:min-w-0 [&>*]:w-full"><ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Primary Identification" label="Primary ID Document" /></div><div className="rounded-xl border border-[var(--border-input)] p-3 [&>*]:h-full [&>*]:min-w-0 [&>*]:w-full">
+                <div className="grid xl:grid-cols-3 gap-3 items-stretch"><div className="rounded-xl border border-[var(--border-input)] p-3 [&>*]:h-full [&>*]:min-w-0 [&>*]:w-full"><ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Primary Identification" label="Primary ID Document" onDocChange={setHasPrimaryId} /></div><div className="rounded-xl border border-[var(--border-input)] p-3 [&>*]:h-full [&>*]:min-w-0 [&>*]:w-full">
                 <ContextualDocSlot entityType="landlord" entityId={Number(id)} docType="Address Identification" label="Secondary ID Document (Optional)" /></div><div className="rounded-xl border border-[var(--border-input)] p-3 flex flex-col justify-center gap-4">
                 <p className="text-xs text-[var(--text-muted)]">One primary identity document is required. Secondary ID is optional.</p>
-                {/* Admin approval button */}
+                {/* Primary ID is required; secondary ID remains optional. */}
+                {user?.role==='admin'&&!landlord.kyc_completed&&<Button variant="gradient" disabled={!hasPrimaryId||approvingKyc} onClick={async()=>{if(!await confirmAction('Confirm you have reviewed the primary ID and approve this landlord’s KYC?','Approve KYC'))return;setApprovingKyc(true);try{await api.put('/api/landlords/'+id,{kyc_completed:1});await loadDetail();}catch(error){alert(error instanceof Error?error.message:'KYC approval could not be saved');}finally{setApprovingKyc(false);}}}>{approvingKyc?'Approving…':'Approve KYC'}</Button>}
                 {!!landlord.kyc_completed&&<div className="flex items-center gap-3"><span className="w-9 h-9 shrink-0 rounded-full bg-emerald-500/15 text-emerald-600 grid place-items-center"><Check size={20}/></span><div><p className="text-sm font-semibold">KYC Approved</p><p className="text-xs text-[var(--text-muted)]">{landlord.kyc_approved_at?new Date(landlord.kyc_approved_at).toLocaleDateString('en-GB'):'Approval recorded'}</p></div></div>}</div></div>
               </div>
             </GlassCard>
@@ -888,7 +897,8 @@ export default function LandlordDetail() {
           </div>
         </div>
         {/* Add Property Modal */}
-        {showAddProp && (
+        {showAddProp && propMode==='create' && <PropertyOnboardingWizard landlordId={Number(id)} onSaved={()=>void loadDetail()} onClose={()=>{setShowAddProp(false);void loadDetail();}}/>}
+        {showAddProp && propMode==='link' && (
           <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm" onClick={() => setShowAddProp(false)}>
             <div className="bg-[var(--bg-card)] border border-[var(--border-input)] rounded-t-2xl md:rounded-2xl p-6 w-full md:max-w-lg space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between">
@@ -901,11 +911,7 @@ export default function LandlordDetail() {
                 <button
                   type="button"
                   onClick={() => setPropMode('create')}
-                  className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    propMode === 'create'
-                      ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                  }`}>
+                  className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
                   Create New
                 </button>
                 <button
@@ -958,15 +964,15 @@ export default function LandlordDetail() {
                   <Input label="Town/City *" value={propForm.city} onChange={city=>setPropForm(f=>({...f,city}))}/>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input label="Postcode *" value={propForm.postcode} onChange={(v: string) => setPropForm(f => ({ ...f, postcode: v }))} placeholder="e.g. SW1A 1AA" />
-                    <Input label="Rent (£/month)" value={propForm.rent_amount} onChange={(v: string) => setPropForm(f => ({ ...f, rent_amount: v }))} placeholder="0" />
+                    <Input type="currency" label="Rent (£/month)" value={propForm.rent_amount} onChange={(v: string) => setPropForm(f => ({ ...f, rent_amount: v }))} placeholder="0" />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Select label="Type" value={propForm.property_type} onChange={(v: string) => setPropForm(f => ({ ...f, property_type: v }))}
                       options={[{ value: 'house', label: 'House' }, { value: 'flat', label: 'Flat' }, { value: 'bungalow', label: 'Bungalow' }, { value: 'studio', label: 'Studio' }, { value: 'hmo', label: 'HMO' }]} />
                     <Input label="Bedrooms" value={propForm.bedrooms} onChange={(v: string) => setPropForm(f => ({ ...f, bedrooms: v }))} placeholder="1" />
                   </div>
-                  <Select label="Status *" value={propForm.status} onChange={status=>setPropForm(f=>({...f,status}))} options={[{value:"to_let",label:"To Let"},{value:"let_agreed",label:"Let Agreed"}]}/>
                   <Select label="Has Gas? *" value={propForm.has_gas} onChange={has_gas=>setPropForm(f=>({...f,has_gas}))} options={[{value:"",label:"Choose Yes or No"},{value:"yes",label:"Yes"},{value:"no",label:"No"}]}/>
+                  <Select label="Status *" value={propForm.status} onChange={status=>setPropForm(f=>({...f,status}))} options={[{value:"to_let",label:"To Let"},{value:"let_agreed",label:"Let Agreed"}]}/>
                   <Select label="Service Type" value={propForm.service_type} onChange={(v: string) => setPropForm(f => ({ ...f, service_type: v }))}
                     options={[{ value: '', label: 'Select...' }, { value: 'full_management', label: 'Full Management' }, { value: 'rent_collection', label: 'Rent Collection' }, { value: 'let_only', label: 'Let Only' }]} />
                   {landlord.landlord_type!=='internal'&&<ServiceFeeFields service={propForm.service_type} setup={propForm.service_setup_fee} monthly={propForm.service_monthly_fee} onChange={fees=>setPropForm(f=>({...f,...fees}))}/>}
@@ -1066,9 +1072,8 @@ export default function LandlordDetail() {
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
+                  <DatePicker
                     label="Date of Birth"
-                    type="date"
                     value={directorForm.date_of_birth}
                     onChange={(v: string) => setDirectorForm({ ...directorForm, date_of_birth: v })}
                   />

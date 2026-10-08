@@ -44,3 +44,19 @@ backend/flemo-accounts/
 
 # Local CSV import fixtures (may contain applicant PII)
 frontend/public/__test-*.csv
+
+# Local release snapshots, browser evidence and generated documents
+/tmp/
+/output/
+/outputs/
+/docs/reviews/
+/docs/previews/
+/portal-design-preview/*.png
+/portal-design-preview/review-company.json
+.openai/
+*.tar.gz
+
+# Separate preview checkout; application implementation lives in frontend/
+/crm-record-design-test/
+/prototypes/guarantor-crm-review/appendices/
+/prototypes/guarantor-crm-review/rejection-state.json

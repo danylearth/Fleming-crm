@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {authMiddleware, requireRole, type AuthRequest} from './auth';
 import {run,queryOne} from './db-pg';
+import {FlemoServiceError,flemoProviderError} from './flemo-errors';
 
 type Login = {loginId:string;verificationUrl:string;userCode:string};
 const sessions=new Map<number,Promise<FlemoAccount>>();
@@ -17,7 +18,7 @@ export class FlemoAccount {
   private sequence=0;
   private stopped=false;
   private requests=new Map<number,{resolve:(value:any)=>void;reject:(error:Error)=>void;timer:NodeJS.Timeout}>();
-  private turn?:{threadId:string;text:string;resolve:(text:string)=>void;reject:(error:Error)=>void;timer:NodeJS.Timeout};
+  private turn?:{threadId:string;text:string;error?:FlemoServiceError;resolve:(text:string)=>void;reject:(error:Error)=>void;timer:NodeJS.Timeout};
   login:Login|null=null;
   loginError:string|null=null;
   private loginStarting?:Promise<Login>;
@@ -39,11 +40,12 @@ export class FlemoAccount {
     this.child.stderr.on('data',()=>{});
     createInterface({input:this.child.stdout}).on('line',line=>{
       let message:any;try{message=JSON.parse(line);}catch{return;}
-      if(message.id!==undefined && !message.method){const request=this.requests.get(message.id);if(request){clearTimeout(request.timer);this.requests.delete(message.id);message.error?request.reject(new Error('The AI service could not complete this request. Please reconnect or try again.')):request.resolve(message.result);}return;}
+      if(message.id!==undefined && !message.method){const request=this.requests.get(message.id);if(request){clearTimeout(request.timer);this.requests.delete(message.id);message.error?request.reject(flemoProviderError(message.error)):request.resolve(message.result);}return;}
       if(message.id!==undefined && message.method){this.child.stdin.write(JSON.stringify({id:message.id,error:{code:-32601,message:'This CRM connection does not permit tool execution'}})+'\n');return;}
       if(message.method==='account/login/completed'){this.login=null;this.loginError=message.params.success?null:'Sign-in did not complete. Try connecting again.';if(message.params.success)void run('UPDATE users SET ai_connected_at=NOW() WHERE id=$1',[this.userId]).catch(()=>{});}
       if(message.method==='item/completed' && this.turn?.threadId===message.params.threadId && message.params.item?.type==='agentMessage')this.turn.text=message.params.item.text || this.turn.text;
-      if(message.method==='turn/completed' && this.turn?.threadId===message.params.threadId){const turn=this.turn;this.turn=undefined;clearTimeout(turn.timer);message.params.turn?.status==='completed' && turn.text ? turn.resolve(turn.text) : turn.reject(new Error('Flemo could not finish the answer. Check your AI account limits and try again.'));}
+      if(message.method==='error' && this.turn?.threadId===message.params.threadId)this.turn.error=flemoProviderError(message.params.error);
+      if(message.method==='turn/completed' && this.turn?.threadId===message.params.threadId){const turn=this.turn;this.turn=undefined;clearTimeout(turn.timer);message.params.turn?.status==='completed' && turn.text ? turn.resolve(turn.text) : turn.reject(message.params.turn?.error?flemoProviderError(message.params.turn.error):turn.error||flemoProviderError(null));}
     });
     const closed=()=>{if(this.stopped)return;this.stopped=true;this.child.kill();for(const pending of this.requests.values()){clearTimeout(pending.timer);pending.reject(new Error('AI connection stopped. Please try again.'));}this.requests.clear();if(this.turn){clearTimeout(this.turn.timer);this.turn.reject(new Error('AI connection stopped. Please try again.'));this.turn=undefined;}clearInterval(this.timer);sessions.delete(userId);};
     this.child.on('error',closed);this.child.on('exit',closed);this.child.stdin.on('error',closed);

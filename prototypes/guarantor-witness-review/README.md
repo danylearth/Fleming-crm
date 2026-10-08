@@ -1,0 +1,11 @@
+# Guarantor and witness review — 30 September 2026
+
+Isolated static design and workflow demonstration. No production API, database, emails, uploads or legally operative signatures. Fictional data only. State is browser-session local; reviewer role switches are demonstrations, not authentication. The earlier guarantor prototype remains unchanged.
+
+Run `node prepare.cjs`, then serve this directory as static files. Test using `node --test model.test.mjs`. Deploy only these public assets to a preview URL, with no production aliases or API rewrites: index.html, app.mjs, model.mjs, style.css, review.css, guarantor-email.html, witness-email.html, email-assets, vercel.json.
+
+The Office view starts after a completed and approved tenant application. Select Yes, prepare the invitation, inspect the supplied Fleming email adaptation, fill fictional guarantor details, attach sample evidence, nominate a witness and sign with presence confirmed. Switch to the witness email/form, attest, then return to the office and complete checks. Try refusing to attest and starting a new signing. Reset begins a fresh demonstration.
+
+Legal findings and links are available inside the preview. Physical witnessing is required for the individual personally signing this standalone deed. The section 91 Land Registration Act electronic disposition exception is not a general exception for guarantees. An ordinary contractual guarantee before grant is a separate legal structure; it is not implemented here. Sample APT/deed pages demonstrate document presentation only, not final revised instruments.
+
+Before production, integrate independent expiring single-use invitations and access controls, canonical document hashes/version locking, genuine upload and identity checks, server-side signature timestamps and audit evidence, evidence segregation for witnesses, actual email delivery/retry reporting and deed delivery provisions. Retain superseded signatures and never permit a replacement witness to attest an old signing. The production flow must receive the full approved periodic deed and proposed APT, with the proper privacy/provider disclosures. This review must not mark actual guarantors verified or send real emails.

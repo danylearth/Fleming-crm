@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import {useApi} from '../../hooks/useApi';
 import {useAuth} from '../../context/AuthContext';
+import {DatePicker} from './DatePicker';
 export interface DocumentReview {
  id:string; status:string; warning?:string; categories:string[];
  targets:{key:string;entity_type:string;id:number;label:string}[];
@@ -14,7 +15,7 @@ export default function FlemoDocumentReview({review,onComplete}:{review:Document
  const field='w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] px-2 py-2 text-xs';
  return <section aria-label="Review attached documents" className="mt-2 space-y-3 text-xs text-[var(--text-primary)]">
  <p>Check each record and document before saving. ID documents remain pending verification.</p>
- {review.warning&&<p className="text-amber-600">Automatic recognition was unavailable. Choose the record and category below.</p>}
+ {review.warning&&<p className="text-amber-600">{review.warning} Choose the record and category below to continue manually.</p>}
  <input aria-label="Find a filing record" placeholder="Find a person or property…" value={search} onChange={e=>setSearch(e.target.value)} className={field}/>
  {items.map((item,index)=>{const selected=review.targets.find(t=>t.key===item.target_key),certificate=['EICR','EPC','Gas Safety Certificate'].includes(item.doc_type),canUpdate=selected?.entity_type==='property'&&certificate&&item.doc_type===review.items[index].doc_type&&(item.doc_type!=='EICR'||item.outcome==='satisfactory');return <fieldset disabled={busy||done} key={item.upload_id} className="rounded-xl border border-[var(--border-input)] p-3 space-y-2 min-w-0">
  <legend className="font-medium break-all">{item.name}</legend><button type="button" className="underline" onClick={()=>void source(item.upload_id,item.name)}>View original document</button>
@@ -23,7 +24,7 @@ export default function FlemoDocumentReview({review,onComplete}:{review:Document
  <label className="block">Document category<select aria-label={`Category for ${item.name}`} className={field} value={item.doc_type} onChange={e=>change(index,{doc_type:e.target.value,update_compliance:false})}>{review.categories.map(c=><option key={c}>{c}</option>)}</select></label>
  {canUpdate&&<label className="flex items-start gap-2"><input type="checkbox" checked={item.update_compliance} onChange={e=>change(index,{update_compliance:e.target.checked})}/>Update the property’s compliance date and complete the old reminder</label>}
  {certificate&&item.doc_type==='EICR'&&item.outcome!=='satisfactory'&&<p className="text-amber-600">The overall result is {item.outcome}. This report can be filed for review; its reminder will stay open.</p>}
- {item.update_compliance&&<><label className="block">Next inspection / expiry date<input aria-label={`Next due date for ${item.name}`} type="date" value={item.expiry_date} onChange={e=>change(index,{expiry_date:e.target.value})} className={field}/></label><p className="text-[var(--text-secondary)]">{item.date_evidence}</p>{item.outcome_evidence&&<p>{item.outcome_evidence}</p>}</>}
+ {item.update_compliance&&<><DatePicker label="Next inspection / expiry date" value={item.expiry_date} onChange={expiry_date=>change(index,{expiry_date})}/><p className="text-[var(--text-secondary)]">{item.date_evidence}</p>{item.outcome_evidence&&<p>{item.outcome_evidence}</p>}</>}
  </fieldset>;})}
  {error&&<p role="alert" className="text-red-600">{error}</p>}
  <button onClick={()=>void apply()} disabled={busy||done||items.some(i=>!i.target_key||(i.update_compliance&&!i.expiry_date))} className="rounded-full bg-[#8f2e70] text-white px-4 py-2 disabled:opacity-50">{done?'Saved':busy?'Saving…':'Save reviewed documents'}</button>

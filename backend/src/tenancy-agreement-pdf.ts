@@ -470,17 +470,6 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     paragraph(`Tenant(s): ${tenantNames}`);
     paragraph('Signed: ____________________________________    Date: ____________________');
 
-    const range = doc.bufferedPageRange();
-    for (let pageIndex = range.start; pageIndex < range.start + range.count; pageIndex += 1) {
-      doc.switchToPage(pageIndex);
-      doc.page.margins.bottom = 0;
-      doc.font('Helvetica').fontSize(7.5).fillColor('#766c7a').text(
-        `Fleming Lettings · FL-TA-${input.enquiryId} · Page ${pageIndex + 1} of ${range.count}`,
-        contentLeft,
-        doc.page.height - 91,
-        { width, align: 'center', lineBreak: false },
-      );
-    }
     doc.end();
   });
 }

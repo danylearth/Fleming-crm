@@ -48,6 +48,8 @@ export default function DocumentsSection({ entityType, entityId, title, compact 
 
   useEffect(() => { fetchDocuments(); fetchDocTypes(); }, [fetchDocuments, fetchDocTypes]);
 
+  useEffect(()=>{const refresh=(event:Event)=>{const detail=(event as CustomEvent).detail;if(!detail||(detail.entityType===entityType&&Number(detail.entityId)===entityId))void fetchDocuments();};window.addEventListener('crm-activity-updated',refresh);window.addEventListener('focus',refresh);return()=>{window.removeEventListener('crm-activity-updated',refresh);window.removeEventListener('focus',refresh);};},[entityType,entityId,fetchDocuments]);
+
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedType) return;

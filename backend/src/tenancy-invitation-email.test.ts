@@ -1,0 +1,6 @@
+import {expect,it} from 'vitest';
+import {tenancyAgreementEmail} from './email';
+const input={firstName:'Zoe',propertyAddress:'99 Ringwood Road, WV10 9ER',tenancyStartDate:'2026-11-06',landlordName:'Fleming Lettings & Developments UK Limited',landlordAddress:'Creative Industries Centre, Glaisher Drive, Wolverhampton Science Park, Wolverhampton, West Midlands, WV10 9TG',monthlyRent:1100,securityDeposit:1100,fundsOnAccount:230,balanceDue:1970,signingUrl:'https://example.test/sign'};
+it('excludes carried-over holding-deposit funds and credit for an existing tenant',()=>{const {html}=tenancyAgreementEmail({...input,isExistingTenant:true});expect(html).not.toContain('Funds already on account');expect(html).not.toContain('&pound;230');expect(html).not.toContain('&pound;1,970');expect(html).toContain('&pound;2,200');});
+it('preserves the holding-deposit credit for new-applicant onboarding',()=>{const {html}=tenancyAgreementEmail(input);expect(html).toContain('Funds already on account');expect(html).toContain('&pound;230');expect(html).toContain('&pound;1,970');});
+it('keeps the company town and postcode together and shortens the address',()=>{const {html}=tenancyAgreementEmail(input);expect(html).toMatch(/white-space:nowrap[^>]*>Wolverhampton, WV10 9TG<\/span>/);expect(html).not.toContain('Glaisher Drive');expect(html).not.toContain('West Midlands, WV10');});

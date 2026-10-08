@@ -1,3 +1,4 @@
+import {syncLandlordBankApprovalTask} from './landlord-bank-approval-task';
 import {serviceReadySql} from './service-workflow';
 import type {Express} from 'express';
 import {authMiddleware,requirePermission,type AuthRequest} from './auth';
@@ -45,7 +46,7 @@ export async function clientAgreementContext(enquiryId:number){
  const paymentOverride=Boolean(paymentAccount&&stored?.paymentConfirmation?.override);
  const defaultAccountApproved=paymentRoute!=='landlord'||Boolean(sourceBank?.approved_at&&sourceBank?.landlord_approved_at);
  const paymentReady=Boolean(paymentAccount&&(paymentOverride||defaultAccountApproved));
- return {propertyId:enquiry.service_property_id,serviceAgreementSigned:!!service,serviceAgreementReady:!!enquiry.service_ready,servicePaymentRoute:service?.payment_route,serviceSetupFee:service?.setup_fee,serviceMonthlyFee:service?.monthly_fee,bankOverride:hasOverride,enquiryId:canonicalId,landlordId:enquiry.landlord_id,enabled:enquiry.landlord_type!=='internal',serviceType:enquiry.service_type,isCompany,defaults,details,directors,bank:bank||null,saved:matchingRecord,paymentRoute,suggestedPaymentAccount,paymentAccount:paymentAccount||suggestedPaymentAccount,paymentConfirmed:paymentReady,paymentOverride,defaultAccountApproved,paymentInstructions:defaultAgreementPaymentInstructions(enquiry.service_type),companyAccounts:{business:company.operatingAccount,clientMoney:company.clientAccount,cmpNumber:company.cmp.number},ready:matchingRecord&&!validateClientDetails(details,isCompany)&&paymentReady};
+ return {propertyId:enquiry.service_property_id,serviceAgreementSigned:!!service,serviceAgreementReady:!!enquiry.service_ready,servicePaymentRoute:service?.payment_route,serviceSetupFee:service?.setup_fee,serviceMonthlyFee:service?.monthly_fee,bankOverride:hasOverride,enquiryId:canonicalId,landlordId:enquiry.landlord_id,enabled:enquiry.landlord_type!=='internal',serviceType:enquiry.service_type,isCompany,defaults,details,directors,bank:bank||null,saved:matchingRecord&&stored?.detailsConfirmed!==false,paymentRoute,suggestedPaymentAccount,paymentAccount:paymentAccount||suggestedPaymentAccount,paymentConfirmed:paymentReady,paymentOverride,defaultAccountApproved,paymentInstructions:defaultAgreementPaymentInstructions(enquiry.service_type),companyAccounts:{business:company.operatingAccount,clientMoney:company.clientAccount,cmpNumber:company.cmp.number},ready:matchingRecord&&stored?.detailsConfirmed!==false&&!validateClientDetails(details,isCompany)&&paymentReady};
 }
 export function registerClientAgreementDetails(app:Express){
  app.get('/api/landlords/:id/bank-details',authMiddleware,requirePermission('staff'),async(req,res)=>{
@@ -64,12 +65,24 @@ export function registerClientAgreementDetails(app:Express){
    const current=(await client.query('SELECT * FROM landlord_bank_details WHERE landlord_id=$1 FOR UPDATE',[req.params.id])).rows[0];
    if(approved&&(!current||current.account_name!==accountName||current.sort_code.replace(/-/g,'')!==sortCode||current.account_number!==accountNumber||current.bank_name!==bankName)){await client.query('ROLLBACK');return res.status(409).json({error:'Bank details have changed. Reload and verify the current account before approving.'});}
    const result=await client.query(`INSERT INTO landlord_bank_details(landlord_id,account_name,sort_code,account_number,bank_name,approved_at,approved_by) VALUES($1,$2,$3,$4,$5,CASE WHEN $6 THEN NOW() END,CASE WHEN $6 THEN $7::integer END) ON CONFLICT(landlord_id) DO UPDATE SET account_name=$2,sort_code=$3,account_number=$4,bank_name=$5,approved_at=CASE WHEN $6 THEN NOW() END,approved_by=CASE WHEN $6 THEN $7::integer END,landlord_approved_at=CASE WHEN landlord_bank_details.account_name=$2 AND landlord_bank_details.sort_code=$3 AND landlord_bank_details.account_number=$4 AND landlord_bank_details.bank_name=$5 THEN landlord_bank_details.landlord_approved_at END,landlord_approved_name=CASE WHEN landlord_bank_details.account_name=$2 AND landlord_bank_details.sort_code=$3 AND landlord_bank_details.account_number=$4 AND landlord_bank_details.bank_name=$5 THEN landlord_bank_details.landlord_approved_name END,updated_at=NOW() RETURNING *`,[req.params.id,accountName,sortCode.replace(/(\d{2})(\d{2})(\d{2})/,'$1-$2-$3'),accountNumber,bankName,approved,req.user.id]);
+   await syncLandlordBankApprovalTask(client,Number(req.params.id));
    await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,$3,'landlord',$4,$5)",[req.user.id,req.user.email,approved?'bank_details_approved':'bank_details_updated',req.params.id,JSON.stringify({details_approved:approved,account_ending:accountNumber.slice(-4),...(approved?{verification_method:'Phone call',verified_with:verifiedWith,verification_note:verificationNote}: {})})]);await client.query('COMMIT');res.json({...result.rows[0],approved_by_name:approved?(await queryOne('SELECT name FROM users WHERE id=$1',[req.user.id]))?.name:null});
   }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
  });
  app.get('/api/tenant-enquiries/:id/client-agreement-details',authMiddleware,requirePermission('staff'),async(req,res)=>{const state=await clientAgreementContext(Number(req.params.id));if(!state)return res.status(409).json({error:'Link the property and landlord first'});res.json(state);});
  app.put('/api/tenant-enquiries/:id/client-agreement-details',authMiddleware,requirePermission('staff'),async(req:AuthRequest,res)=>{
   const state=await clientAgreementContext(Number(req.params.id));if(!state?.enabled)return res.status(409).json({error:'Client details require an external landlord'});
+  if(req.body.action==='reset'||req.body.action==='reset_payment'){
+   const resettingPayment=req.body.action==='reset_payment';
+   const c=await pool.connect();try{await c.query('BEGIN');
+    await c.query('SELECT id FROM tenant_enquiries WHERE id=$1 FOR UPDATE',[state.enquiryId]);
+    const issued=await c.query("SELECT id FROM tenancy_agreements WHERE enquiry_id IN (SELECT id FROM tenant_enquiries WHERE id=$1 OR joint_partner_id=$1) AND status<>'void'",[state.enquiryId]);
+    if(issued.rowCount){await c.query('ROLLBACK');return res.status(409).json({error:'Void the issued agreement before resetting landlord details'});}
+    await c.query("UPDATE tenant_enquiries SET client_agreement_details=jsonb_set(COALESCE(client_agreement_details,'{}'::jsonb),$2::text[],$3::jsonb),updated_at=NOW() WHERE id=$1",[state.enquiryId,[resettingPayment?'paymentConfirmation':'detailsConfirmed'],resettingPayment?'null':'false']);
+    await c.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'client_agreement_details_reset','tenant_enquiry',$3,$4)",[req.user.id,req.user.email,state.enquiryId,JSON.stringify({landlord_id:state.landlordId,section:resettingPayment?'payment_account':'landlord_details'})]);await c.query('COMMIT');
+   }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+   return res.json(await clientAgreementContext(state.enquiryId));
+  }
   const details=Object.fromEntries(Object.keys(state.defaults).map(key=>[key,String(req.body[key]??'').trim().slice(0,1000)])) as ClientDetails;
   const error=validateClientDetails(details,state.isCompany);if(error)return res.status(400).json({error});
   if(details.bankAccountName&&req.body.bank_override_approved!==true)return res.status(400).json({error:'Confirm the alternative bank details for this tenancy'});
@@ -82,7 +95,7 @@ export function registerClientAgreementDetails(app:Express){
    paymentConfirmation={account,override,serviceType:state.serviceType,confirmedAt:new Date().toISOString(),confirmedBy:req.user.id};
   }
   const client=await pool.connect();try{await client.query('BEGIN');
-   await client.query('UPDATE tenant_enquiries SET client_agreement_details=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify({landlordId:state.landlordId,propertyId:state.propertyId,details,paymentConfirmation,bankOverrideApprovedAt:details.bankAccountName?new Date().toISOString():null,bankOverrideApprovedBy:details.bankAccountName?req.user.id:null}),state.enquiryId]);
+   await client.query('UPDATE tenant_enquiries SET client_agreement_details=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify({landlordId:state.landlordId,propertyId:state.propertyId,details,detailsConfirmed:req.body.details_confirmed!==false,paymentConfirmation,bankOverrideApprovedAt:details.bankAccountName?new Date().toISOString():null,bankOverrideApprovedBy:details.bankAccountName?req.user.id:null}),state.enquiryId]);
    await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'client_agreement_details_saved','tenant_enquiry',$3,$4)",[req.user.id,req.user.email,state.enquiryId,JSON.stringify({landlord_id:state.landlordId,is_company:state.isCompany,payment_confirmed:!!paymentConfirmation,payment_override:paymentConfirmation?.override||false,account_ending:paymentConfirmation?.account.accountNumber.slice(-4)})]);await client.query('COMMIT');
   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
   res.json(await clientAgreementContext(state.enquiryId));

@@ -1,3 +1,7 @@
+import { newestNotesFirst } from '../utils/notes';
+import {tenancyDuration} from '../utils/tenancyDuration';
+import {useTenantApplication,TenancyTransitionCard} from '../components/TenantApplication';
+import {FilePenLine as ApplicationActionIcon,LogOut as EndTenancyActionIcon,TrendingUp as RentActionIcon,Archive as ArchiveActionIcon} from 'lucide-react';
 import SignatureRequests from '../components/SignatureRequests';
 import CreditReports from '../components/CreditReports';
 import SectionEditButton from '../components/ui/SectionEditButton';
@@ -384,12 +388,13 @@ export default function TenantDetail() {
     setAddingNote(false);
   };
 
+  const onboarding=useTenantApplication(Number(id),loadDetail);
   if (loading) return <Layout title="Loading..."><div className="p-8 text-[var(--text-muted)] text-sm">Loading...</div></Layout>;
   if (!tenant) return <Layout title="Not Found"><div className="p-8 text-[var(--text-muted)]">Tenant not found</div></Layout>;
 
   const displayName = form.first_name_1 && form.last_name_1 ? `${form.first_name_1} ${form.last_name_1}` : tenant.name;
   const isEditing = (section: string) => editingSection === section;
-  const displayedNotes = notesFilter === 'tenant' ? notes : propertyNotes;
+  const displayedNotes = newestNotesFirst(notesFilter === 'tenant' ? notes : propertyNotes);
 
   return (
     <Layout breadcrumb={[{ label: 'Tenants', to: '/tenants' }, { label: displayName }]}>
@@ -689,32 +694,22 @@ export default function TenantDetail() {
           <div className="lg:col-span-2 space-y-6">
             {/* Tenancy Details */}
             <GlassCard className="p-6">
-              <div className="flex flex-col items-start gap-3 mb-4">
-                <SectionHeader title="Tenancy Details" icon={<Building2 size={16} />} />
-                  <div className="flex w-full flex-nowrap justify-end gap-2 [&>button]:min-w-0 [&>button]:flex-1 [&>button]:whitespace-nowrap [&>button]:px-2 [&>button]:text-[11px]">
-                    {tenant.status==='inactive'&&<Button size="sm" disabled={saving} onClick={async()=>{if(!await confirmAction('Create a fresh enquiry for this returning tenant? Their previous tenancy history will be retained.','Reactivate Tenant'))return;setSaving(true);try{const result=await api.post(`/api/tenants/${tenant.id}/reactivate`,{});navigate(`/enquiries/${result.enquiry_id}`);}catch(e){notify(e instanceof Error?e.message:'Could not reactivate tenant','error');}finally{setSaving(false);}}}>Reactive Record</Button>}
-                    {tenant.status !== 'inactive' && <Button variant="outline" className="!bg-red-600 !text-white !border-red-600" size="sm" onClick={() => setShowEndModal(true)}>End Tenancy</Button>}
-                    <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" onClick={() => setShowRentReview(true)}>Rent Review</Button>
-                    {user?.role === 'admin' && <Button variant="outline" size="sm" className="!bg-red-600 !text-white !border-red-600" onClick={async () => {
-                      if (!await confirmAction(`Remove ${tenant.name}? Records with issued agreements will be archived; otherwise the record and its linked files will be permanently deleted.`, 'Delete / Archive Tenant')) return;
-                      try { const result = await api.post(`/api/tenants/${tenant.id}/remove`, {}); if (result.archived) { await loadDetail(); notify('Tenant archived; history retained','success'); } else navigate('/tenants'); }
-                      catch (e) { notify(e instanceof Error ? e.message : 'Could not remove tenant','error'); }
-                    }}>Delete / Archive</Button>}
-
-                  </div>
-              </div>
-                <div className="divide-y divide-[var(--border-subtle)]">
-                  {tenant?.property_id ? (
-                    <div className="pb-3">
+              <div className="mb-1">
+                <div className="min-w-0"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-base font-semibold flex items-center gap-2"><Building2 size={15} className="shrink-0"/>Tenancy Details</h3>{tenancyDuration(form.tenancy_start_date,form.tenancy_end_date)&&<p className="inline-flex shrink-0 w-fit items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-xs font-normal text-emerald-700 dark:text-emerald-300">{tenant.status==='inactive'?'Tenancy duration: ':form.tenancy_start_date?.slice(0,10)>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date())?'':'Active for '}{tenancyDuration(form.tenancy_start_date,form.tenancy_end_date)}</p>}</div>                  {tenant?.property_id ? (
+                    <div className="mt-4">
                       <p className="text-xs text-[var(--text-muted)]">Property</p>
                       <button onClick={() => navigate(`/properties/${tenant.property_id}`)}
-                        className="text-sm mt-0.5 text-[var(--accent-orange)] hover:underline flex items-center gap-1">
-                        <Building2 size={13} /> {formatPropertyAddress(tenant.property_address || `Property #${tenant.property_id}`, allProperties.find(p => p.id === tenant.property_id)?.postcode)}
+                        className="text-sm mt-0.5 text-[var(--accent-orange)] hover:underline flex items-start gap-1 text-left break-words">
+                        <Building2 size={13} className="shrink-0 mt-0.5" /> {formatPropertyAddress(tenant.property_address || `Property #${tenant.property_id}`, allProperties.find(p => p.id === tenant.property_id)?.postcode)}
                       </button>
                     </div>
                   ) : (
                     <ReadField label="Property" value="No property linked" />
                   )}
+
+</div>
+              </div>
+                <div className="divide-y divide-[var(--border-subtle)]">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3">
                     <ReadField label="Tenancy Start" value={form.tenancy_start_date ? formatDateDMY(form.tenancy_start_date) : null} />
                     <ReadField label={form.tenancy_end_date && form.tenancy_end_date.slice(0,10) < new Date().toLocaleDateString('en-CA') ? 'End Date' : 'Scheduled End Date'} value={form.tenancy_end_date ? formatDateDMY(form.tenancy_end_date) : 'Not scheduled'} />
@@ -744,8 +739,23 @@ export default function TenantDetail() {
                   </div>
 
                 </div>
+<div className="mt-2 border-t border-[var(--border-subtle)] pt-4">
+                  <div role="group" aria-label="Tenancy actions" className="grid grid-cols-2 gap-2 [&>button]:!w-full [&>button]:!min-w-0 [&>button]:!px-2 [&>button]:!text-xs [&>button]:!justify-center [&>button]:!gap-2 [&>button>svg]:!shrink-0 [&>button]:!rounded-full">
+                    {tenant.status==='active'&&onboarding.action}
+                    {tenant.status==='inactive'&&<Button size="sm" disabled={saving} onClick={async()=>{if(!await confirmAction('Create a fresh enquiry for this returning tenant? Their previous tenancy history will be retained.','Reactivate Tenant'))return;setSaving(true);try{const result=await api.post(`/api/tenants/${tenant.id}/reactivate`,{});navigate(`/enquiries/${result.enquiry_id}`);}catch(e){notify(e instanceof Error?e.message:'Could not reactivate tenant','error');}finally{setSaving(false);}}}><ApplicationActionIcon size={16}/>Reactivate Record</Button>}
+                    {tenant.status === 'active' && <Button variant="outline" size="sm" className="!bg-[#4a9670] !text-white !border-[#4a9670]" onClick={() => setShowRentReview(true)}><RentActionIcon size={16}/>Rent Review</Button>}
+                    {['active', 'scheduled'].includes(tenant.status) && <Button variant="outline" size="sm" className="!bg-[#cf211f] !text-white !border-[#cf211f]" onClick={() => setShowEndModal(true)}><EndTenancyActionIcon size={16}/>{tenant.status === 'scheduled' ? 'Schedule Tenancy End' : 'End Tenancy'}</Button>}
+                    {user?.role === 'admin' && <Button variant="outline" size="sm" className="!bg-[#cf211f] !text-white !border-[#cf211f]" onClick={async () => {
+                      if (!await confirmAction(`Remove ${tenant.name}? Records with issued agreements will be archived; otherwise the record and its linked files will be permanently deleted.`, 'Delete / Archive Tenant')) return;
+                      try { const result = await api.post(`/api/tenants/${tenant.id}/remove`, {}); if (result.archived) { await loadDetail(); notify('Tenant archived; history retained','success'); } else navigate('/tenants'); }
+                      catch (e) { notify(e instanceof Error ? e.message : 'Could not remove tenant','error'); }
+                    }}><ArchiveActionIcon size={16}/>Delete/Archive</Button>}
+
+                  </div></div>
             </GlassCard>
 
+            <TenancyTransitionCard transition={onboarding.transition}/>
+            {onboarding.error&&<p role="alert" className="text-sm text-red-600">{onboarding.error}</p>}
             {/* Onboarding Checklist */}
             {form.status === 'onboarding' && !isOnboarded && <GlassCard className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -936,6 +946,7 @@ export default function TenantDetail() {
           </div>
         </div>
       </div>
+      {onboarding.dialog}
       {showEndModal && <TenancyEndModal tenantId={tenant.id} linkedName={tenant.linked_tenant_name} initialDate={tenant.tenancy_end_date} onClose={() => setShowEndModal(false)} onSaved={loadDetail} />}
       {showCompletion && <CompletionModal tenantId={tenant.id} items={checklistItems} canEdit={['admin','manager','staff'].includes(user?.role || '')} onClose={() => setShowCompletion(false)} onSaved={loadDetail} />}
       {showRentReview && <RentReviewModal tenantId={tenant.id} currentRent={tenant.monthly_rent} linkedName={tenant.linked_tenant_name} canEdit={['admin','manager','staff'].includes(user?.role || '') && tenant.status !== 'inactive'} onClose={() => setShowRentReview(false)} onSaved={loadDetail} />}

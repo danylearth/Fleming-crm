@@ -1,0 +1,44 @@
+        const documentGuides = {
+            identity: {
+                title: '🪪 Primary identification',
+                intro: 'Upload one current, clear photo identity document showing your full name and date of birth:',
+                items: ['Passport: the photograph and personal-details page.', 'UK photocard driving licence: front and back.', 'Government-issued national photo identity card: front and back.'],
+                note: 'If you have none of these, contact us about an alternative combination, such as a full birth or adoption certificate with supporting official evidence. A birth certificate or CitizenCard alone does not complete identity verification.'
+            },
+            address: {
+                title: '🏠 Secondary identification/proof of address',
+                intro: 'Upload a document showing your full name and current residential address:',
+                items: ['Bank or building society statement issued within the last three months.', 'Utility bill, such as gas, electricity or water, issued within the last three months.', 'Council tax bill for the current billing year.', 'Recent official correspondence from HMRC, DWP or a local authority.', 'Current UK photocard driving licence showing your present address, if it was not used for primary identification.', 'Latest annual mortgage statement.'],
+                note: 'Use a separate document from your primary identification. Official PDF statements or clear copies are welcome. If bills are not in your name or you have recently moved, contact us about alternatives.'
+            },
+            income: {
+                title: '💼 Proof of income or employment',
+                intro: 'Provide the evidence relevant to your circumstances. These documents support affordability and source-of-funds checks, separately from identity verification:',
+                items: ['Employed: your latest three months of payslips; an employer letter or signed employment contract can support a new job.', 'Self-employed: latest HMRC tax calculation (SA302) and tax-year overview, accounts or an accountant’s income confirmation.', 'CIS workers: recent contractor payment and deduction statements.', 'Pension income: a current pension award letter or recent pension payment statements.', 'Benefits: a current entitlement or award letter, or recent benefit payment statements.', 'Savings: recent bank, building society or investment statements showing your name and available funds.', 'A P60 or P45 may be supplied as supporting evidence alongside proof of current income.'],
+                note: 'Upload evidence for each income source you rely on. You do not need every document in this list.'
+            },
+            bank: {
+                title: '🏦 Bank statements',
+                intro: 'Provide statements covering the latest three consecutive months:',
+                items: ['Official PDF statements downloaded from your bank or building society.', 'Clear scans or photographs of complete paper statements.', 'Joint-account statements are suitable when your name appears as an account holder.', 'One combined file or separate monthly files are both accepted.'],
+                note: 'Include all pages showing your name, account details, statement dates, balances and transactions. A balance-only screenshot or a spreadsheet of transactions does not replace a statement.'
+            }
+        };
+        function openDocumentGuide(category) {
+            const guide = documentGuides[category];
+            if (!guide) return;
+            document.getElementById('document-guide-title').textContent = guide.title;
+            document.getElementById('document-guide-intro').textContent = guide.intro;
+            document.getElementById('document-guide-note').textContent = guide.note;
+            const list = document.getElementById('document-guide-list');
+            list.replaceChildren(...guide.items.map(text => { const item = document.createElement('li'); item.textContent = text; return item; }));
+            document.getElementById('document-guide').showModal();
+        }
+        document.getElementById('document-guide').addEventListener('click', event => {
+            if (event.target !== event.currentTarget) return;
+            const bounds = event.currentTarget.getBoundingClientRect();
+            if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) event.currentTarget.close();
+        });
+
+
+documentGuides.income.items.unshift('Contract of Employment: a signed current contract confirming your role and pay. Supply current payslips too where available.');documentGuides.reference={title:'📄 Employment Reference (Optional)',intro:'You may upload a reference you already hold. This upload is optional.',items:['A signed employer letter confirming your employment.','An accountant or professional reference supporting your income.'],note:'The office can contact the referee you authorise on your application. You can continue without uploading a reference.'};

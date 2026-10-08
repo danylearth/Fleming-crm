@@ -1,0 +1,38 @@
+import {agreementPreviewSections} from '../utils/agreementPreviewSections';
+import {useEffect,useRef} from 'react';
+import {X} from 'lucide-react';
+export type AgreementPreviewValues={tenancyStartDate?:string;rent?:string|number;deposit?:string|number;permittedOccupiers?:string;sharedFacilities?:string;parking?:string;paymentReference?:string;landlordName?:string;landlordEmail?:string;landlordPhone?:string;serviceAddress?:string;emergencyContact?:string;companyNumber?:string;directorName?:string};
+const particulars:[keyof AgreementPreviewValues,string,string][]=[['tenancyStartDate','Tenancy Start Date','Section A · tenancy start and rent payment dates'],['rent','Monthly Rent','Section A · Rent'],['deposit','Security Deposit','Section A · Security Deposit'],['permittedOccupiers','Permitted Occupiers','Section A · Permitted Occupiers'],['sharedFacilities','Shared Facilities','Section A · Shared Facilities'],['parking','Parking','Section A · Parking (if allocated)'],['paymentReference','Payment Reference','Section A · rent payment account details']];
+const landlordFields:[keyof AgreementPreviewValues,string,string][]=[['landlordName','Landlord Name','Section A · landlord identity; landlord signature'],['serviceAddress','Correspondence Address','Section A · landlord identity and address for notices'],['landlordEmail','Landlord Email','Section A · landlord contact details'],['landlordPhone','Landlord Phone','Section A · landlord contact details'],['emergencyContact','Emergency Contact','Section A · Emergency contact'],['companyNumber','Company Number','Section A · landlord identity'],['directorName','Director Signing for Company','Landlord signature']];
+export function agreementPreviewValue(key:keyof AgreementPreviewValues,value:unknown){
+ const text=String(value??'').trim();if(!text)return 'Not entered';
+ if(key==='rent'||key==='deposit')return Number.isFinite(Number(text))?Number(text).toLocaleString('en-GB',{style:'currency',currency:'GBP'}):'Enter a valid amount';
+ if(key==='tenancyStartDate'){const iso=text.slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(iso)&&Number.isFinite(Date.parse(iso))?new Date(iso+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'Europe/London'}):'Enter a valid date';}
+ return text;
+}
+type AgreementContext={agreementType?:'internal'|'client';serviceType?:string|null;holdingDeposit?:number|string;bankDetails?:{accountName:string;bankName:string;sortCode:string;accountNumber:string}};
+export function agreementSectionWording(key:keyof AgreementPreviewValues,values:AgreementPreviewValues,context:AgreementContext={}){
+ const template=agreementPreviewSections[context.agreementType==='client'?(context.serviceType==='let_only'?'let_only':'rent_collection'):'internal'];
+ const source=template[key as keyof typeof template];if(!source)return agreementPreviewValue(key,values[key]);
+ const day=Number(String(values.tenancyStartDate||'').slice(8,10));const ordinal=day?day+([11,12,13].includes(day%100)?'th':({1:'st',2:'nd',3:'rd'} as Record<number,string>)[day%10]||'th'):'[Not entered]';
+ const entered=(value:unknown,fallback='[Not entered]')=>String(value??'').trim()||fallback;
+ const money=(value:unknown)=>String(value??'').trim()&&Number.isFinite(Number(value))?Number(value).toLocaleString('en-GB',{minimumFractionDigits:2}):'[Not entered]';
+ const account=context.bankDetails;
+ const replacements:Record<string,string>={START_DATE:agreementPreviewValue('tenancyStartDate',values.tenancyStartDate),RENT_DAY:ordinal,RENT:money(values.rent),DEPOSIT:money(values.deposit),HOLDING_DEPOSIT:money(context.holdingDeposit||0),OCCUPIERS:entered(values.permittedOccupiers),SHARED_FACILITIES:entered(values.sharedFacilities),PARKING:entered(values.parking),PAYMENT_REFERENCE:entered(values.paymentReference),DEPOSIT_CONTRIBUTOR:'',BANK_SORT_CODE:entered(account?.sortCode),BANK_ACCOUNT_NUMBER:entered(account?.accountNumber),BANK_ACCOUNT_NAME:entered(account?.accountName),BANK_NAME:entered(account?.bankName),CLIENT_SORT_CODE:entered(account?.sortCode),CLIENT_ACCOUNT_NUMBER:entered(account?.accountNumber)};
+ return source.replace(/\{\{([A-Z_]+)\}\}/g,(_,token)=>replacements[token]??'[Not entered]').replace('property:'+replacements.OCCUPIERS,'property: '+replacements.OCCUPIERS).trim();
+}
+export default function AgreementDataPreview({values,previous,onClose,landlord=false,isCompany=false}:{values:AgreementPreviewValues;previous:AgreementPreviewValues;onClose:()=>void;landlord?:boolean;isCompany?:boolean;context?:AgreementContext}){
+ const fields=landlord?landlordFields.filter(([key])=>isCompany||!['companyNumber','directorName'].includes(key)):particulars;
+ const changedFields=fields.filter(([key])=>agreementPreviewValue(key,values[key])!==agreementPreviewValue(key,previous[key]));
+ const close=useRef<HTMLButtonElement>(null),dialog=useRef<HTMLDivElement>(null);
+ useEffect(()=>{const before=document.activeElement as HTMLElement|null;close.current?.focus();return()=>before?.focus();},[]);
+ return <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-3 sm:p-6" onClick={onClose}>
+  <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="apt-changes-title" className="w-full max-w-3xl max-h-[88dvh] overflow-auto rounded-2xl bg-[var(--bg-card)] shadow-2xl" onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();onClose();}if(e.key==='Tab'){const buttons=dialog.current?.querySelectorAll<HTMLButtonElement>('button');const first=buttons?.[0],last=buttons?.[buttons.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}}}>
+   <header className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] p-4 sm:px-6"><h3 id="apt-changes-title" className="text-lg font-semibold">Data Changes on APT</h3><button ref={close} type="button" aria-label="Close APT changes" onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--bg-hover)]"><X size={20}/></button></header>
+   <div className="p-4 sm:p-6 space-y-4"><p className="text-sm text-[var(--text-secondary)]">Only fields changed from the original agreement details are shown.</p>
+    <div className="space-y-3">{changedFields.length===0&&<p className="rounded-xl border border-[var(--border-subtle)] p-4 text-sm">No changes to the agreement details.</p>}{changedFields.map(([key,label,location])=>{const current=agreementPreviewValue(key,values[key]),old=agreementPreviewValue(key,previous[key]),changed=current!==old;return <section key={key} className={`rounded-xl border p-3 ${changed?'border-purple-400/50 bg-purple-500/5':'border-[var(--border-subtle)]'}`}><div className="flex justify-between items-center gap-3"><h4 className="font-semibold text-sm">{label}</h4>{changed&&<span className="text-xs text-purple-700 dark:text-purple-300">{old==='Not entered'?'Added':'Changed'}</span>}</div><p className="mt-1 text-xs text-[var(--text-secondary)]">{location}</p>{changed&&old!=='Not entered'&&<p className="text-xs text-[var(--text-secondary)] mt-1 break-words whitespace-pre-wrap">Previous: {old}</p>}<p className={`mt-1 text-sm whitespace-pre-wrap break-words ${current==='Not entered'?'text-[var(--onboarding-warning)]':''}`}>Current: {current}</p></section>;})}</div>
+    <div className="flex justify-end"><button type="button" className="rounded-lg bg-[#6b2d7c] text-white px-4 py-2 text-sm font-semibold" onClick={onClose}>Close</button></div>
+   </div>
+  </div>
+ </div>;
+}

@@ -1,5 +1,7 @@
 import {registerFlemoDocumentRoutes} from './flemo-documents';
 import {fastComplianceAnswer} from './flemo-lookup';
+import {fastRentAnswer,propertyRentQuestion} from './flemo-rent';
+import {FlemoServiceError} from './flemo-errors';
 import {flemoActions,registerFlemoActions} from './flemo-actions';
 import {flemoAccount,flemoAccountStatus,registerFlemoOAuthRoutes,sharedFlemoOwner} from './flemo-oauth';
 import {flemoEvidence} from './flemo-records';
@@ -34,7 +36,9 @@ export function registerFlemoRoutes(app: Express) {
       let text = ''; let records: any[] = [];
       const intent = flemoIntent(message);
       const financeAllowed=canAccessFinance(req.user);
-      if(!financeAllowed&&(intent==='rent'||/late|overdue|arrears|payment.*trend/i.test(message)))return res.status(403).json({error:'Financial information is restricted to authorised accounts staff'});
+      if(!financeAllowed&&(intent==='rent'||propertyRentQuestion(message)||/late|overdue|arrears|payment.*trend/i.test(message)))return res.status(403).json({error:'Financial information is restricted to authorised accounts staff'});
+      const rentAnswer=await fastRentAnswer(message,portfolio,context,financeAllowed);
+      if(rentAnswer)return res.json({...rentAnswer,as_of:new Date().toISOString()});
       const previous = Array.isArray(history) ? history.slice(-8).filter(item=>item && ['user','assistant'].includes(item.role)&&typeof item.text==='string').map(item=>({role:item.role,text:item.text.slice(0,3000)})) : [];
       const accountOwner=await sharedFlemoOwner().catch(()=>null);
       const accountStatus=accountOwner?await flemoAccountStatus(accountOwner).catch(()=>({connected:false})):{connected:false};
@@ -87,6 +91,6 @@ if (intent === 'rent') {
         return res.json({text:text+(result.note?'\n\n'+result.note:''),actions:result.actions,as_of:new Date().toISOString()});
       }
       res.json({text,actions:records.slice(0,10).map(r => ({id:`${r.entity}-${r.id}`,type:'link',label:r.name || r.address,href:`/${r.entity}/${r.id}`})),as_of:new Date().toISOString()});
-    } catch(error) { console.error('Flemo lookup failed:',error); res.status(500).json({ error:'Could not read the CRM records. Please try again.' }); }
+    } catch(error) { if(error instanceof FlemoServiceError)return res.status(503).json({error:error.message,code:error.code});console.error('Flemo lookup failed:',error); res.status(500).json({ error:'Could not read the CRM records. Please try again.' }); }
   });
 }

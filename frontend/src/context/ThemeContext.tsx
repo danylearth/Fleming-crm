@@ -8,7 +8,7 @@ interface ThemeContextType {
   toggleTheme: () => void;
 }
 
-const ThemeContext = createContext<ThemeContextType>({ theme: 'dark', toggleTheme: () => { } });
+const ThemeContext = createContext<ThemeContextType>({ theme: 'light', toggleTheme: () => { } });
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useTheme() {
@@ -18,9 +18,14 @@ export function useTheme() {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window !== 'undefined') {
-      return (localStorage.getItem('fleming-theme') as Theme) || 'dark';
+      if(!localStorage.getItem('fleming-light-default-20260930')){
+        localStorage.setItem('fleming-light-default-20260930','1');
+        localStorage.setItem('fleming-theme','light');
+        return 'light';
+      }
+      return localStorage.getItem('fleming-theme')==='dark'?'dark':'light';
     }
-    return 'dark';
+    return 'light';
   });
 
   useEffect(() => {

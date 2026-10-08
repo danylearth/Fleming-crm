@@ -20,7 +20,7 @@ interface Props {
   docType: string;
   label: string;
   applicantNumber?: number;
-  onDocChange?: () => void;
+  onDocChange?: (hasDocument: boolean) => void;
 }
 
 function truncateName(name: string, max = 20) {
@@ -45,6 +45,7 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
       .then((docs: Doc[]) => {
         const match = docs.find(d => d.doc_type === docType && d.review_status === 'approved') || docs.find(d => d.doc_type === docType && d.review_status !== 'rejected');
         setDoc(match || null);
+        onDocChange?.(!!match);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -68,7 +69,7 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
       const newDoc = await res.json();
       if (newDoc.id) {
         setDoc({ ...newDoc, uploaded_at: new Date().toISOString() });
-        onDocChange?.();
+        onDocChange?.(true);
       }
     } catch (e) {
       console.error(e);
@@ -83,7 +84,7 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
       const response = await fetch(`${API_URL}/api/documents/${doc.id}`, { method: 'DELETE', headers });
       if (!response.ok) throw new Error((await response.json()).error || 'Document could not be deleted');
       setDoc(null);
-      onDocChange?.();
+      onDocChange?.(false);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Document could not be deleted');
     }
@@ -119,7 +120,7 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
   if (doc) {
     return (
       <div className="flex-1 min-w-[200px] rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 group">
-        <div className="flex items-center gap-3">
+        <div className={entityType==='landlord'?"flex items-start gap-3":"flex items-center gap-3"}>
           <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
             {(entityType === 'tenant' || doc.review_status === 'approved') ? <CheckCircle size={18} className="text-emerald-500" /> : <Clock size={18} className="text-amber-500" />}
           </div>
@@ -156,7 +157,7 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
       disabled={uploading}
       className="flex-1 min-w-[200px] rounded-xl border border-dashed border-[var(--border-color)] bg-[var(--bg-subtle)] hover:border-[var(--text-muted)] hover:bg-[var(--bg-hover)] transition-all p-3 cursor-pointer group"
     >
-      <div className="flex items-center gap-3">
+      <div className={entityType==='landlord'?"flex items-start gap-3":"flex items-center gap-3"}>
         <div className="w-10 h-10 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--border-color)] transition-colors">
           <Upload size={18} className="text-[var(--text-muted)]" />
         </div>

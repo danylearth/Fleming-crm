@@ -1,3 +1,4 @@
+import { newestNotesFirst } from '../utils/notes';
 import {noteDisplayText} from '../utils/noteDisplay';
 import {ToolbarButton} from '../components/ui';
 import ServiceFeeFields from '../components/ServiceFeeFields';
@@ -39,6 +40,7 @@ interface PropertyDetail {
   status: string; landlord_name: string; landlord_id?: number; landlord_type?: 'internal' | 'external';
   landlord_phone?: string; landlord_email?: string;
   current_tenant: string | null; current_tenant_id?: number; tenant_id?: number;
+  pending_onboarding?:Array<{id:number;name:string}>;
   current_tenant_email?: string | null; current_tenant_phone?: string | null;
   bedrooms: number; property_type: string;
   // Management
@@ -159,6 +161,7 @@ export default function PropertyDetail() {
   const { user } = useAuth();
   const { confirmAction: confirmCrmAction } = useNotifications();
   const [manageContract,setManageContract]=useState(false);
+  const [serviceContractStage,setServiceContractStage]=useState<string|null>(null);
   const [property, setProperty] = useState<PropertyDetail | null>(null);
   const id = useRecordAddress('properties', property?.address);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -331,6 +334,10 @@ export default function PropertyDetail() {
     loadDetail().finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, id]);
+
+  useEffect(()=>{const refresh=(event:Event)=>{const detail=(event as CustomEvent).detail;if(!detail||(detail.entityType==='property'&&Number(detail.entityId)===Number(id)))void loadDetail();};window.addEventListener('crm-activity-updated',refresh);window.addEventListener('focus',refresh);return()=>{window.removeEventListener('crm-activity-updated',refresh);window.removeEventListener('focus',refresh);};
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[api,id]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -661,11 +668,11 @@ export default function PropertyDetail() {
           phone: property.current_tenant_phone || undefined,
         }]
       : [];
-  const displayedNotes = notesFilter === 'property'
+  const displayedNotes = newestNotesFirst(notesFilter === 'property'
     ? notes
     : notesFilter === 'landlord'
       ? landlordNotes
-      : tenantNotes[Number(notesFilter.replace('tenant-', ''))] || [];
+      : tenantNotes[Number(notesFilter.replace('tenant-', ''))] || []);
 
   // Compliance reminders (expiring within 30 days)
   const reminders: { label: string; days: number }[] = [];
@@ -690,11 +697,11 @@ export default function PropertyDetail() {
               event.currentTarget.src = getPropertyPlaceholder(property.id, 1200, 400, property.landlord_name, property.landlord_id);
             }} />
           <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-t from-black/70 to-transparent">
-            <div className="flex items-center gap-2 mb-1">
-              <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full border font-medium ${statusColor}`}>{statusLbl}</span>
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full border font-medium ${statusColor}`}>{statusLbl}</span>{property.landlord_type!=='internal'&&serviceContractStage&&serviceContractStage!=='Signed'&&<button onClick={()=>setManageContract(true)} className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900"><AlertTriangle size={14}/>Service Agreement Not Signed{serviceContractStage==='Contract Sent'?' · Awaiting Landlord':serviceContractStage==='Admin Override'?' · Admin Override Recorded':' · Review Contract'}</button>}
             </div>
             <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white line-clamp-1">{property.address}</h1>
-            <p className="text-white/60 text-xs sm:text-sm">{property.postcode}</p>
+            {property.postcode && !property.address.replace(/\s/g, '').toUpperCase().includes(property.postcode.replace(/\s/g, '').toUpperCase()) && <p className="text-white/60 text-xs sm:text-sm">{property.postcode}</p>}
           </div>
           <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex gap-2">
             {user?.role === 'admin' && <Button size="sm" variant="outline" className="!bg-red-600 !border-red-600 !text-white" onClick={async () => {
@@ -706,7 +713,8 @@ export default function PropertyDetail() {
         </div>
 
         {/* Tenant Banner — always visible */}
-        <div className={`rounded-xl sm:rounded-2xl border p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 ${
+        {!!property.pending_onboarding?.length&&<div className="rounded-xl sm:rounded-2xl border border-amber-300 bg-amber-50 p-4 sm:p-5"><p className="text-xs font-medium text-amber-800 mb-2">Tenant · Pending Onboarding</p><div className="space-y-2">{property.pending_onboarding.map(applicant=><div key={applicant.id} className="flex flex-wrap items-center justify-between gap-3"><p className="font-semibold text-amber-950">Pending Onboarding — {applicant.name}</p><Button variant="outline" size="sm" onClick={()=>navigate('/enquiries/'+applicant.id+'?onboarding=1')}>View Tenant Enquiry <ChevronRight size={14}/></Button></div>)}</div></div>}
+        {currentTenants.length===0&&!!property.pending_onboarding?.length?<div className="flex justify-end"><Button variant="outline" size="sm" onClick={()=>{setShowTenantModal(true);setTenantModalMode('create');setApplicantError('');}}>Assign Different Tenant</Button></div>:(<>        <div className={`rounded-xl sm:rounded-2xl border p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 ${
           currentTenants.length > 0
             ? 'bg-gradient-to-r from-[var(--accent-orange)]/10 to-transparent border-[var(--accent-orange)]/30'
             : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)]'
@@ -734,7 +742,7 @@ export default function PropertyDetail() {
           ) : (
             <div className="flex-1 min-w-0">
               <p className="text-xs text-[var(--text-muted)] mb-0.5">Tenant</p>
-              <p className="text-sm text-[var(--text-secondary)]">No tenant assigned to this property</p>
+              <p className="text-sm text-[var(--text-secondary)]">{property.pending_onboarding?.length?'Tenant onboarding in progress':'No tenant assigned to this property'}</p>
             </div>
           )}
           <div className="shrink-0 flex gap-2">
@@ -752,7 +760,7 @@ export default function PropertyDetail() {
               </Button>
             )}
           </div>
-        </div>
+        </div></>)}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* LEFT COLUMN — 2/3 */}
@@ -1028,7 +1036,7 @@ export default function PropertyDetail() {
             {(!isToLet || linkedTenants.length > 0) && (
               <GlassCard className="p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
-                  <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Tenancy Information" icon={<Users size={16} />} />{sectionActions('tenancy')}</div>
+                  <div className="flex items-center justify-between gap-3 mb-4"><SectionHeader title="Tenancy Information" icon={<Users size={16} />} /></div>
                   <div className="flex flex-wrap gap-2 sm:ml-auto">
                   {!(editingSection==='tenancy') && previousTenants.length > 0 && (
                     <Button variant="outline" className="!bg-amber-100 !text-amber-900 !border-amber-300" size="sm" onClick={() => setShowPreviousTenancies(value => !value)}>
@@ -1323,7 +1331,7 @@ export default function PropertyDetail() {
               )}
             </Card>
 
-            {user?.role!=='viewer'&&<><ServiceAgreements propertyId={property.id} onManage={()=>setManageContract(true)}/>{manageContract&&<PropertyContractStep propertyId={property.id} existing onClose={()=>{setManageContract(false);void loadDetail();}}/>}</>}
+            {user?.role!=='viewer'&&<><ServiceAgreements propertyId={property.id} onStageChange={setServiceContractStage} onManage={()=>setManageContract(true)}/>{manageContract&&<PropertyContractStep propertyId={property.id} existing onClose={()=>{setManageContract(false);void loadDetail();}}/>}</>}
 
             {/* Documents */}
             <DocumentUpload refreshKey={inventoryRefresh} entityType="property" entityId={property.id} onChange={loadDetail} />

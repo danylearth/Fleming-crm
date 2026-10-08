@@ -1,0 +1,83 @@
+# 5 October live onboarding release
+
+Backend `crm05-onboarding-cf0b4c3318d8` and tenant forms `dpl_8hJaKeMeKJWUKFGvQTQXPpSmeGco` were deployed, followed by backend `crm05-onboarding-actions-1` (Fly image `deployment-01M45NGYBMYGEZ8QG0YFQRDBZZ`). The latter adds cancellation and new-application message previews and sending. CRM source/build snapshots are under `tmp/release-2026-10-05-new-application` and `tmp/release-2026-10-05-onboarding-actions`.
+
+Zoe Woodberry's real tenant ID is 19. A read-only check confirmed the user's New Application click created enquiry 85 linked to tenant 19, with existing_tenancy_application true. The agent did not start, cancel or send this live application. Public email/SMS tests used fictional recipients and substituted transports; they do not prove delivery to real inboxes.
+
+Live scope: existing tenant New/Continue Application, guarantor application/evidence/review/credit checks, witnessed deed and immutable completed-PDF attachment, approved guarantor emails, dated changeover with retained joint invoices/history and sole billing, automatic closure of completed onboarding after activation, amber transition card, tenancy-card actions and date controls, existing-tenant invitation wording, previously published APT PDF pagination/spacing/signatures.
+
+Follow-up: Cancel Application above Last Viewed (also mobile); current tenancy retained; application links revoked and historical enquiry retained with cancellation reason; signed tenant agreements or scheduled changeovers require office review rather than being silently cancelled. Email/SMS selection and matching previews, Send New Application label, 8px icon gap, removal of holding deposit prompt for continuing tenants, selected unfinished stage amber.
+
+Verification completed: backend and frontend builds; isolated real-PostgreSQL guarantor full HTTP journey and 5/6 November rollover; idempotent application creation/signing/changeover; retained old invoice and arrears; separate guarantor/witness signatures; material rent changes rejected; exact completed PDF attachment; cancellation/link revocation and fresh restart; fake-transport email/SMS content equals previews; SMS-only marks sent. Browser tests at 390/768/1440 cover New Application opening, guarantor stage, no holding-deposit stage, active-stage amber, previews, channel selection, cancellation, and no horizontal overflow. Public guarantor form/date picker also passed those widths. 38 focused unit tests passed. Live health and key asset hashes were verified.
+
+Further work: broader whole-CRM regression, all AST/client document generation variations and expanded guarantor/witness mobile walkthroughs remain to complete. Mobile app/inventory work has not started in this release. Do not claim all testing finished or all emails delivered to real recipients.
+
+## Reconnection and test-data cleanup, 5 October
+
+Confirmed final CRM frontend deployment dpl_4sexJqtAGVTWYYbCTZxGeuyxjXBC and backend crm05-onboarding-actions-1 with 15 successful live health/asset checks. Repeated fake-transport email/SMS parity test passed. Browser controls repeated at 390/768/1440; test login initialization was scoped to the main window to avoid injecting localStorage access into the intentionally sandboxed email preview.
+
+User-authorized cleanup committed after a read-only dependency preflight, recovery backup and SERIALIZABLE transaction. Removed fictional tenants 35/36 Casey/Jamie Taylor, enquiries 71/83/84 (including explicitly named Derek Rowlands), sample property 26, sample landlord 11, their test documents/messages/tasks/signatures, and simulated bank transaction 757 with CRM-test connection 11. No current Sam Fleming tenant or enquiry found. Preserved audit history and recovery backup; did not erase orphaned upload files. Cleanup receipt: tmp/cleanup-oct5-result.json; post-cleanup verification: tmp/cleanup-oct5-verified.json. Tara tenant 12/property 16, Zoe tenant 19, Mathew tenant 18, property 10 and Zoe's new application 85 compared unchanged before/after. Independent verification confirmed deleted roots absent and real application still new and linked to Zoe. No real messages sent.
+
+## Reviewed workflow reconciliation and public forms, 5 October afternoon
+
+Confirmed gaps between local reviewed previews and production; avoid claiming every prior-week request is deployed. Restored the guarantor-required decision after application review, independent decisions for joint applicants, conditional Guarantor Review navigation, and application/guarantor scrolling. Removed duplicated landlord/payment setup from Guarantor Review. Restored review guidance, amber pending sections, red Reset actions, pending evidence first and approved evidence collapsed. Browser checks passed at 390/768/1440 with isolated fake API responses.
+
+Latest CRM deployment: `dpl_7fvCvfWcj78ei1vYX5dur7CCyNWA`, alias crm.fleminglettings.co.uk; entry `index-Bo5DJa5j.js`, wizard `OnboardingWizard-wr0Cftof.js`. Scoped static source: tmp/release-2026-10-05-reviewed-credit/crm. This adds the reviewed shared Run Credit Check stage for tenant and guarantor. Separate scores/reports save to separate endpoints; final guarantor verification still requires approved application and completed guarantor/witness signing. Isolated browser checks verified score/report gates, distinct records, automatic verification and progression to agreement at all three widths. Live asset contents matched the tested build exactly (tmp/verified-reviewed-credit-live.json).
+
+Public forms deployment: `dpl_5JC8QkVSZazCRic6ynjLefDSJ936`, alias apply.fleminglettings.co.uk. Next of Kin now has its own page; semantic field IDs retained. Page order, Back/Continue, validation, draft save/reload, approved locks and rejection routing tested at 390/768/1440. Initial registration's unused email-status placeholder no longer leaves an empty gap. Both live application.html and index.html matched the corrected snapshot exactly.
+
+Application-confirmation sender correction: backend `crm05-application-sender-1`, Fly image `deployment-01M45WKKBVFYVD81WVQX0QDZ2V`. Sender and reply links are tenancies@fleminglettings.co.uk, as clarified by the user. Production code verification passed, and 16 focused email tests passed with substituted transports. Delivery history confirmed Sam's earlier application-confirmation email delivered at 11:44 BST using the then-current enquiries sender. Earlier holding-deposit request/receipt remain failed and have not been resent. Do not claim those two emails were delivered, or send real communications merely to test.
+
+Contract formatting: renderer deployed as crm05-contract-layout-1 before sender release. All three contract types checked for Arial, full dates and page layout; signed historical files retained unchanged. Found old unsigned contracts could reuse cached PDFs, so presentation-version refresh is being deployed separately. This addresses cached unsigned previews, not alteration of signed evidence.
+
+## Removal of five walkthrough scenarios
+
+Explicit user-authorized cleanup completed after marker/relationship checks and recovery backup in a serializable transaction. Deleted dummy landlords 12/13/14, properties 27/28/29, tenant enquiries 86/87/88/89, fictional landlord enquiries 81/82/83/84, three bank placeholders, three ownership links, two sample document records and one failed test SMS record. Fictional onboarded BDM records were included in this explicit all-test-data cleanup; audit history retained. No customer communication sent. Protected Zoe19/Mathew18/application85, Marie15, Sam91 and their property records compared unchanged. Independent inventory returned no remaining records in the cleanup scope. Recovery receipt: tmp/cleanup-five-result.json; verification: tmp/cleanup-five-verified.json. Upload binaries remain in storage/recovery but are no longer linked as CRM documents.
+
+Remaining limits: full reconciliation of every prior-week request, every AST variation, moving an existing tenant to a different property, and mobile app/property inventory work are not claimed complete by these releases.
+Contract refresh release crm05-contract-refresh-1 deployed successfully as image deployment-01M45XW9JQJ8S856EWCATY5GMQ. Production synthetic check confirmed old unsigned presentation regenerates with Arial/full date, saved signed bytes are returned unchanged, and application-confirmation sender remains tenancies@fleminglettings.co.uk. Evidence: tmp/contract-refresh-production-check.json.
+
+## Property flow and applicant prefill — live at 16:29 BST
+
+CRM deployment `dpl_EBaPYnVy8XxwpB13FmVsTXJKcyui` is aliased to crm.fleminglettings.co.uk. Immutable static snapshot: `tmp/release-2026-10-05-prefill-checks/crm`. Backend `crm05-prefill-checks-1`, Fly image `deployment-01M46AKY1A6229GVCB57VFCD8T`, passed migration, machine and health checks. Nine live files matched their tested snapshot byte-for-byte; unauthenticated email retry returned 401. Evidence: `tmp/prefill-checks-live-verification.json`.
+
+This supersedes property-flow CRM `dpl_3Vh9oqAWsgNgcKKCK9q1E2WFEJcD` and backend `crm05-property-flow-1`. Public form routing remains deployment `dpl_WvAvnoFfcbF7Cdtqunm9e2bnPtL2`; all seven public routing checks passed again. Service-contract links and their signed completion links resolve to the correct pages.
+
+Delivered:
+- Four property stages: Property Information, Landlord Details, Service Agreement, Send & Sign Contract. Shared onboarding controls and colours; prefilled landlord/bank details; no search/change landlord button for a prelinked landlord; wide gas/parking choices and smaller status field; comma-separated rent and two-decimal fees.
+- Confirm and Continue first, followed by the requested record/back controls. Before send: Send Agreement, Go Back, Cancel. After send: Resend, Edit Agreement, Cancel. Equal action sizes, red Cancel, no PDF preview/download button or completed stage. Editing revokes the unsigned link and resets all stages while retaining history. Signing completes and closes; office bank confirmation is a separate task.
+- Failed initial loading prevents an editable blank property form and does not overwrite the saved browser draft.
+- New/Continue Application can search/link a draft to another property. Unsaved selection disables sending and previews. Existing tenant, active tenancy and billing are not changed by selection. Sent/prepared applications cannot be silently relinked.
+- New application identity prefill uses saved personal details/current address and approved ID documents. Duplicate files are not copied repeatedly. Blank email addresses cannot match a different person's previous form. Fresh financial evidence, declarations and signing remain required. Opening an existing unsent draft refreshes this prefill.
+- Financial document loading failure shows Retry and does not misleadingly show an empty account. Successful empty results still show the normal empty state.
+
+New verification:
+- Isolated PostgreSQL test: draft property link, changed draft rent, current tenancy/billing unchanged, sent application lock, service previews, last-opened timestamp, signed agreement reset refusal, old unsigned link revoked/history retained, viewer write refusal.
+- Prefill test: approved primary/secondary copied only once, rejected ID and financial evidence excluded, mismatched historical identity excluded, tenant row unchanged.
+- Client landlord: current name displayed, missing/wrong confirmation prevents sending; matching name audited. Email transport replaced with a test stub, no customer message sent.
+- Browser at 390/768/1440: all four property stages, bank prefill, unchanged bank not re-saved, action ordering/sizes, send/reset/resume, automatic closure after mocked signing and browser draft removal, failed initial load blocked.
+- Browser at 390/1440: invoice fetch failure and successful retry; searchable property selection and send/preview locks.
+- Browser at 390/768/1440: client landlord confirmation checkbox, shared guarantor request layout, no duplicate rent/deposit inputs and scrolling.
+- Three newly generated application PDFs: page numbering absent, title case, declarations heading shares page with declarations. Current service PDF visually checked: section underlines removed. Earlier screenshots were dated before the latest PDF; use `tmp/service-pdf-review/current-rent-5.png`.
+
+Remaining limitations / approval:
+- Cross-property final tenancy activation and billing transfer is not implemented. Current completion guard still blocks it. Automatic review rejected the proposed financial/tenancy mutation; an explicit approval question remains unanswered. Draft property selection is live independently. Do not relax the completion guard alone.
+- Previously downloaded/stored completed application PDFs retain their original bytes. New renderer changes do not rewrite those historical files. A faithful updated presentation copy for historical applications remains unresolved; do not overwrite signed evidence from mutable current fields.
+- Historical failed email records remain failed until genuinely resent/delivered. No real communications were sent merely to test these releases.
+- Whole-CRM reconciliation of every request from the past two weeks is not declared complete. Mobile application/inventory work is not covered by these releases.
+- Hosting initially returned Not authorized. Explicit `--scope danyls-projects-1551df91` resolved it; this was hosting scope, not an automatic safety rejection.
+
+## Property visual corrections and inline draft — live at 17:07 BST
+
+CRM deployment `dpl_AGpCWj9hxBzCnxgNohQPxndPX89B`, alias crm.fleminglettings.co.uk, immutable snapshot `tmp/release-2026-10-05-property-polish/crm`. Backend remains `crm05-prefill-checks-1`. Eleven live files including the PDF renderer/worker match the tested build; evidence `tmp/property-polish-live-verification.json`.
+
+- Property dropdowns and inputs now share 44px height, normal text weight and matching font size. Currency symbol is vertically centred and matches the amount. Field widths stay within their columns.
+- Required markers have no preceding space throughout the property flow. Desired Monthly Rent replaces Monthly Rent in the input and property summary. Fee wording uses `of first month’s rent` and `of rent`.
+- Inline contract beneath the Send & Sign summary/actions, loading the actual authenticated PDF endpoint. Reuses the signing pages’ local PDF.js distribution, retains its licence, renders all pages to the available width, and supports retry after a failed load. Native iframe viewer was discarded after visual QA found cropping.
+- Sent state retains Resend/Edit Agreement/Cancel, last-opened timestamp/refresh, signing URL and Copy Link. Copy/refresh controls use compact heights; link label and URL no longer have a large gap.
+- Manual Council Tax Band selector removed. Property confirmation calls the existing postcode lookup and only applies an unambiguous exact address match; another property in the postcode is not used. Four matcher tests passed, including other house/flat, ambiguity and invalid responses. Production and local configuration checks found no council tax API key. An async question asks which provider/account or configuration location to use; live automatic lookup is not claimed operational until configured. Failure leaves the band unset/preserves an existing value and permits property creation with a notice.
+
+Verification: frontend build passed; alignment measurements at 390/768/1024/1440/1920 all equal height/font/weight, paired fields aligned, no horizontal overspill. Browser checks at 390/768/1440 passed draft loading/retry, address-specific band selection, actual clipboard content, opened timestamp refresh, send/reset/resume and equal action sizes. Visual review confirmed full contract width and compact tracking. Fictional fixtures and mocked API/messaging only; no real contracts sent or signed in testing.
+
+## Collapsed contract preview — live at 17:14 BST
+CRM deployment dpl_4BfW5Qt3xTjKm4Lr7ecdNLQRQz2L is aliased to crm.fleminglettings.co.uk. The draft and sent contract sections now start collapsed; the heading/chevron toggles the PDF with native keyboard-accessible disclosure behaviour. PDF loading starts only when expanded and cancels on collapse. Browser checks at 390/768/1440 passed initial collapse, expansion, retry, keyboard collapse, sent-state collapse and the existing property workflow. Live files match the tested snapshot (tmp/contract-collapse-live-verification.json). Backend unchanged and healthy. No real customer messages or signatures used in testing.

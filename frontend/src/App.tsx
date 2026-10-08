@@ -1,3 +1,4 @@
+import {PortfolioScopeProvider} from './context/PortfolioScope';
 import SignatureRequest from './pages/SignatureRequest';
 import SignDocument from './pages/SignDocument';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -127,7 +128,7 @@ export default function App() {
         <NotificationProvider>
           <AuthProvider>
             <ErrorBoundary><PortfolioProvider>
-              <AppRoutes />
+              <PortfolioScopeProvider><AppRoutes /></PortfolioScopeProvider>
             </PortfolioProvider></ErrorBoundary>
           </AuthProvider>
         </NotificationProvider>

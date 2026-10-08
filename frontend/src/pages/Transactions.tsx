@@ -1,3 +1,7 @@
+import {useMemo as usePortfolioMemo} from 'react';
+import {usePortfolio} from '../context/PortfolioContext';
+import {usePortfolioScope} from '../context/PortfolioScope';
+import {allocationInPortfolio,portfolioDepositTotals,portfolioRentTotals} from '../utils/portfolioFinance';
 import {rentDueTiming} from '../utils/rentDueTiming';
 import ClientEarnings from '../components/ClientEarnings';
 import DepositParticipantsSelect, {type DepositParticipant} from '../components/DepositParticipantsSelect';
@@ -41,7 +45,7 @@ interface BankFeedTransaction {
   amount: number;
   currency: string;
   match_status: 'unmatched' | 'matched_rent' | 'matched_deposit' | 'matched_expense' | 'ignored';
-  allocations?: {participants?:{name:string}[];kind:string;amount:number;category?:string;notes?:string;tenant_name?:string;property_address?:string}[];
+  allocations?: {property_id?:number;tenant_id?:number;participants?:{name:string;tenant_id?:number;enquiry_id?:number}[];kind:string;amount:number;category?:string;notes?:string;tenant_name?:string;property_address?:string}[];
   property_address?: string;
   tenant_name?: string;
 }
@@ -67,22 +71,36 @@ function AssignmentConfirmation({children,onCancel,onConfirm}:{children:React.Re
 }
 
 export default function Transactions() {
+  const {portfolioFilter} = usePortfolio();
+  const {scope,records} = usePortfolioScope();
   const api = useApi();
   const [searchParams]=useSearchParams();const openedTransaction=useRef<string|null>(null);
-  const [payments, setPayments] = useState<RentPayment[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [summary, setSummary] = useState({ monthly_rent: 0, collected: 0, outstanding: 0, active_tenancies: 0, assumed:0,let_only_fee_count:0,let_only_fee_total:0,let_only_fee_month:0,vacancy_loss:{total:0,periods:[] as {property_id:number;address:string;from:string;through:string;days:number;rent:number;costs:number;total:number}[],missing_dates:[] as {property_id:number;address:string}[]} });
+  const [allPortfolioPayments, setPayments] = useState<RentPayment[]>([]);
+  const payments=usePortfolioMemo(()=>allPortfolioPayments.filter(row=>scope.property(row.property_id||0)),[allPortfolioPayments,scope]);
+  const [allPortfolioProperties, setProperties] = useState<Property[]>([]);
+  const properties=usePortfolioMemo(()=>allPortfolioProperties.filter(row=>scope.property(row.id)),[allPortfolioProperties,scope]);
+  const [allSummary, setSummary] = useState({ monthly_rent: 0, collected: 0, outstanding: 0, active_tenancies: 0, assumed:0,let_only_fee_count:0,let_only_fee_total:0,let_only_fee_month:0,vacancy_loss:{total:0,periods:[] as {property_id:number;address:string;from:string;through:string;days:number;rent:number;costs:number;total:number}[],missing_dates:[] as {property_id:number;address:string}[]} });
   const [bankStatus, setBankStatus] = useState<BankFeedStatus | null>(null);
-  const [bankTransactions, setBankTransactions] = useState<BankFeedTransaction[]>([]);
+  const [allBankTransactions, setBankTransactions] = useState<BankFeedTransaction[]>([]);
   const [bankBusy, setBankBusy] = useState(false);
   const [bankMessage, setBankMessage] = useState('');
   const [bankResult,setBankResult]=useState('');
   useEffect(()=>{if(bankMessage)setBankResult(bankMessage);},[bankMessage]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [rentSuggestions,setRentSuggestions]=useState<RentSuggestion[]>([]),[suggestionError,setSuggestionError]=useState('');
+  const [allRentSuggestions,setRentSuggestions]=useState<RentSuggestion[]>([]),[suggestionError,setSuggestionError]=useState('');
+  const rentSuggestions=usePortfolioMemo(()=>allRentSuggestions.filter(s=>payments.some(p=>p.id===s.rent_payment_id)),[allRentSuggestions,payments]);
   const [selectedBank,setSelectedBank]=useState<BankFeedTransaction|null>(null);
-  const [deposits,setDeposits]=useState<{security:number;holding:number;transactions:BankFeedTransaction[]}>({security:0,holding:0,transactions:[]});
+  const [allDeposits,setDeposits]=useState<{security:number;holding:number;transactions:BankFeedTransaction[]}>({security:0,holding:0,transactions:[]});
+  const matchesAllocation=usePortfolioMemo(()=> (a:Parameters<typeof allocationInPortfolio>[0])=>allocationInPortfolio(a,scope),[scope]);
+  const bankTransactions=usePortfolioMemo(()=>portfolioFilter==='all'?allBankTransactions:allBankTransactions.filter(t=>!!t.allocations?.length&&t.allocations.every(matchesAllocation)),[allBankTransactions,portfolioFilter,matchesAllocation]);
+  const deposits=usePortfolioMemo(()=>portfolioFilter==='all'?allDeposits:{...portfolioDepositTotals(allDeposits.transactions,matchesAllocation),transactions:allDeposits.transactions.filter(t=>!!t.allocations?.length&&t.allocations.every(matchesAllocation))},[allDeposits,portfolioFilter,matchesAllocation]);
+  const summary=usePortfolioMemo(()=>{
+    if(portfolioFilter==='all')return allSummary;
+    const periods=(allSummary.vacancy_loss?.periods||[]).filter(p=>scope.property(p.property_id));
+    const month=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit'}).format(new Date());
+    return {...allSummary,...portfolioRentTotals(records.tenants.filter(scope.record),records.properties.filter(scope.record),payments,month),...(portfolioFilter==='internal'?{let_only_fee_count:0,let_only_fee_total:0,let_only_fee_month:0}:{}),vacancy_loss:{total:periods.reduce((sum,p)=>sum+Number(p.total),0),periods,missing_dates:(allSummary.vacancy_loss?.missing_dates||[]).filter(p=>scope.property(p.property_id))}};
+  },[allSummary,portfolioFilter,records,scope,payments]);
   const [bankFilter,setBankFilter]=useState('unmatched');
   const [transactionName,setTransactionName]=useState(''),[showImportName,setShowImportName]=useState(false);
   const rentCutoff=new Date();rentCutoff.setUTCDate(rentCutoff.getUTCDate()-30);
@@ -91,9 +109,12 @@ export default function Transactions() {
   type Allocation={participants:DepositParticipant[];kind:string;amount:string;rent_payment_id:string;tenant_id:string;property_id:string;maintenance_id:string;category:string;notes:string};
   const [allocations,setAllocations]=useState<Allocation[]>([]);
   const [pendingAssignment,setPendingAssignment]=useState<Allocation[]|null>(null);
-  const [tenants,setTenants]=useState<{id:number;name:string;linked_tenant_id?:number;property_id?:number;tenancy_start_date?:string}[]>([]);
-  const [enquiries,setEnquiries]=useState<{id:number;first_name_1:string;last_name_1:string;linked_property_id?:number;status?:string;balance_payment_requested?:number;balance_payment_received?:number}[]>([]);
-  const [jobs,setJobs]=useState<{id:number;title:string;property_id:number}[]>([]);
+  const [allPortfolioTenants, setTenants]=useState<{id:number;name:string;linked_tenant_id?:number;property_id?:number;tenancy_start_date?:string}[]>([]);
+  const tenants=usePortfolioMemo(()=>allPortfolioTenants.filter(row=>scope.tenant(row.id)),[allPortfolioTenants,scope]);
+  const [allPortfolioEnquiries, setEnquiries]=useState<{id:number;first_name_1:string;last_name_1:string;linked_property_id?:number;status?:string;balance_payment_requested?:number;balance_payment_received?:number}[]>([]);
+  const enquiries=usePortfolioMemo(()=>allPortfolioEnquiries.filter(row=>scope.enquiry(row.id)),[allPortfolioEnquiries,scope]);
+  const [allPortfolioJobs, setJobs]=useState<{id:number;title:string;property_id:number}[]>([]);
+  const jobs=usePortfolioMemo(()=>allPortfolioJobs.filter(row=>scope.maintenance(row.id)),[allPortfolioJobs,scope]);
   const freshAllocation=(amount=''):Allocation=>({kind:selectedBank&&Number(selectedBank.amount)<0?'expense':'rent',amount,participants:[],rent_payment_id:'',tenant_id:'',property_id:'',maintenance_id:'',category:'',notes:''});
   const beginAssign=useCallback(async(transaction:BankFeedTransaction)=>{
     setPendingAssignment(null);setRentSuggestions([]);setSuggestionError('');setBankMessage('');setTransactionName(transaction.display_name||transaction.description||'');setShowImportName(false);
@@ -172,6 +193,8 @@ export default function Transactions() {
     }
   };
 
+  useEffect(()=>{setSelectedBank(null);setPendingAssignment(null);setRentSuggestions([]);},[portfolioFilter]);
+
   // Calculate summaries
   const totalMonthlyRent = Number(summary.monthly_rent);
   const collected = Number(summary.collected);
@@ -191,7 +214,7 @@ export default function Transactions() {
   statusGroups['Let Only Service']={count:Number(summary.let_only_fee_count||0),rent:Number(summary.let_only_fee_total||0)};
 
   return (
-    <Layout title="Financials" breadcrumb={[{ label: 'Financials' }]}>
+    <Layout title="Financials" breadcrumb={[{ label: 'Financials' }]}>{portfolioFilter!=='all'&&<p className="px-6 pt-4 text-xs text-[var(--text-muted)]">Showing the selected portfolio. Unassigned and mixed-portfolio bank transactions remain under All.</p>}
       {selectedBank&&pendingAssignment&&<AssignmentConfirmation onCancel={()=>setPendingAssignment(null)} onConfirm={()=>void reconcile(selectedBank,'assign',pendingAssignment)}>
         <p className="text-sm text-[var(--text-secondary)]">Assign this {Number(selectedBank.amount)>0?'incoming':'outgoing'} payment of <strong className="text-[var(--text-primary)]">{money(Math.abs(Number(selectedBank.amount)))}</strong>?</p>
         <div className="mt-4 space-y-3">{pendingAssignment.map((a,index)=>{const rent=payments.find(p=>String(p.id)===a.rent_payment_id);const outstanding=rent?Math.max(0,Number(rent.amount_due)-Number(rent.amount_paid||0)):0;return <div key={index} className="rounded-xl bg-[var(--bg-input)] p-3 text-sm"><p className="font-bold">{rent?.tenant_name||a.category||a.kind.replaceAll('_',' ')} · {money(a.amount)}</p>{rent&&<><p className="mt-1">{rent.address}</p><p className="mt-1 text-[var(--text-secondary)]">Due {rent.due_date?.slice(0,10).split('-').reverse().join('/')} · {money(outstanding)} outstanding</p>{Math.abs(Number(a.amount)-outstanding)>0.005&&<p className="mt-2 text-amber-700 dark:text-amber-400">The payment amount differs from the outstanding rent. Cancel to adjust or split the allocation.</p>}</>}</div>;})}</div>
@@ -246,7 +269,7 @@ export default function Transactions() {
                   )}
                 </div>
               </div>
-              {bankStatus?.totals && bankStatus.totals.total > 0 && (
+              {portfolioFilter==='all' && bankStatus?.totals && bankStatus.totals.total > 0 && (
                 <div className="grid grid-cols-4 gap-3 mt-4 pt-4 border-t border-[var(--border-subtle)] text-center">
                   <div><p className="font-semibold">{bankStatus.totals.rent_matches}</p><p className="text-[11px] text-[var(--text-muted)]">Rent matched</p></div>
                   <div><p className="font-semibold">{bankStatus.totals.deposit_matches}</p><p className="text-[11px] text-[var(--text-muted)]">Deposits matched</p></div>
@@ -328,7 +351,7 @@ export default function Transactions() {
                   </div>
                 )}
               </Card>
-              <div className="lg:col-span-2"><ClientEarnings refreshKey={bankMessage}/></div>
+              <div className="lg:col-span-2">{portfolioFilter!=='internal'&&<ClientEarnings refreshKey={bankMessage}/>}</div>
             </div>
 
             {bankTransactions.length > 0 && (

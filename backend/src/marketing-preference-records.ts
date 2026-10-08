@@ -6,11 +6,11 @@ export const channels=['email','sms','phone','post'] as const;
 type Channel=typeof channels[number];
 type Choices=Record<Channel,boolean>;
 const labels={email:'Email',sms:'SMS',phone:'Phone',post:'Post'};
-const bool=(v:unknown)=>v===true||v===1||v==='true'||v==='1';
+const bool=(v:unknown)=>v===true||v===1||v==='true'||v==='1'||v==='on';
 export function sourceChoices(row:any):Choices {
  const data=typeof row.preferences==='string'?JSON.parse(row.preferences):row.preferences||{};
  const list=String(data.marketing_preferences||'').toLowerCase().split(/[,;]+/).map(v=>v.trim());
- return Object.fromEntries(channels.map(channel=>[channel,bool(data[`marketing_${channel}`])||list.includes(labels[channel].toLowerCase())])) as Choices;
+ return Object.fromEntries(channels.map(channel=>[channel,Object.prototype.hasOwnProperty.call(data,`marketing_${channel}`)?bool(data[`marketing_${channel}`]):list.includes(labels[channel].toLowerCase())])) as Choices;
 }
 // Resolve only records matching the destination in the recipient's unguessable link.
 export async function preferenceRecords(c:PoolClient,permission:any) {

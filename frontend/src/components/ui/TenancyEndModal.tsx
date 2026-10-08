@@ -1,3 +1,4 @@
+import DeliveryChoices from './DeliveryChoices';
 import { createPortal } from 'react-dom';
 import SmsEditor from './SmsEditor';
 import { useState } from 'react';
@@ -32,16 +33,14 @@ export default function TenancyEndModal({ tenantId, linkedName, initialDate, onC
   };
   const preview = previews[selected];
   return <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="tenancy-end-title">
-    <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--border-input)] bg-[var(--bg-card)] p-6 shadow-2xl">
+    <div className="onboarding-dialog w-full max-w-3xl max-h-[90dvh] overflow-y-auto rounded-2xl border border-[var(--border-input)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-2xl">
       <div className="flex justify-between gap-3"><h2 id="tenancy-end-title" className="text-lg font-semibold">Schedule Tenancy End</h2><button disabled={busy} onClick={onClose} aria-label="Close tenancy end"><X size={20} /></button></div>
       {linkedName && <p className="mt-3 text-sm text-[var(--text-secondary)]">This updates both linked tenants, including {linkedName}. Selected messages are personalised and sent to each tenant.</p>}
-      <div className="mt-5 space-y-4"><DatePicker label="Scheduled End Date" value={endDate} onChange={v => { setEndDate(v); setSmsEdits({}); }} />
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_260px] gap-4"><div className="space-y-4"><DatePicker label="Scheduled End Date" value={endDate} onChange={v => { setEndDate(v); setSmsEdits({}); }} />
         <p className="text-xs text-[var(--text-muted)]">The tenancy remains active through this date and moves to Archived the following day.</p>
         <label className="block text-xs">Internal Notes<textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={10000} rows={3} className="mt-2 w-full rounded-xl border border-[var(--border-input)] bg-[var(--bg-input)] p-3 text-sm" placeholder="Internal Notes — not included in messages" /></label>
-        <div className="flex items-center justify-between gap-3"><label className="text-sm flex gap-2"><input type="checkbox" checked={email} onChange={e => setEmail(e.target.checked)} />Send Email</label><Button variant="outline" size="sm" disabled={!endDate || busy} onClick={() => submit(true, 'email')}>Preview Email</Button></div>
-        <div className="flex items-center justify-between gap-3"><label className="text-sm flex gap-2"><input type="checkbox" checked={sms} onChange={e => setSms(e.target.checked)} />Send SMS</label><Button variant="outline" size="sm" disabled={!endDate || busy} onClick={() => submit(true, 'sms')}>Preview SMS</Button></div>
-        {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
-        <div className="flex justify-end gap-3"><Button variant="ghost" disabled={busy} onClick={onClose}>Close</Button><Button disabled={!endDate || busy} onClick={() => submit(false)} className="!bg-red-600 !text-white">{busy ? 'Saving…' : 'Schedule End'}</Button></div>
+        </div><aside aria-label="Section actions" className="tenancy-end-actions onboarding-actions [&>button]:w-full [&>button]:min-h-10 rounded-xl border border-[#7e2275]/25 bg-[#7e2275]/5 p-3 space-y-3 self-start"><h3 className="text-base font-semibold text-[var(--accent)]">Actions &amp; Previews</h3><DeliveryChoices email={email} sms={sms} onEmail={setEmail} onSms={setSms} disabled={!endDate||busy} previewEmail={()=>void submit(true,'email')} previewSms={()=>void submit(true,'sms')}/><Button disabled={!endDate || busy} onClick={() => submit(false)} className="!bg-red-600 !text-white">{busy ? 'Saving…' : 'Schedule End'}</Button><Button variant="outline" disabled={busy} onClick={onClose}>Cancel</Button></aside>
+        {error && <p role="alert" className="md:col-span-2 text-sm text-red-400">{error}</p>}
       </div>
     </div>
     {previewChannel === 'email' && preview && <EmailPreviewModal open previewOnly onClose={() => setPreviewChannel(null)} onSend={async () => {}} to={preview.to} from="contact@tenancies.fleminglettings.co.uk" initialSubject={preview.subject} initialBodyHtml={preview.html}>

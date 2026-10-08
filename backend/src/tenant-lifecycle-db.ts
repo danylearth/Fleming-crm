@@ -1,8 +1,10 @@
+import {applyDueTenancyChangeovers} from './tenancy-changeover';
 import {syncPropertyInspectionTasks} from './property-inspections';
 import { applyDueRentReviews } from './rent-review';
 import { run } from './db-pg';
 
 export async function syncTenantLifecycle(): Promise<void> {
+  await applyDueTenancyChangeovers();
   await run(`UPDATE tenants SET status='inactive', updated_at=NOW()
     WHERE COALESCE(status, 'active') IN ('active','scheduled') AND has_end_date=1
       AND tenancy_end_date IS NOT NULL AND tenancy_end_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date`);

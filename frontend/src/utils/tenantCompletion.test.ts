@@ -1,6 +1,17 @@
 import { describe,it,expect } from 'vitest';
 import { tenantCompletion } from './tenantCompletion';
 describe('tenant completion',()=>{
+  it.each(['Bank Statements', 'Bank Statement', 'bank_statement', 'bank-statements'])('counts %s for secondary ID and address evidence without recording staff verification',type=>{
+    const form={kyc_secondary_id:0,kyc_address_verification:0};
+    const document={doc_type:type,original_name:'Z Woodberry - Bank Statement - December 2023.pdf'};
+    const items=tenantCompletion(form,undefined,{},[document]);
+    const supported=items.filter(item=>['kyc_secondary_id','kyc_address_verification'].includes(item.key));
+    expect(supported).toHaveLength(2);
+    expect(supported.every(item=>item.done && !item.recorded && item.evidence===document.original_name)).toBe(true);
+    expect(items.find(item=>item.key==='kyc_primary_id')?.done).toBe(false);
+    expect(form).toEqual({kyc_secondary_id:0,kyc_address_verification:0});
+    expect(tenantCompletion(form,undefined,{},[{...document,review_status:'rejected'}]).some(item=>item.done)).toBe(false);
+  });
   it('counts existing imported documents without changing verification flags',()=>{
     const form={application_forms_completed:1,income_amount:'45000',kyc_primary_id:0,kyc_secondary_id:0,kyc_address_verification:0};
     const docs=[

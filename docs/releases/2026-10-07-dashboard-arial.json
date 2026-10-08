@@ -1,0 +1,12 @@
+{
+ "deployment": "dpl_H28aPDLEVhMrnD85vtMPZxuTWjU9",
+ "url": "https://crm.fleminglettings.co.uk",
+ "baselineDeployment": "dpl_HPtKYukBfUaEujNMbBGanUENVtGV",
+ "source": "tmp/release-2026-10-07-dashboard-arial/frontend-source",
+ "files": ["src/pages/Dashboard.tsx", "src/components/DashboardWorkPanels.tsx", "src/components/DashboardWorkPanels.css"],
+ "changes": ["Person and briefcase icons beside enquiry names", "14px Arial primary row text and consistent arrow buttons", "Smaller addresses retained", "Pipeline subtitle: New and existing tenant and landlord onboardings", "Maintenance subtitle: New and existing maintenance tasks"],
+ "validation": ["TypeScript and Vite build passed", "Local and live browser checks passed using intercepted sample data", "Arial font and 14px primary text checked in computed styles", "Both enquiry icons, subtitles and dismissal controls verified"],
+ "backendChanged": false,
+ "liveRecordsChanged": false,
+ "previewOnly": ["Tenant tabs", "Expanded reminder task details"]
+}

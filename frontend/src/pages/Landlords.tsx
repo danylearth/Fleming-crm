@@ -1,3 +1,5 @@
+import {useMemo as usePortfolioMemo} from 'react';
+import {usePortfolioScope} from '../context/PortfolioScope';
 import {ToolbarButton} from '../components/ui';
 import FloatingDropdown from '../components/FloatingDropdown';
 import {validUkPhone,normaliseUkPhone} from '../utils/phone';
@@ -9,7 +11,7 @@ import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Building2, Phone, Mail, Search, Check, LayoutGrid, List, User, AlertCircle, Briefcase, Upload } from 'lucide-react';
 import CsvImport from '../components/ui/CsvImport';
-import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
+import { usePortfolio } from '../context/PortfolioContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { useNotifications } from '../context/NotificationContext';
 import { clientPropertyStats } from '../utils/clientPropertyStats';
@@ -30,12 +32,15 @@ interface TenantOption {
 }
 
 export default function Landlords() {
+  const {scope} = usePortfolioScope();
   const navigate = useNavigate();
   const api = useApi();
   const { confirmAction } = useNotifications();
   const { isManager } = usePermissions();
-  const [landlords, setLandlords] = useState<Landlord[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [allPortfolioLandlords, setLandlords] = useState<Landlord[]>([]);
+  const landlords = usePortfolioMemo(() => allPortfolioLandlords.filter(row => scope.landlord(row.id)), [allPortfolioLandlords,scope]);
+  const [allPortfolioProperties, setProperties] = useState<Property[]>([]);
+  const properties = usePortfolioMemo(() => allPortfolioProperties.filter(row => scope.property(row.id)), [allPortfolioProperties,scope]);
   const [directors, setDirectors] = useState<{ id: number; landlord_id: number; name?: string; email?: string; phone?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -52,7 +57,8 @@ export default function Landlords() {
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
-  const [tenants, setTenants] = useState<TenantOption[]>([]);
+  const [allPortfolioTenants, setTenants] = useState<TenantOption[]>([]);
+  const tenants = usePortfolioMemo(() => allPortfolioTenants.filter(row => scope.tenant(row.id)), [allPortfolioTenants,scope]);
   // Filter state
   const [tenantFilter, setTenantFilter] = useState<number | null>(null);
   const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
@@ -60,6 +66,8 @@ export default function Landlords() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editMode, setEditMode] = useState(false);
+
+  useEffect(()=>{setTenantFilter(null);setPropertyFilter(null);setSelectedIds([]);},[portfolioFilter]);
 
   const load = async () => {
     try {
@@ -98,7 +106,7 @@ export default function Landlords() {
     );
   };
 
-  const portfolioFiltered = filterByPortfolio(landlords.filter(landlord => landlord.landlord_type !== 'internal'), portfolioFilter);
+  const portfolioFiltered = landlords;
   const filtered = portfolioFiltered.filter(l => {
     // Check if search matches landlord details
     const matchesLandlord = !search || [l.name, l.email, l.phone, l.address, l.company_number]

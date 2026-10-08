@@ -4,6 +4,26 @@
 /* Sign-in starts at natural size; authenticated appearance is applied by AuthContext. */
 html { font-size: 100%; }
 
+/* A small readability increase across CRM lists and forms, retaining the chosen scale. */
+.crm-workspace { --text-xs: .8125rem; --text-sm: .9375rem; }
+.crm-workspace .text-\[10px\] { font-size: max(11px, .75rem); }
+.crm-workspace .text-\[11px\] { font-size: max(12px, .8125rem); }
+.notification-bell-attention {
+  color: var(--accent-orange, #8f2e70);
+  border-color: var(--accent-orange, #8f2e70);
+  background: color-mix(in srgb, var(--accent-orange, #8f2e70) 12%, var(--bg-card));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-orange, #8f2e70) 16%, transparent);
+}
+.notification-bell-shake { transform-origin: 50% 15%; animation: notification-bell-ring .8s ease-in-out 3; }
+@keyframes notification-bell-ring {
+  0%, 100% { transform: rotate(0); }
+  15%, 45% { transform: rotate(16deg); }
+  30%, 60% { transform: rotate(-16deg); }
+  75% { transform: rotate(8deg); }
+  90% { transform: rotate(-8deg); }
+}
+@media (prefers-reduced-motion: reduce) { .notification-bell-shake { animation: none; } }
+
 /* Theme CSS Variables */
 :root {
   --bg-page: #f5f5f5;
@@ -231,6 +251,8 @@ body { font-family:var(--user-font,'Lufga'),sans-serif; }
 .onboarding-actions > .grid { grid-template-columns: minmax(0, 1fr); }
 .onboarding-actions button { width: 100%; white-space: normal; height: auto; min-height: 44px; justify-content: center; }
 .onboarding-actions > .flex { flex-direction: column; }
+.tenancy-end-actions .delivery-choices label { background: color-mix(in srgb, #7e2275 9%, var(--bg-card)); border: 1px solid #7e227526; }
+.tenancy-end-actions input[type="checkbox"] { accent-color: #7e2275; }
 
 .onboarding-dialog .delivery-preview { width: auto; min-height: 32px; height: 32px; white-space: nowrap; }
 
@@ -241,15 +263,16 @@ body { font-family:var(--user-font,'Lufga'),sans-serif; }
 .onboarding-dialog .application-review-rows select { min-height:32px; height:32px; padding:4px 28px 4px 8px; font-size:12px; line-height:20px; }
 .onboarding-dialog .application-review-rows .delivery-preview { padding:6px 10px; font-size:14px; line-height:20px; font-weight:500; }
 .onboarding-dialog .application-review-rows .delivery-choices label { font-size:14px; line-height:20px; }
-.onboarding-dialog .application-review-actions .review-final-action { width:100%; min-height:40px; justify-content:center; }
-.onboarding-dialog .review-ready-actions { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; }
-.onboarding-dialog .review-ready-actions > h5 { grid-column:1 / -1; }
-.onboarding-dialog .review-ready-actions > * { margin:0; }
-.onboarding-dialog .review-ready-actions .review-final-actions { align-self:end; border:0; padding:0; }
-.onboarding-dialog .review-ready-actions .review-final-action { width:auto; white-space:nowrap; }
+.onboarding-dialog .application-review-actions { display:flex; flex-direction:column; gap:12px; padding:16px; background:var(--bg-card); }
+.onboarding-dialog .application-review-actions > * { margin:0; }
+.onboarding-dialog .application-review-actions > p { font-size:13px; line-height:1.5; color:var(--text-secondary); }
+.onboarding-dialog .application-review-actions > label { width:100%; }
+.onboarding-dialog .application-review-actions textarea { min-height:80px; font-size:14px; }
+.onboarding-dialog .application-review-actions .review-final-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; border-top:1px solid var(--border-input); padding-top:12px; }
+.onboarding-dialog .application-review-actions .review-final-action { width:auto; min-height:40px; padding:8px 18px; font-size:14px; line-height:20px; font-weight:600; justify-content:center; }
+.onboarding-dialog .application-review-actions .review-primary-action { background:#8f2e70; color:#fff; }
 @media (max-width:640px) {
-  .onboarding-dialog .review-ready-actions { grid-template-columns:minmax(0,1fr); }
-  .onboarding-dialog .review-ready-actions .review-final-actions { justify-self:end; }
+  .onboarding-dialog .application-review-actions .review-final-action { width:100%; }
 }
 .onboarding-dialog .review-approve { color:var(--onboarding-success); background:color-mix(in srgb,#10b981 13%,transparent); border-color:color-mix(in srgb,#10b981 35%,transparent); }
 .onboarding-dialog .review-reject { color:var(--onboarding-danger); background:color-mix(in srgb,#ef4444 10%,transparent); border-color:color-mix(in srgb,#ef4444 30%,transparent); }
@@ -259,7 +282,7 @@ body { font-family:var(--user-font,'Lufga'),sans-serif; }
 .application-review-modal .review-reject:hover:not(:disabled) { background:#991b1b; }
 .application-review-modal .review-section-actions button { width:88px; min-height:36px; justify-content:center; }
 @media(max-width:640px) {
-  .application-review-modal section { flex-direction:column; align-items:stretch; }
+  .application-review-modal .review-section-content { flex-direction:column; align-items:stretch; }
   .application-review-modal .review-section-actions { flex-direction:row; justify-content:flex-end; }
   .application-review-modal .review-section-actions button { min-height:44px; }
 }
@@ -313,3 +336,30 @@ body { font-family:var(--user-font,'Lufga'),sans-serif; }
  .onboarding-deposit-stage .onboarding-actions { padding-top:10px; }
  .onboarding-deposit-stage .onboarding-actions > :not(:first-child) { margin-top:8px; }
 }
+
+.user-actions{display:grid;grid-template-columns:58px 124px 120px 92px;align-items:center;gap:6px}.user-actions button{justify-content:center;text-align:center;border-radius:999px;min-height:36px;line-height:1.3;font-size:12px;transition:background-color .15s,color .15s}.user-action-edit{grid-column:1}.user-action-security{grid-column:2}.user-action-password{grid-column:3}.user-action-deactivate,.user-action-reactivate{grid-column:4}.user-actions button{grid-row:1}.user-action-edit:hover,.user-action-edit:focus-visible{background:#fef3c7!important;color:#92400e!important}.user-action-security:hover,.user-action-security:focus-visible{background:#dbeafe!important;color:#1d4ed8!important}.user-action-password:hover,.user-action-password:focus-visible{background:#ede9fe!important;color:#6d28d9!important}.user-action-deactivate:hover,.user-action-deactivate:focus-visible{background:#fee2e2!important;color:#b91c1c!important}.user-action-reactivate:hover,.user-action-reactivate:focus-visible{background:#dcfce7!important;color:#15803d!important}
+.onboarding-actions button{min-height:40px}.onboarding-actions label{white-space:nowrap}
+
+/* Keep property onboarding dropdowns, numbers and currency on the same baseline. */
+.onboarding-dialog .property-onboarding-fields fieldset,
+.onboarding-dialog .property-onboarding-fields .grid > * { min-width:0; min-inline-size:0; }
+.onboarding-dialog .property-onboarding-fields input:not([type="checkbox"]):not([type="radio"]),
+.onboarding-dialog .property-onboarding-fields button[aria-expanded] {
+  box-sizing:border-box; width:100%; max-width:100%; min-width:0;
+  height:44px; min-height:44px; padding:9px 16px;
+  font-size:1rem; line-height:24px; font-weight:400;
+}
+.onboarding-dialog .property-onboarding-fields button[aria-expanded] > span { overflow:hidden; }
+.onboarding-dialog .property-onboarding-fields button[aria-expanded] > span > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.onboarding-dialog .property-onboarding-fields button[aria-expanded] > svg { flex-shrink:0; }
+.onboarding-dialog .property-onboarding-fields .relative > span[aria-hidden="true"] {
+  top:50%; transform:translateY(-50%); font-size:1rem; line-height:24px;
+}
+
+/* Portalled options retain the field font size and readable tap targets. */
+.crm-floating-dropdown button,.crm-floating-dropdown input{font-size:inherit!important;line-height:1.5;min-height:44px}
+
+/* Shared action panels in every onboarding stage. */
+.onboarding-actions h5{font-size:16px;font-weight:600}
+.onboarding-actions button{font-weight:500;min-height:40px}
+.onboarding-action-buttons button{height:auto;min-height:40px;border-radius:9999px}

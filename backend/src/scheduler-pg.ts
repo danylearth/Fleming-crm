@@ -1,3 +1,4 @@
+import {deliverGuarantorExecutionEmails} from './guarantor-execution-email';
 import {deliverCompletedDocumentEmails} from './document-signing-email';
 import {refreshOnsRents} from './rent-comparisons';
 import {runFinanceSchedule} from './finance-scheduler';
@@ -299,7 +300,7 @@ async function runAllChecks() {
 }
 
 export function startScheduler() {
-  const signingEmailCheck=()=>deliverCompletedDocumentEmails().catch(error=>console.error('[Signed document email]',error.message));
+  const signingEmailCheck=()=>Promise.allSettled([deliverCompletedDocumentEmails(),deliverGuarantorExecutionEmails()]).then(results=>{for(const result of results)if(result.status==='rejected')console.error('[Signed document email]',result.reason?.message);});
   void signingEmailCheck();setInterval(signingEmailCheck,60_000);
   const refreshRents=()=>refreshOnsRents().catch(e=>console.error('[ONS rent refresh]',e.message));
   if(process.env.NODE_ENV!=='test'){void refreshRents();setInterval(refreshRents,24*60*60*1000);}

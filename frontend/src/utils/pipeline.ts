@@ -1,4 +1,5 @@
-interface PipelineEnquiry {status:string;viewing_date?:string;viewing_time?:string;handover_date?:string;handover_not_required?:number;balance_payment_requested?:number;balance_payment_received?:number;balance_follow_up_date?:string;follow_up_date?:string;tenancy_agreement_status?:string;application_form_completed?:number|boolean;application_review_status?:string;application_changes_sent_at?:string;ready_for_review?:boolean}
+import {enquiryStageLabel} from './enquiryStage';
+interface PipelineEnquiry {status:string;existing_tenancy_application?:unknown;source_tenant_id?:unknown;viewing_date?:string;viewing_time?:string;handover_date?:string;handover_not_required?:number;balance_payment_requested?:number;balance_payment_received?:number;balance_follow_up_date?:string;follow_up_date?:string;tenancy_agreement_status?:string;application_form_completed?:number|boolean;application_review_status?:string;application_changes_sent_at?:string;ready_for_review?:boolean}
 export function applicationReadyForReview(e:PipelineEnquiry & {joint_partner_id?:number},partner?:PipelineEnquiry){
  const submitted=(r:PipelineEnquiry|undefined)=>!!r?.application_form_completed&&!(r.application_review_status==='changes_requested'&&r.application_changes_sent_at);
  return submitted(e)&&(!e.joint_partner_id||submitted(partner))&&(e.application_review_status!=='approved'||!!partner&&partner.application_review_status!=='approved');
@@ -21,7 +22,7 @@ export function pipelineStage(e:PipelineEnquiry,today:string){
  if(e.application_form_completed)return e.application_review_status==='approved'?'Application Approved':'Application Completed';
  if(e.status==='viewing_booked')return 'Viewing Booked';
  if(e.follow_up_date&&e.follow_up_date.slice(0,10)<=today)return 'Follow-up Due';
- return e.status.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+ return enquiryStageLabel(e.status.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()),e);
 }
 
 export function matchesPipelineAgent(agent:string|number|null|undefined,selected:string,members:{id:number;name:string}[]){

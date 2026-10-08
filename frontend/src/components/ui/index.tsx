@@ -45,7 +45,7 @@ export function Button({ children, onClick, variant = 'primary', size = 'md', cl
   children: ReactNode; onClick?: (e?: React.MouseEvent) => void; variant?: 'primary' | 'ghost' | 'gradient' | 'outline';
   size?: 'sm' | 'md' | 'lg'; className?: string; disabled?: boolean; type?: 'button' | 'submit';
 }) {
-  const base = 'inline-flex items-center justify-center font-medium transition-all rounded-full';
+  const base = 'inline-flex items-center justify-center gap-2 [&>svg]:shrink-0 font-medium transition-all rounded-full';
   const sizes = { sm: 'px-4 py-1.5 text-xs', md: 'px-6 py-2.5 text-sm', lg: 'px-8 py-3 text-base' };
   const variants = {
     primary: 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] hover:opacity-90',
@@ -74,10 +74,12 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
   const [showPassword,setShowPassword]=useState(false);
   const phone = type==='tel'||/phone|mobile|contact number/i.test(label||'');
   const currency = type === 'currency';
-  const shown = currency ? value.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : value;
+  const percentage = type === 'percentage';
+  const [focused,setFocused]=useState(false);
+  const shown = currency ? value.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : percentage && !focused && value!=='' && Number.isFinite(Number(value)) ? Number(value).toFixed(2) : value;
   const shouldCap = !currency && !['email', 'number', 'password', 'time', 'tel'].includes(type);
   const handleChange = (raw: string) => {
-    if (currency) { const numeric = raw.replace(/[£,\s]/g, ''); if (/^\d*(\.\d{0,2})?$/.test(numeric)) onChange(numeric); return; }
+    if (currency || percentage) { const numeric = raw.replace(/[£,\s]/g, ''); if (/^\d*(\.\d{0,2})?$/.test(numeric)) onChange(numeric); return; }
     if (shouldCap && raw.length > 0 && (value.length === 0 || raw.length === 1)) {
       onChange(raw.charAt(0).toUpperCase() + raw.slice(1));
     } else {
@@ -87,16 +89,16 @@ export function Input({ label, value, onChange, placeholder, type = 'text', clas
   return (
     <div className={className}>
       {label && <label className="block text-xs text-[var(--text-secondary)] mb-1.5 font-medium">{label}</label>}
-      <div className="relative">{currency && <span className="absolute left-3 top-2.5 text-sm" aria-hidden="true">£</span>}<input aria-label={label} type={phone?'tel':currency || (type==='password'&&showPassword) ? 'text' : type} inputMode={currency ? 'decimal' : undefined} style={currency ? {paddingLeft:28} : undefined} value={shown} onChange={e => handleChange(e.target.value)} placeholder={phone?PHONE_PLACEHOLDER:placeholder} onFocus={()=>{if(phone&&!value)onChange('+44');}} onBlur={()=>{if(phone)onChange(value==='+44'?'':normaliseUkPhone(value));}}
+      <div className="relative">{currency && <span className="absolute left-3 top-2.5 text-sm" aria-hidden="true">£</span>}<input aria-label={label} type={phone?'tel':currency || percentage || (type==='password'&&showPassword) ? 'text' : type} inputMode={currency || percentage ? 'decimal' : undefined} style={currency ? {paddingLeft:28} : undefined} value={shown} onChange={e => handleChange(e.target.value)} placeholder={phone?PHONE_PLACEHOLDER:placeholder} onFocus={()=>{setFocused(true);if(percentage&&value!==''&&Number.isFinite(Number(value)))onChange(Number(value).toFixed(2));if(phone&&!value)onChange('+44');}} onBlur={()=>{setFocused(false);if(percentage&&value!==''&&Number.isFinite(Number(value)))onChange(Number(value).toFixed(2));if(phone)onChange(value==='+44'?'':normaliseUkPhone(value));}}
         className="w-full bg-[var(--bg-input)] border border-[var(--border-input)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-input)] transition-colors" />{type==='password'&&<button type="button" className="mt-2 flex items-center gap-2 text-xs" onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={14}/>:<Eye size={14}/>} {showPassword?'Hide Password':'Show Password'}</button>}</div>
     </div>
   );
 }
 
 // ─── Select ───
-export function Select({ label, value, onChange, options, className = '', searchable, inlineLabel = false, hideLabel = false, icon, compact = false, disabled = false }: {
+export function Select({ label, value, onChange, options, className = '', searchable, inlineLabel = false, hideLabel = false, icon, compact = false, standardControl = false, disabled = false, dropdownMinWidth, dropdownClassName }: {
   label?: string; value: string; onChange: (v: string) => void;
-  options: { value: string; label: string; className?:string }[]; className?: string; searchable?: boolean; inlineLabel?: boolean; hideLabel?: boolean; icon?: ReactNode; compact?: boolean; disabled?: boolean;
+  options: { value: string; label: string; className?:string }[]; className?: string; searchable?: boolean; inlineLabel?: boolean; hideLabel?: boolean; icon?: ReactNode; compact?: boolean; standardControl?: boolean; disabled?: boolean; dropdownMinWidth?:number; dropdownClassName?:string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -113,7 +115,7 @@ export function Select({ label, value, onChange, options, className = '', search
     else if(open&&compact) (menuRef.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]') || menuRef.current?.querySelector<HTMLButtonElement>('[role="option"]'))?.focus();
   }, [open, showSearch, compact]);
 
-  const dropdown = open ? <FloatingDropdown anchor={triggerRef} onClose={()=>{setOpen(false);setSearch('');}}>
+  const dropdown = open ? <FloatingDropdown anchor={triggerRef} minWidth={dropdownMinWidth} className={dropdownClassName} onClose={()=>{setOpen(false);setSearch('');}}>
       {showSearch && (
         <div className="p-2 border-b border-[var(--border-subtle)]">
           <input ref={searchRef} type="text" value={search} onChange={e => setSearch(e.target.value)}
@@ -160,7 +162,7 @@ export function Select({ label, value, onChange, options, className = '', search
         onKeyDown={event=>{if(compact&&(event.key==='ArrowDown'||event.key==='ArrowUp')){event.preventDefault();setOpen(true);}}}
         type="button"
         onClick={() => setOpen(!open)}
-        className={`w-full flex items-center justify-between gap-3 border rounded-xl text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed ${compact ? "bg-[var(--bg-card)] border-[var(--border-input)] px-3 py-2 text-[13px] shadow-sm hover:border-purple-400" : "bg-[var(--bg-input)] border-[var(--border-input)] px-4 py-2.5 text-sm focus:border-[var(--accent)]"}`}
+        className={`w-full flex items-center justify-between gap-3 border rounded-xl text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed ${compact && !standardControl ? "bg-[var(--bg-card)] border-[var(--border-input)] px-3 py-2 text-[13px] shadow-sm hover:border-purple-400" : "bg-[var(--bg-input)] border-[var(--border-input)] px-4 py-2.5 text-sm focus:border-[var(--accent)]"}`}
       >
         <span className={`flex items-center gap-2 min-w-0 ${selected ? '' : 'text-[var(--text-muted)]'}`}>{icon}<span className={selected?.className?`rounded-lg px-2 py-1 ${selected.className}`:undefined}>{selected?.label || 'Select...'}</span></span>
         <svg className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -183,7 +185,7 @@ const TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
 export function TimePicker({ label, value, onChange, className = '' }: {
   label?: string; value: string; onChange: (v: string) => void; className?: string;
 }) {
-  return <Select label={label} value={value} onChange={onChange} options={TIME_OPTIONS} searchable={false} className={className} />;
+  return <Select label={label} value={value} onChange={onChange} options={TIME_OPTIONS} compact standardControl searchable={false} className={className} />;
 }
 
 // ─── Tag ───

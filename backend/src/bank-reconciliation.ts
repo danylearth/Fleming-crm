@@ -1,3 +1,4 @@
+import {validateHoldingDepositReset} from './holding-deposit-reset';
 import {suggestRentMatches} from './rent-match-suggestions';
 import {holdingParticipantGroups,refreshHoldingDeposit} from './holding-deposit-progress';
 import {refreshFinalBalance,validateFinalBalance} from './final-balance-progress';
@@ -55,7 +56,7 @@ export function registerBankReconciliation(app:Express) {
    AND NOT EXISTS(SELECT 1 FROM bank_feed_allocations a WHERE a.bank_transaction_id=b.id AND a.reversed_at IS NULL)
    ORDER BY booked_at DESC,id DESC`);
   const matches=available.flatMap(row=>{const reason=holdingDepositMatch(row,applicants);return reason?[{id:row.id,booked_at:row.booked_at,description:row.display_name||row.description||row.merchant_name||'Bank payment',amount:Number(row.amount),match_reason:reason}]:[];});
-  const linked=await query(`SELECT b.id,b.booked_at,COALESCE(b.display_name,b.description) AS description,SUM(a.amount*SIGN(b.amount)) AS amount
+  const linked=await query(`SELECT b.id,b.booked_at,COALESCE(b.display_name,b.description) AS description,b.description AS bank_reference,b.amount AS bank_amount,b.currency,SUM(a.amount*SIGN(b.amount)) AS amount
    FROM bank_feed_transactions b JOIN bank_feed_allocations a ON a.bank_transaction_id=b.id
    WHERE a.kind='holding_deposit' AND a.reversed_at IS NULL AND EXISTS(
     SELECT 1 FROM bank_feed_allocation_participants ap LEFT JOIN tenants t ON t.id=ap.tenant_id
@@ -92,7 +93,7 @@ export function registerBankReconciliation(app:Express) {
   await run("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,'rename','bank_feed_transaction',$3,$4)",[req.user.id,req.user.email,row.id,JSON.stringify({display_name:name,original_import_name:row.description})]);res.json(row);
  });
 
- const reconcileTransaction=async(req:AuthRequest,res:Response,holdingEnquiryId?:number)=>{
+ const reconcileTransaction=async(req:AuthRequest,res:Response,holdingEnquiryId?:number,resetHolding=false)=>{
   const client=await pool.connect();
   try {
    await client.query('BEGIN');
@@ -101,10 +102,17 @@ export function registerBankReconciliation(app:Express) {
    if(holdingEnquiryId!==undefined){
     const ids=(await holdingParticipantGroups(client,[{enquiry_id:holdingEnquiryId}])).flat();
     const applicants=(await client.query('SELECT * FROM tenant_enquiries WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE',[ids])).rows;
-    const allocated=(await client.query('SELECT id FROM bank_feed_allocations WHERE bank_transaction_id=$1 AND reversed_at IS NULL',[bank.id])).rows;
+    const allocated=(await client.query('SELECT id,kind FROM bank_feed_allocations WHERE bank_transaction_id=$1 AND reversed_at IS NULL',[bank.id])).rows;
+    if(resetHolding){
+     if(!applicants.length||applicants.some(r=>r.status==='converted'))throw Error('This application has already converted. Review the payment in Financials.');
+     const participants=(await client.query('SELECT ap.allocation_id,COALESCE(ap.enquiry_id,t.source_enquiry_id) AS enquiry_id FROM bank_feed_allocation_participants ap LEFT JOIN tenants t ON t.id=ap.tenant_id WHERE ap.allocation_id=ANY($1::int[])',[allocated.map(a=>a.id)])).rows;
+     validateHoldingDepositReset(allocated,participants,ids);
+     req.body={action:'unassign'};
+    }else{
     if(allocated.length||!holdingDepositMatch(bank,applicants))throw Error('This payment is no longer available or does not match this holding deposit');
     // Revalidate under the transaction lock; never accept an arbitrary allocation from this endpoint.
     req.body={action:'assign',allocations:[{kind:'holding_deposit',amount:Number(bank.amount),participants:ids.map(enquiry_id=>({enquiry_id}))}]};
+    }
    }
    const action=req.body.action;
    const holdingGroups=new Map<number,number[]>();
@@ -197,6 +205,12 @@ export function registerBankReconciliation(app:Express) {
   if(!Number.isSafeInteger(enquiryId)||enquiryId<=0||!Number.isSafeInteger(transactionId)||transactionId<=0)return res.status(400).json({error:'Choose an enquiry and matching bank transaction'});
   req.params.id=String(transactionId);
   return reconcileTransaction(req,res,enquiryId);
+ });
+ app.post('/api/tenant-enquiries/:id/reset-holding-deposit-payment',authMiddleware,requirePermission('staff'),async(req:AuthRequest,res)=>{
+  const enquiryId=Number(req.params.id),transactionId=Number(req.body.transaction_id);
+  if(!Number.isSafeInteger(enquiryId)||enquiryId<=0||!Number.isSafeInteger(transactionId)||transactionId<=0)return res.status(400).json({error:'Choose a linked holding-deposit payment'});
+  req.params.id=String(transactionId);
+  return reconcileTransaction(req,res,enquiryId,true);
  });
  app.post('/api/tenant-enquiries/:id/allocate-balance',authMiddleware,requirePermission('staff'),async(req:AuthRequest,res)=>{
   const enquiryId=Number(req.params.id),transactionId=Number(req.body.transaction_id);

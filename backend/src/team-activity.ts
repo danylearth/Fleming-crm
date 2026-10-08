@@ -5,11 +5,13 @@ import { AuthRequest, authMiddleware, requireRole } from './auth';
 
 export function registerTeamActivityRoutes(app: Express) {
   app.post('/api/dashboard/clear-alerts', authMiddleware, requireRole('admin'), async(req:AuthRequest,res)=>{
+    const selected=req.body?.keys;
+    if(selected!==undefined&&(!Array.isArray(selected)||selected.length>500||selected.some(k=>typeof k!=='string'||k.length>200)))return res.status(400).json({error:'Choose valid dashboard items to clear'});
     const client=await pool.connect();
     try{
       const alerts=await dashboardAlerts();
       const maintenance=await query("SELECT id FROM maintenance WHERE status IN ('open','in_progress')");
-      const keys=[...alerts.map(a=>a.alert_key),...maintenance.map(m=>'maintenance:'+m.id)];
+      const keys=[...alerts.map(a=>a.alert_key),...maintenance.map(m=>'maintenance:'+m.id)].filter(key=>selected===undefined||selected.includes(key));
       await client.query('BEGIN');
       const changed=await client.query('INSERT INTO dashboard_alert_dismissals(alert_key,cleared_by) SELECT unnest($1::text[]),$2 ON CONFLICT DO NOTHING RETURNING alert_key',[keys,req.user!.id]);
       await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,changes) VALUES($1,$2,'update','dashboard',$3)",[req.user!.id,req.user!.email,JSON.stringify({action:'clear_alerts',keys:changed.rows.map(r=>r.alert_key)})]);
@@ -18,10 +20,12 @@ export function registerTeamActivityRoutes(app: Express) {
   });
 
   app.post('/api/tasks/clear-recent', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
+    const ids=req.body?.ids;
+    if(ids!==undefined&&(!Array.isArray(ids)||ids.length>500||ids.some(id=>!Number.isSafeInteger(id)||id<1)))return res.status(400).json({error:'Choose valid tasks to clear'});
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const changed = await client.query('UPDATE tasks SET dashboard_dismissed_at=NOW() WHERE dashboard_dismissed_at IS NULL RETURNING id');
+      const changed = await client.query('UPDATE tasks SET dashboard_dismissed_at=NOW() WHERE dashboard_dismissed_at IS NULL'+(ids===undefined?'':' AND id=ANY($1::int[])')+' RETURNING id',ids===undefined?[]:[ids]);
       await client.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,changes) VALUES($1,$2,'update','task',$3)", [req.user!.id,req.user!.email,JSON.stringify({ action: 'clear_recent_tasks', ids: changed.rows.map(r => r.id) })]);
       await client.query('COMMIT'); res.json({ cleared: changed.rowCount });
     } catch { await client.query('ROLLBACK'); res.status(500).json({ error: 'Could not clear recent tasks' }); } finally { client.release(); }

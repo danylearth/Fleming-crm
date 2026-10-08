@@ -1,3 +1,6 @@
+import {usePortfolio} from '../context/PortfolioContext';
+import {useMemo as usePortfolioMemo} from 'react';
+import {usePortfolioScope} from '../context/PortfolioScope';
 import {ToolbarButton} from '../components/ui';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -103,14 +106,20 @@ function FilterDropdown({ icon: Icon, label, value, displayValue, onClear, items
 }
 
 export default function Tasks() {
+  const {scope} = usePortfolioScope();
+  const {portfolioFilter} = usePortfolio();
   const api = useApi();
   const { confirmAction } = useNotifications();
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [allPortfolioTasks, setTasks] = useState<Task[]>([]);
+  const tasks = usePortfolioMemo(() => allPortfolioTasks.filter(row => scope.task(row)), [allPortfolioTasks,scope]);
   const [statusError,setStatusError]=useState<{message:string;propertyId:number|null}|null>(null);
-  const [properties, setProperties] = useState<{ id: number; address: string; landlord_id: number | null }[]>([]);
-  const [landlords, setLandlords] = useState<{ id: number; name: string }[]>([]);
-  const [tenants, setTenants] = useState<{ id: number; name: string; property_id: number | null }[]>([]);
+  const [allPortfolioProperties, setProperties] = useState<{ id: number; address: string; landlord_id: number | null }[]>([]);
+  const properties = usePortfolioMemo(() => allPortfolioProperties.filter(row => scope.property(row.id)), [allPortfolioProperties,scope]);
+  const [allPortfolioLandlords, setLandlords] = useState<{ id: number; name: string }[]>([]);
+  const landlords = usePortfolioMemo(() => allPortfolioLandlords.filter(row => scope.landlord(row.id)), [allPortfolioLandlords,scope]);
+  const [allPortfolioTenants, setTenants] = useState<{ id: number; name: string; property_id: number | null }[]>([]);
+  const tenants = usePortfolioMemo(() => allPortfolioTenants.filter(row => scope.tenant(row.id)), [allPortfolioTenants,scope]);
   const [users, setUsers] = useState<{ id: number; name: string; role: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -152,6 +161,8 @@ export default function Tasks() {
       initials: member.name.split(' ').filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase() || '?',
     })),
   ], [users]);
+
+  useEffect(()=>{setFilterProperty(null);setFilterLandlord(null);setFilterTenant(null);setSelectedIds([]);setShowAdd(false);},[portfolioFilter]);
 
   const load = useCallback(async () => {
     try {

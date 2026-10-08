@@ -8,6 +8,8 @@ import path from 'node:path';
 import { once } from 'node:events';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
+import sharp from 'sharp';
+import {createHash,randomBytes} from 'node:crypto';
 import { PDFDocument } from 'pdf-lib';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -43,7 +45,15 @@ try {
   const password = 'Local-test-password-386!';
   for (const role of ['admin', 'staff', 'viewer']) await sql('INSERT INTO users(email,password,name,role) VALUES($1,$2,$3,$4)', [`${role}@example.test`, await bcrypt.hash(password, 4), `Test ${role}`, role]);
   const auth = {};
-  for (const role of ['admin', 'staff', 'viewer']) auth[role] = (await ok('/api/auth/login', { method: 'POST', body: { email: `${role}@example.test`, password } })).token;
+  for (const role of ['admin', 'staff', 'viewer']) {
+    const user=await one('SELECT id FROM users WHERE email=$1',[role+'@example.test']);
+    const challenge=await ok('/api/auth/login',{method:'POST',body:{email:role+'@example.test',password}});
+    assert.equal(challenge.requiresTwoFactor,true);
+    const device=randomBytes(32).toString('hex'),sha=value=>createHash('sha256').update(value).digest('hex');
+    await sql("INSERT INTO trusted_login_devices(token_hash,user_id,user_agent_hash,expires_at) VALUES($1,$2,$3,NOW()+INTERVAL '1 hour')",[sha(device),user.id,sha('fresh-onboarding-test')]);
+    const login=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json','User-Agent':'fresh-onboarding-test',Cookie:'fleming_device_'+user.id+'='+device},body:JSON.stringify({email:role+'@example.test',password})});
+    assert.equal(login.status,200);auth[role]=(await login.json()).token;assert(auth[role]);
+  }
   await test('anonymous requests and viewer writes are rejected; staff cannot administer users', async () => {
     assert.equal((await request('/api/tenants')).status, 401);
     assert.equal((await request('/api/landlords', { method: 'POST', token: auth.viewer, body: { name: 'Forbidden' } })).status, 403);
@@ -63,6 +73,7 @@ try {
   const applicants = [];
   for (const name of ['Alex', 'Jamie']) applicants.push(await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,phone_1,linked_property_id,is_joint_application,holding_deposit_received,application_form_completed,application_review_status,credit_check_completed,monthly_rent_agreed,security_deposit_amount,holding_deposit_amount,current_address_1) VALUES($1,'Test',$2,'07700900001',$3,1,1,1,'approved',1,1000,1000,200,'Previous Test Address') RETURNING id", [name, `${name.toLowerCase()}@example.test`, property.id]));
   const [a, b] = applicants.map(x => x.id);
+  await sql('UPDATE tenant_enquiries SET guarantor_required=FALSE WHERE id=ANY($1::int[])',[[a,b]]);
   await sql('UPDATE tenant_enquiries SET joint_partner_id=$2 WHERE id=$1', [a,b]); await sql('UPDATE tenant_enquiries SET joint_partner_id=$2 WHERE id=$1', [b,a]);
   for (const id of [a,b]) await sql("INSERT INTO documents(entity_type,entity_id,doc_type,filename,original_name,mime_type,review_status) VALUES('tenant_enquiry',$1,'Credit Check Report','sample.pdf',$2,'application/pdf','approved')", [id, `Credit for ${id}.pdf`]);
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date());
@@ -96,7 +107,7 @@ try {
     const preview = await ok(`/api/tenant-enquiries/${a}/schedule-handover/email-preview`,{method:'POST',token:auth.staff,body:{handover_date:today,handover_time:'10:30',assigned_to:'Test staff'}});
     assert.match(preview.body_html, /10:30/); assert.equal((await one('SELECT count(*)::int AS n FROM email_messages')).n,0);
   });
-  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l1kAAAAASUVORK5CYII=';
+  const png = 'data:image/png;base64,'+(await sharp({create:{width:200,height:60,channels:4,background:'#222222'}}).png().toBuffer()).toString('base64');
   await test('signature requires affirmative consent and a decodable image',async()=>{
     assert.equal((await request(`/api/public/tenancy-agreements/${ta}/sign`,{method:'POST',body:{signature_name:'Alex Test',signature:png}})).status,400);
     assert.equal((await request(`/api/public/tenancy-agreements/${ta}/sign`,{method:'POST',body:{signature_name:'Alex Test',signature:'data:image/png;base64,aGVsbG8=',accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true}})).status,400);
@@ -109,7 +120,9 @@ try {
     const docs=await sql("SELECT * FROM documents WHERE doc_type='Signed Tenancy Agreement'"); assert.equal(docs.length,3); assert.equal(new Set(docs.map(x=>x.filename)).size,1);
     for(const x of await sql('SELECT onboarding_step FROM tenant_enquiries WHERE id=ANY($1::int[])',[[a,b]])) assert(x.onboarding_step>=7);
     const signedPdf=await PDFDocument.load(readFileSync(path.join(dir,row.signed_filename))); assert(signedPdf.getPageCount()>4);
-    const signedText=spawnSync('pdftotext',[path.join(dir,row.signed_filename),'-'],{encoding:'utf8'});assert.equal(signedText.status,0);assert((signedText.stdout.match(/Signed on:/g)||[]).length>=11,'Applicable receipt acknowledgements, both tenants and landlord sign in the addendum; tenants also sign the main agreement');
+    const signedText=spawnSync('pdftotext',['-layout',path.join(dir,row.signed_filename),'-'],{encoding:'utf8'});assert.equal(signedText.status,0);assert.equal((signedText.stdout.match(/Signed on:/g)||[]).length,5,'Both tenants sign the main agreement; landlord and both tenants sign the addendum');
+    const receipts=signedText.stdout.slice(0,signedText.stdout.lastIndexOf('Electronic Signature Certificate'));
+    for(const name of ['Alex Łukasz Test','Jamie Test'])assert((receipts.split(name).length-1)>=3,'Both signers must appear against the applicable receipt acknowledgements');
     assert(!signedText.stdout.includes('The electronic signature certificate records'));
     const certificate=signedText.stdout.slice(signedText.stdout.lastIndexOf('Electronic Signature Certificate'));
     assert.match(certificate,/IP address:/);assert.match(certificate,/192\.0\.2\./);assert(!certificate.includes('Robert'));assert(!certificate.includes('Landlord'));

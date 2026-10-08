@@ -1,5 +1,6 @@
 export type NotificationCategory='landlord'|'tenant'|'maintenance'|'property'|'compliance'|'finance'|'general';
-export function notificationCategory(item:{title:string;href:string}):NotificationCategory {
+export function notificationCategory(item:{title:string;href:string;category?:NotificationCategory}):NotificationCategory {
+ if(item.category)return item.category;
  const title=item.title.toLowerCase(),href=item.href;
  if(/maintenance|repair/.test(title)||href.startsWith('/maintenance'))return 'maintenance';
  if(/\b(epc|eicr|gas safety|compliance)\b/.test(title))return 'compliance';

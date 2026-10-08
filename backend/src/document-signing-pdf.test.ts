@@ -6,7 +6,7 @@ it('records IP, local date/time and UTC timestamp only once every recipient has 
  await expect(appendSigningCertificate(pdf,[{name:'Waiting',signed_at:''}],'abc')).rejects.toThrow('All recipients');
  expect(pdf.getPageCount()).toBe(1);
  const lines=(await appendSigningCertificate(pdf,[{name:'Test Signer',email:'test@example.test',signed_at:'2026-09-28T13:05:06Z',signing_ip:'203.0.113.42'}],'a'.repeat(64))).flat().join('\n');
- expect(lines).toContain('IP address: 203.0.113.42');expect(lines).toContain('28/09/2026, 14:05:06 (Europe/London)');expect(lines).toContain('2026-09-28T13:05:06.000Z');expect(lines).toContain('a'.repeat(64));expect(pdf.getPageCount()).toBe(2);
+ expect(lines).toContain('IP address: 203.0.113.42');expect(lines).toContain('28/09/2026, 14:05:06 (Europe/London)');expect(lines).toContain('2026-09-28T13:05:06.000Z');expect(lines).not.toContain('a'.repeat(64));expect(pdf.getKeywords()).toContain('a'.repeat(64));expect(pdf.getPageCount()).toBe(2);
 });
 it('continues the certificate onto additional pages for many signers',async()=>{
  const pdf=await PDFDocument.create();pdf.addPage();
@@ -44,7 +44,7 @@ it('includes stored declarations and signature alongside branded letterhead with
  const pdf=await PDFDocument.create();pdf.addPage();
  const consent_snapshot=signingConsentSnapshot({consentVersion:SIGNING_CONSENT_VERSION,acknowledgements:{terms:true,legalEffect:true,declaration:true}});
  const sheets=await appendSigningCertificate(pdf,[{name:'Alex Example',signed_at:'2026-09-28T11:12:54Z',signature,consent_snapshot}],'a'.repeat(64));
- expect(sheets.flat().join(' ')).toContain('signing creates legally binding obligations');expect(sheets.flat().join(' ')).toContain('Declaration version: 2026-09-28');
+ expect(sheets.flat().join(' ')).toContain('signing creates legally binding obligations');expect(sheets.flat().join(' ')).not.toContain('Declaration version:');
  expect(pdf.getPageCount()).toBe(2);expect(pdf.getPage(1).node.Resources()?.toString()).toContain('Image');
  const old=await PDFDocument.create();old.addPage();const lines=await appendSigningCertificate(old,[{name:'Earlier signer',signed_at:'2026-09-28T11:12:54Z',signature}],'hash');
  expect(lines.flat().join(' ')).toContain('Individual declaration wording was not recorded');expect(lines.flat().join(' ')).not.toContain('I have read');

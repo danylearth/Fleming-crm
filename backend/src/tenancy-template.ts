@@ -104,7 +104,7 @@ export function formatClientContractLayout(xml:string):string {
         if(tag[0].startsWith('</')){if(--rowDepth===0){lastStart=rowStart;lastEnd=tag.index!+tag[0].length;}}
         else if(rowDepth++===0)rowStart=tag.index!;
       }
-      table=pageBreak+table.slice(0,lastStart)+'</w:tbl>'+paragraphs(table.slice(lastStart,lastEnd));
+      table=table.slice(0,lastStart)+'</w:tbl>'+paragraphs(table.slice(lastStart,lastEnd));
     }
     if(index===2)table=paragraphs(table);
     if(index===3)table=pageBreak+table;
@@ -135,10 +135,15 @@ export function formatClientContractLayout(xml:string):string {
 
 /** Presentation shared by owned and client APTs, before personal fields are filled. */
 export function formatAptPresentation(xml:string,hasGas:boolean):string {
+  xml=xml.replace(/<w:tr\b(?:(?!<w:tr\b)[\s\S])*?<\/w:tr>/g,row=>{
+    if(!row.includes('This agreement is dated')||!row.includes('{{AGREEMENT_DATE}}'))return row;
+    return '<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:tcW w:w="11160" w:type="dxa"/><w:gridSpan w:val="2"/><w:tcBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/></w:tcBorders></w:tcPr><w:p><w:pPr><w:keepLines/><w:spacing w:line="276" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>This agreement is dated {{AGREEMENT_DATE}}.</w:t></w:r></w:p></w:tc></w:tr>';
+  });
   const text=(part:string)=>[...part.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m=>m[1]).join('').trim();
-  if(!hasGas)xml=xml.replace(/<w:tr\b(?:(?!<w:tr\b)[\s\S])*?<\/w:tr>/g,row=>{
+  xml=xml.replace(/<w:tr\b(?:(?!<w:tr\b)[\s\S])*?<\/w:tr>/g,row=>{
     const label=text(row.match(/<w:tc\b[\s\S]*?<\/w:tc>/)?.[0]||row);
-    return ['Gas Safety Certificate','{{GAS_ACKNOWLEDGEMENT}}'].includes(label)?'':row;
+    if(/^The Renters[’'] Rights Act Information Sheet 2026$/.test(label))return '';
+    return !hasGas&&['Gas Safety Certificate','{{GAS_ACKNOWLEDGEMENT}}'].includes(label)?'':row;
   });
   const subheadings=new Set(['Rent and other payments','Utilities','Use of the property','Leaving the property empty','Condition of the property','Letters and notices','Access to the property','Keys and alarm codes']);
   const minor=new Set(['a','an','the','and','or','but','of','in','on','at','by','for','to','as','if']);
@@ -147,6 +152,11 @@ export function formatAptPresentation(xml:string,hasGas:boolean):string {
     const value=text(p),heading=/^\d+\.\s+[A-Za-z]/.test(value)||subheadings.has(value),sectionC=value==='Section C - Terms and Conditions';
     // The stored last-rendered break is stale after repagination.
     p=p.replace(/<w:lastRenderedPageBreak\s*\/>/g,'');
+    if(/^Section A\s*[-–]\s*Main Terms of the Agreement$/i.test(value)){
+      p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');
+      if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
+      return p.replace(/<w:spacing[^>]*\/>/g,'').replace(/<w:keepNext[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:keepNext/><w:spacing w:before="480" w:after="120"/>');
+    }
     if(value.includes('is not a party to this')&&value.includes('Fleming')){
       p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');
       if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
@@ -165,6 +175,124 @@ export function formatAptPresentation(xml:string,hasGas:boolean):string {
   });
   const title='<w:p><w:pPr><w:keepNext/><w:keepLines/><w:jc w:val="center"/><w:spacing w:before="0" w:after="240"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/></w:rPr><w:t>Assured Periodic Tenancy Agreement</w:t></w:r></w:p>';
   return xml.replace('<w:body>','<w:body>'+title);
+}
+
+/** Free narrative clauses from oversized table rows so normal pagination can work. */
+export function formatAgreementFlow(xml:string,values:Record<string,string>):string {
+ xml=xml.replace(/<w:p\s*\/>/g,'');
+ const text=(part:string)=>[...part.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m=>m[1]).join('').trim();
+ const ranges:{start:number;end:number}[]=[];let depth=0,start=0;
+ for(const tag of xml.matchAll(/<w:tbl(?=[\s>])[^>]*>|<\/w:tbl>/g)){
+  if(tag[0].startsWith('</')){if(--depth===0)ranges.push({start,end:tag.index!+tag[0].length});}
+  else if(depth++===0)start=tag.index!;
+ }
+ for(const range of ranges.reverse()){
+  const table=xml.slice(range.start,range.end),content=text(table);
+  if(!/This agreement is dated|Shared Facilities|Ending the Tenancy/.test(content)||content.includes('Section B - Definitions'))continue;
+  const properties=table.match(/<w:tblPr>[\s\S]*?<\/w:tblPr>/)?.[0]||'',grid=table.match(/<w:tblGrid>[\s\S]*?<\/w:tblGrid>/)?.[0]||'';
+  let result='',rows='';const flush=()=>{if(rows){result+='<w:tbl>'+properties+grid+rows+'</w:tbl>';rows='';}};
+  for(const match of table.matchAll(/<w:tr(?:\s[^>]*)?>[\s\S]*?<\/w:tr>/g)){
+   const cells=[...match[0].matchAll(/<w:tc(?:\s[^>]*)?>[\s\S]*?<\/w:tc>/g)];
+   if(cells.length===1){flush();result+=cells[0][0].replace(/^<w:tc(?:\s[^>]*)?>/,'').replace(/<\/w:tc>$/,'').replace(/<w:tcPr>[\s\S]*?<\/w:tcPr>/,'');}
+   else rows+=match[0];
+  }
+  flush();xml=xml.slice(0,range.start)+result+xml.slice(range.end);
+ }
+ const paragraphSpacing=(p:string,before:number,after:number)=>{
+  p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
+  return p.replace(/<w:spacing[^>]*\/>/g,'').replace(/<w:contextualSpacing[^>]*\/>/g,'').replace('<w:pPr>',`<w:pPr><w:contextualSpacing w:val="0"/><w:spacing w:before="${before}" w:after="${after}" w:line="276" w:lineRule="auto"/>`);
+ };
+ let narrative=true,addendum=false,receiptPage=false,mainTerms=true;
+ xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{
+  const value=text(p);
+  if(/^Section B/.test(value))mainTerms=false;
+  if(value==='Signed as an agreement')narrative=false;
+  if(value==='Addendum to Tenancy Agreement'){narrative=true;addendum=true;}
+  if(value.startsWith('Please sign below')){narrative=false;addendum=false;receiptPage=true;}
+  if(receiptPage&&value==='{{TENANT_NAMES}}')p=paragraphSpacing(p,240,60);
+  if(p.includes('{{TENANT_SIGNING_SECTIONS}}'))p=p.replace(/<w:r(?:\s[^>]*)?>[\s\S]*?<\/w:r>/g,run=>run.replace(/<w:rPr>[\s\S]*?<\/w:rPr>/g,'').replace(/(<w:r(?:\s[^>]*)?>)/,'$1<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>'));
+  if(!narrative)return p;
+  if(!value&&!/<w:drawing|<w:pict|<w:sectPr|<w:pageBreakBefore|<w:br[^>]*w:type="page"/.test(p))return '';
+  if(value==='{{DEPOSIT_CONTRIBUTOR}}'&&!values.DEPOSIT_CONTRIBUTOR)return '';
+  p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
+  const heading=value.length<110&&/<w:b(?:\s[^>]*)?\/>/.test(p)&&/<w:u\b/.test(p);
+  const longField=[...value.matchAll(/\{\{([A-Z_]+)\}\}/g)].some(m=>(values[m[1]]||'').length>700);
+  p=p.replace(/<w:keepLines[^>]*\/>/g,'').replace(/<w:widowControl[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:widowControl/><w:keepLines'+(longField?' w:val="0"':'')+'/>');
+  if(heading)p=p.replace(/<w:spacing[^>]*\/>/g,'').replace(/<w:keepNext[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:keepNext/><w:spacing w:before="120" w:after="60" w:line="276" w:lineRule="auto"/>');
+  if(mainTerms&&!heading&&value.length>110&&!p.includes('<w:numPr>'))p=paragraphSpacing(p,0,120);
+  if(mainTerms&&/account details are:|cleared funds to:/.test(value))p=p.replace(/<w:keepNext[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:keepNext/>');
+  if(value.startsWith('Your contact details provided'))p=p.replace(/<w:pageBreakBefore[^>]*\/>/g,'').replace(/<w:keepNext[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:keepNext/>');
+  if(addendum&&value){
+   const label=['It is agreed that:','between the Landlord:','and you, the Tenant(s):'].includes(value);
+   p=paragraphSpacing(p,0,value==='Addendum to Tenancy Agreement'||value==='{{TENANT_NAMES}}'?160:label?40:p.includes('<w:numPr>')?100:120);
+   if(label)p=p.replace('<w:pPr>','<w:pPr><w:keepNext/>');
+  }
+  if(value.includes('{{OCCUPIERS}}')){p=p.replace(/<w:br\s*\/>/g,'').replace('property:{{OCCUPIERS}}','property: {{OCCUPIERS}}');if(!longField)p=p.replace('<w:pPr>','<w:pPr><w:keepNext/>');}
+  if(value==='Parking (if allocated):'||value.endsWith('shared facilities and common parts:'))p=p.replace('<w:pPr>','<w:pPr><w:keepNext/>');
+  return p;
+ });
+ xml=xml.replace(/<w:tr(?:\s[^>]*)?>[\s\S]*?<\/w:tr>/g,row=>{
+  const label=text(row.match(/<w:tc(?:\s[^>]*)?>[\s\S]*?<\/w:tc>/)?.[0]||'');
+  const receipt=/^(Written Statement of Terms|EPC$|EICR$|Gas Safety Certificate$|\{\{GAS_ACKNOWLEDGEMENT\}\}$)/.test(label),intro=label.startsWith('Please sign below');
+  if(!receipt&&!intro)return row;
+  row=row.replace(/<w:trHeight[^>]*\/>/g,'');
+  if(receipt)row=row.replace('<w:trPr>','<w:trPr><w:trHeight w:val="760" w:hRule="atLeast"/>');
+  row=row.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{
+   if(!text(p)&&!/<w:drawing|<w:pict/.test(p))return '';
+   p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
+   p=p.replace(/<w:spacing[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:spacing w:before="0" w:after="'+(intro?'120':'0')+'" w:line="240" w:lineRule="auto"/>');
+   if(receipt)p=p.replace(/<w:r(?:\s[^>]*)?>[\s\S]*?<\/w:r>/g,run=>run.includes('<w:rPr>')?run.replace('<w:rPr>','<w:rPr><w:b/><w:bCs/>'):run.replace(/(<w:r(?:\s[^>]*)?>)/,'$1<w:rPr><w:b/><w:bCs/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>'));return p;
+  });
+  return row.replace(/<w:tcPr>/g,'<w:tcPr><w:tcMar><w:top w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/></w:tcMar>');
+ });
+ xml=xml.replace(/<w:tbl\b(?:(?!<w:tbl\b)[\s\S])*?<\/w:tbl>/g,table=>{
+  const contact=text(table).startsWith('Name(s):');
+  if(!contact&&(!/\{\{(?:CLIENT_|BANK_)SORT_CODE\}\}/.test(table)||!text(table).startsWith('Sort Code:')))return table;
+  const rows=[...table.matchAll(/<w:tr(?:\s[^>]*)?>[\s\S]*?<\/w:tr>/g)];let index=0;
+  return table.replace(/<w:tr(?:\s[^>]*)?>[\s\S]*?<\/w:tr>/g,row=>{
+   const keep=++index<rows.length||contact;
+   return row.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>p.replace(/<w:keepNext[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:keepNext w:val="'+(keep?'1':'0')+'"/>'));
+  });
+ });
+ xml=xml.replace(/<w:tbl(?:\s[^>]*)?>[\s\S]*?<\/w:tbl>/g,table=>text(table).startsWith('Addendum to Tenancy Agreement')?table.replace(/<w:tr(?:\s[^>]*)?>[\s\S]*?<\/w:tr>/g,row=>!text(row)&&!/<w:drawing|<w:pict/.test(row)?'':row.replace(/<w:trHeight[^>]*\/>/g,'').replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>!text(p)&&!/<w:drawing|<w:pict|<w:sectPr|<w:pageBreakBefore|<w:br[^>]*w:type="page"/.test(p)?'':p)):table);
+ // A break-only paragraph can itself spill onto a new page, creating a blank
+ // sheet. Attach its break to the following content instead.
+ let pendingBreak=false;
+ xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{
+  if(!text(p)&&/<w:br[^>]*w:type="page"/.test(p)&&!/<w:drawing|<w:pict|<w:sectPr/.test(p)){pendingBreak=true;return '';}
+  if(pendingBreak&&text(p)){pendingBreak=false;p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');p=p.replace(/<w:pageBreakBefore[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:pageBreakBefore/>');}return p;
+ });
+ return xml.replace(/(<w:tc(?:\s[^>]*)?>)([\s\S]*?)(<\/w:tc>)/g,(_all,open,content,close)=>open+content+(content.includes('<w:p')?'':'<w:p/>')+close);
+}
+
+/** Keep name-to-signature spacing equal in both main and addendum signing blocks. */
+export function formatSignatureSpacing(xml:string):string {
+ const text=(p:string)=>[...p.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m=>m[1]).join('').trim();
+ const spacing=(p:string,before:number,after:number)=>{
+  p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
+  return p.replace(/<w:spacing[^>]*\/>/g,'').replace(/<w:contextualSpacing[^>]*\/>/g,'').replace('<w:pPr>',`<w:pPr><w:contextualSpacing w:val="0"/><w:spacing w:before="${before}" w:after="${after}" w:line="276" w:lineRule="auto"/>`);
+ };
+ let signing=false,afterName=false,mainSigning=false,mainDate=0;
+ return xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{
+  const value=text(p);
+  if(value==='Signed as an agreement'){signing=true;mainSigning=true;afterName=false;return spacing(p,360,180).replace('<w:pPr>','<w:pPr><w:keepNext/>');}
+  if(/^Addendum to|^Please sign below/.test(value)){signing=false;mainSigning=false;afterName=false;}
+  if(/^Signed by the parties/.test(value))signing=true;
+  if(!signing)return p;
+  if(mainSigning){
+   if(value==='{{TENANT_SIGNING_SECTIONS}}')return spacing(p,0,0).replace('<w:pPr>','<w:pPr><w:keepNext/><w:keepLines/>');
+   if(!value&&!/<w:br|<w:drawing|<w:sectPr/.test(p))return '';
+   if(/^(Between the Landlord:|And you, the Tenant\(s\):)$/.test(value))return spacing(p,value.startsWith('And')?360:0,80).replace('<w:pPr>','<w:pPr><w:keepNext/>');
+   if(['{{LANDLORD_SIGNATORY}}','{{TENANT_NAMES}}'].includes(value)||value.includes('(Managing Director)')){p=p.replace(/<w:sz(?:Cs)?\b[^>]*\/>/g,'').replace('<w:rPr>','<w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/>');return spacing(p,0,80).replace('<w:pPr>','<w:pPr><w:keepNext/>');}
+   if(value==='Landlord signature and date:')return spacing(p,0,900).replace('<w:pPr>','<w:pPr><w:keepNext/>');
+   if(value==='Signature:')return spacing(p.replace(/<w:drawing\b[\s\S]*?<\/w:drawing>/g,''),0,720).replace('<w:pPr>','<w:pPr><w:keepNext/>');
+   if(value==='Date:'){const date=spacing(p,0,0);return ++mainDate===1?date.replace('<w:pPr>','<w:pPr><w:keepNext/>'):date;}
+  }
+  if(!value&&signing&&!/<w:br|<w:drawing|<w:sectPr/.test(p))return '';
+  if(['{{LANDLORD_SIGNATORY}}','{{TENANT_NAMES}}'].includes(value)){afterName=true;return spacing(p,0,80).replace('<w:pPr>','<w:pPr><w:keepNext/>');}
+  if(value){afterName=false;if(value==='Signed:')return spacing(p,0,1080).replace(/<w:keepNext[^>]*\/>/g,'');if(/^(?:Signature:|Landlord signature and date:)$/.test(value))return spacing(p,0,0);}
+  return p;
+ });
 }
 
 /** Preserve the supplied contract's clauses, tables, headers and page settings. */
@@ -198,14 +326,26 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         TENANT_EMAILS: input.tenants.map(t => t.email).filter(Boolean).join('; '),
         TENANT_PHONES: input.tenants.map(t => t.phone).filter(Boolean).join('; '),
         TENANT_ADDRESSES: input.tenants.map(t => `${t.name}: ${t.address || 'Not supplied'}`).join('\n'),
-        TENANT_SIGNING_SECTIONS: input.tenants.map((t, i) => `Tenant ${i + 1}: ${t.name}\nSignature and date:\n\n`).join('\n'),
+        TENANT_SIGNING_SECTIONS: input.tenants.map(t => `${t.name}\nTenants Signature:\n\n\n\n`).join('\n\n'),
         DEPOSIT_CONTRIBUTOR: input.depositContributorDetails ? `Deposit contribution disclosed by the tenant(s): ${input.depositContributorDetails}` : '',
         GAS_ACKNOWLEDGEMENT: input.hasGas ? 'Gas Safety Certificate' : 'Gas Safety Certificate: not applicable (no gas connection)',
       };
       let xml = zip.file('word/document.xml')!.asText();
       if(isClient)xml=prepareClientPaymentTemplate(xml,input.serviceType);
       xml=isClient?formatClientContractLayout(xml):formatContractLayout(xml);
-      xml=formatAptPresentation(xml,input.hasGas);
+      xml=formatSignatureSpacing(formatAgreementFlow(formatAptPresentation(xml,input.hasGas),values));
+      // Only the signing labels change; preserve the surrounding agreement wording.
+      let signatureRole='Landlords',mainSignatureLabels=false;
+      xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{
+        const value=[...p.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m=>m[1]).join('').trim();
+        if(value==='Signed as an agreement')mainSignatureLabels=true;
+        if(value.startsWith('Addendum to'))mainSignatureLabels=false;
+        if(/Between the Landlord:|between the Landlord:/.test(value)||value==='{{LANDLORD_SIGNATORY}}'||value.includes('(Managing Director)'))signatureRole='Landlords';
+        if(/(?:And|and) you, the Tenant\(s\):/.test(value)||value==='{{TENANT_NAMES}}')signatureRole='Tenants';
+        const label=value==='Landlord signature and date:'?'Landlords Signature:':['Signature:','Signed:'].includes(value)?`${signatureRole} Signature:`:value==='Date:'||mainSignatureLabels&&value.startsWith('Date:')?'Dated Signed:':null;
+        if(!label)return p;let first=true;
+        return p.replace(/(<w:t(?:\s[^>]*)?>)[\s\S]*?(<\/w:t>)/g,(_m,open,close)=>{const replacement=first?label:'';first=false;return open+replacement+close;});
+      });
       if(input.companySettings){xml=companyTemplateText(xml,input.companySettings,isClient?'client':'internal');await applyCompanyImages(zip,input.companySettings,!isClient);}
       xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,paragraph=>paragraph.replace(/<[^>]+>/g,'').includes('The electronic signature certificate records each named tenant')?'':paragraph);
       xml = xml.replace(/\{\{([A-Z_]+)\}\}/g, (_match, key) => {

@@ -1,10 +1,12 @@
+import {useMemo as usePortfolioMemo} from 'react';
+import {usePortfolioScope} from '../context/PortfolioScope';
 import { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
 import { GlassCard, Button, Input, Tag, SearchBar, EmptyState, DataTable, SearchDropdown, Select, DatePicker } from '../components/ui';
 import BulkActions from '../components/ui/BulkActions';
 import { useApi } from '../hooks/useApi';
 import { Plus, X, Wrench, MapPin, ChevronDown, ChevronUp, Search, Building2, User } from 'lucide-react';
-import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
+import { usePortfolio } from '../context/PortfolioContext';
 import { useParams } from 'react-router-dom';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -50,11 +52,14 @@ function formatDate(d: string) {
 }
 
 export default function Maintenance() {
+  const {scope} = usePortfolioScope();
   const api = useApi();
   const { confirmAction } = useNotifications();
   const { requestId } = useParams();
-  const [items, setItems] = useState<MaintenanceItem[]>([]);
-  const [properties, setProperties] = useState<{ id: number; address: string }[]>([]);
+  const [allPortfolioItems, setItems] = useState<MaintenanceItem[]>([]);
+  const items = usePortfolioMemo(() => allPortfolioItems.filter(row => scope.maintenance(row.id)), [allPortfolioItems,scope]);
+  const [allPortfolioProperties, setProperties] = useState<{ id: number; address: string }[]>([]);
+  const properties = usePortfolioMemo(() => allPortfolioProperties.filter(row => scope.property(row.id)), [allPortfolioProperties,scope]);
   const [error,setError]=useState('');
   const [members,setMembers]=useState<{id:number;name:string}[]>([]);
   const [owner,setOwner]=useState('all');
@@ -66,8 +71,10 @@ export default function Maintenance() {
   const [form, setForm] = useState({ title: '', description: '', priority: 'medium', property_id: '', assigned_to:'',follow_up_date:'',due_date:'' });
   const [propDropOpen, setPropDropOpen] = useState(false);
   const [propSearch, setPropSearch] = useState('');
-  const [tenants, setTenants] = useState<TenantOption[]>([]);
-  const [landlords, setLandlords] = useState<LandlordOption[]>([]);
+  const [allPortfolioTenants, setTenants] = useState<TenantOption[]>([]);
+  const tenants = usePortfolioMemo(() => allPortfolioTenants.filter(row => scope.tenant(row.id)), [allPortfolioTenants,scope]);
+  const [allPortfolioLandlords, setLandlords] = useState<LandlordOption[]>([]);
+  const landlords = usePortfolioMemo(() => allPortfolioLandlords.filter(row => scope.landlord(row.id)), [allPortfolioLandlords,scope]);
   // Filter state
   const [propertyFilter, setPropertyFilter] = useState<number | null>(null);
   const [tenantFilter, setTenantFilter] = useState<number | null>(null);
@@ -85,6 +92,8 @@ export default function Maintenance() {
     queueMicrotask(() => { if (!cancelled) setExpanded(requested); });
     return () => { cancelled = true; };
   }, [requestId]);
+
+  useEffect(()=>{setPropertyFilter(null);setTenantFilter(null);setLandlordFilter(null);setSelectedIds([]);setShowAdd(false);setExpanded(null);},[portfolioFilter]);
 
   const load = useCallback(async () => {
     try {
@@ -106,7 +115,7 @@ export default function Maintenance() {
     return acc;
   }, {} as Record<string, number>);
 
-  const portfolioFiltered = requestId ? items.filter(i=>i.id===Number(requestId)) : filterByPortfolio(items, portfolioFilter);
+  const portfolioFiltered = requestId ? items.filter(i=>i.id===Number(requestId)) : items;
   const filtered = portfolioFiltered.filter(i => {
     if(owner!=='all' && String(i.assigned_to||'unassigned')!==owner)return false;
     if (statusFilter === 'active' ? ['completed','closed','cancelled'].includes(i.status) : statusFilter !== 'all' && i.status !== statusFilter) return false;

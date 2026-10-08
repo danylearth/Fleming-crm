@@ -1,0 +1,23 @@
+const {chromium}=require('C:/Users/samfl/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+(async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{
+ const context=await browser.newContext({viewport:{width:1600,height:1000}}),page=await context.newPage();
+ await page.goto(process.env.CRM_PREVIEW_URL||'http://127.0.0.1:8975/');await page.getByRole('button',{name:'Yes — Guarantor Required',exact:true}).click();
+ await page.getByRole('button',{name:'Preview SMS',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:'Preview SMS',exact:true});await dialog.waitFor();
+ const expected='Hi there Robin, you have been nominated to support Casey Taylor and Jamie Taylor as a guarantor on their tenancy agreement with Fleming Lettings. We have just sent you important information to your nominated email address provided by the tenants. If you have not received this, please call our office on 01902 212 415.';
+ await dialog.getByText(expected,{exact:true}).waitFor();await dialog.getByRole('button',{name:'Close',exact:true}).click();
+ await page.getByLabel('Send Email',{exact:true}).uncheck();if(!await page.getByRole('button',{name:'Send Application & Deed',exact:true}).isDisabled())throw Error('Allowed SMS before email');await page.getByLabel('Send Email',{exact:true}).check();
+ await page.getByRole('button',{name:'Send Application & Deed',exact:true}).click();await page.getByRole('button',{name:'Confirm',exact:true}).click();await page.getByRole('button',{name:'Resend Application & Deed',exact:true}).waitFor();
+ if(await page.getByRole('link',{name:'Open Test Invitation'}).count())throw Error('Test link still in actions');
+ const read=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('fleming-crm-preview-guarantor')));
+ let state=await read();if(state.invitationDelivery.smsMessage.text!==expected)throw Error('SMS differs from preview');
+ const form=await context.newPage();await form.goto(new URL('/guarantor/index.html#apply',page.url()).href);await form.getByRole('heading',{name:'Your Guarantor Application',exact:true}).waitFor();await form.locator('[name=introRead]').check();await form.getByRole('button',{name:'Confirm & Continue 👉',exact:true}).click();await form.getByRole('heading',{name:'Your Details',exact:true}).waitFor();
+ await page.bringToFront();await page.getByRole('button',{name:'Refresh guarantor audit',exact:true}).click();await page.getByRole('region',{name:'Guarantor audit'}).getByText(/Last opened/).waitFor();
+ await page.evaluate(()=>fetch('/api/preview/guarantor',{method:'POST',body:JSON.stringify({action:'save',address:'Saved test draft'})}));
+ await page.getByLabel('Send SMS',{exact:true}).uncheck();await page.getByRole('button',{name:'Resend Application & Deed',exact:true}).click();await page.getByRole('button',{name:'Confirm',exact:true}).click();await page.getByText(/Application invitation resent in this test/).waitFor();
+ state=await read();if(state.form.address!=='Saved test draft'||state.lastResent.sms||!state.openedAt)throw Error('Resend lost draft/audit or ignored SMS toggle');
+ await page.getByLabel('Send Email',{exact:true}).uncheck();if(!await page.getByRole('button',{name:'Resend Application & Deed',exact:true}).isDisabled())throw Error('Resend allowed with no method');
+ await page.getByLabel('Send SMS',{exact:true}).check();await page.getByRole('button',{name:'Resend Application & Deed',exact:true}).click();await page.getByRole('button',{name:'Confirm',exact:true}).click();state=await read();if(!state.lastResent.sms||state.lastResent.email)throw Error('SMS-only resend choice ignored');
+ await page.getByText('View activity history',{exact:true}).click();await page.screenshot({path:'docs/reviews/crm-2026-09-30/guarantor-delivery-audit.png'});
+ console.log('SMS wording/preview, optional delivery, resend preserving draft, APT signing order and refreshed last-opened audit passed.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

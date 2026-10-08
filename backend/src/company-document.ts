@@ -76,8 +76,12 @@ export async function applyCompanyImages(zip:PizZip,c:CompanySettings,hasCompany
     if(header){
       const lines:string[]=[];for(const part of c.registeredAddress.split(/,\s*|\n/)){for(const word of part.split(/\s+/)){if(!lines.length||lines[lines.length-1].length+word.length>32)lines.push(word);else lines[lines.length-1]+=' '+word;}}
       const x=Math.floor(w*.62),font=Math.min(w*.016,h*.7/Math.max(lines.length,1));
-      const {data}=await sharp(bytes).removeAlpha().extract({left:Math.floor(w*.5),top:Math.floor(h*.5),width:1,height:1}).raw().toBuffer({resolveWithObject:true});
-      svg=`<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg"><rect x="${x}" width="${w-x}" height="${h}" fill="rgb(${data[0]},${data[1]},${data[2]})"/><text fill="white" font-family="Arial" font-size="${font}">${lines.map((line,i)=>`<tspan x="${x+15}" y="${h*.15+(i+1)*font*1.2}">${escape(line)}</tspan>`).join('')}</text></svg>`;
+      const {data,info}=await sharp(bytes).removeAlpha().extract({left:Math.floor(w*.5),top:0,width:1,height:h}).raw().toBuffer({resolveWithObject:true});
+      const background=data.subarray(Math.floor(h*.5)*info.channels,Math.floor(h*.5)*info.channels+3);
+      // The source letterhead includes a white bottom margin. Preserve it when
+      // replacing the address, otherwise the right-hand edge extends below the logo.
+      let bottom=h;while(bottom>h/2&&background.some((v,c)=>Math.abs(data[(bottom-1)*info.channels+c]-v)>8))bottom--;
+      svg=`<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg"><rect x="${x}" width="${w-x}" height="${bottom}" fill="rgb(${background[0]},${background[1]},${background[2]})"/><text fill="white" font-family="Arial" font-size="${font}">${lines.map((line,i)=>`<tspan x="${x+15}" y="${h*.15+(i+1)*font*1.2}">${escape(line)}</tspan>`).join('')}</text></svg>`;
     }else{
       svg=`<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="white"/><path d="M40 ${h*.3} H${w-40}" stroke="#DC006D" stroke-width="2"/><g fill="#26083b" font-family="Arial" font-size="${w*.015}"><text x="40" y="${h*.65}">${escape(c.phone)}</text><text x="${w*.5}" y="${h*.65}" text-anchor="middle">${escape(c.website)}</text><text x="${w-40}" y="${h*.65}" text-anchor="end">${escape(c.email)}</text></g></svg>`;
     }

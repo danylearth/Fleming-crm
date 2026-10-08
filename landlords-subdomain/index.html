@@ -749,7 +749,18 @@
 .input-group input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),.input-group select,.custom-select-trigger {height:60px;min-height:60px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;}
 </style>
 <link rel="stylesheet" href="/form-typography.css">
-<script src="/form-capitalisation.js" defer></script></head>
+<script src="/form-capitalisation.js" defer></script><style>
+.registration-choices{grid-template-columns:repeat(3,minmax(0,1fr));gap:18px!important}
+.registration-choices .radio-option{min-width:0}
+.registration-choices .radio-option label{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:210px;padding:24px 12px;text-align:center;border-radius:16px}
+.registration-choices input:not(:checked)+label{color:#252525!important}.registration-choices input:checked+label{color:#fff!important}.registration-choices label>*{color:inherit!important}
+.registration-choices svg{width:48px;height:48px;flex-shrink:0}
+.registration-choices strong{font-family:Arial,sans-serif!important;font-size:20px}.registration-choices span{font-size:14px;font-weight:400;line-height:1.5}
+.registration-choices input:focus-visible+label{outline:3px solid #7e2275;outline-offset:4px}
+.step[data-step="1"] .button-group{margin-top:24px}
+@media(max-width:540px){.registration-choices{gap:10px!important}.registration-choices .radio-option label{min-height:170px;padding:18px 8px}.registration-choices svg{width:36px;height:36px}.registration-choices strong{font-size:18px}.registration-choices span{font-size:12px}}
+@media(max-width:420px){.registration-choices:has(#company){grid-template-columns:1fr}.registration-choices:has(#company) .radio-option label{min-height:100px;display:grid;grid-template-columns:40px 1fr;text-align:left;column-gap:16px}.registration-choices:has(#company) svg{grid-row:span 2}.registration-choices:has(#company) span{grid-column:2}}
+</style></head>
 <body>
     <div class="container">
         <!-- Header -->
@@ -773,23 +784,23 @@
                     <h2>Welcome! &#x1F44B;</h2>
                     <p class="step-description">Let's get you registered. Are you registering as an individual, joint owner or as a limited company?</p>
 
-                    <div class="radio-group">
+                    <div class="radio-group registration-choices">
                         <div class="radio-option">
                             <input type="radio" name="registration_type" id="sole" value="Sole" checked>
-                            <label for="sole">Sole ownership</label>
+                            <label for="sole"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg><strong>Sole</strong><span>Individual owner</span></label>
                         </div>
                         <div class="radio-option">
                             <input type="radio" name="registration_type" id="joint" value="Joint">
-                            <label for="joint">Joint ownership</label>
+                            <label for="joint"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M21 21v-2a6 6 0 0 0-4-5.65"/></svg><strong>Joint</strong><span>Two or more owners</span></label>
                         </div>
                         <div class="radio-option">
                             <input type="radio" name="registration_type" id="company" value="Limited Company">
-                            <label for="company">Limited company</label>
+                            <label for="company"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 21v-5h6v5M8 7h1m6 0h1M8 11h1m6 0h1"/></svg><strong>Company</strong><span>Limited company</span></label>
                         </div>
                     </div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
+                        <button type="button" class="btn btn-primary" onclick="nextStep()">Continue</button>
                     </div>
                 </div>
 

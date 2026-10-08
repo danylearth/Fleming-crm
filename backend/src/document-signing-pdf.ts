@@ -35,7 +35,7 @@ export async function prepareSigningPdf(input:Buffer,extension:string){
  return {bytes,pages:pdf.getPages().map(p=>{const {width,height}=displayedPage(p);return {width,height};})};
 }
 export async function signingPagePng(bytes:Buffer,page:number){const dir=await fs.mkdtemp(path.join(os.tmpdir(),'sign-preview-'));try{await fs.writeFile(path.join(dir,'source.pdf'),bytes);await exec('pdftoppm',['-cropbox','-f',String(page+1),'-l',String(page+1),'-singlefile','-scale-to','1200','-png',path.join(dir,'source.pdf'),path.join(dir,'page')],{timeout:30000,maxBuffer:1024*1024});return await fs.readFile(path.join(dir,'page.png'));}finally{await fs.rm(dir,{recursive:true,force:true});}}
-export async function completeSigningPdf(bytes:Buffer,fields:SignatureField[],recipients:any[],sourceHash:string){
+export async function completeSigningPdf(bytes:Buffer,fields:SignatureField[],recipients:any[],sourceHash:string,options:{includeCertificate?:boolean;certificatePageNumbers?:boolean}={}){
  const pdf=await PDFDocument.load(bytes),font=await pdf.embedFont(StandardFonts.Helvetica);
  for(const r of recipients){
   const signature=await pdf.embedPng(await cropSignature(r.signature));
@@ -45,7 +45,7 @@ export async function completeSigningPdf(bytes:Buffer,fields:SignatureField[],re
    const transform: [number,number,number,number,number,number]=rotation===90?[0,1,-1,0,box.x+box.width,box.y]:rotation===180?[-1,0,0,-1,box.x+box.width,box.y+box.height]:rotation===270?[0,-1,1,0,box.x,box.y+box.height]:[1,0,0,1,box.x,box.y];
    p.pushOperators(pushGraphicsState(),concatTransformationMatrix(...transform));
    if(f.type==='date'){
-    const date=new Date(r.signed_at).toLocaleDateString('en-GB',{timeZone:'Europe/London'}),size=Math.min(12,f.height*h*.65,(f.width*w)/font.widthOfTextAtSize(date,1));
+    const date=new Date(r.signed_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'Europe/London'}),size=Math.min(12,f.height*h*.65,(f.width*w)/font.widthOfTextAtSize(date,1));
     p.drawText(date,{x:f.x*w,y:h-(f.y+f.height)*h+(f.height*h-size)/2,size,font,color:rgb(0,0,0)});
    }else{
     const image=f.type==='initials'?initials!:signature,legacy=!f.type,fit=image.scaleToFit(f.width*w,Math.max(8,f.height*h-(legacy?18:0)));
@@ -55,5 +55,5 @@ export async function completeSigningPdf(bytes:Buffer,fields:SignatureField[],re
    p.pushOperators(popGraphicsState());
   }
  }
- await appendSigningCertificate(pdf,recipients,sourceHash);return Buffer.from(await pdf.save());
+ if(options.includeCertificate!==false)await appendSigningCertificate(pdf,recipients,sourceHash,options.certificatePageNumbers!==false);return Buffer.from(await pdf.save());
 }

@@ -1,3 +1,5 @@
+import {useMemo as usePortfolioMemo} from 'react';
+import {usePortfolioScope} from '../context/PortfolioScope';
 import {useOnboardingStarted} from '../hooks/useOnboardingStarted';
 import {ToolbarButton} from '../components/ui';
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -473,10 +475,13 @@ function PropertyDropdown({ properties, value, onChange, enquiries, linkedProper
 
 // ─── Main Page ───
 export default function EnquiriesKanban() {
+  const {scope} = usePortfolioScope();
   const api = useApi();
   const navigate = useNavigate();
-  const [enquiries, setEnquiries] = useState<EnquiryRaw[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [allPortfolioEnquiries, setEnquiries] = useState<EnquiryRaw[]>([]);
+  const enquiries = usePortfolioMemo(() => allPortfolioEnquiries.filter(row => scope.enquiry(row.id)), [allPortfolioEnquiries,scope]);
+  const [allPortfolioProperties, setProperties] = useState<Property[]>([]);
+  const properties = usePortfolioMemo(() => allPortfolioProperties.filter(row => scope.property(row.id)), [allPortfolioProperties,scope]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterPropId, setFilterPropId] = useState<string>('');

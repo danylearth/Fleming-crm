@@ -1,4 +1,22 @@
 type Client={query:(sql:string,values?:any[])=>Promise<{rows:any[]}>};
+export async function completeHoldingDepositFollowUps(client:Client,ids:number[]) {
+ if(!ids.length)return;
+ // Only close the deposit chase, never application or other enquiry follow-ups.
+ const completed=(await client.query(`UPDATE tasks t SET status='completed',completed_at=NOW(),updated_at=NOW()
+ FROM tenant_enquiries e WHERE t.entity_type='tenant_enquiry' AND t.entity_id=e.id
+ AND e.id=ANY($1::int[]) AND e.holding_deposit_received=1
+ AND t.task_type='follow_up' AND t.title LIKE 'Holding deposit follow-up:%'
+ AND t.status IN ('pending','in_progress') RETURNING t.id,t.entity_id,t.due_date`,[ids])).rows;
+ for(const task of completed){
+  await client.query(`UPDATE tenant_enquiries e SET follow_up_date=NULL,follow_up_return_status=NULL,updated_at=NOW()
+   WHERE (e.id=$1 OR e.joint_partner_id=$1) AND e.holding_deposit_received=1 AND e.follow_up_date=$2::date
+   AND e.follow_up_return_status='onboarding' AND NOT EXISTS(SELECT 1 FROM tasks other
+    WHERE other.entity_type='tenant_enquiry' AND other.entity_id=e.id AND other.task_type='follow_up'
+    AND other.status IN ('pending','in_progress') AND other.due_date=e.follow_up_date)`,[task.entity_id,task.due_date]);
+  await client.query(`INSERT INTO audit_log(user_email,action,entity_type,entity_id,changes)
+   VALUES('System','task_completed','task',$1,$2)`,[task.id,JSON.stringify({reason:'Holding deposit received',enquiry_id:task.entity_id,source:'holding_deposit_receipt'})]);
+ }
+}
 export function holdingDepositTotal(expected:unknown,manual:unknown,bank:unknown) {
   // Manual confirmation describes the total received, not an additional bank payment.
   const amount=Math.max(0,Math.round(Number(manual||0)*100),Math.round(Number(bank||0)*100));
@@ -44,6 +62,7 @@ export async function refreshHoldingDeposit(client:Client,ids:number[]) {
   const date=Number(bank?.amount||0)>=Number(manual||0)?bank?.received_date:record.holding_deposit_manual_date;
   await client.query(`UPDATE tenant_enquiries SET holding_deposit_bank_amount=$1,holding_deposit_bank_date=$2,holding_deposit_received=$3,holding_deposit_received_amount=$4,holding_deposit_received_date=$5,updated_at=NOW() WHERE id=$6`,[Number(bank?.amount||0),bank?.received_date||null,total.received?1:0,total.amount,date||null,record.id]);
  }
+ await completeHoldingDepositFollowUps(client,ids);
  await refreshDepositApplicationReady(client,ids);
 }
 export async function holdingParticipantGroups(client:Client,participants:{tenant_id?:number;enquiry_id?:number}[]) {

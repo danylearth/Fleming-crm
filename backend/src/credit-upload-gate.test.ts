@@ -25,7 +25,7 @@ async function uploadThroughGate(gateError:string|null,score='250'){
  const route=ts.transpileModule(source.slice(routeStart,routeEnd),{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText;
  const client={query:vi.fn(async()=>({rows:[]})),release:vi.fn()};
  const upload={single:(field:string)=>[multer({storage:multer.memoryStorage()}).single(field),(req:express.Request,_res:express.Response,next:()=>void)=>{if(req.file)req.file.filename='fictional-memory-only-report.pdf';next();}]};
- new Function('app','authMiddleware','requirePermission','upload','uploadsDir','path','fs','creditReportResult','isValidManualCreditScore','queryOne','pool','logAudit',route)(app,(_req:unknown,_res:unknown,next:()=>void)=>next(),()=> (_req:unknown,_res:unknown,next:()=>void)=>next(),upload,'tmp',path,fs,creditReportResult,isValidManualCreditScore,queryOne,{connect:async()=>client},vi.fn());
+ new Function('app','authMiddleware','requirePermission','upload','uploadsDir','path','fs','creditReportResult','isValidManualCreditScore','queryOne','pool','logAudit','linkedEntityIds','assertGuarantorsReady',route)(app,(_req:unknown,_res:unknown,next:()=>void)=>next(),()=> (_req:unknown,_res:unknown,next:()=>void)=>next(),upload,'tmp',path,fs,creditReportResult,isValidManualCreditScore,queryOne,{connect:async()=>client},vi.fn(),async()=>[84],vi.fn(async()=>{}));
  const server=createServer(app);servers.push(server);
  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
  const address=server.address();if(!address||typeof address==='string')throw Error('Test server unavailable');

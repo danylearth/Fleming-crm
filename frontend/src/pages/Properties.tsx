@@ -1,9 +1,11 @@
+import {useMemo as usePortfolioMemo} from 'react';
+import {usePortfolioScope} from '../context/PortfolioScope';
 import {ToolbarButton} from '../components/ui';
 import ServiceFeeFields,{validServiceFees} from '../components/ServiceFeeFields';
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import PropertyContractStep from '../components/PropertyContractStep';
+import PropertyOnboardingWizard from '../components/PropertyOnboardingWizard';
 import { GlassCard, Button, Input, Select, Tag, SearchBar, EmptyState, SearchDropdown } from '../components/ui';
 
 import BulkActions from '../components/ui/BulkActions';
@@ -11,7 +13,7 @@ import { useApi } from '../hooks/useApi';
 import { Building2, Plus, List, Map, X, Search, ChevronDown, User, Upload } from 'lucide-react';
 import CsvImport from '../components/ui/CsvImport';
 import PropertyMap from '../components/ui/PropertyMap';
-import { usePortfolio, filterByPortfolio } from '../context/PortfolioContext';
+import { usePortfolio } from '../context/PortfolioContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -59,16 +61,19 @@ function statusLabel(s: string) {
 }
 
 export default function Properties() {
+  const {scope} = usePortfolioScope();
   const api = useApi();
   const { confirmAction } = useNotifications();
   const navigate = useNavigate();
   const { isManager } = usePermissions();
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [allPortfolioProperties, setProperties] = useState<Property[]>([]);
+  const properties = usePortfolioMemo(() => allPortfolioProperties.filter(row => scope.property(row.id)), [allPortfolioProperties,scope]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
-  const [landlords, setLandlords] = useState<LandlordOption[]>([]);
+  const [allPortfolioLandlords, setLandlords] = useState<LandlordOption[]>([]);
+  const landlords = usePortfolioMemo(() => allPortfolioLandlords.filter(row => scope.landlord(row.id)), [allPortfolioLandlords,scope]);
   const [showAdd, setShowAdd] = useState(false);
   const [contractPropertyId, setContractPropertyId] = useState<number | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -83,7 +88,8 @@ export default function Properties() {
   });
   const [llDropOpen, setLlDropOpen] = useState(false);
   const [llSearch, setLlSearch] = useState('');
-  const [tenants, setTenants] = useState<TenantOption[]>([]);
+  const [allPortfolioTenants, setTenants] = useState<TenantOption[]>([]);
+  const tenants = usePortfolioMemo(() => allPortfolioTenants.filter(row => scope.tenant(row.id)), [allPortfolioTenants,scope]);
   // Filter state
   const [landlordFilter, setLandlordFilter] = useState<number | null>(null);
   const [tenantFilter, setTenantFilter] = useState<number | null>(null);
@@ -94,6 +100,8 @@ export default function Properties() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editMode, setEditMode] = useState(false);
+
+  useEffect(()=>{setLandlordFilter(null);setTenantFilter(null);setSelectedIds([]);setShowAdd(false);},[portfolioFilter]);
 
   const load = useCallback(() => {
     Promise.all([api.get('/api/properties'), api.get('/api/landlords'), api.get('/api/tenants')])
@@ -108,7 +116,7 @@ export default function Properties() {
 
   useEffect(() => { load(); }, [load]);
 
-  const portfolioFiltered = filterByPortfolio(properties, portfolioFilter);
+  const portfolioFiltered = properties;
   const visibleStatuses = portfolioFilter === 'internal'
     ? STATUSES.filter(status => !['let_only', 'full_management', 'rent_collection'].includes(status.key))
     : STATUSES;
@@ -353,7 +361,6 @@ export default function Properties() {
                   <th className="text-left py-2 px-3 font-medium">City/Town</th>
                   <th className="text-left py-2 px-3 font-medium hidden md:table-cell">Postcode</th>
                   <th className="text-left py-2 px-3 font-medium hidden lg:table-cell">Landlord</th>
-                  <th className="text-left py-2 px-3 font-medium hidden lg:table-cell">Tenant</th>
                   <th className="text-left py-2 px-3 font-medium">Status</th>{portfolioFilter!=='internal'&&<><th className="text-left py-2 px-3 font-medium w-px whitespace-nowrap">Service Type</th><th className="text-center py-2 px-3 font-medium w-px whitespace-nowrap">Contract Signed</th></>}
                   <th className="text-left py-2 px-3 font-medium w-px whitespace-nowrap hidden sm:table-cell">Rent</th>
                   <th className="text-left py-2 px-3 font-medium w-px whitespace-nowrap hidden md:table-cell">Type</th>
@@ -396,9 +403,6 @@ export default function Properties() {
                     <td className="py-2 px-3 hidden lg:table-cell">
                       <span className="text-xs text-[var(--text-secondary)]">{p.landlord_name || '—'}</span>
                     </td>
-                    <td className="py-2 px-3 hidden lg:table-cell">
-                      <span className="text-xs text-[var(--text-secondary)]">{p.current_tenant || '—'}</span>
-                    </td>
                     <td className="py-2 px-3">
                       <span className={`inline-flex items-center h-5 text-xs whitespace-nowrap px-2 rounded-full border font-medium ${statusStyle(p.status)}`}>
                         {statusLabel(p.status)}
@@ -418,34 +422,7 @@ export default function Properties() {
           </div>
         )}
         {/* Add Property Modal */}
-        {showAdd && <PropertyAddModal
-          landlords={landlords} form={form} setForm={setForm}
-          llDropOpen={llDropOpen} setLlDropOpen={setLlDropOpen}
-          llSearch={llSearch} setLlSearch={setLlSearch}
-          saving={saving}
-          onClose={() => { setShowAdd(false); resetForm(); }}
-          onSubmit={async () => {
-            if (form.has_gas === null || (form.is_leasehold && form.has_management_company === null)) return;
-            setSaving(true);
-            try {
-              const res = await api.post('/api/properties', {
-                ...form,
-                landlord_id: Number(form.landlord_id),
-                bedrooms: Number(form.bedrooms),
-                rent_amount: Number(form.rent_amount) || 0,
-                has_gas: form.has_gas,
-                has_management_company: form.is_leasehold ? form.has_management_company : false,
-              });
-              if(res.epc_notice)alert(res.epc_notice);
-              setShowAdd(false);
-              resetForm();
-              if (landlords.find(landlord => landlord.id === Number(form.landlord_id))?.landlord_type !== 'internal') setContractPropertyId(res.id);
-              else navigate(`/properties/${res.id}`);
-            } catch (e) { alert(e instanceof Error ? e.message : 'Property could not be created'); }
-            setSaving(false);
-          }}
-        />}
-        {contractPropertyId && <PropertyContractStep propertyId={contractPropertyId} onClose={() => navigate(`/properties/${contractPropertyId}`)} />}
+        {showAdd && <PropertyOnboardingWizard landlordId={portfolioFilter==='internal'?landlords.find(l=>l.landlord_type==='internal')?.id:undefined} onSaved={()=>load()} onClose={()=>{setShowAdd(false);load();}}/>}
       </div>
     </Layout>
   );

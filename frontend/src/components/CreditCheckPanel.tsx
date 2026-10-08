@@ -7,9 +7,9 @@ import {isValidCreditScore} from '../utils/creditChecks';
 
 type CreditEnquiry={id:number;first_name_1?:string;last_name_1?:string;application_review_status?:string;credit_check_completed?:number|boolean;credit_score?:string;credit_check_date?:string};
 type CreditDocument={id:number;doc_type:string;original_name:string};
-type Props={enquiry:CreditEnquiry;documents:CreditDocument[];onSaved:()=>Promise<void>;onView:(id:number,name:string)=>Promise<void>;onDownload:(id:number,name:string)=>Promise<void>};
+type Props={enquiry:CreditEnquiry;documents:CreditDocument[];onSaved:()=>Promise<void>;onView:(id:number,name:string)=>Promise<void>;onDownload:(id:number,name:string)=>Promise<void>;apiBase?:string};
 
-export default function CreditCheckPanel({enquiry,documents,onSaved,onView,onDownload}:Props){
+export default function CreditCheckPanel({enquiry,documents,onSaved,onView,onDownload,apiBase}:Props){
  const {token}=useAuth();const api=useApi();
  const [score,setScore]=useState(String(enquiry.credit_score||''));
  const [details,setDetails]=useState<Record<string,string>>({});
@@ -27,9 +27,9 @@ export default function CreditCheckPanel({enquiry,documents,onSaved,onView,onDow
   setSaving(true);setError('');
   try{
    const body=new FormData();body.append('score',score.trim());body.append('report',file);body.append('result',JSON.stringify({...details,bankruptcy:details.bankruptcy?details.bankruptcy==='true':undefined}));
-   const response=await fetch(`${import.meta.env.VITE_API_URL||''}/api/tenant-enquiries/${enquiry.id}/credit-check`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body});
+   const response=await fetch(`${import.meta.env.VITE_API_URL||''}${apiBase||'/api/tenant-enquiries/'+enquiry.id}/credit-check`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body});
    const result=await response.json();if(!response.ok)throw new Error(result.error||'Credit check could not be saved');
-   const [updatedRecord,updatedDocuments]=await Promise.all([api.get(`/api/tenant-enquiries/${enquiry.id}`),api.get(`/api/documents/tenant_enquiry/${enquiry.id}`)]);
+   const [updatedRecord,updatedDocuments]=await Promise.all([api.get(apiBase?`${apiBase}/record`:`/api/tenant-enquiries/${enquiry.id}`),api.get(apiBase?`${apiBase}/files`:`/api/documents/tenant_enquiry/${enquiry.id}`)]);
    setSaved({record:updatedRecord,documents:updatedDocuments});setFile(null);setReplacing(false);await onSaved();
   }catch(e){setError(e instanceof Error?e.message:'Credit check could not be saved');}finally{setSaving(false);}
  }

@@ -1,3 +1,4 @@
+import PortfolioBoundary from './PortfolioBoundary';
 import {usePermissions} from '../hooks/usePermissions';
 import FeedbackPanel from './FeedbackPanel';
 import NotificationsBell from './NotificationsBell';
@@ -54,7 +55,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
   const { theme, toggleTheme } = useTheme();
   const { portfolioFilter, setPortfolioFilter } = usePortfolio();
 
-  const visibleNavItems=navItems.filter(item => (item.to!=='/financials'||canAccessFinance()) && (!item.roles || (user?.role && item.roles.includes(user.role))));
+  const visibleNavItems=navItems.filter(item => (portfolioFilter !== 'internal' || !['/landlords','/landlord-enquiries'].includes(item.to)) && (item.to!=='/financials'||canAccessFinance()) && (!item.roles || (user?.role && item.roles.includes(user.role))));
   const headerIndex=Math.max(0,visibleNavItems.findIndex(item => item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)||(item.to==='/landlord-enquiries'&&location.pathname.startsWith('/bdm'))));
   const HeaderIcon=visibleNavItems[headerIndex]?.icon||DashboardIcon;
   const iconStyle=(index:number)=>({backgroundColor:['#f973161c','#3b82f61c','#a855f71c','#10b9811c','#ec48991c'][index%5],color:['#ea580c','#3b82f6','#a855f7','#10b981','#ec4899'][index%5]});
@@ -67,7 +68,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
   }, [location.pathname, title]);
 
   return (
-    <div className="flex h-screen bg-[var(--bg-page)] font-[family-name:var(--user-font)] text-[var(--text-primary)] overflow-hidden">
+    <div className="crm-workspace flex h-screen bg-[var(--bg-page)] font-[family-name:var(--user-font)] text-[var(--text-primary)] overflow-hidden">
       {/* Mobile overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 bg-[var(--overlay-bg)] z-40 md:hidden" onClick={() => setMobileOpen(false)} />
@@ -204,7 +205,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
         )}
 
         <main className="flex-1 overflow-y-auto">
-          {children}
+          <PortfolioBoundary>{children}</PortfolioBoundary>
         </main>
       </div>
 

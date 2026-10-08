@@ -1,0 +1,96 @@
+{
+  "backendRelease": "crm06-workflows-8",
+  "image": "registry.fly.io/fleming-crm-api:deployment-01M482V7J0Y1T3Z3MR3XEV4BZ0",
+  "frontendDeployment": "dpl_58gEGyTSkQu8EZKSoY1t4XFVRaYJ",
+  "url": "https://crm.fleminglettings.co.uk",
+  "sourceFilesVerified": 437,
+  "live": {
+    "release": "crm06-workflows-8",
+    "tenant": {
+      "id": 37,
+      "status": "scheduled",
+      "service_type": "let_only",
+      "start_date": "2026-10-12"
+    },
+    "apiChecks": [
+      "tenant service types",
+      "enquiry workflow query",
+      "dashboard reminders",
+      "approved receipt template"
+    ],
+    "counts": {
+      "tenants": 16,
+      "enquiries": 6,
+      "alerts": 5
+    },
+    "sentEmails": 0
+  },
+  "recordRepair": {
+    "changed": true,
+    "after": {
+      "id": 37,
+      "status": "scheduled",
+      "tenancy_start_date": "2026-10-12",
+      "property_status": "let_agreed",
+      "service_type": "let_only"
+    },
+    "paymentHistoryUnchanged": true,
+    "emailsSent": 0
+  },
+  "browser": {
+    "passed": true,
+    "base": "https://crm.fleminglettings.co.uk",
+    "density": {
+      "height": 504,
+      "row": 82.109375,
+      "scroll": 738
+    },
+    "checks": [
+      "seven visible compact rows",
+      "preview View and Clear",
+      "clear one selected item only",
+      "let-only excluded by default",
+      "all service types selectable",
+      "scheduled actions",
+      "notes newest first in both tabs",
+      "mobile no overflow"
+    ],
+    "errors": []
+  },
+  "onboarding": {
+    "passed": true,
+    "checks": [
+      "workflow date",
+      "Progress opens wizard",
+      "thousands separators",
+      "decimal receipt",
+      "numeric receipt payload",
+      "shared success toast",
+      "handover action panel"
+    ],
+    "realMessagesSent": 0,
+    "errors": []
+  },
+  "portalDrafts": {
+    "passed": true,
+    "screens": [
+      "login",
+      "tenant",
+      "landlord"
+    ],
+    "desktop": 1440,
+    "mobile": 390,
+    "actions": [
+      "bank detail preview",
+      "resume application preview",
+      "chat preview"
+    ],
+    "errors": []
+  },
+  "limits": [
+    "Outlook HTML corrected; actual Outlook rendering not directly verified",
+    "Portal concepts are local drafts; no new client login accounts enabled",
+    "Existing sent emails and signed documents were not regenerated"
+  ],
+  "testEmailsSent": 0
+}

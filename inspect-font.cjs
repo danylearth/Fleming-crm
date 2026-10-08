@@ -1,0 +1,1 @@
+const fs=require('fs'),fk=require('./backend/node_modules/@pdf-lib/fontkit');const f=fk.create(fs.readFileSync('C:/Windows/Fonts/arial.ttf'));console.log({ascent:f.ascent,descent:f.descent,units:f.unitsPerEm});

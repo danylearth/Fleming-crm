@@ -24,6 +24,14 @@
       "destination": "/report.html"
     },
     {
+      "source": "/guarantor",
+      "destination": "/guarantor/index.html"
+    },
+    {
+      "source": "/guarantor/",
+      "destination": "/guarantor/index.html"
+    },
+    {
       "source": "/inventory/:token",
       "destination": "/inventory.html"
     },

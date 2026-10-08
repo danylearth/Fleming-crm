@@ -126,6 +126,9 @@ cd frontend && npm run dev     # http://localhost:5173
 - **Rate limiting:** `express-rate-limit` on `/api/public/*`. POST: 10 req/15min, GET: 60 req/15min.
 
 ## Gotchas
+- Generated documents: follow Sam's agreed presentation across APTs, service contracts, guarantor deeds and signing requests. Use available page space; keep headings with content and each bank/contact/signature block together. Move a whole block only when it cannot fit; do not leave short sections alone before a forced page break.
+- Document changes require rendering/reviewing the whole document, including long content and joint signers, to catch blank pages, footer collisions and downstream gaps. Preserve agreement wording and existing signed evidence.
+- Signing presentation: Arial; consistent names/signatures/declaration ticks; `Landlords Signature`, `Tenants Signature` and `Dated Signed: 12 September 2026`. No visible agreement references, page numbers or declaration-version labels. Preserve actual opening/signing timestamps and revision/resubmission history; never invent historical acceptance or IP/location evidence.
 - Express 5 (not 4): route handlers return promises natively; error handling differs
 - Backend is API-only: root `GET /` must return JSON, never serve frontend files (Railway)
 - Never delete converted records (BDM→Landlord, Enquiry→Tenant) — only mark as converted
