@@ -455,7 +455,7 @@ export default function TenantDetail() {
                 <div className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 w-fit">
                   <AlertTriangle size={14} className="text-red-400" />
                   <span className="text-xs text-red-400 font-medium">
-                    {endDateWarning === 0 ? 'Tenancy has expired!' : `Tenancy ends in ${endDateWarning} days`}
+                    {endDateWarning === 0 ? 'Tenancy has ended' : `Tenancy ends in ${endDateWarning} days`}
                   </span>
                 </div>
               )}
@@ -695,7 +695,7 @@ export default function TenantDetail() {
             {/* Tenancy Details */}
             <GlassCard className="p-6">
               <div className="mb-1">
-                <div className="min-w-0"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-base font-semibold flex items-center gap-2"><Building2 size={15} className="shrink-0"/>Tenancy Details</h3>{tenancyDuration(form.tenancy_start_date,form.tenancy_end_date)&&<p className="inline-flex shrink-0 w-fit items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-xs font-normal text-emerald-700 dark:text-emerald-300">{tenant.status==='inactive'?'Tenancy duration: ':form.tenancy_start_date?.slice(0,10)>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date())?'':'Active for '}{tenancyDuration(form.tenancy_start_date,form.tenancy_end_date)}</p>}</div>                  {tenant?.property_id ? (
+                <div className="min-w-0"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-base font-semibold flex items-center gap-2"><Building2 size={15} className="shrink-0"/>Tenancy Details</h3>{tenancyDuration(form.tenancy_start_date,form.tenancy_end_date)&&<p className={`inline-flex shrink-0 w-fit items-center rounded-full border px-3 py-1 text-xs font-normal ${tenant.status === 'inactive' ? 'border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}>{tenant.status==='inactive'?'Tenancy duration: ':form.tenancy_start_date?.slice(0,10)>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date())?'':'Active for '}{tenancyDuration(form.tenancy_start_date,form.tenancy_end_date)}</p>}</div>                  {tenant?.property_id ? (
                     <div className="mt-4">
                       <p className="text-xs text-[var(--text-muted)]">Property</p>
                       <button onClick={() => navigate(`/properties/${tenant.property_id}`)}
