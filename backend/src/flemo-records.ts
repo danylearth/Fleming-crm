@@ -1,4 +1,5 @@
 import {matchFlemoRecords} from './flemo-lookup';
+import {contactLookup,contactAnswerInstructions} from './flemo-contact-lookup';
 import {query} from './db-pg';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -7,6 +8,11 @@ import path from 'node:path';
 import os from 'node:os';
 const exec=promisify(execFile);
 export async function flemoEvidence(message:string,portfolio:string,context?:{entityType?:string;entityId?:number},readScans=false,includeFinance=true) {
+  if(contactLookup(message)){
+    const ownPortfolio=/\b(?:own|internal)\s+portfolio\b|\bfleming\s+lettings\s+(?:own\s+)?(?:properties|portfolio)\b/i.test(message);
+    const contacts=await query(`SELECT t.name,t.phone,t.email,p.address AS property_address,p.postcode AS property_postcode FROM tenants t JOIN properties p ON p.id=t.property_id LEFT JOIN landlords l ON l.id=p.landlord_id WHERE t.status='active' AND p.archived_at IS NULL AND ($1='all' OR l.landlord_type=$1) AND (NOT $2::boolean OR l.landlord_type='internal') ORDER BY p.address,t.name`,[portfolio,ownPortfolio]);
+    return {records:[],contacts,answerInstructions:contactAnswerInstructions,summary:'Please specify or confirm the property address for this contact lookup.',documents:[],paymentHistory:[],latestSms:[],portfolioSummary:{},catalog:[],limitations:[]};
+  }
   const tenants=await query(`SELECT t.id,t.name,t.email,t.phone,t.status,t.date_of_birth_1 AS date_of_birth,t.current_address,t.previous_address,t.nok_name,t.nok_phone,t.guarantor_name,t.guarantor_address,t.guarantor_email,t.additional_guarantors,t.income_amount,t.income_frequency,t.income_employer,t.notes,t.monthly_rent,t.tenancy_start_date,t.tenancy_end_date,t.property_id,p.address AS property_address,p.postcode AS property_postcode,'tenants' AS entity FROM tenants t LEFT JOIN properties p ON p.id=t.property_id LEFT JOIN landlords l ON l.id=p.landlord_id WHERE ($1='all' OR l.landlord_type=$1) AND p.archived_at IS NULL ORDER BY t.name LIMIT 500`,[portfolio]);
   const properties=await query(`SELECT p.id,p.address AS name,p.postcode,p.property_type,p.bedrooms,p.status,p.rent_amount,p.epc_expiry_date,p.eicr_expiry_date,p.gas_safety_expiry_date,'properties' AS entity FROM properties p LEFT JOIN landlords l ON l.id=p.landlord_id WHERE ($1='all' OR l.landlord_type=$1) AND p.archived_at IS NULL ORDER BY p.address LIMIT 500`,[portfolio]);
   const enquiries=await query(`SELECT te.id,concat_ws(' ',te.first_name_1,te.last_name_1) AS name,te.email_1 AS email,te.status,te.linked_property_id AS property_id,te.application_form_completed,te.application_review_status,te.credit_check_completed,'enquiries' AS entity FROM tenant_enquiries te LEFT JOIN properties p ON p.id=te.linked_property_id LEFT JOIN landlords l ON l.id=p.landlord_id WHERE ($1='all' OR l.landlord_type=$1) AND te.status NOT IN ('rejected','converted') ORDER BY te.id DESC LIMIT 200`,[portfolio]);

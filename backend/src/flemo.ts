@@ -1,4 +1,5 @@
 import {registerFlemoDocumentRoutes} from './flemo-documents';
+import {contactLookup,contactLookupMessage} from './flemo-contact-lookup';
 import {fastComplianceAnswer} from './flemo-lookup';
 import {fastRentAnswer,propertyRentQuestion} from './flemo-rent';
 import {FlemoServiceError} from './flemo-errors';
@@ -34,17 +35,19 @@ export function registerFlemoRoutes(app: Express) {
       if(direct)return res.json({...direct,as_of:new Date().toISOString()});
       await syncTenantLifecycle();
       let text = ''; let records: any[] = [];
-      const intent = flemoIntent(message);
-      const financeAllowed=canAccessFinance(req.user);
-      if(!financeAllowed&&(intent==='rent'||propertyRentQuestion(message)||/late|overdue|arrears|payment.*trend/i.test(message)))return res.status(403).json({error:'Financial information is restricted to authorised accounts staff'});
-      const rentAnswer=await fastRentAnswer(message,portfolio,context,financeAllowed);
-      if(rentAnswer)return res.json({...rentAnswer,as_of:new Date().toISOString()});
       const previous = Array.isArray(history) ? history.slice(-8).filter(item=>item && ['user','assistant'].includes(item.role)&&typeof item.text==='string').map(item=>({role:item.role,text:item.text.slice(0,3000)})) : [];
+      const contactMessage=contactLookupMessage(message,previous);
+      const isContactLookup=contactLookup(contactMessage);
+      const intent = isContactLookup?'help':flemoIntent(message);
+      const financeAllowed=canAccessFinance(req.user);
+      if(!financeAllowed&&!isContactLookup&&(intent==='rent'||propertyRentQuestion(message)||/late|overdue|arrears|payment.*trend/i.test(message)))return res.status(403).json({error:'Financial information is restricted to authorised accounts staff'});
+      const rentAnswer=isContactLookup?null:await fastRentAnswer(message,portfolio,context,financeAllowed);
+      if(rentAnswer)return res.json({...rentAnswer,as_of:new Date().toISOString()});
       const accountOwner=await sharedFlemoOwner().catch(()=>null);
       const accountStatus=accountOwner?await flemoAccountStatus(accountOwner).catch(()=>({connected:false})):{connected:false};
       if(accountOwner&&accountStatus.connected){
         const followUp=/\b(it|that|this|their|them)\b/i.test(message)&&!/[0-9]/.test(message);
-        const lookup=followUp?[previous.filter(item=>item.role==='user').slice(-1)[0]?.text,message].filter(Boolean).join(' '):message;
+        const lookup=isContactLookup?contactMessage:followUp?[previous.filter(item=>item.role==='user').slice(-1)[0]?.text,message].filter(Boolean).join(' '):message;
         const evidence=await flemoEvidence(lookup,portfolio,context,/\b(read|scan|analyse|analyze|summari[sz]e|document|report|certificate)\b/i.test(message),financeAllowed);
         const text=await(await flemoAccount(accountOwner)).answer(message,JSON.stringify({...evidence,conversation:previous}));
         const result=await flemoActions(req.user,message,text,evidence);
