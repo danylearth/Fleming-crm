@@ -84,8 +84,9 @@ export function useApi() {
 
   const mutate = async (endpoint: string, options: RequestInit, invalidate?: string) => {
     const data = await request(endpoint, options);
-    // Preview endpoints are read-only even though the request carries a JSON body.
-    if ((endpoint.endsWith('/email-preview') || endpoint.endsWith('/landlord-agreement-preview')) || endpoint==='/api/ai/chat') return data;
+    // Lookups and previews carry a JSON body but do not change CRM records.
+    // Invalidating after geocoding makes Tenants reload and geocode indefinitely.
+    if ((endpoint.endsWith('/email-preview') || endpoint.endsWith('/landlord-agreement-preview')) || endpoint==='/api/ai/chat' || endpoint==='/api/postcode/bulk-geocode') return data;
     // Invalidate related cache entries after any write
     if (invalidate) invalidateCache(invalidate);
     else {
