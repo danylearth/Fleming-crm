@@ -3,9 +3,11 @@ pdfjs.GlobalWorkerOptions.workerSrc=new URL('../vendor/pdfjs/pdf.worker.mjs',imp
 async function bytes(url){const response=await fetch(url,{cache:'no-store',credentials:'omit'});if(!response.ok)throw Error('The document is unavailable. Refresh the application and try again.');return response.arrayBuffer();}
 export async function showPdf(element){
  element.textContent='Loading document…';
+ let loadingTask;
  try{
-  const pdf=await pdfjs.getDocument({data:await bytes(window.guarantorDeedUrl()),isEvalSupported:false}).promise;
-  if(!element.isConnected){await pdf.destroy();return;}
+  loadingTask=pdfjs.getDocument({data:await bytes(window.guarantorDeedUrl()),isEvalSupported:false});
+  const pdf=await loadingTask.promise;
+  if(!element.isConnected)return;
   element.replaceChildren();
   for(let number=1;number<=pdf.numPages;number++){
    if(!element.isConnected)break;
@@ -14,8 +16,8 @@ export async function showPdf(element){
    sheet.setAttribute('role','img');sheet.setAttribute('aria-label','Deed document sheet '+number);
    element.append(sheet);await page.render({canvasContext:sheet.getContext('2d'),viewport}).promise;
   }
-  await pdf.destroy();
- }catch(error){element.textContent=error.message;}
+ }catch(error){if(element.isConnected)element.textContent=error.message;}
+ finally{await loadingTask?.destroy();}
 }
 export async function openPdf(url){
  const popup=window.open('about:blank','_blank');if(popup)popup.opener=null;

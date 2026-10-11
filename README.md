@@ -4,6 +4,8 @@ Source repository: [danylearth/Fleming-crm](https://github.com/danylearth/Flemin
 
 This monorepo contains the staff CRM, PostgreSQL API, tenant and landlord public forms, and mobile app. It covers properties, landlords, tenants, enquiries, onboarding, guarantor and witness signing, documents, maintenance, finance, communications and team tasks.
 
+Latest verification: [11 October witness design reconciliation and mobile/tablet/desktop UAT](docs/releases/2026-10-11-witness-design-and-uat.md).
+
 | Directory | Purpose |
 | --- | --- |
 | `frontend/` | React 19 / TypeScript staff CRM, built with Vite |

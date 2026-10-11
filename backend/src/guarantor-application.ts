@@ -17,6 +17,7 @@ import {guarantorRequestEmail,guarantorWitnessEmail,guarantorChangesEmail,sendEm
 import {guarantorEvidenceCategories,assertGuarantorEvidenceEditable,storeGuarantorEvidence,guarantorEvidencePath} from './guarantor-evidence';
 import {guarantorReviewDecision,guarantorRequestedChanges,assertGuarantorReviewComplete,resubmitGuarantorCorrections} from './guarantor-review';
 import {creditReportResult,isValidManualCreditScore} from './credit-report-result';
+import {publicWitnessState} from './guarantor-public-state';
 
 async function enquiry(client:PoolClient,id:number,lock=false){
  const row=(await client.query(`SELECT e.*,p.address AS property_address,p.postcode AS property_postcode,p.city AS property_city FROM tenant_enquiries e LEFT JOIN properties p ON p.id=e.linked_property_id WHERE e.id=$1${lock?' FOR UPDATE OF e':''}`,[id])).rows[0];
@@ -286,7 +287,7 @@ export function registerGuarantorApplication(app:Express,uploadsDir:string){
  app.get(witnessBase,handle(async(req,res)=>res.json(await transaction(async client=>{
   const {g,row}=await publicWitness(client,req.params.token,true);await client.query('UPDATE guarantor_verifications SET workflow=$2 WHERE id=$1',[g.id,JSON.stringify({...g.workflow,witnessOpenedAt:new Date().toISOString()})]);
   // Deliberately exclude employment, bank data, evidence files and review notes.
-  const f=row.form_snapshot;return {role:'witness',status:row.status,sourceHash:row.source_sha256,consentVersion:GUARANTOR_EXECUTION_CONSENT_VERSION,form:{name:f.name,witnessName:f.witnessName,witnessAddress:f.witnessAddress},tenancy:{tenantNames:row.tenancy_snapshot.tenantNames,propertyAddress:row.tenancy_snapshot.propertyAddress,startDate:row.tenancy_snapshot.startDate},signed:{name:row.guarantor_signature.name,at:row.guarantor_signature.signed_at},witnessed:row.witness_signature?{name:row.witness_signature.name,at:row.witness_signature.signed_at}:null};
+  return publicWitnessState(row);
  }))));
  app.get(witnessBase+'/deed',handle(async(req,res)=>{const bytes=await transaction(async client=>{const {row}=await publicWitness(client,req.params.token);return row.signed_pdf||row.partially_signed_pdf;});res.type('pdf').send(bytes);}));
  app.post(witnessBase+'/sign',handle(async(req,res)=>{

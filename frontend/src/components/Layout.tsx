@@ -96,7 +96,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
             />
           )}
           {/* Close on mobile */}
-          <button onClick={() => setMobileOpen(false)} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-secondary)] md:hidden">
+          <button aria-label="Close navigation" onClick={() => setMobileOpen(false)} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-secondary)] md:hidden">
             <X size={18} />
           </button>
         </div>
@@ -156,12 +156,12 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
           <header className="flex flex-wrap items-center justify-between gap-2 px-4 md:px-8 py-2 min-h-14 md:min-h-[4.5rem] border-b border-[var(--border-subtle)] shrink-0">
             <div className="flex items-center gap-3">
               {/* Hamburger on mobile */}
-              <button onClick={() => setMobileOpen(true)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden mr-1">
+              <button aria-label="Open navigation" onClick={() => setMobileOpen(true)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] md:hidden mr-1">
                 <Menu size={22} />
               </button>
               {title && <><span className="rounded-xl p-2.5 shrink-0" style={iconStyle(headerIndex)}><HeaderIcon size={22}/></span><h1 className="text-xl md:text-2xl font-bold">{title}</h1></>}
             </div>
-            <div className="flex items-center gap-2 sm:gap-3 max-w-full">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 max-w-full">
               <NotificationsBell/>
               {/* Portfolio toggle - Admin only */}
               {user?.role === 'admin' && (
@@ -170,7 +170,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
                     <button
                       key={opt.key}
                       onClick={() => setPortfolioFilter(opt.key)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${portfolioFilter === opt.key
+                      className={`px-2 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${portfolioFilter === opt.key
                           ? opt.key === 'internal'
                             ? 'bg-orange-500/20 text-orange-400 shadow-sm'
                             : opt.key === 'external'
@@ -187,7 +187,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
               <button aria-label="Toggle colour theme" onClick={toggleTheme} className="p-2 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-elevated)] border border-[var(--border-color)] transition-colors text-[var(--text-primary)]">
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-xs font-bold text-white">
+              <div className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-xs font-bold text-white">
                 {user?.avatar_url ? <img src={user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" /> : user?.name?.[0] || 'U'}
               </div>
               <div className="text-right hidden sm:block">

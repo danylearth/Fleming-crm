@@ -3415,7 +3415,7 @@ app.post('/api/public/application-form/:token', publicSubmitLimiter, async (req,
       SELECT action, changes, created_at, ip_address
       FROM audit_log
       WHERE entity_type = 'tenant_enquiry' AND entity_id = $1
-        AND (action IN ('application_form_view','application_form_submitted','application_review') OR (action='update' AND changes->>'action' IN ('application_form_revised','application_form_completed')))
+        AND (action IN ('application_form_view','application_form_submitted','application_review') OR (action='update' AND changes::jsonb->>'action' IN ('application_form_revised','application_form_completed')))
       ORDER BY created_at ASC
     `, [enquiry.id]);
     const auditEntries = auditRows.map((row: any) => {

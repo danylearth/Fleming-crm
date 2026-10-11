@@ -117,8 +117,8 @@ describe('31 August CRM feedback regressions', () => {
     expect(propertyDetailSource).toContain('max-h-64 overflow-y-auto');
   });
 
-  it('allows dashboard reminders to be deleted and uploaded property photos to become thumbnails', () => {
-    expect(dashboardSource).toContain("api.delete(`/api/tasks/${task.id}`)");
+  it('allows dashboard reminders to be cleared without deletion and uploaded property photos to become thumbnails', () => {
+    expect(dashboardSource).toContain("api.post('/api/tasks/clear-recent', {ids:[task.id]})");
     expect(dashboardSource).toContain('getPropertyPlaceholder(prop.id, 400, 240, prop.landlord_name, prop.landlord_id, cardColours.get(prop.id))');
     expect(propertyImagesSource).toContain('landlordInitials(landlordName)');
     expect(apiSource).toContain("doc_type='Property Photo'");

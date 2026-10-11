@@ -81,3 +81,16 @@ html{overflow-y:scroll;scrollbar-gutter:stable}body{display:block}#app{width:100
 
 /* Use matching controls for returning and saving requested changes. */
 .form-wrapper .nav-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}.form-wrapper .nav-actions .btn{box-sizing:border-box;flex:1 1 0;min-width:0;min-height:50px;margin:0;padding:12px 16px;border-radius:12px;font-family:Arial,sans-serif;font-size:16px;font-weight:600;line-height:24px}
+
+/* Keep the public signing presentation aligned with the approved application. */
+.container{font-family:Arial,sans-serif}.container .header .logo{width:175px;max-width:45%;height:50px;object-fit:contain;object-position:left center}
+.witness-attestation input,.witness-attestation button{font-family:Arial,sans-serif}
+.witness-attestation .panel{align-self:stretch}
+.container .document{overflow:auto}
+.witness-attestation .tenancy-summary-grid .full-width{grid-column:1/-1}
+.witness-attestation .signature-actions .button{font-size:14px}
+.deed-readonly{border:1px solid #e6e0e8;border-radius:12px;overflow:hidden}
+.form-wrapper .deed-readonly>summary{padding:14px 18px;background:#f7f5f8;color:#27083d;border-radius:0}
+.deed-readonly>.open-link{margin:12px 16px;min-height:44px;padding:10px 16px;border-radius:999px;background:#fff;font:600 14px/22px Arial,sans-serif;cursor:pointer}
+.deed-readonly>.document{margin:0 16px 16px;height:70dvh;max-height:760px;min-height:280px;border-radius:10px;padding:12px}
+@media(max-width:480px){.container .header .logo{width:140px;height:40px}.deed-readonly>.document{margin:0 10px 10px;padding:8px}.deed-readonly>.open-link{margin:10px}}

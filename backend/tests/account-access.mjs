@@ -14,7 +14,20 @@ const dir=mkdtempSync(path.join(tmpdir(),'fleming-accounts-')),port=3317,env={PA
 assert.equal(spawnSync(process.execPath,['dist/migrate.js'],{env,encoding:'utf8'}).status,0);
 const fd=openSync(path.join(dir,'server.log'),'w'),server=spawn(process.execPath,['dist/index-pg.js'],{env,stdio:['ignore',fd,fd]}),base=`http://localhost:${port}`;
 let passed=0;const test=async(name,fn)=>{await fn();console.log('PASS '+name);passed++;};
-const request=async(route,body,token,method=body?'POST':'GET')=>{const res=await fetch(base+route,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:res.status,data:await res.json()};};
+const request=async(route,body,token,method=body?'POST':'GET')=>{
+ const options={method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},...(body?{body:JSON.stringify(body)}:{})};
+ let res=await fetch(base+route,options),data=await res.json();
+ // These isolated account-management scenarios use a seeded trusted device.
+ // The initial password check must still succeed and request two-factor authentication.
+ if(route==='/api/auth/login'&&res.ok&&data.requiresTwoFactor){
+  const user=(await db.query('SELECT id FROM users WHERE email=$1',[body.email])).rows[0];
+  const device=crypto.randomBytes(32).toString('hex'),agent='isolated-account-uat';
+  const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
+  await db.query("INSERT INTO trusted_login_devices(token_hash,user_id,user_agent_hash,expires_at) VALUES($1,$2,$3,NOW()+INTERVAL '1 hour')",[sha(device),user.id,sha(agent)]);
+  res=await fetch(base+route,{...options,headers:{...options.headers,'User-Agent':agent,Cookie:'fleming_device_'+user.id+'='+device}});data=await res.json();
+ }
+ return {status:res.status,data};
+};
 const one=async(sql,params=[])=>(await db.query(sql,params)).rows[0];
 try{
  for(let i=0;i<100;i++){try{if((await fetch(base+'/api/health')).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}

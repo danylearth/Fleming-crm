@@ -1,3 +1,18 @@
+import {GUARANTOR_EXECUTION_CONSENT_VERSION} from './guarantor-execution-rules';
+
+// Witness details must describe the locked deed, not a subsequently edited application.
+export function publicWitnessState(row: any) {
+ const f=row.form_snapshot,t=row.tenancy_snapshot,signature=row.guarantor_signature;
+ return {
+  role:'witness',status:row.status,sourceHash:row.source_sha256,consentVersion:GUARANTOR_EXECUTION_CONSENT_VERSION,
+  form:{name:f.name,witnessName:f.witnessName,witnessAddress:f.witnessAddress},
+  tenancy:{tenantNames:t.tenantNames,propertyAddress:t.propertyAddress,startDate:t.startDate,landlord:t.landlord,monthlyRent:t.monthlyRent,deposit:t.deposit},
+  signed:{name:signature.name,at:signature.signed_at},
+  signatureImage:signature.signature?'data:image/png;base64,'+signature.signature:null,
+  witnessed:row.witness_signature?{name:row.witness_signature.name,at:row.witness_signature.signed_at}:null,
+ };
+}
+
 // Public invitation holders receive their application and requested corrections,
 // never the office review record or the company's saved agreement configuration.
 export function publicGuarantorState(state: any) {

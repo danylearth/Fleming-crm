@@ -93,7 +93,9 @@ describe('5 September CRM feedback', () => {
     expect(backend).toContain("'pending','maintenance',$4,CURRENT_DATE,'maintenance'");
     expect(app).toContain('path="/maintenance/:requestId"');
     expect(maintenance).toContain('setExpanded(requested)');
-    expect(dashboard).toContain('navigate(`/maintenance/${item.id}`)');
+    expect(dashboard).toContain('DashboardWorkPanels');
+    const workPanels = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/components/DashboardWorkPanels.tsx'), 'utf8');
+    expect(workPanels).toContain("href:'/maintenance/'+m.id");
     expect(apiHook).toContain("window.addEventListener('focus', refresh)");
     expect(apiHook).toContain('DATA_UPDATED_STORAGE_KEY');
   });

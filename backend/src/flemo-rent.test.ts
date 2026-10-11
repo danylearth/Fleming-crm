@@ -22,6 +22,13 @@ it('keeps actions and portfolio-wide questions on their existing paths',()=>{
 it('does not access finance without permission',async()=>{
  expect(await fastRentAnswer(question,'all',{},false)).toBeNull();expect(query).not.toHaveBeenCalled();
 });
+it('leaves rent review reminders on the review route without reading balances',async()=>{
+ for(const message of ['Which rent reviews are due this month?','When is the rent review due?','Which reviews of rent are due?']){
+  expect(propertyRentQuestion(message)).toBe(false);
+  expect(await fastRentAnswer(message,'all',{},true)).toBeNull();
+ }
+ expect(query).not.toHaveBeenCalled();
+});
 it('answers due day, overdue part payment and today separately with property-scoped queries',async()=>{
  fixture([{id:1,due_date:'2026-09-05',amount_paid:300,outstanding:800},{id:2,due_date:'2026-10-05',amount_paid:0,outstanding:1100}]);
  const answer=await fastRentAnswer(question,'internal',{},true);

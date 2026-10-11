@@ -3,6 +3,7 @@ import {matchFlemoRecords} from './flemo-lookup';
 
 export function propertyRentQuestion(message:string){
  return /\brent\b/i.test(message)&&/\b(due|when|date|missing|payments?|arrears|overdue|outstanding)\b/i.test(message)
+  &&!/\brent\s+reviews?\b|\breviews?\b.*\brent\b/i.test(message)
   &&!/\b(send|email|text|change|update|set|edit|create|schedule|cancel|delete|mark|all|every|portfolio|total)\b/i.test(message);
 }
 export function rentLookupText(message:string){

@@ -1,5 +1,25 @@
 import {describe,it,expect} from 'vitest';
-import {publicGuarantorState} from './guarantor-public-state';
+import {publicGuarantorState,publicWitnessState} from './guarantor-public-state';
+
+describe('public witness signing summary',()=>{
+ it('uses the frozen deed particulars and recorded signature without disclosing private application data',()=>{
+  const row={status:'awaiting_witness',source_sha256:'locked-deed',
+   form_snapshot:{name:'Guarantor',witnessName:'Witness',witnessAddress:'2 Test Road',salary:'PRIVATE'},
+   tenancy_snapshot:{tenantNames:['Tenant A','Tenant B'],propertyAddress:'1 Test Road',startDate:'2026-10-19',landlord:'Landlord',monthlyRent:900,deposit:900,agreementInput:{private:'PRIVATE'}},
+   guarantor_signature:{name:'Guarantor',signed_at:'2026-10-08T12:00:00Z',signature:'c2lnbmF0dXJl',signing_ip:'PRIVATE',user_agent:'PRIVATE'},
+   witness_signature:null,review_notes:'PRIVATE',witness_token_encrypted:'PRIVATE'};
+  const result=publicWitnessState(row);
+  expect(result.tenancy).toEqual({tenantNames:['Tenant A','Tenant B'],propertyAddress:'1 Test Road',startDate:'2026-10-19',landlord:'Landlord',monthlyRent:900,deposit:900});
+  expect(result.signed).toEqual({name:'Guarantor',at:'2026-10-08T12:00:00Z'});
+  expect(result.signatureImage).toBe('data:image/png;base64,c2lnbmF0dXJl');
+  expect(result.sourceHash).toBe('locked-deed');
+  expect(result.witnessed).toBeNull();
+  expect(JSON.stringify(result)).not.toContain('PRIVATE');
+  const completed=publicWitnessState({...row,status:'completed',witness_signature:{name:'Witness',signed_at:'2026-10-11T12:00:00Z',signing_ip:'PRIVATE'}});
+  expect(completed.witnessed).toEqual({name:'Witness',at:'2026-10-11T12:00:00Z'});
+  expect(JSON.stringify(completed)).not.toContain('PRIVATE');
+ });
+});
 
 describe('public guarantor application boundary',()=>{
  const fixture=()=>({

@@ -41,7 +41,8 @@ describe('4 September CRM feedback', () => {
     expect(tenantDetail).toContain('Previous Address');
     expect(tenantDetail).toContain('Maintenance (');
     expect(tenantDetail).toContain('label="deposit scheme"');
-    expect(tenantDetail).toContain('onClick={() => setShowEndModal(true)}><EndTenancyActionIcon size={16}/>End Tenancy</Button>');
+    expect(tenantDetail).toContain('onClick={() => setShowEndModal(true)}');
+    expect(tenantDetail).toContain("tenant.status === 'scheduled' ? 'Schedule Tenancy End' : 'End Tenancy'");
   });
 
   it('requires client service types and restricts property statuses', () => {

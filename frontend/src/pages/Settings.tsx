@@ -101,14 +101,14 @@ export default function Settings() {
           <SectionHeader title="Profile" icon={<UserRound size={20} aria-hidden="true"/>} />
           <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-6">
           <div className="min-w-0">
-          <div className="flex items-center gap-6">
-            <label className="relative group cursor-pointer" aria-label="Upload profile photo">
+          <div className="flex items-center gap-3 sm:gap-6">
+            <label className="relative group shrink-0 cursor-pointer" aria-label="Upload profile photo">
               <Avatar name={user?.name} src={user?.avatar_url} size="xl" /><input ref={photoInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={profileBusy} onChange={event => { void uploadPhoto(event.target.files?.[0]); event.target.value = ''; }} />
               <div className="absolute inset-0 rounded-full bg-[var(--overlay-bg)] opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer">
                 <Camera size={20} className="text-[var(--text-primary)]" />
               </div>
             </label>
-            <div>
+            <div className="min-w-0 break-words">
               <h2 className="text-lg font-semibold">{user?.name || 'User'}</h2>
               <p className="text-sm text-[var(--text-secondary)]">{user?.email || ''}</p>
             </div>
