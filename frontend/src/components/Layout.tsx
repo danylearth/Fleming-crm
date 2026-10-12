@@ -55,7 +55,7 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
   const { theme, toggleTheme } = useTheme();
   const { portfolioFilter, setPortfolioFilter } = usePortfolio();
 
-  const visibleNavItems=navItems.filter(item => (portfolioFilter !== 'internal' || !['/landlords','/landlord-enquiries'].includes(item.to)) && (item.to!=='/financials'||canAccessFinance()) && (!item.roles || (user?.role && item.roles.includes(user.role))));
+  const visibleNavItems=navItems.filter(item => (item.to!=='/financials'||canAccessFinance()) && (!item.roles || (user?.role && item.roles.includes(user.role))));
   const headerIndex=Math.max(0,visibleNavItems.findIndex(item => item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)||(item.to==='/landlord-enquiries'&&location.pathname.startsWith('/bdm'))));
   const HeaderIcon=visibleNavItems[headerIndex]?.icon||DashboardIcon;
   const iconStyle=(index:number)=>({backgroundColor:['#f973161c','#3b82f61c','#a855f71c','#10b9811c','#ec48991c'][index%5],color:['#ea580c','#3b82f6','#a855f7','#10b981','#ec4899'][index%5]});
@@ -112,7 +112,19 @@ export default function Layout({ children, title, hideTopBar }: LayoutProps) {
         {/* Nav */}
         <nav className="sidebar-nav flex-1 min-h-0 py-2 px-2 grid gap-1 overflow-y-auto" style={{gridTemplateRows:`repeat(${visibleNavItems.length}, minmax(38px, 1fr))`}}>
           {visibleNavItems
-            .map((item, index) => (
+            .map((item, index) => portfolioFilter === 'internal' && ['/landlords','/landlord-enquiries'].includes(item.to) ? (
+              <span
+                key={item.to}
+                role="link"
+                aria-disabled="true"
+                aria-label={item.label}
+                title={`${item.label} is available under All or My Clients`}
+                className="flex items-center gap-3 px-3 py-1 rounded-xl text-base text-[var(--text-muted)] opacity-50 cursor-not-allowed select-none"
+              >
+                <span className="p-1.5 rounded-lg shrink-0 bg-[var(--bg-input)]"><item.icon size={18} /></span>
+                {(!collapsed || mobileOpen) && <span className="whitespace-nowrap font-normal">{item.label}</span>}
+              </span>
+            ) : (
               <NavLink
                 key={item.to}
                 to={item.to}
