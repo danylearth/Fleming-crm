@@ -11,7 +11,7 @@ export const guarantorApplicationUrl=(token:string)=>'https://apply.flemingletti
 export async function guarantorFiles(client:PoolClient,id:number){return (await client.query('SELECT id,category,original_name,mime_type,size,review_status,review_notes,uploaded_at FROM guarantor_verification_files WHERE verification_id=$1 AND current=TRUE ORDER BY id',[id])).rows;}
 async function loadGuarantorState(client:PoolClient,row:any,enquiry:any,office=false){
  const {categories}=formRules(),files=row?await guarantorFiles(client,row.id):[],workflow=row?.workflow||{};
- const execution=row?.execution_id?(await client.query('SELECT id,status,source_sha256,form_snapshot,tenancy_snapshot,guarantor_signature,witness_signature,completed_at FROM guarantor_executions WHERE id=$1',[row.execution_id])).rows[0]:null;
+ const execution=row?.execution_id?(await client.query('SELECT id,status,source_sha256,signature_fields,form_snapshot,tenancy_snapshot,guarantor_signature,witness_signature,completed_at FROM guarantor_executions WHERE id=$1',[row.execution_id])).rows[0]:null;
  const contact={name:row?.name||enquiry.app_guarantor_name||'',email:row?.email||enquiry.app_guarantor_email||'',phone:row?.phone||enquiry.app_guarantor_phone||''};
  const uploads:any={},documentReviews:any={};
  categories.forEach((item:any,index:number)=>{const file=files.find(file=>file.category===item[1]);if(file){uploads[index]={key:String(file.id),name:file.original_name,type:file.mime_type,size:file.size,at:file.uploaded_at};documentReviews[900100+index]={status:file.review_status,notes:file.review_notes};}});
@@ -33,6 +33,7 @@ async function loadGuarantorState(client:PoolClient,row:any,enquiry:any,office=f
  const state={...g,g,data,executionId:execution?.id,sourceHash:execution?.source_sha256,record:guarantorReviewRecord(g,data,row?.id||0,applicationUrl),
   documents:files.map(file=>({...file,entity_type:'guarantor',entity_id:row?.id,doc_type:file.category})),applicationUrl,witnessUrl,
   witnessInvitationDelivery:witnessMessage?{email:true,sms:false,at:witnessMessage.sent_at||witnessMessage.created_at,status:witnessMessage.status,error:witnessMessage.last_error}:null,
+  signedDeedPage:execution?.status==='completed'?((execution.signature_fields||[]).filter((field:any)=>(field.type||'signature')==='signature').map((field:any)=>field.page+1).sort((a:number,b:number)=>a-b)[0]??1):null,
   completionEmail:completion?{status:completion.status,at:completion.sent_at||completion.created_at,error:completion.last_error}:null,
   tenancy:{...tenancy,...(landlordContext?.enabled?{landlord:landlordContext.details.landlordName,clientLandlord:true}:{}),tenants:tenancy.tenantNames.join(' and '),property:tenancy.propertyAddress,propertyCity:enquiry.property_city,propertyPostcode:enquiry.property_postcode,rent:Number(tenancy.monthlyRent).toLocaleString('en-GB',{style:'currency',currency:'GBP'})}};
  return state;
