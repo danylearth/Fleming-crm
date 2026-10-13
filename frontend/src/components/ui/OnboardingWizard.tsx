@@ -443,7 +443,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     const prop = properties.find(p => p.id === Number(enquiry.linked_property_id));
     const rent = enquiry.monthly_rent_agreed || prop?.rent_amount || 0;
     setHdMonthlyRent(String(rent || ''));
-    setHdSecurityDeposit(String(enquiry.security_deposit_amount || ''));
+    setHdSecurityDeposit(String(enquiry.security_deposit_amount ?? ''));
     setHdHoldingDeposit(String(enquiry.holding_deposit_amount || (rent ? Math.round(rent * 12 / 52) : '')));
     setHdReceivedAmount(enquiry.holding_deposit_received_amount ? String(enquiry.holding_deposit_received_amount) : '');
     setReviewNotes('');
@@ -837,8 +837,20 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     } catch (error) { setReviewError(error instanceof Error ? error.message : 'Could not load the email preview'); }
   };
 
+  const applicationAmountsLocked=Boolean(enquiry.application_form_sent||enquiry.application_form_completed);
+  const applicationAmountsSaved=enquiry.security_deposit_amount!=null&&String(enquiry.security_deposit_amount).trim()!==''&&Number(enquiry.monthly_rent_agreed)>0&&Number(enquiry.security_deposit_amount)>=0;
+  const applicationAmountsDirty=Number(hdMonthlyRent)!==Number(enquiry.monthly_rent_agreed)||hdSecurityDeposit.trim()===''||Number(hdSecurityDeposit)!==Number(enquiry.security_deposit_amount);
+  const applicationAmountsReady=applicationAmountsSaved&&(applicationAmountsLocked||!applicationAmountsDirty);
+  const saveApplicationAmounts=async()=>{
+    setSaving(true);setReviewError('');
+    try{await api.post(`/api/tenant-enquiries/${enquiryId}/application-amounts`,{monthly_rent:hdMonthlyRent,security_deposit:hdSecurityDeposit});await onUpdate();notify('New tenancy amounts confirmed.','success');}
+    catch(error){setReviewError(error instanceof Error?error.message:'Could not save the new tenancy amounts');}
+    finally{setSaving(false);}
+  };
+
   const sendApplicationEmail = async (_preview: { subject: string; bodyHtml: string }) => {
     void _preview;
+    if(existingTenancy&&!applicationAmountsReady){setReviewError('Confirm the new tenancy amounts before sending the application.');return;}
     if(existingTenancy&&!applicationSendEmail&&!applicationSendSms){setReviewError('Select Email or SMS before sending.');return;}
     setSendingEmail(true);
     try {
@@ -1218,11 +1230,20 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
           {/* merged initial section 1 */}
 
           {/* Step 3: Application Form */}
-          {existingTenancy&&<StepCard idx={2} step={steps[2]} {...stepCardProps} actions={<><DeliveryChoices email={applicationSendEmail} sms={applicationSendSms} onEmail={setApplicationSendEmail} onSms={setApplicationSendSms} disabled={sendingEmail||saving||propertySelectionChanged} previewEmail={async()=>{try{setHoldingEmailPreview(await api.post('/api/tenant-enquiries/'+enquiryId+'/send-application-email/email-preview',{}));}catch(error){setReviewError(error instanceof Error?error.message:'Preview unavailable');}}} previewSms={async()=>{try{const preview=await api.post('/api/tenant-enquiries/'+enquiryId+'/send-application-email/email-preview',{});setSmsPreview(preview.sms);}catch(error){setReviewError(error instanceof Error?error.message:'Preview unavailable');}}}/><Button disabled={saving||propertySelectionChanged||sendingEmail||(!applicationSendEmail&&!applicationSendSms)} onClick={()=>void sendApplicationEmail({subject:'',bodyHtml:''})}><Send size={16}/>{sendingEmail?'Sending…':'Send New Application'}</Button>{reviewError&&<p role="alert" className="text-sm text-red-600">{reviewError}</p>}</>} >
+          {existingTenancy&&<StepCard idx={2} step={steps[2]} {...stepCardProps} actions={<><DeliveryChoices email={applicationSendEmail} sms={applicationSendSms} onEmail={setApplicationSendEmail} onSms={setApplicationSendSms} disabled={sendingEmail||saving||propertySelectionChanged||!applicationAmountsReady} previewEmail={async()=>{try{setHoldingEmailPreview(await api.post('/api/tenant-enquiries/'+enquiryId+'/send-application-email/email-preview',{}));}catch(error){setReviewError(error instanceof Error?error.message:'Preview unavailable');}}} previewSms={async()=>{try{const preview=await api.post('/api/tenant-enquiries/'+enquiryId+'/send-application-email/email-preview',{});setSmsPreview(preview.sms);}catch(error){setReviewError(error instanceof Error?error.message:'Preview unavailable');}}}/><Button disabled={saving||propertySelectionChanged||sendingEmail||!applicationAmountsReady||(!applicationSendEmail&&!applicationSendSms)} onClick={()=>void sendApplicationEmail({subject:'',bodyHtml:''})}><Send size={16}/>{sendingEmail?'Sending…':'Send New Application'}</Button>{reviewError&&<p role="alert" className="text-sm text-red-600">{reviewError}</p>}</>} >
             <section aria-label="Application property" className="rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-4 space-y-3">
               <h5 className="font-semibold">Property for This Application</h5>
               {applicationPropertyLocked?<p className="text-sm">{formatPropertyAddress(prop.address,prop.postcode)}<br/><span className="text-[var(--text-muted)]">This property is fixed once the application is prepared or sent. Start a new application to choose another property.</span></p>:<><Select label="Search/Link Property" searchable value={applicationProperty} onChange={setApplicationProperty} options={[{value:'',label:'Search by address or postcode'},...properties.map(p=>({value:String(p.id),label:formatPropertyAddress(p.address,p.postcode)}))]}/><Button variant="gradient" disabled={saving||!applicationProperty||!propertySelectionChanged} onClick={()=>void(async()=>{setSaving(true);setReviewError('');try{await api.post('/api/tenant-enquiries/'+enquiryId+'/application-property',{property_id:Number(applicationProperty)});await onUpdate();}catch(e){setReviewError(e instanceof Error?e.message:'Property could not be linked');}finally{setSaving(false);}})()}>{saving?'Linking…':'Link Property'}</Button></>}
               <p className="text-sm text-[var(--text-secondary)]">The tenant’s current tenancy and billing stay unchanged while this new application is completed.</p>
+            </section>
+            <section aria-label="New tenancy amounts" className="rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-4 space-y-3">
+              <h5 className="font-semibold">New Tenancy Amounts</h5>
+              <p className="text-sm text-[var(--text-secondary)]">Confirm the agreed rent and security deposit for this new tenancy before sending the application. These amounts will appear on the tenant’s form.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="space-y-1 text-sm"><span className="block">Monthly Rent (£) *</span><input type="number" min="0.01" step="0.01" required disabled={applicationAmountsLocked||saving} value={hdMonthlyRent} onChange={e=>setHdMonthlyRent(e.target.value)} className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 disabled:opacity-70"/></label>
+                <label className="space-y-1 text-sm"><span className="block">Security Deposit (£) *</span><input type="number" min="0" step="0.01" required disabled={applicationAmountsLocked||saving} value={hdSecurityDeposit} onChange={e=>setHdSecurityDeposit(e.target.value)} className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 disabled:opacity-70"/></label>
+              </div>
+              {!applicationAmountsLocked&&<><p className="text-sm text-[var(--text-muted)]">Enter 0 only if no security deposit is required. The current tenancy’s deposit and billing remain unchanged.</p><Button disabled={saving||propertySelectionChanged||(!applicationAmountsDirty&&applicationAmountsSaved)} onClick={()=>void saveApplicationAmounts()}>{saving?'Saving…':applicationAmountsReady?'Amounts Confirmed':'Confirm Tenancy Amounts'}</Button></>}
             </section>
             {enquiry.joint_partner_id?jointApplicationContent:applicationContent}
           </StepCard>}

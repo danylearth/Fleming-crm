@@ -9,7 +9,7 @@ import {syncLandlordBankApprovalTask} from './landlord-bank-approval-task';
 import {registerGuarantorApplication} from './guarantor-application';
 import {assertGuarantorsReady,assertIssuedAgreementMatchesGuarantees} from './guarantor-gates';
 import {scheduleExistingTenancy,registerTenancyChangeovers,updateTenancyBillingForEdit} from './tenancy-changeover';
-import {registerApplicationProperty} from './application-property';
+import {registerApplicationProperty,applicationAmountsValid} from './application-property';
 import {syncHandoverCalendar} from './handover-calendar';
 import {recordManualFinalBalance} from './final-balance-progress';
 import {saveBalanceFollowUp} from './balance-follow-up';
@@ -6929,10 +6929,11 @@ app.post('/api/tenant-enquiries/:id/confirm-holding-deposit', authMiddleware, as
   }
 });
 
-async function applicationRecipients(enquiryId: number) {
+async function applicationRecipients(enquiryId: number, requireAmounts=false) {
   const ids = await linkedEntityIds('tenant_enquiry', enquiryId);
   const records = await query(`SELECT te.*,p.address AS property_address,p.postcode AS property_postcode,p.city AS property_city,l.landlord_type AS property_landlord_type FROM tenant_enquiries te LEFT JOIN properties p ON p.id=te.linked_property_id LEFT JOIN landlords l ON l.id=p.landlord_id WHERE te.id=ANY($1::int[]) ORDER BY te.id`,[ids]);
   if (!records.length) throw new Error('Enquiry not found');
+  if(requireAmounts&&records.some((record:any)=>!applicationAmountsValid(record.monthly_rent_agreed,record.security_deposit_amount)))throw Object.assign(new Error('Confirm the agreed monthly rent and security deposit before preparing or sending the application.'),{status:409});
   for (const record of records) {
     if (!record.application_form_token || !record.application_form_slug) {
       record.application_form_token ||= crypto.randomBytes(24).toString('hex');
@@ -7002,11 +7003,11 @@ app.post('/api/tenant-enquiries/:id/request-holding-deposit',authMiddleware,asyn
   }catch(error){res.status(500).json({error:'Holding deposit request could not be completed'});}
 });
 app.post('/api/tenant-enquiries/:id/send-application-email/email-preview',authMiddleware,requirePermission('staff'),async(req:AuthRequest,res)=>{
- try{const records=await applicationRecipients(Number(req.params.id));const record=records.find((r:any)=>r.id===Number(req.params.id));const link='https://apply.fleminglettings.co.uk/'+record.application_form_slug;const name=record.first_name_1||'there';const {newTenancyApplicationEmail,applicationReminderEmail}=require('./email');const content=record.existing_tenancy_application?newTenancyApplicationEmail(name,link):applicationReminderEmail(name,link);res.json({...content,to:record.email_1,sms:`Hi there${name === 'there' ? '' : ' ' + name}, your application form for your new tenancy request with Fleming Lettings has been sent to you on your registered email address. If you have not received this or need any help completing it, then please contact the office on 01902 212 415.`});}catch(error){res.status(409).json({error:error.message});}
+ try{const records=await applicationRecipients(Number(req.params.id),true);const record=records.find((r:any)=>r.id===Number(req.params.id));const link='https://apply.fleminglettings.co.uk/'+record.application_form_slug;const name=record.first_name_1||'there';const {newTenancyApplicationEmail,applicationReminderEmail}=require('./email');const content=record.existing_tenancy_application?newTenancyApplicationEmail(name,link):applicationReminderEmail(name,link);res.json({...content,to:record.email_1,sms:`Hi there${name === 'there' ? '' : ' ' + name}, your application form for your new tenancy request with Fleming Lettings has been sent to you on your registered email address. If you have not received this or need any help completing it, then please contact the office on 01902 212 415.`});}catch(error){res.status(409).json({error:error.message});}
 });
 app.post('/api/tenant-enquiries/:id/send-application-email',authMiddleware,requirePermission('staff'),async(req:AuthRequest,res)=>{
-  try{const records=await applicationRecipients(Number(req.params.id));const delivery=await sendApplicationMessages(records,req,'reminder');res.json({success:true,delivery});}
-  catch(error){res.status(500).json({error:'Application reminder could not be sent'});}
+  try{const records=await applicationRecipients(Number(req.params.id),true);const delivery=await sendApplicationMessages(records,req,'reminder');res.json({success:true,delivery});}
+  catch(error){res.status(error.status===409?409:500).json({error:error.status===409?error.message:'Application reminder could not be sent'});}
 });
 app.post('/api/tenant-enquiries/:id/holding-deposit/email-preview',authMiddleware,async(req:AuthRequest,res)=>{
  const record=await queryOne('SELECT te.*,p.address, p.postcode, p.city,l.landlord_type AS property_landlord_type FROM tenant_enquiries te LEFT JOIN properties p ON p.id=te.linked_property_id LEFT JOIN landlords l ON l.id=p.landlord_id WHERE te.id=$1',[req.params.id]);if(!record)return res.sendStatus(404);
