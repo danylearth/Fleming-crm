@@ -1,5 +1,5 @@
 import {it,expect} from 'vitest';
-import {applicationReadyForReview,pipelineVisible,pipelineStage,matchesPipelineAgent} from './pipeline';
+import {applicationReadyForReview,guarantorPipelineState,pipelineVisible,pipelineStage,matchesPipelineAgent} from './pipeline';
 it('resurfaces submitted joint applications only when both are ready, including after a revision',()=>{
  const one={status:'onboarding',joint_partner_id:84,application_form_completed:1,application_review_status:'approved',follow_up_date:'2026-10-10'};
  const other={status:'onboarding',application_form_completed:1,application_review_status:'pending'};
@@ -36,4 +36,27 @@ it('hides future follow-ups until due but resurfaces completed agreements',()=>{
  expect(pipelineVisible(enquiry,'2026-09-25')).toBe(true);
  expect(pipelineVisible({...enquiry,tenancy_agreement_status:'completed'},'2026-09-23')).toBe(true);
  expect(pipelineStage({...enquiry,tenancy_agreement_status:'completed'},'2026-09-23')).toBe('Agreement Signed');
+});
+
+it('waits for the guarantor, then resurfaces a signed submission despite a future follow-up',()=>{
+ const base={status:'onboarding',application_form_completed:1,application_review_status:'approved',guarantor_required:true,follow_up_date:'2026-12-01'};
+ const waiting={...base,guarantor_pipeline_action:'waiting' as const};
+ expect(pipelineVisible({...waiting,guarantor_pipeline_state:guarantorPipelineState(waiting)},'2026-10-14')).toBe(false);
+ const review={...base,guarantor_pipeline_action:'review' as const};
+ const ready={...review,guarantor_pipeline_state:guarantorPipelineState(review)};
+ expect(pipelineVisible(ready,'2026-10-14')).toBe(true);
+ expect(pipelineStage(ready,'2026-10-14')).toBe('Guarantor Ready for Review');
+ expect(pipelineVisible({...ready,status:'converted'},'2026-10-14')).toBe(false);
+ expect(guarantorPipelineState({...base,guarantor_pipeline_action:'complete'})).toBe(null);
+ expect(guarantorPipelineState({...base,guarantor_required:false})).toBe(null);
+ expect(guarantorPipelineState({...base,application_review_status:'pending'})).toBe(null);
+ expect(guarantorPipelineState(base)).toBe('action');
+});
+it('keeps joint office work visible when the other guarantor is still outstanding',()=>{
+ const base={status:'onboarding',application_review_status:'approved',guarantor_required:true};
+ const first={...base,joint_partner_id:2,guarantor_pipeline_action:'waiting' as const};
+ expect(guarantorPipelineState(first,{...base,guarantor_pipeline_action:'waiting'})).toBe('waiting');
+ expect(guarantorPipelineState(first,{...base,guarantor_pipeline_action:'review'})).toBe('review');
+ expect(guarantorPipelineState(first,base)).toBe('action');
+ expect(guarantorPipelineState(first,{...base,application_review_status:'pending'})).toBe(null);
 });

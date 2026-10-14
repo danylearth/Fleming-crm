@@ -1,0 +1,25 @@
+const assert=require('node:assert/strict'),fs=require('fs');
+const u=new URL(process.env.DATABASE_URL);assert(['localhost','127.0.0.1'].includes(u.hostname)&&u.pathname.startsWith('/fleming_crm_test'));
+const pool=require('../dist/db-pg').default;const one=async(sql,args=[])=>(await pool.query(sql,args)).rows[0];
+(async()=>{try{
+ const source=fs.readFileSync('src/index-pg.ts','utf8'),section=source.slice(source.indexOf("app.get('/api/tenant-enquiries',")),tick=String.fromCharCode(96),open=section.indexOf(tick),close=section.indexOf(tick,open+1),sql=section.slice(open+1,close);
+ const e=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,phone_1,status,application_form_completed,application_review_status,guarantor_required) VALUES('Fictional','Applicant','fictional@example.test','07700900000','onboarding',1,'approved',true) RETURNING id");
+ const g=await one("INSERT INTO guarantor_verifications(enquiry_id,name,status) VALUES($1,'Fictional Guarantor','invited') RETURNING id",[e.id]);
+ const state=async()=> (await pool.query(sql,[100,0])).rows.find(r=>r.id===e.id).guarantor_pipeline_action;
+ assert.equal(await state(),'waiting');
+ await pool.query("UPDATE guarantor_verifications SET status='awaiting_witness',signature=$2,submitted_at=NOW() WHERE id=$1",[g.id,JSON.stringify({testOnly:true})]);assert.equal(await state(),'review');
+ await pool.query("UPDATE guarantor_verifications SET status='changes_requested',workflow=$2 WHERE id=$1",[g.id,JSON.stringify({reviewStatus:'changes_requested',changesSent:'2026-10-14'})]);assert.equal(await state(),'waiting');
+ await pool.query("UPDATE guarantor_verifications SET workflow=$2 WHERE id=$1",[g.id,JSON.stringify({reviewStatus:'pending',changesSent:null})]);assert.equal(await state(),'review');
+ await pool.query("UPDATE guarantor_verifications SET status='verified' WHERE id=$1",[g.id]);assert.equal(await state(),'complete');
+ await pool.query("UPDATE guarantor_verifications SET status='draft',signature=NULL,submitted_at=NULL,workflow='{}' WHERE id=$1",[g.id]);assert.equal(await state(),'action');
+ await pool.query("UPDATE guarantor_verifications SET status='invited',workflow=$2 WHERE id=$1",[g.id,JSON.stringify({invitationDelivery:{status:'failed'}})]);assert.equal(await state(),'action');
+ const {assertGuarantorsReady}=require('../dist/guarantor-gates');
+ await assert.rejects(()=>assertGuarantorsReady(pool,[e.id]),/Complete the guarantor/);
+ const execution=await one("INSERT INTO guarantor_executions(verification_id,status,source_pdf,source_sha256,signature_fields,tenancy_snapshot,form_snapshot) VALUES($1,'awaiting_witness',$2,'fictional','{}','{}','{}') RETURNING id",[g.id,Buffer.from('test-only')]);
+ await pool.query("UPDATE guarantor_verifications SET status='verified',execution_id=$2,workflow=$3 WHERE id=$1",[g.id,execution.id,JSON.stringify({reviewStatus:'approved',credit:{credit_check_completed:1}})]);
+ await assert.rejects(()=>assertGuarantorsReady(pool,[e.id]),/Complete the guarantor/);
+ await pool.query("UPDATE guarantor_executions SET status='completed',signed_pdf=$2 WHERE id=$1",[execution.id,Buffer.from('test-only')]);await assertGuarantorsReady(pool,[e.id]);
+ await pool.query("UPDATE guarantor_verifications SET workflow=$2 WHERE id=$1",[g.id,JSON.stringify({reviewStatus:'pending',credit:{credit_check_completed:1}})]);await assert.rejects(()=>assertGuarantorsReady(pool,[e.id]),/Complete the guarantor/);
+ console.log('PASS actual enquiry list SQL: invited hidden, signed review, corrections waiting, resubmission review, verified complete, draft/failed invitation actionable');
+ console.log('PASS completion gates: guarantor invitation, incomplete witness and unapproved application blocked; complete reviewed witnessed deed accepted');
+}finally{await pool.end();}})().catch(e=>{console.error(e);process.exitCode=1});

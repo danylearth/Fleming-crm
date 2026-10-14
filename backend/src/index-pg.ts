@@ -195,11 +195,11 @@ const storage = multer.diskStorage({
     cb(null, uniqueSuffix + '-' + file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_'));
   }
 });
-const upload = multer({ 
+const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif',
                      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     cb(null, allowed.includes(file.mimetype));
   }
@@ -660,7 +660,7 @@ app.post('/api/auth/login', loginLimiter, async (req:AuthRequest, res) => {
     if(!await knownLoginDevice(req,user))return beginLoginVerification(req,res,user);
     await run('UPDATE users SET last_login=CURRENT_TIMESTAMP,login_password_failures=0,login_2fa_failures=0,login_2fa_sent_count=0,login_2fa_lock_after=NULL WHERE id=$1', [user.id]);
     await logAudit(user.id, user.email, 'login', 'user', user.id);
-    
+
     res.set('Cache-Control','no-store').json(loginResult(user,authenticatedAtMs));
   } catch (err) {
     console.error(err);
@@ -678,12 +678,12 @@ app.post('/api/auth/setup', async (req, res) => {
     if (parseInt(existing.count) > 0) {
       return res.status(400).json({ error: 'Setup already completed' });
     }
-    
+
     const { email, password, name } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
-    await query('INSERT INTO users (email, password, name, role) VALUES ($1, $2, $3, $4)', 
+    await query('INSERT INTO users (email, password, name, role) VALUES ($1, $2, $3, $4)',
       [email, hashedPassword, name, 'admin']);
-    
+
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -889,7 +889,7 @@ app.get('/api/landlords/:id', authMiddleware, async (req: AuthRequest, res) => {
       FROM landlords l WHERE l.id = $1
     `, [id]);
     if (!landlord) return res.status(404).json({ error: 'Landlord not found' });
-    
+
     await logAudit(req.user?.id, req.user?.email, 'view', 'landlord', parseInt(id));
     res.json(landlord);
   } catch (err) {
@@ -1448,6 +1448,13 @@ app.get('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) =
         (SELECT COALESCE(u.name,a.user_email) FROM audit_log a LEFT JOIN users u ON u.id=a.user_id WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id AND a.user_id IS NOT NULL AND a.action NOT IN ('view','page_view','navigate') ORDER BY a.created_at DESC LIMIT 1) AS previous_agent,
         (SELECT ta.status FROM tenancy_agreements ta WHERE ta.enquiry_id IN (te.id,te.joint_partner_id) AND ta.status<>'void' ORDER BY ta.id DESC LIMIT 1) AS tenancy_agreement_status,
         COALESCE((SELECT ta.status='completed' FROM tenancy_agreements ta WHERE ta.enquiry_id IN (te.id,te.joint_partner_id) AND ta.status<>'void' ORDER BY ta.id DESC LIMIT 1),false) AS tenancy_agreement_completed,
+        (SELECT CASE
+          WHEN g.status='verified' THEN 'complete'
+          WHEN g.signature IS NOT NULL AND g.submitted_at IS NOT NULL
+            AND NOT(COALESCE(g.workflow->>'reviewStatus','')='changes_requested' AND g.workflow->>'changesSent' IS NOT NULL) THEN 'review'
+          WHEN (g.status='invited' AND g.signature IS NULL AND COALESCE(g.workflow->'invitationDelivery'->>'status','')<>'failed')
+            OR (g.workflow->>'reviewStatus'='changes_requested' AND g.workflow->>'changesSent' IS NOT NULL) THEN 'waiting'
+          ELSE 'action' END FROM guarantor_verifications g WHERE g.enquiry_id=te.id AND te.guarantor_required=TRUE) AS guarantor_pipeline_action,
         (SELECT u.name FROM audit_log a JOIN users u ON u.id=a.user_id WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id ORDER BY a.created_at DESC,a.id DESC LIMIT 1) AS last_agent,
         COALESCE((SELECT MAX(a.created_at) FROM audit_log a WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id AND a.action='status_changed' AND a.changes::jsonb->>'to'=te.status),CASE WHEN te.status='onboarding' THEN (SELECT MIN(a.created_at) FROM audit_log a WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id AND a.action='holding_deposit_requested') WHEN te.status='new' THEN te.created_at END) AS workflow_since,
         CASE WHEN te.status<>'onboarding' THEN NULL

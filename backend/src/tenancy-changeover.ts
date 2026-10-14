@@ -5,6 +5,7 @@ import pool from './db-pg';
 import {authMiddleware,requirePermission,type AuthRequest} from './auth';
 import {dateOnly} from './tenant-lifecycle';
 import {changeoverDates,validateChangeoverApplicants} from './tenancy-changeover-rules';
+import {assertGuarantorsReady} from './guarantor-gates';
 import {seedTenantApplication} from './tenant-application-prefill';
 
 const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date());
@@ -40,6 +41,8 @@ export async function scheduleExistingTenancy(c:any,enquiryId:number,user:any,up
   if(a.guarantor_required===null)throw Error('Confirm whether each applicant requires a guarantor');
   if(a.guarantor_required&&(await c.query("SELECT id FROM guarantor_verifications WHERE enquiry_id=$1 AND status='verified'",[a.id])).rowCount!==1)throw Error('Complete the guarantor checks and witnessed deed first');
  }
+ await assertGuarantorsReady(c,ids,true);
+ const guarantors=(await c.query("SELECT enquiry_id,name,COALESCE(form->>'email',email) AS email,COALESCE(form->>'phone',phone) AS phone,form->>'name' AS full_name,form->>'address' AS address,COALESCE(form->>'dob',form->>'date_of_birth') AS date_of_birth,COALESCE(form->>'employment',form->>'employment_status') AS employment_status,form->>'employer' AS employer,COALESCE(form->>'income',form->>'annual_income') AS annual_income FROM guarantor_verifications WHERE enquiry_id=ANY($1::int[]) AND status='verified'",[ids])).rows;
  const terms=json(agreement.agreement_details);
  const dates=changeoverDates(terms.tenancyStartDate,existing.map((t:any)=>dateOnly(t.tenancy_start_date)).sort().at(-1));
  if(dates.start<today())throw Error('Review a retrospective tenancy changeover with the office before completion');
@@ -49,8 +52,8 @@ export async function scheduleExistingTenancy(c:any,enquiryId:number,user:any,up
  const signedPath=path.resolve(uploadsDir,path.basename(agreement.signed_filename));
  if(!fs.existsSync(signedPath))throw Error('The completed agreement PDF is missing');
  const oldIds=existing.map((t:any)=>t.id);
- if((await c.query('SELECT id FROM rent_payments WHERE tenant_id=ANY($1::int[]) AND property_id=$2 AND due_date >= $3',[oldIds,property.id,dates.previousEnd])).rowCount)throw Error('Review existing rent charges on or after the final billing boundary before scheduling this changeover');
- const next={tenants:applicants.map((a:any)=>({tenant_id:a.source_tenant_id,enquiry_id:a.id,name:[a.first_name_1,a.last_name_1].filter(Boolean).join(' '),application:a})),terms,monthlyRent:rent,agreedDeposit:deposit,rentDueDay:dueDay};
+ if((await c.query('SELECT id FROM rent_payments WHERE tenant_id=ANY($1::int[]) AND property_id=$2 AND due_date >= $3 AND (amount_due<>0 OR COALESCE(amount_paid,0)<>0)',[oldIds,property.id,dates.previousEnd])).rowCount)throw Error('Review existing rent charges on or after the final billing boundary before scheduling this changeover');
+ const next={tenants:applicants.map((a:any)=>({tenant_id:a.source_tenant_id,enquiry_id:a.id,name:[a.first_name_1,a.last_name_1].filter(Boolean).join(' '),application:a,guarantor:a.guarantor_required?guarantors.find((g:any)=>g.enquiry_id===a.id):null})),terms,monthlyRent:rent,agreedDeposit:deposit,rentDueDay:dueDay};
  const row=(await c.query(`INSERT INTO tenancy_changeovers(enquiry_id,agreement_id,property_id,continuing_tenant_ids,previous_tenant_ids,start_date,previous_end_date,previous_snapshot,next_snapshot,created_by)
   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,[e.id,agreement.id,property.id,continuing,oldIds,dates.start,dates.previousEnd,JSON.stringify(existing),JSON.stringify(next),user?.id||null])).rows[0];
  const old=existing[0];
@@ -95,6 +98,11 @@ export async function applyDueTenancyChangeovers(businessDate=today()){
     const application=person.application;
     if(application)await c.query(`UPDATE tenants SET name=$2,first_name_1=$3,last_name_1=$4,email=$5,phone=$6,date_of_birth_1=$7,
      income_contract_type=$8,income_employer=$9,income_amount=$10,income_frequency='annual',application_forms_completed=1,updated_at=NOW() WHERE id=$1`,[person.tenant_id,person.name,application.first_name_1,application.last_name_1,application.email_1,application.phone_1,application.app_form_data?.date_of_birth||application.date_of_birth_1||null,application.contract_type_1||null,application.employer_1||application.app_form_data?.employer_name||null,application.income_1||application.app_form_data?.gross_annual_income||null]);
+    // Freeze the reviewed guarantor with this tenancy; never leave the previous
+    // tenancy's guarantor displayed as the new sole tenancy's guarantor.
+    if('guarantor' in person){const g=person.guarantor;
+     await c.query(`UPDATE tenants SET guarantor_required=$2,guarantor_name=$3,guarantor_email=$4,guarantor_phone=$5,guarantor_address=$6,guarantor_date_of_birth=$7,guarantor_employment_status=$8,guarantor_employer=$9,guarantor_annual_income=$10,guarantor_kyc_completed=$2,guarantor_deed_received=$2,guarantor_primary_id=$2,guarantor_secondary_id=$2,guarantor_authority_to_contact=0 WHERE id=$1`,[person.tenant_id,g?1:0,g?.full_name||g?.name||null,g?.email||null,g?.phone||null,g?.address||null,g?.date_of_birth||null,g?.employment_status||null,g?.employer||null,g?.annual_income||null]);
+    }
     await audit(c,null,person.tenant_id,'tenancy_changeover_activated',{changeover_id:row.id,start:dateOnly(row.start_date)});
    }
    await c.query("UPDATE tenancy_changeovers SET status='active',activated_at=NOW() WHERE id=$1",[row.id]);

@@ -114,12 +114,14 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   };
 
   const statusIcon = (status: string) => {
+    if (status === 'not due') return <CheckCircle2 size={14} className="text-[var(--text-muted)]" />;
     if (status === 'paid') return <CheckCircle2 size={14} className="text-emerald-400" />;
     if (status === 'overdue') return <AlertCircle size={14} className="text-red-400" />;
     return <Clock size={14} className="text-amber-400" />;
   };
 
   const statusColor = (status: string) => {
+    if (status === 'not due') return 'text-[var(--text-muted)]';
     if (status === 'paid') return 'text-emerald-400';
     if (status === 'overdue') return 'text-red-400';
     return 'text-amber-400';
@@ -131,7 +133,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
   // Calculate summary
   const totalDue = filteredPayments.reduce((sum, p) => sum + Number(p.amount_due || 0), 0);
   const totalPaid = filteredPayments.reduce((sum, p) => sum + Number(p.amount_paid || 0), 0);
-  const pendingCount = filteredPayments.filter(p => p.status !== 'paid').length;
+  const pendingCount = filteredPayments.filter(p => !['paid','not due'].includes(p.status)).length;
 
   // Average late payment (days between due_date and payment_date for paid payments)
   const paidPayments = filteredPayments.filter(p => p.status === 'paid' && p.payment_date && p.due_date);
@@ -196,7 +198,7 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
       ) : (
         <div className="space-y-2">
           {displayPayments.map(payment => (
-            <div key={payment.id} className={`flex flex-wrap items-center gap-3 p-3 rounded-xl border ${payment.status==='paid'?'bg-emerald-500/10 border-emerald-500/30':payment.status==='overdue'?'bg-red-500/5 border-red-500/30':'bg-amber-500/10 border-amber-500/30'}`}>
+            <div key={payment.id} className={`flex flex-wrap items-center gap-3 p-3 rounded-xl border ${payment.status==='not due'?'bg-[var(--bg-subtle)] border-[var(--border-color)]':payment.status==='paid'?'bg-emerald-500/10 border-emerald-500/30':payment.status==='overdue'?'bg-red-500/5 border-red-500/30':'bg-amber-500/10 border-amber-500/30'}`}>
               {statusIcon(payment.status)}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">
@@ -216,9 +218,9 @@ export default function RentPayments({ propertyId, tenantId, compact }: Props) {
                 {Number(payment.amount_paid)>Number(payment.amount_due)?`Credit £${money(Number(payment.amount_paid)-Number(payment.amount_due))}`:payment.status==='pending'?'Unpaid · Not yet due':payment.status}
               </span>
               <RentInvoiceButton paymentId={payment.id}/>
-              <RentBankTransactions paymentId={payment.id} onChanged={reloadPayments} hasLinked={Number(payment.bank_transaction_count)>0||Number(payment.bank_received)>0}/ >
+              {payment.status!=='not due'&&<RentBankTransactions paymentId={payment.id} onChanged={reloadPayments} hasLinked={Number(payment.bank_transaction_count)>0||Number(payment.bank_received)>0}/ >}
               {payment.status !== 'paid' && ['overdue','due today'].includes(payment.status) && <TenantMessageTemplates tenantId={payment.tenant_id} rentPaymentId={payment.id} onSent={()=>{}}/>}
-              {payment.status !== 'paid' && (
+              {!['paid','not due'].includes(payment.status) && (
                 <Button variant="outline" className="!bg-emerald-600 !text-white !border-emerald-600" size="sm" disabled={paying!==null} onClick={() => handlePay(payment)}>
                   Mark Paid
                 </Button>

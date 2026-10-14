@@ -1,5 +1,5 @@
 import DashboardWorkPanels from '../components/DashboardWorkPanels';
-import {applicationReadyForReview,pipelineVisible,pipelineStage,matchesPipelineAgent} from '../utils/pipeline';
+import {applicationReadyForReview,guarantorPipelineState,pipelineVisible,pipelineStage,matchesPipelineAgent} from '../utils/pipeline';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
@@ -13,7 +13,7 @@ import { portfolioMatcher, type PortfolioRecord } from '../utils/dashboardPortfo
 import { useNotifications } from '../context/NotificationContext';
 import { getPropertyImage, getPropertyPlaceholder, propertyCardColours } from '../utils/propertyImages';
 import {
-  Building2, Users, Wrench, MessageSquare, 
+  Building2, Users, Wrench, MessageSquare,
   Clock, CheckCircle2, ArrowRight, Trash2, UserRound, BriefcaseBusiness, CalendarDays, ListChecks
 } from 'lucide-react';
 
@@ -163,7 +163,7 @@ export default function Dashboard() {
 
   const todayKey=new Date(now).toLocaleDateString('en-CA',{timeZone:'Europe/London'});
   const pipeline=[
-    ...enquiries.map(e=>({...e,ready_for_review:applicationReadyForReview(e,allEnquiries.find(p=>p.id===e.joint_partner_id))})).filter(e=>pipelineVisible(e,todayKey,new Date(now).toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour12:false}).slice(0,5))).map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',previousAgent:e.previous_agent||'—',type:'Tenant Enquiry',date:e.balance_follow_up_date&&e.balance_follow_up_date.slice(0,10)<=todayKey?e.balance_follow_up_date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:pipelineStage(e,todayKey),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
+    ...enquiries.map(e=>({...e,ready_for_review:applicationReadyForReview(e,allEnquiries.find(p=>p.id===e.joint_partner_id)),guarantor_pipeline_state:guarantorPipelineState(e,allEnquiries.find(p=>p.id===e.joint_partner_id))})).filter(e=>pipelineVisible(e,todayKey,new Date(now).toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour12:false}).slice(0,5))).map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',previousAgent:e.previous_agent||'—',type:'Tenant Enquiry',date:e.balance_follow_up_date&&e.balance_follow_up_date.slice(0,10)<=todayKey?e.balance_follow_up_date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:pipelineStage(e,todayKey),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
     ...landlordEnquiries.filter(e=>!['onboarded','not_interested','rejected','closed'].includes(e.status)&&(!e.follow_up_date||e.follow_up_date.slice(0,10)<=todayKey)).map(e=>({key:`landlord-${e.id}`,name:e.name||[e.first_name,e.last_name].filter(Boolean).join(' ')||'Landlord Enquiry',previousAgent:e.previous_agent||'—',type:'Landlord Enquiry',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.status.replaceAll('_',' '),href:`/bdm/${e.id}`,onboarding:false})),
     ...tasks.filter(t=>t.entity_type==='tenant'&&t.task_type==='follow_up'&&t.status!=='completed'&&t.due_date?.slice(0,10)<=todayKey).map(t=>({key:`followup-${t.id}`,name:t.title,previousAgent:teamMembers.find(m=>String(m.id)===String(t.assigned_to))?.name||t.assigned_to||'—',type:'Tenant Follow-up',date:t.due_date,status:'Follow-up Due',href:`/tasks/${t.id}`,onboarding:false})),
   ] .filter(row=>!hiddenPipeline.includes(row.key)).filter(row=>pipelineType==='all'||(pipelineType==='landlord'?row.type==='Landlord Enquiry':row.type.startsWith('Tenant '))).filter(row=>matchesPipelineAgent(row.previousAgent,pipelineAgent,teamMembers)).sort((a,b)=>(Date.parse(a.date||'1970-01-01')-Date.parse(b.date||'1970-01-01'))*(pipelineOldest?1:-1));

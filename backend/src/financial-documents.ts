@@ -23,6 +23,8 @@ export function registerFinancialDocuments(app:Express){
  });
  app.post('/api/rent-payments/:id/invoice',...guards,requirePermission('staff'),async(req:AuthRequest,res)=>{try{
  const r=await rentInvoiceSource(Number(req.params.id));if(!r)return res.sendStatus(404);
+ const existing=await queryOne('SELECT * FROM financial_documents WHERE source_key=$1',['rent:'+r.id]);
+ if(existing?.snapshot?.cancelled_at)return res.json({...existing,number:financialNumber(existing)});
  const s=rentInvoiceSnapshot(r);
  res.json(await issueFinancialDocument('rent_invoice','rent:'+r.id,s,{tenant_id:r.tenant_id,landlord_id:r.landlord_id,property_id:r.property_id,rent_payment_id:r.id},req.user));
  }catch(e){res.status(400).json({error:e.message});}});

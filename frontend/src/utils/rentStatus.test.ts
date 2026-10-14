@@ -1,3 +1,5 @@
 import {it,expect} from 'vitest';import {rentStatus} from './rentStatus';
 it('changes unpaid rent from amber on the due date to red the next day',()=>{const p={amount_due:620,amount_paid:0,due_date:'2026-09-26'};expect(rentStatus(p,'2026-09-26')).toBe('due today');expect(rentStatus(p,'2026-09-27')).toBe('overdue');expect(rentStatus(p,'2026-09-25')).toBe('pending');});
 it('keeps partial payments overdue and clears fully paid charges',()=>{expect(rentStatus({amount_due:620,amount_paid:600,due_date:'2026-09-01'},'2026-09-26')).toBe('overdue');expect(rentStatus({amount_due:620,amount_paid:620,due_date:'2026-09-01'},'2026-09-26')).toBe('paid');});
+
+it('shows a cancelled zero charge as not due without pretending it was paid',()=>{expect(rentStatus({amount_due:0,amount_paid:0,due_date:'2026-11-05'},'2026-11-06')).toBe('not due');});
