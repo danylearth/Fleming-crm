@@ -44,7 +44,8 @@ const {guarantorPipelineSql,tenantPipelineFieldsSql,registerPipelineStatus}=requ
   const row=(await get()).find(r=>r.property_id===p.id);assert.equal(row.contract_status,'signed');assert(row.landlord_approved_at);assert.equal(row.bank_approved_at,null);assert(!('account_number' in row));assert(!('signature' in row));
   await pool.query("UPDATE landlord_bank_details SET approved_at=NOW() WHERE landlord_id=$1",[l.id]);assert((await get()).find(r=>r.property_id===p.id).bank_approved_at);
   await pool.query("UPDATE landlord_service_agreements SET status='void' WHERE id=$1",[a.id]);assert.equal((await get()).find(r=>r.property_id===p.id).contract_status,null);
-  await pool.query("UPDATE properties SET status='closed' WHERE id=$1",[p.id]);assert(!(await get()).some(r=>r.property_id===p.id));
+  await pool.query("UPDATE properties SET archived_at=NOW() WHERE id=$1",[p.id]);assert(!(await get()).some(r=>r.property_id===p.id));
+  await pool.query("UPDATE properties SET archived_at=NULL,status='closed' WHERE id=$1",[p.id]);assert(!(await get()).some(r=>r.property_id===p.id));
  }finally{await new Promise(r=>server.close(r));}
  const source=fs.readFileSync('src/index-pg.ts','utf8'),section=source.slice(source.indexOf("app.get('/api/landlords-bdm',")),tick=String.fromCharCode(96),start=section.indexOf(tick),end=section.indexOf(tick,start+1);await pool.query(section.slice(start+1,end));
  console.log('PASS real SQL and authenticated API: invitations, expiry, signed submissions, correction/resubmission, credit work, witness wait/failure/completion, verification, latest delivery, landlord contract states, bank approval, void/archive and privacy');

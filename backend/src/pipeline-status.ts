@@ -44,7 +44,7 @@ export const landlordOnboardingSql = `SELECT l.id AS landlord_id,l.name,l.kyc_co
    LEFT JOIN LATERAL(SELECT em.status FROM email_messages em WHERE em.entity_type='landlord' AND em.entity_id=l.id AND em.template='service_agreement'
      AND (em.body_html LIKE '%-contract'||a.id::text||'-%' OR em.body_html LIKE '%'||a.token||'%') ORDER BY em.id DESC LIMIT 1) message ON true
    WHERE a.property_id=p.id AND a.landlord_id=l.id AND a.service_type=p.service_type AND a.status<>'void' ORDER BY a.id DESC LIMIT 1) sa ON true
- WHERE l.landlord_type='external' AND p.status NOT IN ('archived','sold','closed')
+ WHERE l.landlord_type='external' AND p.archived_at IS NULL AND p.status NOT IN ('archived','sold','closed')
  UNION ALL
  SELECT l.id,l.name,l.kyc_completed,NULL,NULL,l.updated_at,NULL,NULL,NULL,false,NULL,NULL,false,NULL
  FROM landlords l WHERE l.landlord_type='external' AND NOT EXISTS(SELECT 1 FROM properties p WHERE p.landlord_id=l.id)
