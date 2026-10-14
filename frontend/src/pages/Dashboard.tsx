@@ -1,5 +1,5 @@
 import DashboardWorkPanels from '../components/DashboardWorkPanels';
-import {applicationReadyForReview,guarantorPipelineState,pipelineVisible,pipelineStage,matchesPipelineAgent} from '../utils/pipeline';
+import {tenantPipelineRecord,pipelineVisible,pipelineStage,matchesPipelineAgent,landlordEnquiryAction,landlordServiceAction,type LandlordServiceRecord,type LandlordPipelineEnquiry} from '../utils/pipeline';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
@@ -50,7 +50,7 @@ interface Enquiry {
   viewing_date?:string;viewing_time?:string;handover_date?:string;handover_not_required?:number; previous_agent?:string; id: number; status: string; first_name_1?: string; last_name_1?: string;
   property_address?: string; property_id?: number; created_at?: string;
   email_1?: string; phone_1?: string;
-  joint_partner_id?:number; application_changes_sent_at?:string; application_form_completed?: number | boolean; application_review_status?: string;
+  joint_partner_id?:number; guarantor_required?:boolean|null; guarantor_pipeline_action?:'waiting'|'review'|'action'|'complete'|null; credit_check_completed?:number; existing_tenancy_application?:unknown; source_tenant_id?:unknown; holding_deposit_received?:number; application_changes_sent_at?:string; application_form_completed?: number | boolean; application_review_status?: string;
   balance_payment_received?:number; balance_payment_requested?:number; balance_follow_up_date?:string; tenancy_agreement_completed?: boolean; tenancy_agreement_status?: string; updated_at?:string; follow_up_date?:string; holding_deposit_requested?:number; application_form_sent?:number;
 }
 
@@ -70,7 +70,10 @@ export default function Dashboard() {
   const [selectedTask,setSelectedTask]=useState<Task|null>(null);
   const [allTasks, setTasks] = useState<Task[]>([]);
   const [allEnquiries, setEnquiries] = useState<Enquiry[]>([]);
-  const [allLandlordEnquiries,setLandlordEnquiries]=useState<{id:number;previous_agent?:string;name?:string;first_name?:string;last_name?:string;status:string;updated_at?:string;created_at?:string;follow_up_date?:string}[]>([]);
+  const [landlordServiceRows,setLandlordServiceRows]=useState<LandlordServiceRecord[]>([]);
+  const [pipelineLoadError,setPipelineLoadError]=useState(false);
+  const [refreshTick,setRefreshTick]=useState(0);
+  const [allLandlordEnquiries,setLandlordEnquiries]=useState<(LandlordPipelineEnquiry & {id:number;previous_agent?:string;name?:string;first_name?:string;last_name?:string;status:string;updated_at?:string;created_at?:string;follow_up_date?:string})[]>([]);
   const [pipelineOldest,setPipelineOldest]=useState(false);
   const [pipelineAgent,setPipelineAgent]=useState('all');
   const [pipelineType,setPipelineType]=useState<'all'|'landlord'|'tenant'>('all');
@@ -91,23 +94,27 @@ export default function Dashboard() {
       api.get('/api/dashboard').catch(() => null),
       getAll('/api/properties').catch(() => []),
       getAll('/api/tasks').catch(() => []),
-      getAll('/api/tenant-enquiries').catch(() => []),
+      getAll('/api/tenant-enquiries').catch(() => null),
       api.get('/api/users/options').catch(()=>[]),
-      api.get('/api/landlords-bdm').catch(()=>[]),
+      api.get('/api/landlords-bdm').catch(()=>null),
       getAll('/api/tenants').catch(()=>[]),
       getAll('/api/landlords').catch(()=>[]),
       getAll('/api/maintenance').catch(()=>[]),
-    ]).then(([dash, props, tks, enqs, members, bdm, tenants, landlords, maintenance]) => {
+      api.get('/api/dashboard/landlord-onboarding').catch(()=>null),
+    ]).then(([dash, props, tks, enqs, members, bdm, tenants, landlords, maintenance, services]) => {
       if (!active) return;
       setPortfolioRecords({tenants,landlords,maintenance});
-      setTeamMembers(members);setLandlordEnquiries(bdm);
+      setTeamMembers(members);
+      setPipelineLoadError(!Array.isArray(enqs)||!Array.isArray(bdm)||!Array.isArray(services));
+      if(Array.isArray(bdm))setLandlordEnquiries(bdm);
+      if(Array.isArray(services))setLandlordServiceRows(services);
       setDashboard(dash);
       setProperties(Array.isArray(props) ? props : []);
       setTasks(Array.isArray(tks) ? tks : []);
-      setEnquiries(Array.isArray(enqs) ? enqs : []);
+      if(Array.isArray(enqs))setEnquiries(enqs);
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [api]);
+  }, [api,refreshTick]);
 
   const matches = portfolioMatcher({...portfolioRecords, properties:allProperties, enquiries:allEnquiries}, portfolioFilter);
   const properties = allProperties.filter(matches.record);
@@ -135,7 +142,8 @@ export default function Dashboard() {
     active_enquiries: enquiries.length,
   };
 
-  const [now] = useState(Date.now);
+  const [now,setNow] = useState(Date.now);
+  useEffect(()=>{const timer=window.setInterval(()=>{setNow(Date.now());if(document.visibilityState==='visible')setRefreshTick(n=>n+1);},60000);return()=>window.clearInterval(timer);},[]);
 
   const calendarDays = useMemo(() => {
     const start = new Date(now);
@@ -162,11 +170,18 @@ export default function Dashboard() {
   const visibleRecentTasks = tasks.filter(task => ['pending','in_progress'].includes(task.status) && !task.dashboard_dismissed_at && !['tenant_enquiry','landlord_bdm','maintenance'].includes(task.entity_type||'') && !['eicr_reminder','epc_reminder','gas_reminder'].includes(task.task_type||'') && !dashboard?.complianceAlerts.some(alert=>alert.task_id===task.id) && (taskOwner==='all' || (taskOwner==='me' ? [String(user?.id),user?.name].includes(task.assigned_to) : [taskOwner,teamMembers.find(member=>String(member.id)===taskOwner)?.name].includes(String(task.assigned_to)))));
 
   const todayKey=new Date(now).toLocaleDateString('en-CA',{timeZone:'Europe/London'});
+  const timeKey=new Date(now).toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour12:false}).slice(0,5);
+  const dueFollowups=tasks.filter(t=>t.task_type==='follow_up'&&['pending','in_progress'].includes(t.status)&&t.due_date?.slice(0,10)<=todayKey);
+  const hasFollowup=(type:string,ids:(number|undefined)[])=>dueFollowups.some(t=>t.entity_type===type&&ids.includes(t.entity_id));
   const pipeline=[
-    ...enquiries.map(e=>({...e,ready_for_review:applicationReadyForReview(e,allEnquiries.find(p=>p.id===e.joint_partner_id)),guarantor_pipeline_state:guarantorPipelineState(e,allEnquiries.find(p=>p.id===e.joint_partner_id))})).filter(e=>pipelineVisible(e,todayKey,new Date(now).toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour12:false}).slice(0,5))).map(e=>({key:`tenant-${e.id}`,name:[e.first_name_1,e.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',previousAgent:e.previous_agent||'—',type:'Tenant Enquiry',date:e.balance_follow_up_date&&e.balance_follow_up_date.slice(0,10)<=todayKey?e.balance_follow_up_date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:pipelineStage(e,todayKey),href:`/enquiries/${e.id}`,onboarding:!!(e.holding_deposit_requested||e.application_form_sent||e.status==='onboarding')})),
-    ...landlordEnquiries.filter(e=>!['onboarded','not_interested','rejected','closed'].includes(e.status)&&(!e.follow_up_date||e.follow_up_date.slice(0,10)<=todayKey)).map(e=>({key:`landlord-${e.id}`,name:e.name||[e.first_name,e.last_name].filter(Boolean).join(' ')||'Landlord Enquiry',previousAgent:e.previous_agent||'—',type:'Landlord Enquiry',date:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?e.follow_up_date:e.updated_at||e.created_at||'',status:e.follow_up_date&&e.follow_up_date.slice(0,10)<=todayKey?'Follow-up Due':e.status.replaceAll('_',' '),href:`/bdm/${e.id}`,onboarding:false})),
-    ...tasks.filter(t=>t.entity_type==='tenant'&&t.task_type==='follow_up'&&t.status!=='completed'&&t.due_date?.slice(0,10)<=todayKey).map(t=>({key:`followup-${t.id}`,name:t.title,previousAgent:teamMembers.find(m=>String(m.id)===String(t.assigned_to))?.name||t.assigned_to||'—',type:'Tenant Follow-up',date:t.due_date,status:'Follow-up Due',href:`/tasks/${t.id}`,onboarding:false})),
-  ] .filter(row=>!hiddenPipeline.includes(row.key)).filter(row=>pipelineType==='all'||(pipelineType==='landlord'?row.type==='Landlord Enquiry':row.type.startsWith('Tenant '))).filter(row=>matchesPipelineAgent(row.previousAgent,pipelineAgent,teamMembers)).sort((a,b)=>(Date.parse(a.date||'1970-01-01')-Date.parse(b.date||'1970-01-01'))*(pipelineOldest?1:-1));
+    ...enquiries.map(e=>({...tenantPipelineRecord(e,allEnquiries.find(p=>p.id===e.joint_partner_id)),pipeline_follow_up_due:hasFollowup('tenant_enquiry',[e.id,e.joint_partner_id])})).filter(e=>pipelineVisible(e,todayKey,timeKey)).map(e=>{
+      const original=e;
+      return {key:'tenant-'+original.id,name:[original.first_name_1,original.last_name_1].filter(Boolean).join(' ')||'Tenant Enquiry',previousAgent:original.previous_agent||'—',type:'Tenant Enquiry',date:original.updated_at||original.created_at||'',status:pipelineStage(e,todayKey,timeKey),href:'/enquiries/'+original.id,onboarding:e.status==='onboarding'};
+    }),
+    ...landlordEnquiries.map(e=>({...e,action:landlordEnquiryAction({...e,pipeline_follow_up_due:hasFollowup('landlord_bdm',[e.id])},todayKey,timeKey)})).filter(e=>e.action).map(e=>({key:'landlord-'+e.id,name:e.name||[e.first_name,e.last_name].filter(Boolean).join(' ')||'Landlord Enquiry',previousAgent:e.previous_agent||'—',type:'Landlord Enquiry',date:e.follow_up_date||e.updated_at||e.created_at||'',status:e.action!,href:'/bdm/'+e.id,onboarding:false})),
+    ...(portfolioFilter==='internal'?[]:landlordServiceRows).map(e=>({...e,action:landlordServiceAction(e)})).filter(e=>e.action).map(e=>({key:'service-'+e.landlord_id+'-'+(e.property_id||'new'),name:e.name+(e.property_address?' — '+e.property_address:''),previousAgent:e.previous_agent||'—',type:'Landlord Enquiry',date:e.signed_at||e.updated_at||'',status:e.action!,href:e.property_id&&['Prepare Service Contract','Send Service Contract','Service Contract Delivery Failed'].includes(e.action!)?'/properties/'+e.property_id:'/landlords/'+e.landlord_id,onboarding:false})),
+    ...dueFollowups.filter(t=>t.entity_type==='tenant'||t.entity_type==='landlord'&&!(t.title==='Office Approval: Confirm Landlord Bank Details'&&landlordServiceRows.some(s=>s.landlord_id===t.entity_id&&landlordServiceAction(s)))||t.entity_type==='property'&&landlordServiceRows.some(s=>s.property_id===t.entity_id)).map(t=>({key:'followup-'+t.id,name:t.title,previousAgent:teamMembers.find(m=>String(m.id)===String(t.assigned_to))?.name||t.assigned_to||'—',type:t.entity_type==='tenant'?'Tenant Follow-up':'Landlord Enquiry',date:t.due_date,status:'Follow-up Due',href:'/tasks/'+t.id,onboarding:false})),
+  ].filter(row=>!hiddenPipeline.includes([row.key,row.status,row.date].join('|'))).filter(row=>pipelineType==='all'||(pipelineType==='landlord'?row.type==='Landlord Enquiry':row.type.startsWith('Tenant '))).filter(row=>matchesPipelineAgent(row.previousAgent,pipelineAgent,teamMembers)).sort((a,b)=>(Date.parse(a.date||'1970-01-01')-Date.parse(b.date||'1970-01-01'))*(pipelineOldest?1:-1));
 
   const clearTask = async (task: Task) => {
     if (!await confirmAction(`Clear “${task.title}” from the dashboard? The task stays open.`)) return;
@@ -226,8 +241,8 @@ export default function Dashboard() {
           <DashboardWorkPanels alerts={dashboard?.complianceAlerts||[]} maintenance={dashboard?.recentMaintenance||[]} teamMembers={teamMembers} onChanged={async()=>setDashboard(await api.get('/api/dashboard'))}/>
           {/* Pipeline */}
           <Card className="p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><div><h2 className="font-semibold flex items-center gap-2"><MessageSquare size={16}/>Enquiry Pipeline</h2><p className="dashboard-section-subtitle">New and existing tenant and landlord onboardings</p></div><div className="flex flex-wrap items-center gap-2"><div role="group" aria-label="Enquiry type" className="flex flex-wrap gap-2">{([{value:'all',label:'All'},{value:'landlord',label:'Landlord Enquiries'},{value:'tenant',label:'Tenant Enquiries'}] as const).map(option=><button key={option.value} aria-pressed={pipelineType===option.value} onClick={()=>setPipelineType(option.value)} className={'rounded-full border px-3 py-2 text-sm font-medium transition-colors '+(pipelineType===option.value?'bg-[var(--accent-orange,#8f2e70)] border-[var(--accent-orange,#8f2e70)] text-white':'border-[var(--border-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]')}>{option.label}</button>)}</div><Select hideLabel searchable className="w-64 max-w-full" label="Filter enquiries by agent" value={pipelineAgent} onChange={setPipelineAgent} options={[{value:'all',label:'View All'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/></div></div>
-            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="dashboard-enquiry-table w-full text-sm text-left [&_th+th]:border-l [&_td+td]:border-l [&_th]:border-[var(--border-subtle)] [&_td]:border-[var(--border-subtle)]"><thead><tr className="text-sm text-[var(--text-muted)]"><th className="py-3">Enquiry Name</th><th className="px-2 whitespace-nowrap">Enquiry Type</th><th className="px-2">Stage</th><th className="px-2">Last Agent</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="px-2 py-2 text-left whitespace-nowrap" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="px-2 text-center dashboard-action-cell">Action</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-1.5 pr-3"><button className="dashboard-enquiry-name" onClick={()=>navigate(row.href)}>{row.type==='Landlord Enquiry'?<BriefcaseBusiness size={17} className="enquiry-kind-icon" aria-label="Landlord enquiry"/>:<UserRound size={17} className="enquiry-kind-icon" aria-label="Tenant enquiry"/>}<span className="block font-normal">{row.key.startsWith('followup-')?row.name:row.name.replace(/^(?:(?:mr|mrs|ms|miss|dr|prof|sir|dame|rev)\.?\s+)+/i,'')}</span></button></td><td className="px-2 text-sm whitespace-nowrap">{row.type}</td><td className="px-2 text-sm">{row.status.charAt(0).toUpperCase()+row.status.slice(1)}</td><td className="px-2 text-sm">{row.previousAgent}</td><td className="px-2 text-sm whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="px-2 text-center dashboard-action-cell"><div className="dashboard-row-actions"><Button size="sm" className="dashboard-row-open" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue':'View'}<ArrowRight size={14}/></Button><button aria-label={'Remove '+row.name+' from this view'} className="dashboard-row-dismiss" onClick={()=>setHiddenPipeline(current=>[...current,row.key])}><Trash2 size={16}/></button></div></td></tr>)}</tbody></table></div>:<EmptyState message={pipelineAgent==='all'?"No enquiries or follow-ups awaiting action":"No enquiries or follow-ups awaiting action for this agent"}/>}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><div><h2 className="font-semibold flex items-center gap-2"><MessageSquare size={16}/>Enquiry Pipeline</h2>{pipelineLoadError&&<p role="alert" className="text-sm text-red-600">Some onboarding updates could not be loaded. Retrying automatically.</p>}<p className="dashboard-section-subtitle">New and existing tenant and landlord onboardings</p></div><div className="flex flex-wrap items-center gap-2"><div role="group" aria-label="Enquiry type" className="flex flex-wrap gap-2">{([{value:'all',label:'All'},{value:'landlord',label:'Landlord Enquiries'},{value:'tenant',label:'Tenant Enquiries'}] as const).map(option=><button key={option.value} aria-pressed={pipelineType===option.value} onClick={()=>setPipelineType(option.value)} className={'rounded-full border px-3 py-2 text-sm font-medium transition-colors '+(pipelineType===option.value?'bg-[var(--accent-orange,#8f2e70)] border-[var(--accent-orange,#8f2e70)] text-white':'border-[var(--border-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]')}>{option.label}</button>)}</div><Select hideLabel searchable className="w-64 max-w-full" label="Filter enquiries by agent" value={pipelineAgent} onChange={setPipelineAgent} options={[{value:'all',label:'View All'},...teamMembers.map(m=>({value:String(m.id),label:m.name}))]}/></div></div>
+            {pipeline.length ? <div className="overflow-x-auto max-h-96"><table className="dashboard-enquiry-table w-full text-sm text-left [&_th+th]:border-l [&_td+td]:border-l [&_th]:border-[var(--border-subtle)] [&_td]:border-[var(--border-subtle)]"><thead><tr className="text-sm text-[var(--text-muted)]"><th className="py-3">Enquiry Name</th><th className="px-2 whitespace-nowrap">Enquiry Type</th><th className="px-2">Stage</th><th className="px-2">Last Agent</th><th><button onClick={()=>setPipelineOldest(v=>!v)} className="px-2 py-2 text-left whitespace-nowrap" aria-label="Sort pipeline by date">Date {pipelineOldest?'↑':'↓'}</button></th><th className="px-2 text-center dashboard-action-cell">Action</th></tr></thead><tbody>{pipeline.map(row=><tr key={row.key} className="border-t border-[var(--border-subtle)]"><td className="py-1.5 pr-3"><button className="dashboard-enquiry-name" onClick={()=>navigate(row.href)}>{row.type==='Landlord Enquiry'?<BriefcaseBusiness size={17} className="enquiry-kind-icon" aria-label="Landlord enquiry"/>:<UserRound size={17} className="enquiry-kind-icon" aria-label="Tenant enquiry"/>}<span className="block font-normal">{row.key.startsWith('followup-')?row.name:row.name.replace(/^(?:(?:mr|mrs|ms|miss|dr|prof|sir|dame|rev)\.?\s+)+/i,'')}</span></button></td><td className="px-2 text-sm whitespace-nowrap">{row.type}</td><td className="px-2 text-sm">{row.status.charAt(0).toUpperCase()+row.status.slice(1)}</td><td className="px-2 text-sm">{row.previousAgent}</td><td className="px-2 text-sm whitespace-nowrap">{row.date?new Date(row.date).toLocaleDateString('en-GB'):'Not Set'}</td><td className="px-2 text-center dashboard-action-cell"><div className="dashboard-row-actions"><Button size="sm" className="dashboard-row-open" onClick={()=>navigate(row.href+(row.onboarding?'?onboarding=1':''))}>{row.onboarding?'Continue':'View'}<ArrowRight size={14}/></Button><button aria-label={'Remove '+row.name+' from this view'} className="dashboard-row-dismiss" onClick={()=>setHiddenPipeline(current=>[...current,[row.key,row.status,row.date].join('|')])}><Trash2 size={16}/></button></div></td></tr>)}</tbody></table></div>:<EmptyState message={pipelineAgent==='all'?"No enquiries or follow-ups awaiting action":"No enquiries or follow-ups awaiting action for this agent"}/>}
           </Card>
         </div>
 

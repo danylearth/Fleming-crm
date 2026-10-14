@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('fs');
 const u=new URL(process.env.DATABASE_URL);assert(['localhost','127.0.0.1'].includes(u.hostname)&&u.pathname.startsWith('/fleming_crm_test'));
 const pool=require('../dist/db-pg').default;const one=async(sql,args=[])=>(await pool.query(sql,args)).rows[0];
 (async()=>{try{
- const source=fs.readFileSync('src/index-pg.ts','utf8'),section=source.slice(source.indexOf("app.get('/api/tenant-enquiries',")),tick=String.fromCharCode(96),open=section.indexOf(tick),close=section.indexOf(tick,open+1),sql=section.slice(open+1,close);
+ const source=fs.readFileSync('src/index-pg.ts','utf8'),section=source.slice(source.indexOf("app.get('/api/tenant-enquiries',")),tick=String.fromCharCode(96),open=section.indexOf(tick),close=section.indexOf(tick,open+1),sql=section.slice(open+1,close).replace('${guarantorPipelineSql}',require('../dist/pipeline-status').guarantorPipelineSql).replace('${tenantPipelineFieldsSql}',require('../dist/pipeline-status').tenantPipelineFieldsSql);
  const e=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,phone_1,status,application_form_completed,application_review_status,guarantor_required) VALUES('Fictional','Applicant','fictional@example.test','07700900000','onboarding',1,'approved',true) RETURNING id");
  const g=await one("INSERT INTO guarantor_verifications(enquiry_id,name,status) VALUES($1,'Fictional Guarantor','invited') RETURNING id",[e.id]);
  const state=async()=> (await pool.query(sql,[100,0])).rows.find(r=>r.id===e.id).guarantor_pipeline_action;

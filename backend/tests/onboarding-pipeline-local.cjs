@@ -1,0 +1,52 @@
+const assert=require('node:assert/strict'),fs=require('fs');
+const u=new URL(process.env.DATABASE_URL);assert(['127.0.0.1','localhost'].includes(u.hostname)&&u.pathname.startsWith('/fleming_crm_test'));
+const pool=require('../dist/db-pg').default,one=async(s,p=[])=>(await pool.query(s,p)).rows[0];
+const {guarantorPipelineSql,tenantPipelineFieldsSql,registerPipelineStatus}=require('../dist/pipeline-status');
+(async()=>{try{
+ const e=await one("INSERT INTO tenant_enquiries(first_name_1,last_name_1,email_1,phone_1,status,guarantor_required) VALUES('Fictional','Applicant','fixture@example.test','07700900000','onboarding',true) RETURNING id");
+ const g=await one("INSERT INTO guarantor_verifications(enquiry_id,name,status,expires_at) VALUES($1,'Fictional Guarantor','invited',NOW()+INTERVAL '30 days') RETURNING id",[e.id]);
+ const state=async()=>(await one('SELECT '+guarantorPipelineSql+' AS action FROM tenant_enquiries te WHERE te.id=$1',[e.id])).action;
+ assert.equal(await state(),'waiting');
+ await pool.query("UPDATE guarantor_verifications SET expires_at=NOW()-INTERVAL '1 day' WHERE id=$1",[g.id]);assert.equal(await state(),'action');
+ await pool.query("UPDATE guarantor_verifications SET signature='{}',submitted_at=NOW(),status='awaiting_witness',expires_at=NOW()+INTERVAL '30 days' WHERE id=$1",[g.id]);assert.equal(await state(),'review');
+ const x=await one("INSERT INTO guarantor_executions(verification_id,status,source_pdf,source_sha256,signature_fields,tenancy_snapshot,form_snapshot,witness_expires_at) VALUES($1,'awaiting_witness',$2,'fictional','{}','{}','{}',NOW()+INTERVAL '30 days') RETURNING id",[g.id,Buffer.from('fixture')]);
+ await pool.query("UPDATE guarantor_verifications SET execution_id=$2,workflow=$3 WHERE id=$1",[g.id,x.id,JSON.stringify({reviewStatus:'approved'})]);assert.equal(await state(),'action');
+ await pool.query("UPDATE guarantor_verifications SET workflow=$2 WHERE id=$1",[g.id,JSON.stringify({reviewStatus:'approved',credit:{credit_check_completed:1}})]);assert.equal(await state(),'waiting');
+ await pool.query("INSERT INTO guarantor_execution_emails(execution_id,kind,to_email,subject,body_html,status) VALUES($1,'witness_request','witness@example.test','Fixture','Fixture','failed')",[x.id]);assert.equal(await state(),'action');
+ await pool.query("UPDATE guarantor_execution_emails SET status='sent' WHERE execution_id=$1",[x.id]);assert.equal(await state(),'waiting');
+ await pool.query("UPDATE guarantor_executions SET status='completed' WHERE id=$1",[x.id]);assert.equal(await state(),'action');
+ await pool.query("UPDATE guarantor_verifications SET status='verified' WHERE id=$1",[g.id]);assert.equal(await state(),'complete');
+ await pool.query("UPDATE guarantor_verifications SET status='changes_requested',workflow=$2 WHERE id=$1",[g.id,JSON.stringify({reviewStatus:'changes_requested',changesSent:new Date().toISOString()})]);assert.equal(await state(),'waiting');
+ await pool.query("UPDATE guarantor_verifications SET workflow=$2 WHERE id=$1",[g.id,JSON.stringify({reviewStatus:'pending',changesSent:null})]);assert.equal(await state(),'review');
+ const fields=()=>one('SELECT '+tenantPipelineFieldsSql+' FROM tenant_enquiries te WHERE te.id=$1',[e.id]);await fields();
+ await pool.query("INSERT INTO email_messages(entity_type,entity_id,to_email,from_email,subject,template,body_html,status) VALUES('tenant_enquiry',$1,'fake@example.test','fake@example.test','Fixture','tenancy_application','Fixture','failed')",[e.id]);assert.equal((await fields()).pipeline_delivery.tenancy_application,'failed');
+ await pool.query("INSERT INTO email_messages(entity_type,entity_id,to_email,from_email,subject,template,body_html,status) VALUES('tenant_enquiry',$1,'fake@example.test','fake@example.test','Fixture','tenancy_application','Fixture','sent')",[e.id]);assert.equal((await fields()).pipeline_delivery.tenancy_application,'sent');
+ const l=await one("INSERT INTO landlords(name,landlord_type,kyc_completed) VALUES('Fictional Owner','external',1) RETURNING id");
+ const p=await one("INSERT INTO properties(address,postcode,landlord_id,status,service_type) VALUES('1 Test Road','WV1 1AA',$1,'to_let','full_management') RETURNING id",[l.id]);
+ const ta=await one("INSERT INTO tenancy_agreements(enquiry_id,property_id,agreement_type,filename,original_name,tenant_token,requires_landlord_signature,landlord_slug,issued_at) VALUES($1,$2,'client','fixture.pdf','Fixture','fixture-token',1,'fixture-landlord',NOW()-INTERVAL '1 minute') RETURNING id",[e.id,p.id]);
+ assert.equal((await fields()).tenancy_agreement_action,true);
+ await pool.query("INSERT INTO email_messages(entity_type,entity_id,to_email,from_email,subject,template,body_html,status) VALUES('tenant_enquiry',$1,'owner@example.test','fake@example.test','Fixture','landlord_tenancy_agreement','Fixture','sent')",[e.id]);assert.equal((await fields()).tenancy_agreement_action,false);
+ await pool.query("UPDATE tenancy_agreements SET landlord_signed_at=NOW() WHERE id=$1",[ta.id]);assert.equal((await fields()).tenancy_agreement_action,true);
+ await pool.query("UPDATE tenancy_agreements SET tenant_delivery_sent_at=NOW(),status='tenant_signed' WHERE id=$1",[ta.id]);assert.equal((await fields()).tenancy_agreement_action,false);
+ await pool.query("INSERT INTO email_messages(entity_type,entity_id,to_email,from_email,subject,template,body_html,status) VALUES('tenant_enquiry',$1,'fake@example.test','fake@example.test','Fixture','tenancy_agreement','Fixture','bounced')",[e.id]);assert.equal((await fields()).tenancy_agreement_action,true);
+ await pool.query("UPDATE tenancy_agreements SET status='completed' WHERE id=$1",[ta.id]);assert.equal((await fields()).tenancy_agreement_action,false);
+ const a=await one("INSERT INTO landlord_service_agreements(property_id,landlord_id,service_type,setup_fee,monthly_fee,payment_route,token,details,bank_details,filename) VALUES($1,$2,'full_management',10,10,'fleming_client_money','fixture-token','{}','{}','fixture.pdf') RETURNING id",[p.id,l.id]);
+ const admin=await one("INSERT INTO users(name,email,password,role,is_active) VALUES('Fixture Admin','pipeline@example.test','unused','admin',1) RETURNING *");
+ const express=require('express'),app=express();registerPipelineStatus(app);const server=await new Promise(r=>{const s=app.listen(0,'127.0.0.1',()=>r(s));});
+ try{
+  const url='http://127.0.0.1:'+server.address().port+'/api/dashboard/landlord-onboarding';assert.equal((await fetch(url)).status,401);
+  const get=async()=>{const r=await fetch(url,{headers:{Authorization:'Bearer '+require('../dist/auth').generateToken(admin)}});assert.equal(r.status,200);return r.json();};
+  assert.equal((await get()).find(r=>r.property_id===p.id).contract_status,'draft');
+  await pool.query("UPDATE landlord_service_agreements SET status='issued',delivery_status='sent' WHERE id=$1",[a.id]);assert.equal((await get()).find(r=>r.property_id===p.id).contract_status,'issued');
+  await pool.query("INSERT INTO email_messages(entity_type,entity_id,to_email,from_email,subject,template,body_html,status) VALUES('landlord',$1,'owner@example.test','fake@example.test','Fixture','service_agreement',$2,'bounced')",[l.id,'https://apply.fleminglettings.co.uk/owner-contract'+a.id+'-fixture']);assert.equal((await get()).find(r=>r.property_id===p.id).delivery_status,'bounced');
+  await pool.query("UPDATE landlord_service_agreements SET status='signed',signed_at=NOW() WHERE id=$1",[a.id]);
+  await pool.query("INSERT INTO landlord_bank_details(landlord_id,account_name,sort_code,account_number,bank_name,landlord_approved_at) VALUES($1,'Fixture','00-00-00','00000000','Fixture',NOW())",[l.id]);
+  const row=(await get()).find(r=>r.property_id===p.id);assert.equal(row.contract_status,'signed');assert(row.landlord_approved_at);assert.equal(row.bank_approved_at,null);assert(!('account_number' in row));assert(!('signature' in row));
+  await pool.query("UPDATE landlord_bank_details SET approved_at=NOW() WHERE landlord_id=$1",[l.id]);assert((await get()).find(r=>r.property_id===p.id).bank_approved_at);
+  await pool.query("UPDATE landlord_service_agreements SET status='void' WHERE id=$1",[a.id]);assert.equal((await get()).find(r=>r.property_id===p.id).contract_status,null);
+  await pool.query("UPDATE properties SET status='closed' WHERE id=$1",[p.id]);assert(!(await get()).some(r=>r.property_id===p.id));
+ }finally{await new Promise(r=>server.close(r));}
+ const source=fs.readFileSync('src/index-pg.ts','utf8'),section=source.slice(source.indexOf("app.get('/api/landlords-bdm',")),tick=String.fromCharCode(96),start=section.indexOf(tick),end=section.indexOf(tick,start+1);await pool.query(section.slice(start+1,end));
+ console.log('PASS real SQL and authenticated API: invitations, expiry, signed submissions, correction/resubmission, credit work, witness wait/failure/completion, verification, latest delivery, landlord contract states, bank approval, void/archive and privacy');
+}finally{await pool.end();}})().catch(e=>{console.error(e);process.exitCode=1});
+

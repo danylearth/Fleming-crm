@@ -1,3 +1,4 @@
+import {guarantorPipelineSql,tenantPipelineFieldsSql,registerPipelineStatus} from './pipeline-status';
 import {flyClientIp} from './client-ip';
 import {agreementConsentSnapshot} from './agreement-consent';
 import {appendSigningCertificate} from './signing-certificate';
@@ -1295,7 +1296,7 @@ app.delete('/api/property-landlords/:linkId', authMiddleware, async (req: AuthRe
 
 app.get('/api/landlords-bdm', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const prospects = await query(`SELECT b.*, (SELECT COALESCE(u.name,a.user_email) FROM audit_log a LEFT JOIN users u ON u.id=a.user_id WHERE a.entity_type='landlord_bdm' AND a.entity_id=b.id AND a.user_id IS NOT NULL AND a.action NOT IN ('view','page_view','navigate') ORDER BY a.created_at DESC LIMIT 1) AS previous_agent FROM landlords_bdm b ORDER BY created_at DESC`);
+    const prospects = await query(`SELECT b.*, (SELECT jsonb_build_object('kind',kind,'date',appointment_date,'time',appointment_time,'delivery',delivery) FROM landlord_appointments WHERE enquiry_id=b.id ORDER BY id DESC LIMIT 1) AS pipeline_appointment, (SELECT COALESCE(u.name,a.user_email) FROM audit_log a LEFT JOIN users u ON u.id=a.user_id WHERE a.entity_type='landlord_bdm' AND a.entity_id=b.id AND a.user_id IS NOT NULL AND a.action NOT IN ('view','page_view','navigate') ORDER BY a.created_at DESC LIMIT 1) AS previous_agent FROM landlords_bdm b ORDER BY created_at DESC`);
     res.json(prospects);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch landlords BDM' });
@@ -1448,13 +1449,8 @@ app.get('/api/tenant-enquiries', authMiddleware, async (req: AuthRequest, res) =
         (SELECT COALESCE(u.name,a.user_email) FROM audit_log a LEFT JOIN users u ON u.id=a.user_id WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id AND a.user_id IS NOT NULL AND a.action NOT IN ('view','page_view','navigate') ORDER BY a.created_at DESC LIMIT 1) AS previous_agent,
         (SELECT ta.status FROM tenancy_agreements ta WHERE ta.enquiry_id IN (te.id,te.joint_partner_id) AND ta.status<>'void' ORDER BY ta.id DESC LIMIT 1) AS tenancy_agreement_status,
         COALESCE((SELECT ta.status='completed' FROM tenancy_agreements ta WHERE ta.enquiry_id IN (te.id,te.joint_partner_id) AND ta.status<>'void' ORDER BY ta.id DESC LIMIT 1),false) AS tenancy_agreement_completed,
-        (SELECT CASE
-          WHEN g.status='verified' THEN 'complete'
-          WHEN g.signature IS NOT NULL AND g.submitted_at IS NOT NULL
-            AND NOT(COALESCE(g.workflow->>'reviewStatus','')='changes_requested' AND g.workflow->>'changesSent' IS NOT NULL) THEN 'review'
-          WHEN (g.status='invited' AND g.signature IS NULL AND COALESCE(g.workflow->'invitationDelivery'->>'status','')<>'failed')
-            OR (g.workflow->>'reviewStatus'='changes_requested' AND g.workflow->>'changesSent' IS NOT NULL) THEN 'waiting'
-          ELSE 'action' END FROM guarantor_verifications g WHERE g.enquiry_id=te.id AND te.guarantor_required=TRUE) AS guarantor_pipeline_action,
+        ${guarantorPipelineSql} AS guarantor_pipeline_action,
+        ${tenantPipelineFieldsSql},
         (SELECT u.name FROM audit_log a JOIN users u ON u.id=a.user_id WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id ORDER BY a.created_at DESC,a.id DESC LIMIT 1) AS last_agent,
         COALESCE((SELECT MAX(a.created_at) FROM audit_log a WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id AND a.action='status_changed' AND a.changes::jsonb->>'to'=te.status),CASE WHEN te.status='onboarding' THEN (SELECT MIN(a.created_at) FROM audit_log a WHERE a.entity_type='tenant_enquiry' AND a.entity_id=te.id AND a.action='holding_deposit_requested') WHEN te.status='new' THEN te.created_at END) AS workflow_since,
         CASE WHEN te.status<>'onboarding' THEN NULL
@@ -2810,6 +2806,7 @@ registerApplicationProperty(app);
 registerInventoryReviewRoutes(app);
 registerPropertyInspections(app);
 registerLandlordAppointments(app);
+registerPipelineStatus(app);
 registerClientAgreementDetails(app);
 registerTenantMessageTemplates(app);
 registerFlemoRoutes(app);
