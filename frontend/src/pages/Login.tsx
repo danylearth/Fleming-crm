@@ -5,6 +5,11 @@ import {  CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 
 export default function Login() {
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = 'Sign in | Fleming Lettings';
+    return () => { document.title = previousTitle; };
+  }, []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
