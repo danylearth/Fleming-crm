@@ -27,7 +27,7 @@ export default function TenancyEndModal({ tenantId, linkedName, initialDate, onC
     try {
       const result = await api.post(`/api/tenants/${tenantId}/tenancy-end`, { end_date: endDate, notes, send_email: email, send_sms: sms, preview_only: previewOnly, sms_messages: smsEdits });
       if (previewOnly) { setPreviews(result.previews); setSelected(0); setPreviewChannel(channel || 'email'); }
-      else { await onSaved(); if (result.failures?.length) setError(`End date saved. Some messages were not sent: ${result.failures.join('; ')}`); else onClose(); }
+      else { await onSaved(); const issues=[...(result.billing_review||[]),...(result.failures?.length?[`Some messages were not sent: ${result.failures.join('; ')}`]:[])]; if(issues.length)setError(`End date saved. ${issues.join(' ')}`); else onClose(); }
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not save the tenancy end date'); }
     finally { setBusy(false); }
   };

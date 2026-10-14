@@ -5,6 +5,7 @@ import { tenancyEndEmail, normalizePropertyAddress, sendEmail, OUTBOUND_EMAIL_AD
 import { sendSms, normalizeUkPhone, SMS_FROM } from './sms';
 import { dateOnly } from './tenant-lifecycle';
 import { syncTenantLifecycle } from './tenant-lifecycle-db';
+import {removeRentChargesAtTenancyEnd} from './rent-charge-correction';
 
 export function validEndDate(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -46,6 +47,7 @@ export function registerTenancyEndRoutes(app: Express) {
       if (req.body.preview_only === true) { await client.query('ROLLBACK'); return res.json({ previews }); }
       if (req.body.send_email && previews.some(p => !p.to)) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Every linked tenant needs an email address to send email confirmations' }); }
       if (req.body.send_sms && previews.some(p => !p.phone)) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Every linked tenant needs a phone number to send SMS confirmations' }); }
+      const rentCleanup=await removeRentChargesAtTenancyEnd(client,tenants.map(t=>t.id),original.property_id,endDate,req.user);
       for (const tenant of tenants) {
         let previousNotes: any[] = [];
         try { const parsed = JSON.parse(tenant.notes || '[]'); if (Array.isArray(parsed)) previousNotes = parsed; } catch { if (tenant.notes) previousNotes = [{ id: 'legacy', text: tenant.notes, author: 'System', created_at: new Date().toISOString() }]; }
@@ -81,7 +83,7 @@ export function registerTenancyEndRoutes(app: Express) {
         }
       }
       await syncTenantLifecycle();
-      res.json({ success: true, scheduled: tenants.map(t => t.id), failures });
+      res.json({ success: true, scheduled: tenants.map(t => t.id), failures, removed_rent_charges:rentCleanup.removed, billing_review:rentCleanup.review });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
       console.error('Tenancy end scheduling failed', error);

@@ -28,3 +28,7 @@ The old tenancy end date does not itself approve or activate the new tenancy. St
 The agreed new deposit is not a bank receipt: recorded deposit held is not automatically increased. Existing funds/top-up/protection must be handled through the normal financial process.
 
 This covers the same-property joint-to-sole workflow. Cross-property moves and unrelated site-wide UAT are outside this verification.
+
+## Follow-up: remove charges when scheduling the end
+
+Sam requested complete removal rather than a cancelled £0 billing entry. End-of-tenancy scheduling now deletes unused rent charges and their local saved invoices on or after the end date, retaining the audit trail. Recorded payments, allocations, delivery history and external invoices are retained and flagged for office review. Historical billing and the replacement tenancy’s profile are excluded from cleanup. Preview, repeat scheduling, removal, invoice deletion and no recreation by the scheduler are covered by the isolated HTTP/PostgreSQL regression.
