@@ -186,6 +186,7 @@ export default function EnquiryDetail() {
   const [data, setData] = useState<Record<string, any> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form, setForm] = useState<Record<string, any>>({});
+  const requiredUploadTypes=(applicant=1)=>['Primary Identification','Secondary Identification','Bank Statements',...(['Student','Unemployed'].includes(applicant===1?(form.app_form_data?.employment_status||form.employment_status_1):form.employment_status_2)?[]:['Proof of Income or Employment'])].filter(type=>applicant!==1||form.application_document_overrides?.[type]?.status!=='overridden');
   const draftFields = useRef<Record<string, unknown>>({});
   const loadedId = useRef<string | undefined>(undefined);
   const [properties, setProperties] = useState<{ id: number; address: string; postcode?: string; rent_amount?: number }[]>([]);
@@ -682,15 +683,15 @@ export default function EnquiryDetail() {
               <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
                 <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Identity Documents</p>
                 <div className="flex flex-wrap gap-3">
-                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Primary Identification" label="Primary ID" applicantNumber={1} onDocChange={loadDocs} />
-                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Secondary Identification" label="Secondary ID" applicantNumber={1} onDocChange={loadDocs} />
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} required={requiredUploadTypes().includes('Primary Identification')} docType="Primary Identification" label="Primary ID" applicantNumber={1} onDocChange={loadDocs} />
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} required={requiredUploadTypes().includes('Secondary Identification')} docType="Secondary Identification" label="Secondary ID" applicantNumber={1} onDocChange={loadDocs} />
                 </div>
                 {!hasLinkedPartner && jointApp && (
                   <>
                     <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mt-4 mb-3">Identity Documents — Applicant 2</p>
                     <div className="flex flex-wrap gap-3">
-                      <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Primary Identification" label="Primary ID" applicantNumber={2} onDocChange={loadDocs} />
-                      <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Secondary Identification" label="Secondary ID" applicantNumber={2} onDocChange={loadDocs} />
+                      <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} required={requiredUploadTypes(2).includes('Primary Identification')} docType="Primary Identification" label="Primary ID" applicantNumber={2} onDocChange={loadDocs} />
+                      <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} required={requiredUploadTypes(2).includes('Secondary Identification')} docType="Secondary Identification" label="Secondary ID" applicantNumber={2} onDocChange={loadDocs} />
                     </div>
                   </>
                 )}
@@ -735,8 +736,8 @@ export default function EnquiryDetail() {
               <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
                 <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mb-3">Financial Documents</p>
                 <div className="flex flex-wrap gap-3">
-                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Bank Statements" label="Bank Statements" applicantNumber={1} onDocChange={loadDocs} />
-                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Proof of Income or Employment" label="Proof of Employment" applicantNumber={1} onDocChange={loadDocs} />
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} required={requiredUploadTypes().includes('Bank Statements')} docType="Bank Statements" label="Bank Statements" applicantNumber={1} onDocChange={loadDocs} />
+                  <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} required={requiredUploadTypes().includes('Proof of Income or Employment')} docType="Proof of Income or Employment" label="Proof of Employment" applicantNumber={1} onDocChange={loadDocs} />
                   <ContextualDocSlot entityType="tenant_enquiry" entityId={Number(id)} docType="Credit Check Report" label="Credit Report" applicantNumber={1} onDocChange={loadDocs} />
                 </div>
               </div>
@@ -827,11 +828,11 @@ export default function EnquiryDetail() {
             </GlassCard>
 
             {/* Documents */}
-            <DocumentUpload entityType="tenant_enquiry" entityId={Number(id)} applicantNumber={1} title={(!hasLinkedPartner && jointApp) ? "Documents — Applicant 1" : "Documents"} />
+            <DocumentUpload requiredTypes={requiredUploadTypes()} entityType="tenant_enquiry" entityId={Number(id)} applicantNumber={1} title={(!hasLinkedPartner && jointApp) ? "Documents — Applicant 1" : "Documents"} />
 
             {/* Documents — Applicant 2 (only for legacy records without linked partner) */}
             {!hasLinkedPartner && jointApp && (
-              <DocumentUpload entityType="tenant_enquiry" entityId={Number(id)} applicantNumber={2} title="Documents — Applicant 2" />
+              <DocumentUpload requiredTypes={requiredUploadTypes(2)} entityType="tenant_enquiry" entityId={Number(id)} applicantNumber={2} title="Documents — Applicant 2" />
             )}
           </div>
 

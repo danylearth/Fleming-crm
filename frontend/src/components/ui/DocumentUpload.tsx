@@ -3,6 +3,7 @@ import { useNotifications } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Button, SectionHeader, EmptyState, Select, Input } from './index';
 import { Upload, FileText, Image, Paperclip, Trash2, Download } from 'lucide-react';
+import MandatoryDocumentBadge from './MandatoryDocumentBadge';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -22,6 +23,7 @@ interface Props {
   title?: string;
   group?: 'tenant' | 'guarantor';
   refreshKey?: number;
+  requiredTypes?: string[];
   onChange?: () => void | Promise<void>;
 }
 
@@ -31,7 +33,7 @@ function formatBytes(bytes: number) {
   return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
-export default function DocumentUpload({ entityType, entityId, applicantNumber, title, group, refreshKey, onChange }: Props) {
+export default function DocumentUpload({ entityType, entityId, applicantNumber, title, group, refreshKey, requiredTypes=[], onChange }: Props) {
   const {confirmAction}=useNotifications();
   const { token } = useAuth();
   const [docs, setDocs] = useState<Doc[]>([]);
@@ -186,6 +188,7 @@ export default function DocumentUpload({ entityType, entityId, applicantNumber, 
             <Upload size={14} className="mr-2" />
             {uploading ? 'Uploading...' : 'Choose File'}
           </Button>
+          {requiredTypes.includes(selectedType)&&!docs.some(doc=>doc.doc_type===selectedType)&&<MandatoryDocumentBadge/>}
         </div>
       )}
 

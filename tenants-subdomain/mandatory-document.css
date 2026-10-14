@@ -1,0 +1,4 @@
+.document-upload-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-top:16px}
+.document-upload-row .upload-button{margin:0}
+.mandatory-document-badge{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid #f2b5bb;border-radius:999px;background:#fff0f1;color:#be2537;font:600 12px Arial,sans-serif;white-space:nowrap}
+.mandatory-document-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1.5px solid currentColor;border-radius:50%;font-size:11px;font-weight:700}

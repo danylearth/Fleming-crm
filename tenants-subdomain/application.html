@@ -742,7 +742,8 @@
         #signature-controls .signature-actions { margin-top:12px; }
     </style>
 <link rel="stylesheet" href="/form-typography.css">
-<link rel="stylesheet" href="/signature-controls.css"><script src="/form-capitalisation.js" defer></script></head>
+<link rel="stylesheet" href="/signature-controls.css"><script src="/form-capitalisation.js" defer></script><link rel="stylesheet" href="/mandatory-document.css?v=20261014">
+</head>
 <body>
     <div class="container" id="app">
         <!-- Header -->
@@ -1578,6 +1579,7 @@
             toggleSelfEmployedType();
             toggleAccountantDetails();
             togglePanelFromYesNo('f_has_employment_further_info', 'employment-further-info-fields');
+            renderDocuments();
         }
 
         function toggleSelfEmployedType() {
@@ -1894,7 +1896,13 @@
                 const fileInput = card?.querySelector('input[type="file"]');
                 if (fileInput) fileInput.disabled = isRevision && approved;
                 const uploadLabel = card?.querySelector('.upload-button');
-                if (uploadLabel) uploadLabel.textContent = matchingDocuments.length ? '+ Add another' : 'Choose files';
+                if (uploadLabel) {
+                    uploadLabel.textContent = matchingDocuments.length ? '+ Add another' : 'Choose files';
+                    let row=card.querySelector('.document-upload-row');
+                    if(!row){row=document.createElement('div');row.className='document-upload-row';uploadLabel.before(row);row.append(uploadLabel);}
+                    row.querySelector('.mandatory-document-badge')?.remove();
+                    if(requiredDocumentTypes().includes(list.dataset.docList)&&!documentRequirementOverridden(list.dataset.docList)&&!matchingDocuments.some(doc=>doc.review_status!=='rejected'))row.insertAdjacentHTML('beforeend',"<span class=\"mandatory-document-badge\" role=\"status\"><span class=\"mandatory-document-icon\" aria-hidden=\"true\">!</span>Mandatory to continue</span>");
+                }
                 matchingDocuments.forEach(doc => {
                     const item = document.createElement('li');
                     const name = document.createElement('span'); name.textContent = doc.original_name;

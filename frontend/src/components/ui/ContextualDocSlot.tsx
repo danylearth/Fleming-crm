@@ -1,3 +1,4 @@
+import MandatoryDocumentBadge from './MandatoryDocumentBadge';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { CheckCircle, Clock, Upload, Download, Trash2 } from 'lucide-react';
@@ -20,6 +21,7 @@ interface Props {
   docType: string;
   label: string;
   applicantNumber?: number;
+  required?: boolean;
   onDocChange?: (hasDocument: boolean) => void;
 }
 
@@ -29,7 +31,7 @@ function truncateName(name: string, max = 20) {
   return name.slice(0, max - ext.length - 3) + '...' + ext;
 }
 
-export default function ContextualDocSlot({ entityType, entityId, docType, label, applicantNumber, onDocChange }: Props) {
+export default function ContextualDocSlot({ entityType, entityId, docType, label, applicantNumber, required=false, onDocChange }: Props) {
   const { token } = useAuth();
   const [doc, setDoc] = useState<Doc | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,8 +85,13 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
     try {
       const response = await fetch(`${API_URL}/api/documents/${doc.id}`, { method: 'DELETE', headers });
       if (!response.ok) throw new Error((await response.json()).error || 'Document could not be deleted');
-      setDoc(null);
-      onDocChange?.(false);
+      const appQuery = applicantNumber !== undefined ? `?applicant_number=${applicantNumber}` : '';
+      const remainingResponse=await fetch(`${API_URL}/api/documents/${entityType}/${entityId}${appQuery}`,{headers});
+      if(!remainingResponse.ok)throw Error('Document removed, but the remaining files could not be refreshed');
+      const remaining:Doc[]=await remainingResponse.json();
+      const match=remaining.find(d=>d.doc_type===docType&&d.review_status==='approved')||remaining.find(d=>d.doc_type===docType&&d.review_status!=='rejected');
+      setDoc(match||null);
+      onDocChange?.(!!match);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Document could not be deleted');
     }
@@ -166,6 +173,7 @@ export default function ContextualDocSlot({ entityType, entityId, docType, label
           <p className="text-xs text-[var(--text-muted)]">
             {uploading ? 'Uploading...' : 'Click to upload file'}
           </p>
+          {required&&<span className="mt-2 flex"><MandatoryDocumentBadge/></span>}
         </div>
       </div>
       <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />

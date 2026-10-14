@@ -1,3 +1,4 @@
+import MandatoryDocumentBadge from './ui/MandatoryDocumentBadge';
 import {useState} from 'react';
 import {CheckCircle,FileText,Eye,Download} from 'lucide-react';
 import {useAuth} from '../context/AuthContext';
@@ -52,7 +53,7 @@ export default function CreditCheckPanel({enquiry,documents,onSaved,onView,onDow
      <label className="text-sm">Credit Score *<input required inputMode="numeric" pattern="[0-9]+" value={score} onChange={e=>setScore(e.target.value)} placeholder="e.g. 720" className={inputClass}/></label>
      <Select className="credit-select" label="Credit Rating" compact searchable={false} disabled={saving||!editable} value={details.rating||''} onChange={rating=>setDetails({...details,rating})} options={[{value:'',label:'Not supplied'},...['Very Poor','Poor','Fair','Good','Excellent'].map(label=>({value:label.toUpperCase().replace(/ /g,'_'),label}))]}/>
     </div>
-    <label className="block text-sm">Upload Credit Report *
+    <label className="block text-sm"><span className="flex flex-wrap items-center justify-between gap-2">Upload Credit Report *{!report&&<MandatoryDocumentBadge/>}</span>
      <span className={`relative mt-1 flex min-h-11 items-center gap-3 rounded-lg border px-3 py-1.5 focus-within:ring-2 focus-within:ring-purple-400 ${file?'border-purple-400 bg-purple-500/10':'border-[var(--border-input)] bg-[var(--bg-input)]'}`}>
       <input aria-label="Upload Credit Report" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e=>setFile(e.target.files?.[0]||null)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0"/>
       <span className="shrink-0 rounded-md bg-[var(--bg-hover)] px-2 py-1">{file?'Change File':'Choose File'}</span>
