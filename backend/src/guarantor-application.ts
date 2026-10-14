@@ -51,7 +51,7 @@ async function publicWitness(client:PoolClient,token:string,lock=false){
 export function registerGuarantorApplication(app:Express,uploadsDir:string){
  const staff=[authMiddleware,requirePermission('staff')],base='/api/tenant-enquiries/:id/guarantor';
  const handle=(work:(req:any,res:Response)=>Promise<any>)=>async(req:any,res:Response)=>{try{await work(req,res);}catch(error){res.status(409).json({error:error instanceof Error?error.message:'The guarantor application could not be updated'});}};
- const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024,files:1}});
+ const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024,files:6}});
  const staffState=async(id:number)=>transaction(async client=>{const e=await enquiry(client,id);const g=(await client.query('SELECT * FROM guarantor_verifications WHERE enquiry_id=$1',[id])).rows[0];return guarantorState(client,g,e,true);});
  app.get(base,...staff,handle(async(req,res)=>res.json(await staffState(Number(req.params.id)))));
  app.post(base,...staff,handle(async(req:AuthRequest,res)=>{
@@ -237,17 +237,21 @@ export function registerGuarantorApplication(app:Express,uploadsDir:string){
   if(!file)return res.sendStatus(404);
   res.set('Content-Security-Policy','sandbox').type(file.mime_type).sendFile(guarantorEvidencePath(uploadsDir,file.filename));
  }));
- app.post(publicBase+'/files',upload.single('file'),handle(async(req,res)=>{
-  let written='';try{
+ app.post(publicBase+'/files',upload.array('file',6),handle(async(req,res)=>{
+  const written:string[]=[];try{
    const result=await transaction(async client=>{
     const {e,g}=await publicGuarantor(client,req.params.token,true),category=String(req.body.category||''),files=await guarantorFiles(client,g.id);
     assertGuarantorEvidenceEditable(g,category,files);
-    const stored=await storeGuarantorEvidence(client,g,category,req.file,uploadsDir);written=stored.location;
+    const incoming=(req.files||[]) as Express.Multer.File[];
+    if(!incoming.length)throw Error('Choose at least one document');
+    const retained=files.filter(file=>file.category===category&&!(g.signature&&file.review_status==='rejected'));
+    if(retained.length+incoming.length>20)throw Error('You can keep up to 20 documents in each category. Remove an unwanted file or contact the office.');
+    const ids:number[]=[];for(const file of incoming){const stored=await storeGuarantorEvidence(client,g,category,file,uploadsDir);written.push(stored.location);ids.push(stored.id);}
     await invalidatePrepared(client,g);
     if(g.signature){g.workflow={...g.workflow,revisionUploads:[...new Set([...(g.workflow.revisionUploads||[]),guarantorEvidenceCategories.indexOf(category)])]};await client.query('UPDATE guarantor_verifications SET workflow=$2,updated_at=NOW() WHERE id=$1',[g.id,JSON.stringify(g.workflow)]);}
-    await audit(client,req,e.id,'guarantor_evidence_uploaded',{file_id:stored.id,category});return guarantorState(client,g,e);
+    await audit(client,req,e.id,'guarantor_evidence_uploaded',{file_ids:ids,category});return guarantorState(client,g,e);
    });res.json(result);
-  }catch(error){if(written)await fs.promises.unlink(written).catch(()=>{});throw error;}
+  }catch(error){await Promise.all(written.map(file=>fs.promises.unlink(file).catch(()=>{})));throw error;}
  }));
  app.delete(publicBase+'/files/:fileId',handle(async(req,res)=>res.json(await transaction(async client=>{
   const {e,g}=await publicGuarantor(client,req.params.token,true);

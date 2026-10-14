@@ -28,8 +28,8 @@ export function assertGuarantorEvidenceEditable(g:any,category:string,files:any[
  if(!guarantorEvidenceCategories.includes(category))throw Error('Choose a permitted evidence category');
  if(!['invited','changes_requested'].includes(g.status))throw Error('Submitted evidence is locked');
  if(g.signature){
-  const current=files.find(file=>file.category===category),index=guarantorEvidenceCategories.indexOf(category);
-  if(g.workflow?.reviewStatus!=='changes_requested'||!g.workflow?.changesSent||(current?.review_status!=='rejected'&&!(index<4&&!current)))throw Error('Only documents requested by the office can be replaced');
+  const current=files.filter(file=>file.category===category),index=guarantorEvidenceCategories.indexOf(category);
+  if(g.workflow?.reviewStatus!=='changes_requested'||!g.workflow?.changesSent||(!current.some(file=>file.review_status==='rejected')&&!(index<4&&!current.length)&&!g.workflow?.revisionUploads?.includes(index)))throw Error('Only documents requested by the office can be replaced');
  }
 }
 
@@ -42,7 +42,10 @@ export async function storeGuarantorEvidence(client:PoolClient,g:any,category:st
  const originalName=path.basename(String(file.originalname).replace(/\\/g,'/')).replace(/[\u0000-\u001f\u007f]/g,'').slice(0,200)||'Supporting document'+type.extension;
  await fs.mkdir(uploadsDir,{recursive:true});await fs.writeFile(location,file.buffer,{flag:'wx'});
  try{
-  await client.query('UPDATE guarantor_verification_files SET current=FALSE WHERE verification_id=$1 AND category=$2',[g.id,category]);
+  // Supporting evidence accumulates; only a replacement credit report or
+  // rejected evidence from an issued correction request supersedes old files.
+  if(category===guarantorCreditCategory)await client.query('UPDATE guarantor_verification_files SET current=FALSE WHERE verification_id=$1 AND category=$2',[g.id,category]);
+  else if(g.signature)await client.query("UPDATE guarantor_verification_files SET current=FALSE WHERE verification_id=$1 AND category=$2 AND review_status='rejected'",[g.id,category]);
   const row=(await client.query('INSERT INTO guarantor_verification_files(verification_id,category,filename,original_name,mime_type,sha256,size) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id',[g.id,category,filename,originalName,type.mime,executionHash(file.buffer),file.buffer.length])).rows[0];
   return {id:row.id,location};
  }catch(error){await fs.unlink(location).catch(()=>{});throw error;}
