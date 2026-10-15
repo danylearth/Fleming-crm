@@ -1096,6 +1096,7 @@
         <p id="document-guide-intro"></p>
         <ul id="document-guide-list"></ul>
         <p id="document-guide-note" class="document-guide-note"></p>
+        <p id="document-guide-entitlement" class="document-guide-note" hidden>For state pension or benefits evidence, use the <a href="https://www.gov.uk/proof-benefits-state-pension" target="_blank" rel="noopener noreferrer">GOV.UK proof of entitlement service</a> to obtain your proof of entitlement.</p>
         <p>Documents are reviewed by our team. We may request additional evidence or original-document checks before verification is complete.</p>
     </dialog>
 
@@ -1171,6 +1172,7 @@
             document.getElementById('document-guide-title').textContent = guide.title;
             document.getElementById('document-guide-intro').textContent = guide.intro;
             document.getElementById('document-guide-note').textContent = guide.note;
+            document.getElementById('document-guide-entitlement').hidden = category !== 'income';
             const list = document.getElementById('document-guide-list');
             list.replaceChildren(...guide.items.map(text => { const item = document.createElement('li'); item.textContent = text; return item; }));
             document.getElementById('document-guide').showModal();

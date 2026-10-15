@@ -30,6 +30,7 @@
             document.getElementById('document-guide-title').textContent = guide.title;
             document.getElementById('document-guide-intro').textContent = guide.intro;
             document.getElementById('document-guide-note').textContent = guide.note;
+            document.getElementById('document-guide-entitlement').hidden = category !== 'income';
             const list = document.getElementById('document-guide-list');
             list.replaceChildren(...guide.items.map(text => { const item = document.createElement('li'); item.textContent = text; return item; }));
             document.getElementById('document-guide').showModal();
