@@ -266,7 +266,7 @@ export function formatAgreementFlow(xml:string,values:Record<string,string>):str
 }
 
 /** Keep name-to-signature spacing equal in both main and addendum signing blocks. */
-export function formatSignatureSpacing(xml:string):string {
+export function formatSignatureSpacing(xml:string,preserveLandlordSignature=false):string {
  const text=(p:string)=>[...p.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m=>m[1]).join('').trim();
  const spacing=(p:string,before:number,after:number)=>{
   p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
@@ -285,7 +285,7 @@ export function formatSignatureSpacing(xml:string):string {
    if(/^(Between the Landlord:|And you, the Tenant\(s\):)$/.test(value))return spacing(p,value.startsWith('And')?360:0,80).replace('<w:pPr>','<w:pPr><w:keepNext/>');
    if(['{{LANDLORD_SIGNATORY}}','{{TENANT_NAMES}}'].includes(value)||value.includes('(Managing Director)')){p=p.replace(/<w:sz(?:Cs)?\b[^>]*\/>/g,'').replace('<w:rPr>','<w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/>');return spacing(p,0,80).replace('<w:pPr>','<w:pPr><w:keepNext/>');}
    if(value==='Landlord signature and date:')return spacing(p,0,900).replace('<w:pPr>','<w:pPr><w:keepNext/>');
-   if(value==='Signature:')return spacing(p.replace(/<w:drawing\b[\s\S]*?<\/w:drawing>/g,''),0,720).replace('<w:pPr>','<w:pPr><w:keepNext/>');
+   if(value==='Signature:')return spacing(preserveLandlordSignature?p:p.replace(/<w:drawing\b[\s\S]*?<\/w:drawing>/g,''),0,720).replace('<w:pPr>','<w:pPr><w:keepNext/>');
    if(value==='Date:'){const date=spacing(p,0,0);return ++mainDate===1?date.replace('<w:pPr>','<w:pPr><w:keepNext/>'):date;}
   }
   if(!value&&signing&&!/<w:br|<w:drawing|<w:sectPr/.test(p))return '';
@@ -333,7 +333,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
       let xml = zip.file('word/document.xml')!.asText();
       if(isClient)xml=prepareClientPaymentTemplate(xml,input.serviceType);
       xml=isClient?formatClientContractLayout(xml):formatContractLayout(xml);
-      xml=formatSignatureSpacing(formatAgreementFlow(formatAptPresentation(xml,input.hasGas),values));
+      xml=formatSignatureSpacing(formatAgreementFlow(formatAptPresentation(xml,input.hasGas),values),input.agreementType==='internal');
       // Only the signing labels change; preserve the surrounding agreement wording.
       let signatureRole='Landlords',mainSignatureLabels=false;
       xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{

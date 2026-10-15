@@ -9,6 +9,7 @@ import {
   resolvePaymentRoute,
   type TenancyAgreementPdfInput,
 } from './tenancy-agreement-pdf';
+import {formatSignatureSpacing} from './tenancy-template';
 
 const baseInput: TenancyAgreementPdfInput = {
   enquiryId: 42,
@@ -54,6 +55,12 @@ describe('tenancy agreement routing', () => {
 });
 
 describe('tenancy agreement PDFs', () => {
+  it('keeps the company signature drawing in Fleming-owned APTs', () => {
+    const signingBlock='<w:p><w:r><w:t>Signed as an agreement</w:t></w:r></w:p><w:p><w:r><w:t>Signature:</w:t><w:drawing><wp:inline/></w:drawing></w:r></w:p>';
+    expect(formatSignatureSpacing(signingBlock,true)).toContain('<w:drawing>');
+    expect(formatSignatureSpacing(signingBlock,false)).not.toContain('<w:drawing>');
+  });
+
   it.each([
     ['Fleming-owned', baseInput],
     ['client-owned without gas', {
