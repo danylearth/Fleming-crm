@@ -160,6 +160,8 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   } | null>(null);
   const [complianceLoading,setComplianceLoading]=useState(false);
   const complianceRequest=useRef(0);
+  const complianceRefreshing=useRef(false);
+  const complianceLoadedFor=useRef<number|null>(null);
   const [agreementDraftKey]=useState(()=>['fleming-agreement-draft',user?.id||'local',enquiryId,enquiry.linked_property_id,new URLSearchParams(location.search).get('scenario')||'',new URLSearchParams(location.search).get('run')||''].join(':'));
   const [initialAgreementDraft]=useState<Record<string,string>|null>(()=>{try{const draft=JSON.parse(localStorage.getItem(agreementDraftKey)||'null');return draft&&typeof draft==='object'&&!Array.isArray(draft)?draft:null;}catch{return null;}});
   const [agreementStartDate, setAgreementStartDate] = useState(initialAgreementDraft?.tenancyStartDate??'');
@@ -288,13 +290,17 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[enquiryId,agreement?.id,agreement?.status]);
 
-  const fetchAgreementCompliance = async () => {
+  const fetchAgreementCompliance = async (background = false) => {
+    // Focus and polling keep the last checked state usable; issuing still validates on the server.
+    if(background&&complianceRefreshing.current)return false;
     const requestId=++complianceRequest.current;
-    setComplianceLoading(true);
+    complianceRefreshing.current=true;
+    if(!background||complianceLoadedFor.current!==enquiryId)setComplianceLoading(true);
     try {
       const data = await api.get(`/api/tenant-enquiries/${enquiryId}/tenancy-agreement-compliance`);
       if(requestId!==complianceRequest.current)return false;
       setAgreementCompliance(data || null);
+      complianceLoadedFor.current=data?enquiryId:null;
       if (data?.defaults&&!agreementDirty.current) {
         setAgreementStartDate(current => current || dateInputValue(data.defaults.tenancyStartDate));
         setAgreementRent(current => current || String(data.defaults.rent || ''));
@@ -305,12 +311,12 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         setPaymentReference(current=>current||String(data.defaults.paymentReference||''));
       }
       return true;
-    } catch { if(requestId===complianceRequest.current)setReviewError('Property compliance could not be refreshed. Please reopen this stage.');return false; }
-    finally {if(requestId===complianceRequest.current)setComplianceLoading(false);}
+    } catch { if(requestId===complianceRequest.current){setAgreementCompliance(null);complianceLoadedFor.current=null;setReviewError('Property compliance could not be refreshed. Please reopen this stage.');}return false; }
+    finally {if(requestId===complianceRequest.current){complianceRefreshing.current=false;setComplianceLoading(false);}}
   };
 
   // Fetch documents for this enquiry
-  useEffect(() => { fetchDocs(); fetchEmailHistory(); fetchAgreement(); fetchAgreementCompliance(); }, [enquiryId, token, enquiry.updated_at]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchDocs(); fetchEmailHistory(); fetchAgreement(); fetchAgreementCompliance(true); }, [enquiryId, token, enquiry.updated_at]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => {
     if (documentPreview) URL.revokeObjectURL(documentPreview.url);
   }, [documentPreview]);
@@ -946,9 +952,9 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const displayedStep = existingTenancy&&[0,1,2].includes(activeStep)?2:activeStep === 2 ? 1 : activeStep;
   useEffect(()=>{
     if(displayedStep!==5)return;
-    void fetchAgreementCompliance();
-    const timer=setInterval(()=>void fetchAgreementCompliance(),15000);
-    const refresh=()=>void fetchAgreementCompliance();window.addEventListener('focus',refresh);
+    void fetchAgreementCompliance(true);
+    const timer=setInterval(()=>{if(document.visibilityState==='visible')void fetchAgreementCompliance(true);},15000);
+    const refresh=()=>void fetchAgreementCompliance(true);window.addEventListener('focus',refresh);
     return()=>{clearInterval(timer);window.removeEventListener('focus',refresh);};
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[displayedStep,enquiryId,trackingVersion,enquiry.credit_check_completed,jointApplication?.record.credit_check_completed]);
@@ -1305,6 +1311,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                   {agreementCompliance?.agreementType==='internal'&&<p className="text-sm font-semibold">Tenant Signing Invitation</p>}
                   <DeliveryChoices email={agreementSendEmail} sms={agreementSendSms} onEmail={setAgreementSendEmail} onSms={setAgreementSendSms} previewEmail={()=>void previewAgreementEmail()} previewSms={()=>setSmsPreview(renderSmsPreview(agreementSmsMessage))}/>
                   <Button className="self-start font-semibold" variant="gradient" size="sm" onClick={issueAgreement} disabled={saving || complianceLoading || agreementCompliance?.ready !== true || !agreementDetailsComplete}>{saving ? 'Generating...' : editingAgreement ? 'Save Changes & Resend Agreement' : 'Generate & Issue Agreement'}</Button>
+                  {reviewError&&<p role="alert" className="text-sm text-[var(--onboarding-danger)]">{reviewError}</p>}
 </>}</>}>
             {allPreviousComplete(5) ? (
               <div className="space-y-3">
