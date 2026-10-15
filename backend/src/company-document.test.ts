@@ -38,3 +38,11 @@ it.each(['client-let-only-aug26.docx','client-rent-collection-aug26.docx','assur
  const width=original.info.width,channels=original.info.channels,y=original.info.height-1;
  for(const x of [Math.floor(width*.5),Math.floor(width*.75),width-1]){const i=(y*width+x)*channels;expect([...updated.data.subarray(i,i+3)]).toEqual([...original.data.subarray(i,i+3)]);}
 });
+it('flattens cleaned company signature pixels so resized PDFs cannot expose transparent edge guides',async()=>{
+ const zip=new PizZip(fs.readFileSync(path.join(__dirname,'agreement-assets','assured-periodic-tenancy-template.docx')));
+ const signature=fs.readFileSync(path.join(__dirname,'agreement-assets','robert-fleming-signature.png'));
+ await applyCompanyImages(zip,{...COMPANY_DEFAULTS,signer:{name:'Robert Fleming',title:'Managing Director',userId:null,signature:'data:image/png;base64,'+signature.toString('base64')}},true);
+ const rel=zip.file('word/_rels/document.xml.rels')!.asText().match(/<Relationship\b[^>]*Type="[^"]*\/image"[^>]*\/>/)![0];
+ const target=rel.match(/Target="([^"]+)"/)![1];
+ expect((await sharp(zip.file('word/'+target)!.asNodeBuffer()).metadata()).hasAlpha).toBe(false);
+});

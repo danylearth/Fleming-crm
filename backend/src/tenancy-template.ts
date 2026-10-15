@@ -238,6 +238,10 @@ export function formatAgreementFlow(xml:string,values:Record<string,string>):str
   row=row.replace(/<w:trHeight[^>]*\/>/g,'');
   if(receipt)row=row.replace('<w:trPr>','<w:trPr><w:trHeight w:val="760" w:hRule="atLeast"/>');
   row=row.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{
+   if(text(p).startsWith('Written Statement of Terms')){
+    const note=text(p).slice('Written Statement of Terms'.length).trim();
+    return '<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>Written Statement of Terms</w:t></w:r><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:br/><w:t>'+note+'</w:t></w:r></w:p>';
+   }
    if(!text(p)&&!/<w:drawing|<w:pict/.test(p))return '';
    p=p.replace(/<w:pPr\s*\/>/,'<w:pPr></w:pPr>');if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
    p=p.replace(/<w:spacing[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:spacing w:before="0" w:after="'+(intro?'120':'0')+'" w:line="240" w:lineRule="auto"/>');
@@ -289,8 +293,8 @@ export function formatSignatureSpacing(xml:string,preserveLandlordSignature=fals
    if(value==='Date:'){const date=spacing(p,0,0);return ++mainDate===1?date.replace('<w:pPr>','<w:pPr><w:keepNext/>'):date;}
   }
   if(!value&&signing&&!/<w:br|<w:drawing|<w:sectPr/.test(p))return '';
-  if(['{{LANDLORD_SIGNATORY}}','{{TENANT_NAMES}}'].includes(value)){afterName=true;return spacing(p,0,80).replace('<w:pPr>','<w:pPr><w:keepNext/>');}
-  if(value){afterName=false;if(value==='Signed:')return spacing(p,0,1080).replace(/<w:keepNext[^>]*\/>/g,'');if(/^(?:Signature:|Landlord signature and date:)$/.test(value))return spacing(p,0,0);}
+  if(['{{LANDLORD_SIGNATORY}}','{{TENANT_NAMES}}'].includes(value)||value.includes('(Managing Director)')){afterName=true;return spacing(p,0,80).replace('<w:pPr>','<w:pPr><w:keepNext/>');}
+  if(value){afterName=false;if(value==='Signed:')return spacing(p,0,preserveLandlordSignature?0:1080).replace(/<w:keepNext[^>]*\/>/g,'');if(/^(?:Signature:|Landlord signature and date:)$/.test(value))return spacing(p,0,0);}
   return p;
  });
 }
@@ -307,7 +311,7 @@ export function placeCompanySignatureBelowLandlordLabels(xml:string,drawing:stri
   return xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,paragraph=>{
     if(text(paragraph)!=='Landlords Signature:')return paragraph;
     const id=900+copy++;
-    let numberedDrawing=drawing.replace(/<wp:docPr\b([^>]*)>/,(_match,attributes)=>{
+    let numberedDrawing=drawing.replace(/<a:ln\b[^>]*>[\s\S]*?<\/a:ln>|<a:ln\b[^>]*\/>/g,'').replace('</pic:spPr>','<a:ln><a:noFill/></a:ln></pic:spPr>').replace(/<wp:docPr\b([^>]*)>/,(_match,attributes)=>{
       const withId=/\bid="[^"]*"/.test(attributes)?attributes.replace(/\bid="[^"]*"/,` id="${id}"`):`${attributes} id="${id}"`;
       return `<wp:docPr${/\bname="/.test(withId)?withId.replace(/\bname="[^"]*"/,` name="Fleming company signature ${id}"`):`${withId} name="Fleming company signature ${id}"`}>`;
     });
@@ -315,8 +319,9 @@ export function placeCompanySignatureBelowLandlordLabels(xml:string,drawing:stri
       const withId=/\bid="[^"]*"/.test(attributes)?attributes.replace(/\bid="[^"]*"/,` id="${id}"`):`${attributes} id="${id}"`;
       return `<pic:cNvPr${/\bname="/.test(withId)?withId.replace(/\bname="[^"]*"/,` name="Fleming company signature ${id}"`):`${withId} name="Fleming company signature ${id}"`}>`;
     });
-    const signatureParagraph='<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="280" w:line="276" w:lineRule="auto"/></w:pPr><w:r>'+numberedDrawing+'</w:r></w:p>';
-    return paragraph+signatureParagraph;
+    const signatureParagraph='<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="160" w:line="276" w:lineRule="auto"/></w:pPr><w:r>'+numberedDrawing+'</w:r></w:p>';
+    const addendumDate=copy>1?'<w:p><w:pPr><w:spacing w:before="0" w:after="280" w:line="276" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/></w:rPr><w:t>Dated Signed: {{AGREEMENT_DATE}}</w:t></w:r></w:p>':'';
+    return paragraph+signatureParagraph+addendumDate;
   });
 }
 
@@ -326,11 +331,58 @@ export function finaliseSigningBlock(xml:string,agreementDate:string):string {
   return xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,paragraph=>{
     const value=text(paragraph);
     if(/recorded electronically|electronic signature certificate|signature.+signing certificate/i.test(value))return '';
-    if(value!=='Dated Signed:')return paragraph;
+    if(value!=='Dated Signed:'||!agreementDate)return paragraph;
     let first=true;
     return paragraph.replace(/(<w:t(?:\s[^>]*)?>)[\s\S]*?(<\/w:t>)/g,(_match,open,close)=>{
       const replacement=first?`Dated Signed: ${agreementDate}`:'';first=false;return open+replacement+close;
     });
+  });
+}
+
+/** Separate paragraphs reserve a signature and actual-signing-date slot per tenant. */
+export function tenantSigningParagraphs(names:string[]):string {
+  const paragraph=(value:string,after:number,keep:boolean)=>`<w:p><w:pPr><w:keepLines/>${keep?'<w:keepNext/>':''}<w:spacing w:before="0" w:after="${after}" w:line="276" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/></w:rPr><w:t>${xmlText(value)}</w:t></w:r></w:p>`;
+  const signatureSpace='<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="160" w:line="868" w:lineRule="exact"/></w:pPr><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>';
+  return names.map(name=>paragraph(name,80,true)+paragraph('Tenants Signature:',0,true)+signatureSpace+paragraph('Dated Signed:',200,false)).join('');
+}
+
+/** Client landlords use the same reserved signing space, dated only on signing. */
+export function clientLandlordSigningBlocks(xml:string):string {
+  const paragraphs=[...xml.matchAll(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g)];
+  const text=(p:string)=>[...p.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m=>m[1]).join('').trim();
+  for(let i=0;i<paragraphs.length;i++){
+    const p=paragraphs[i][0];if(text(p)!=='Landlords Signature:')continue;
+    let old=p;
+    for(let j=i+1;j<paragraphs.length;j++){
+      const next=paragraphs[j][0],value=text(next);
+      if(value==='Dated Signed:'){old+=next;break;}
+      if(value||next.includes('<w:drawing'))break;
+      old+=next;
+    }
+    const block=tenantSigningParagraphs(['']).replace(/<w:p>[\s\S]*?<\/w:p>/,'').replace('Tenants Signature:','Landlords Signature:');
+    xml=xml.replace(old,block);
+  }
+  return xml;
+}
+
+/** Reclaim clause spacing before joint client signatures without shrinking the signing slots. */
+export function compactClientJointSigningFlow(xml:string):string {
+  let mainSigning=false;
+  return xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{
+    const value=[...p.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m=>m[1]).join('').trim();
+    if(value==='Signed as an agreement')mainSigning=true;
+    if(value==='Addendum to Tenancy Agreement')mainSigning=false;
+    const clause=/^[•\s]*(?:9\.4|10\.\d+|11\.\d+)\s/.test(value);
+    const heading=/^(?:10|11)\.\s/.test(value);
+    const closing=mainSigning&&value.includes('is not a party to this');
+    if(clause||heading||value==='Signed as an agreement'||closing){
+      if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');
+      const before=clause?0:heading?80:160,after=clause?0:heading?40:80;
+      p=p.replace(/<w:spacing[^>]*\/>/g,'').replace('<w:pPr>',`<w:pPr><w:spacing w:before="${before}" w:after="${after}" w:line="240" w:lineRule="auto"/>`);
+    }
+    if(mainSigning&&!closing)p=p.replace(/<w:keepNext[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:keepNext/>');
+    if(closing)mainSigning=false;
+    return p;
   });
 }
 
@@ -399,7 +451,29 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
       xml=xml.replace(/<w:highlight[^>]*\/>/g,'').replace(/<w:shd[^>]*w:fill="FFFF00"[^>]*\/>/gi,'');
       // Keep the supplied wording and layout while applying the requested body font.
       xml=xml.replace(/<w:rFonts[^>]*\/>/g, '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>');
-      xml=finaliseSigningBlock(xml,values.AGREEMENT_DATE);
+      xml=finaliseSigningBlock(xml,isClient?'':values.AGREEMENT_DATE);
+      // Keep the tenant date blank until the captured signing timestamp exists.
+      const tenantBlocks=tenantSigningParagraphs(input.tenants.map(tenant=>tenant.name));
+      // The addendum has a separate names paragraph followed by its signature label.
+      const paragraphs=[...xml.matchAll(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g)];
+      const paragraphText=(p:string)=>[...p.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m=>m[1]).join('').trim();
+      for(let index=0;index<paragraphs.length-1;index++){
+        const first=paragraphs[index][0],second=paragraphs[index+1][0];
+        if(paragraphText(first)===xmlText(names)&&paragraphText(second)==='Tenants Signature:')xml=xml.replace(first+second,tenantBlocks);
+      }
+      xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{
+        const text=paragraphText(p);
+        return text.includes('Tenants Signature:')&&text!=='Tenants Signature:'?tenantBlocks:p;
+      });
+      if(isClient)xml=clientLandlordSigningBlocks(xml);
+      if(isClient&&input.tenants.length>1)xml=compactClientJointSigningFlow(xml);
+      let previousSigningText='';
+      xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{
+        const value=paragraphText(p);
+        if(value==='Dated Signed:'&&previousSigningText===value)return '';
+        if(value)previousSigningText=value;
+        return p;
+      });
       zip.file('word/document.xml', xml);
       const styles=zip.file('word/styles.xml');
       if(styles)zip.file('word/styles.xml',styles.asText().replace(/<w:rFonts[^>]*\/>/g,'<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>'));

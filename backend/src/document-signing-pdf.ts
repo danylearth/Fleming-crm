@@ -6,6 +6,7 @@ import sanitizeHtml from 'sanitize-html';
 import fs from 'node:fs/promises';import os from 'node:os';import path from 'node:path';
 import {execFile} from 'node:child_process';import {promisify} from 'node:util';import {pathToFileURL} from 'node:url';
 import {pdfFontPath} from './pdf-fonts';
+import {formalAgreementDate} from './tenancy-template';
 const exec=promisify(execFile);
 export type SignatureField={type?:'signature'|'initials'|'date';recipient_id:number;page:number;x:number;y:number;width:number;height:number};
 export function validateSignatureFields(fields:any,pages:any[],recipients:any[],draft=false):SignatureField[]{
@@ -47,7 +48,7 @@ export async function completeSigningPdf(bytes:Buffer,fields:SignatureField[],re
    const transform: [number,number,number,number,number,number]=rotation===90?[0,1,-1,0,box.x+box.width,box.y]:rotation===180?[-1,0,0,-1,box.x+box.width,box.y+box.height]:rotation===270?[0,-1,1,0,box.x,box.y+box.height]:[1,0,0,1,box.x,box.y];
    p.pushOperators(pushGraphicsState(),concatTransformationMatrix(...transform));
    if(f.type==='date'){
-    const date=new Date(r.signed_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'Europe/London'}),size=Math.min(12,f.height*h*.65,(f.width*w)/font.widthOfTextAtSize(date,1));
+    const date=formalAgreementDate(new Date(r.signed_at)),size=Math.min(12,f.height*h*.65,(f.width*w)/font.widthOfTextAtSize(date,1));
     p.drawText(date,{x:f.x*w,y:h-(f.y+f.height)*h+(f.height*h-size)/2+size*.2,size,font,color:rgb(0,0,0)});
    }else{
     const image=f.type==='initials'?initials!:signature,legacy=!f.type,fit=image.scaleToFit(f.width*w,Math.max(8,f.height*h-(legacy?18:0)));

@@ -18,6 +18,8 @@ export async function cleanCompanySignature(image:Uint8Array):Promise<Buffer> {
     if(count<info.height*.55)continue;
     for(let y=0;y<info.height;y++)data[(y*info.width+x)*4+3]=0;
   }
+  // Scanned white paper and its faint rectangular edge must not become a box.
+  for(let i=0;i<data.length;i+=4)if(Math.min(data[i],data[i+1],data[i+2])>225)data[i+3]=0;
   return cropSignature(await sharp(data,{raw:{width:info.width,height:info.height,channels:4}}).png().toBuffer());
 }
 
@@ -117,8 +119,8 @@ export async function applyCompanyImages(zip:PizZip,c:CompanySettings,hasCompany
       const existing=zip.file('word/'+target);
       const size=existing&&await sharp(existing.asNodeBuffer()).metadata();
       const output=size?.width&&size.height
-        ?await sharp(signature).resize({width:size.width,height:size.height,fit:'contain',background:{r:255,g:255,b:255,alpha:1}}).png().toBuffer()
-        :signature;
+        ?await sharp(signature).resize({width:size.width,height:size.height,fit:'contain',background:{r:255,g:255,b:255,alpha:1}}).flatten({background:'#ffffff'}).png().toBuffer()
+        :await sharp(signature).flatten({background:'#ffffff'}).png().toBuffer();
       zip.file('word/'+target,output);
     }
   }

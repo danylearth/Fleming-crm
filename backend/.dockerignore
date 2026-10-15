@@ -6,3 +6,5 @@ dist
 uploads
 *.log
 .git
+tmp/
+.tmp-flyctl/

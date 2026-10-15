@@ -24,7 +24,7 @@ export async function serviceGate(propertyId:number){
  return p&&p.landlord_type!=='internal'&&!p.signed?'The landlord must sign the property service agreement before marketing or tenant onboarding can proceed.':null;
 }
 const renderStored=(a:any)=>a.source_filename?fs.readFile(path.join(root(),a.source_filename)).then(source=>servicePdf(a,source)):servicePdf(a);
-const SERVICE_PDF_PRESENTATION='2026-10-05-no-underlines';
+const SERVICE_PDF_PRESENTATION='2026-10-15-consistent-signing-layout';
 export const readAgreementPdf=(a:any)=>['draft','issued'].includes(a.status)&&a.details?.pdf_presentation!==SERVICE_PDF_PRESENTATION?renderStored(a):fs.readFile(path.join(root(),a.signed_filename||a.filename));
 const safe=(a:any)=>{if(!a)return a;const {signature,signature_ip,signature_user_agent,...rest}=a;const {companySettings,...details}=a.details||{};return {...rest,details,signing_url:serviceSigningUrl(a)};};
 const audit=async(c:any,user:any,action:string,a:any)=>c.query("INSERT INTO audit_log(user_id,user_email,action,entity_type,entity_id,changes) VALUES($1,$2,$3,'property',$4,$5)",[user?.id||null,user?.email||null,action,a.property_id,JSON.stringify({service_agreement_id:a.id,service_type:a.service_type,status:a.status})]);

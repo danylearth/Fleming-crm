@@ -1,6 +1,7 @@
 import {appendSigningCertificate} from './signing-certificate';
 import {createHash} from 'node:crypto';
 import {cropSignature} from './signature-image';
+import {formalAgreementDate} from './tenancy-template';
 import {companyTemplateText,applyCompanyImages} from './company-document';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -17,7 +18,7 @@ export const serviceNames:Record<string,string>={let_only:'Let Only',rent_collec
 const xmlText=(s:unknown)=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]!));
 export function formatAgreementDate(value:string):string {
  const date=new Date(value);if(Number.isNaN(date.getTime()))throw Error('Invalid agreement date');
- return date.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'Europe/London'});
+ return formalAgreementDate(date);
 }
 export function fillServiceTemplate(xml:string,a:any):string {
  if(a.details.companySettings)xml=companyTemplateText(xml,a.details.companySettings,'service');
@@ -43,7 +44,18 @@ export function fillServiceTemplate(xml:string,a:any):string {
   if(value.includes('And you, the Landlord:'))signingRole='Landlords';
   return p.replace(/(<w:t(?:\s[^>]*)?>)Signature:(<\/w:t>)/g,`$1${signingRole} Signature:$2`).replace(/(<w:t(?:\s[^>]*)?>)Date:(<\/w:t>)/g,'$1Dated Signed:$2');
  });
+ let signing=false,afterSignerHeading=false;
  return xml.replace(/<w:highlight[^>]*\/>/g,'').replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,p=>{if(!p.includes('<w:pPr>'))p=p.replace(/(<w:p(?:\s[^>]*)?>)/,'$1<w:pPr></w:pPr>');const text=[...p.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m=>m[1]).join('');
+ if(text==='Signed as an agreement')signing=true;
+ if(signing){
+  const space=(after:number)=>{p=p.replace(/<w:spacing[^>]*\/>/g,'').replace('<w:pPr>',`<w:pPr><w:spacing w:before="0" w:after="${after}" w:line="276" w:lineRule="auto"/>`);};
+  if(afterSignerHeading){space(80);afterSignerHeading=false;}
+  if(text==='Between us, the Agent:'||text==='And you, the Landlord:')afterSignerHeading=true;
+  if(text==='Agents Signature:'||text==='Landlords Signature:')space(0);
+  if(p.includes('<w:drawing')){space(160);p=p.replace(/<a:ln\b[^>]*>[\s\S]*?<\/a:ln>|<a:ln\b[^>]*\/>/g,'').replace('</pic:spPr>','<a:ln><a:noFill/></a:ln></pic:spPr>');}
+  if(text.startsWith('Dated Signed:'))space(280);
+  if(text==='Landlords Signature:')p+='<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="160" w:line="868" w:lineRule="exact"/></w:pPr><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>';
+ }
  if(/^\d+\.\s/.test(text)){p=p.replace(/<w:keepNext[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:keepNext/>');}
  if(/^\d+\.\d+/.test(text)){p=p.replace(/<w:spacing[^>]*\/>/g,'').replace('<w:pPr>','<w:pPr><w:spacing w:before="0" w:after="140" w:line="276" w:lineRule="auto"/>');}
  return p.replace('<w:pPr>','<w:pPr><w:keepLines/>');});
@@ -69,7 +81,12 @@ export async function signedServicePdf(bytes:Buffer,a:any,draft=false):Promise<B
   const file=path.join(dir,'source.pdf');await fs.writeFile(file,bytes);const {stdout}=await exec('pdftotext',['-bbox',file,'-']);
   const pages=[...stdout.matchAll(/<page\b[^>]*>([\s\S]*?)<\/page>/g)];
   for(let i=0;i<pages.length;i++){const words=[...pages[i][1].matchAll(/<word xMin="([^"]+)" yMin="([^"]+)" xMax="([^"]+)" yMax="([^"]+)">([^<]+)<\/word>/g)];const signatures=words.filter(w=>w[5]==='Signature:');if(signatures.length<2)continue;
-   const target=pdf.getPage(i),slot=signatures[signatures.length-1],size=signatureImage.scaleToFit(130,26);target.drawImage(signatureImage,{x:Number(slot[3])+8,y:target.getHeight()-Number(slot[2])-size.height,width:size.width,height:size.height});
+   const target=pdf.getPage(i),slot=signatures[signatures.length-1];
+   const signingDate=words.filter(w=>w[5]==='Signed:'||w[5]==='Date:').slice(-1)[0];
+   const height=signingDate?Math.max(8,Math.min(43.4,Number(signingDate[2])-Number(slot[2])-15-16)):24;
+   const size=signatureImage.scaleToFit(200,height);
+   const label=words.find(w=>w[5]==='Landlords'&&Math.abs(Number(w[2])-Number(slot[2]))<.5);
+   target.drawImage(signatureImage,{x:Number(label?.[1]||slot[1]),y:signingDate?target.getHeight()-Number(signingDate[2])+16:target.getHeight()-Number(slot[2])-15-24,width:size.width,height:size.height});
    const dates=words.filter(w=>w[5]==='Signed:'||w[5]==='Date:');const agentDate=dates[0];const agentValue=agentDate&&words.find(w=>Math.abs(Number(w[2])-Number(agentDate[2]))<0.5&&Number(w[1])>Number(agentDate[3]));
    // Match the date already typeset beside the agent signature, including its space and font size.
    const dateSize=agentValue?(Number(agentValue[3])-Number(agentValue[1]))/font.widthOfTextAtSize(agentValue[5],1):10;
