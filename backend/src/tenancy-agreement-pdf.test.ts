@@ -9,7 +9,7 @@ import {
   resolvePaymentRoute,
   type TenancyAgreementPdfInput,
 } from './tenancy-agreement-pdf';
-import {formatSignatureSpacing,placeCompanySignatureBelowLandlordLabels} from './tenancy-template';
+import {finaliseSigningBlock,formatSignatureSpacing,placeCompanySignatureBelowLandlordLabels} from './tenancy-template';
 
 const baseInput: TenancyAgreementPdfInput = {
   enquiryId: 42,
@@ -64,6 +64,13 @@ describe('tenancy agreement PDFs', () => {
     expect(output).toContain('Fleming company signature 900');
     expect(output).toContain('Fleming company signature 901');
     expect(output).toMatch(/<pic:cNvPr\s+id="900"\s+name="Fleming company signature 900"\/>/);
+  });
+
+  it('shows the agreement date while omitting electronic-signing notices from the contract body',()=>{
+    const xml='<w:p><w:r><w:t>Dated Signed:</w:t></w:r></w:p><w:p><w:r><w:t>Recorded electronically in the signing certificate</w:t></w:r></w:p>';
+    const result=finaliseSigningBlock(xml,'6th November 2026');
+    expect(result).toContain('Dated Signed: 6th November 2026');
+    expect(result).not.toContain('Recorded electronically');
   });
 
   it.each([

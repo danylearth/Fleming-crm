@@ -320,6 +320,20 @@ export function placeCompanySignatureBelowLandlordLabels(xml:string,drawing:stri
   });
 }
 
+/** Keep the visible agreement date and remove certificate notes from the agreement body. */
+export function finaliseSigningBlock(xml:string,agreementDate:string):string {
+  const text=(paragraph:string)=>[...paragraph.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(match=>match[1]).join('').trim();
+  return xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,paragraph=>{
+    const value=text(paragraph);
+    if(/recorded electronically|electronic signature certificate|signature.+signing certificate/i.test(value))return '';
+    if(value!=='Dated Signed:')return paragraph;
+    let first=true;
+    return paragraph.replace(/(<w:t(?:\s[^>]*)?>)[\s\S]*?(<\/w:t>)/g,(_match,open,close)=>{
+      const replacement=first?`Dated Signed: ${agreementDate}`:'';first=false;return open+replacement+close;
+    });
+  });
+}
+
 /** Preserve the supplied contract's clauses, tables, headers and page settings. */
 export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput): Promise<Buffer> {
   if (pending >= 1) throw new Error('Other agreements are being prepared. Please try again shortly.');
@@ -343,7 +357,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         CLIENT_SORT_CODE:initialAccount.sortCode,CLIENT_ACCOUNT_NUMBER:initialAccount.accountNumber,INITIAL_ACCOUNT_NAME:initialAccount.accountName,INITIAL_BANK_NAME:initialAccount.bankName||'Not supplied',BANK_ACCOUNT_NAME:input.bankDetails.accountName,BANK_NAME:input.bankDetails.bankName||'Not supplied',
         BANK_SORT_CODE:input.bankDetails.sortCode,BANK_ACCOUNT_NUMBER:input.bankDetails.accountNumber,
         HOLDING_DEPOSIT:Number(input.holdingDeposit||0).toLocaleString('en-GB',{minimumFractionDigits:2}),DEPOSIT_SCHEME:input.depositScheme||'',
-        AGREEMENT_DATE: date(input.tenancyStartDate), START_DATE: date(input.tenancyStartDate),
+        AGREEMENT_DATE: date(input.agreementDate), START_DATE: date(input.tenancyStartDate),
         RENT_DAY: isClient ? date(input.tenancyStartDate).split(' ')[0] : input.tenancyStartDate.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'Europe/London' }),
         TENANT_NAMES: names, PROPERTY_ADDRESS: input.propertyAddress,
         RENT: input.rent.toLocaleString('en-GB',{minimumFractionDigits:2}), DEPOSIT: input.deposit.toLocaleString('en-GB',{minimumFractionDigits:2}), PAYMENT_REFERENCE: input.paymentReference,
@@ -376,7 +390,6 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
       });
       if(input.agreementType==='internal')xml=placeCompanySignatureBelowLandlordLabels(xml,companySignatureDrawing);
       if(input.companySettings){xml=companyTemplateText(xml,input.companySettings,isClient?'client':'internal');await applyCompanyImages(zip,input.companySettings,!isClient);}
-      xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,paragraph=>paragraph.replace(/<[^>]+>/g,'').includes('The electronic signature certificate records each named tenant')?'':paragraph);
       xml = xml.replace(/\{\{([A-Z_]+)\}\}/g, (_match, key) => {
         if (!(key in values)) throw new Error(`Unfilled agreement field: ${key}`);
         return xmlText(values[key]);
@@ -386,7 +399,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
       xml=xml.replace(/<w:highlight[^>]*\/>/g,'').replace(/<w:shd[^>]*w:fill="FFFF00"[^>]*\/>/gi,'');
       // Keep the supplied wording and layout while applying the requested body font.
       xml=xml.replace(/<w:rFonts[^>]*\/>/g, '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>');
-      xml=xml.replace(/(<w:t[^>]*>)Signed:(<\/w:t>)/g, '$1Signed: signatures and dates for each party are recorded in the electronic signature certificate, applying to this addendum.$2');
+      xml=finaliseSigningBlock(xml,values.AGREEMENT_DATE);
       zip.file('word/document.xml', xml);
       const styles=zip.file('word/styles.xml');
       if(styles)zip.file('word/styles.xml',styles.asText().replace(/<w:rFonts[^>]*\/>/g,'<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>'));

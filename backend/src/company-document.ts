@@ -1,8 +1,25 @@
 import type PizZip from 'pizzip';
 import sharp from 'sharp';
 import {COMPANY_DEFAULTS,type CompanySettings} from './company-settings-values';
+import {cropSignature} from './signature-image';
 const escape=(s:string)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const decode=(s:string)=>s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
+
+/**
+ * Remove the tall guide marks that can be left either side of a scanned
+ * company signature, while preserving the handwritten ink itself.
+ */
+export async function cleanCompanySignature(image:Uint8Array):Promise<Buffer> {
+  const {data,info}=await sharp(Buffer.from(image)).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  const ink=(x:number,y:number)=>{const index=(y*info.width+x)*4;return data[index+3]>16&&(data[index]<245||data[index+1]<245||data[index+2]<245);};
+  for(let x=0;x<info.width;x++){
+    if(x>info.width*.16&&x<info.width*.84)continue;
+    let count=0;for(let y=0;y<info.height;y++)if(ink(x,y))count++;
+    if(count<info.height*.55)continue;
+    for(let y=0;y<info.height;y++)data[(y*info.width+x)*4+3]=0;
+  }
+  return cropSignature(await sharp(data,{raw:{width:info.width,height:info.height,channels:4}}).png().toBuffer());
+}
 
 /** Lay out the supplied office address without ever splitting a UK postcode. */
 export function letterheadAddressLines(address:string,maxCharacters=36):string[] {
@@ -91,11 +108,18 @@ export function companyTemplateText(xml:string,c:CompanySettings,kind:'internal'
 export async function applyCompanyImages(zip:PizZip,c:CompanySettings,hasCompanySignature:boolean) {
   if(hasCompanySignature){
     const rels=zip.file('word/_rels/document.xml.rels')!.asText();
+    const signature=await cleanCompanySignature(Buffer.from(c.signer.signature.split(',')[1],'base64'));
     // Supplied templates have one body image: the company's signature.
     for(const rel of rels.match(/<Relationship\b[^>]*\/?>/g)||[]){
       if(!rel.includes('/image"'))continue;
       const target=rel.match(/Target="([^"]+)"/)?.[1];
-      if(target)zip.file('word/'+target,Buffer.from(c.signer.signature.split(',')[1],'base64'));
+      if(!target)continue;
+      const existing=zip.file('word/'+target);
+      const size=existing&&await sharp(existing.asNodeBuffer()).metadata();
+      const output=size?.width&&size.height
+        ?await sharp(signature).resize({width:size.width,height:size.height,fit:'contain',background:{r:255,g:255,b:255,alpha:1}}).png().toBuffer()
+        :signature;
+      zip.file('word/'+target,output);
     }
   }
   for(const relName of Object.keys(zip.files).filter(n=>/^word\/_rels\/(header|footer)\d+\.xml\.rels$/.test(n))){
