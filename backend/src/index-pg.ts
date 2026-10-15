@@ -5916,6 +5916,7 @@ app.get('/api/tenant-enquiries/:id/tenancy-agreement-compliance', authMiddleware
     if (!compliance) return res.json({ ready: false, propertyLinked: false, items: [] });
     const agreementType = resolveAgreementType(enquiry.landlord_type);
     const paymentRoute = resolvePaymentRoute(agreementType, enquiry.service_type);
+    const company = (await getCompanySettings()).data;
     const jointApplicantsReady = !enquiry.joint_partner_id || Boolean(
       enquiry.partner_application_form_completed
       && enquiry.partner_application_review_status === 'approved'
@@ -5937,6 +5938,7 @@ app.get('/api/tenant-enquiries/:id/tenancy-agreement-compliance', authMiddleware
       serviceType: enquiry.service_type,
       paymentRoute,
       initialPaymentAccount: agreementType==='internal'?await configuredBankDetails('fleming_operating'):undefined,
+      companyAccounts: {business:company.operatingAccount,clientMoney:company.clientAccount,cmpNumber:company.cmp.number},
       landlordName: enquiry.landlord_name,
       fees: {setupPercent:enquiry.service_setup_fee,monthlyPercent:enquiry.service_monthly_fee},
       defaults: {

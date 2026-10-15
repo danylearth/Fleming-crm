@@ -14,6 +14,7 @@ import {applicationReviewSections,missingDocumentRequest,onboardingReviewNotes} 
 import ClientAgreementDetails from '../ClientAgreementDetails';
 import AgreementPaymentAccountSummary from '../AgreementPaymentAccountSummary';
 import AgreementDataPreview from '../AgreementDataPreview';
+import {createPortal} from 'react-dom';
 import { useNotifications } from '../../context/NotificationContext';
 import React, { useState, useEffect, useRef } from 'react';
 import { useApi } from '../../hooks/useApi';
@@ -150,6 +151,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
     serviceType?: string | null;
     paymentRoute?: 'fleming_operating' | 'fleming_client_money' | 'landlord';
     initialPaymentAccount?: {accountName:string;bankName:string;sortCode:string;accountNumber:string};
+    companyAccounts?: {business:{accountName:string;bankName:string;sortCode:string;accountNumber:string};clientMoney:{accountName:string;bankName:string;sortCode:string;accountNumber:string};cmpNumber:string};
     landlordName?: string | null;
     fees?: {setupPercent?:string|number|null;monthlyPercent?:string|number|null};
     jointApplicantsReady?: boolean;
@@ -168,6 +170,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [agreementParking, setAgreementParking] = useState(initialAgreementDraft?.parking??'');
   const [paymentReference,setPaymentReference]=useState(()=>{if(initialAgreementDraft?.paymentReference)return initialAgreementDraft.paymentReference;const property=properties.find(p=>Number(p.id)===Number(enquiry.linked_property_id));return (String(property?.address||enquiry.property_address||'').match(/^\s*\d+[A-Za-z]?/)?.[0]?.trim()||'PROPERTY')+' '+String(property?.postcode||enquiry.property_postcode||'').replace(/\s/g,'').toUpperCase()+' - '+String(enquiry.last_name_1||'TENANT').toUpperCase();});
   const [showAgreementData,setShowAgreementData]=useState(false);
+  const [showCompanyAccounts,setShowCompanyAccounts]=useState(false);
   const [clientDetailsReady,setClientDetailsReady]=useState(false);
   const [serviceGate,setServiceGate]=useState<{propertyId:number}|null>(null);
   useEffect(()=>{let active=true;api.get(`/api/tenant-enquiries/${enquiryId}/client-agreement-details`).then(data=>{if(active)setServiceGate(data.enabled&&!(data.serviceAgreementReady??data.serviceAgreementSigned)&&enquiry.status!=='converted'?{propertyId:data.propertyId}:null);}).catch(()=>{});return()=>{active=false;};},[api,enquiryId,enquiry.status]);
@@ -1319,7 +1322,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
                     </div>
                   )}
                   <section aria-label="Contract & Tenancy Particulars" className="rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-3 space-y-2">
-                    <h5 className="text-base font-semibold">Contract &amp; Tenancy Particulars</h5>
+                    <div className="flex flex-wrap items-center justify-between gap-2"><h5 className="text-base font-semibold">Contract &amp; Tenancy Particulars</h5><button type="button" className="company-account-details-button ml-auto inline-flex h-[44px] w-[220px] max-w-full shrink-0 items-center justify-center rounded-md bg-[#6b2d7c] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-500 disabled:opacity-40" disabled={!agreementCompliance?.companyAccounts} onClick={()=>setShowCompanyAccounts(true)}>View Company Account Details</button></div>
                     <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
                       {agreementCompliance?.agreementType==='client'&&<div><dt className="text-xs text-[var(--text-secondary)]">Landlord</dt><dd>{agreementCompliance.landlordName||'Not recorded'}</dd></div>}
                       <div><dt className="text-xs text-[var(--text-secondary)]">{enquiry.joint_partner_id?'Tenants':'Tenant'}</dt><dd>{[name,enquiry.joint_partner_id?agreementCompliance?.jointApplicant?.name:null].filter(Boolean).join(' & ')}</dd></div>
@@ -1475,6 +1478,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       />
 
       {showAgreementData&&<AgreementDataPreview context={{agreementType:agreementCompliance?.agreementType,serviceType:agreementCompliance?.serviceType,holdingDeposit:enquiry.holding_deposit_received_amount||enquiry.holding_deposit_amount||0,bankDetails:agreementCompliance?.initialPaymentAccount}} values={{tenancyStartDate:agreementStartDate,rent:agreementRent,deposit:agreementDeposit,permittedOccupiers:agreementOccupiers,sharedFacilities:agreementFacilities,parking:agreementParking,paymentReference}} previous={agreementCompliance?.defaults||{}} onClose={()=>setShowAgreementData(false)}/>}
+      {showCompanyAccounts&&createPortal(<div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/50 p-4"><section role="dialog" aria-modal="true" aria-labelledby="company-accounts-heading" className="w-full max-w-3xl max-h-[90dvh] overflow-y-auto rounded-2xl bg-[var(--bg-card)] text-[var(--text-primary)] p-5 space-y-4 shadow-xl"><div className="flex items-center justify-between gap-3"><h3 id="company-accounts-heading" className="text-lg font-semibold">Company Account Details</h3><button aria-label="Close company account details" onClick={()=>setShowCompanyAccounts(false)}><X size={20}/></button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{([{title:'Business Bank Account',account:agreementCompliance?.companyAccounts?.business},{title:'Client Money Account',account:agreementCompliance?.companyAccounts?.clientMoney}] as const).map(({title,account},index)=><section key={title} className="rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-4"><h4 className="text-base font-semibold mb-3">{title}</h4><dl className="space-y-2 text-sm">{[['Account Name',account?.accountName],['Bank',account?.bankName],['Sort Code',account?.sortCode],['Account Number',account?.accountNumber],...(index===1?[['CMP Number',agreementCompliance?.companyAccounts?.cmpNumber]]:[])].map(([label,value])=><div key={label}><dt className="text-xs text-[var(--text-secondary)]">{label}</dt><dd className="break-words">{value||'Not recorded'}</dd></div>)}</dl></section>)}</div><div className="flex justify-end"><Button variant="outline" onClick={()=>setShowCompanyAccounts(false)}>Close</Button></div></section></div>,document.body)}
       {documentPreview && (
         <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-[70] p-4" onClick={closeDocumentPreview}>
           <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-input)] w-full max-w-4xl h-[86vh] overflow-hidden flex flex-col" onClick={event => event.stopPropagation()}>
