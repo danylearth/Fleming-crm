@@ -5737,7 +5737,6 @@ app.post('/api/tenant-enquiries/:id/credit-check', authMiddleware, requirePermis
       await client.query('BEGIN');
       const ids=await linkedEntityIds('tenant_enquiry',enquiryId);
       await client.query('SELECT id FROM tenant_enquiries WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE',[ids]);
-      await assertGuarantorsReady(client,ids,true);
       await client.query(`
         INSERT INTO documents (entity_type, entity_id, doc_type, filename, original_name, mime_type, size, uploaded_by, review_status, credit_check_result)
         VALUES ('tenant_enquiry', $1, 'Credit Check Report', $2, $3, $4, $5, $6, 'approved', $7::jsonb)
