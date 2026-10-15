@@ -4729,7 +4729,7 @@ app.post('/api/documents/:entityType/:entityId', authMiddleware, requirePermissi
 });
 
 app.put('/api/documents/:id/category', authMiddleware, requirePermission('staff'), async(req:AuthRequest,res)=>{
-  const categories=['Primary Identification','Secondary Identification','Bank Statements','Proof of Income or Employment','Credit Check Report','Other'];
+  const categories=['Primary Identification','Secondary Identification','Bank Statements','Proof of Income or Employment','Credit Check Report','Other Financial Document','Right-to-Rent Share Code','Other'];
   if(!categories.includes(req.body.doc_type))return res.status(400).json({error:'Choose a valid application document category'});
   const client=await pool.connect();
   try{await client.query('BEGIN');const doc=(await client.query('SELECT * FROM documents WHERE id=$1',[req.params.id])).rows[0];

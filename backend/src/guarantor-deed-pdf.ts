@@ -1,5 +1,5 @@
 import PDFKit from 'pdfkit';
-import {PDFDocument,rgb,StandardFonts} from 'pdf-lib';
+import {PDFDocument} from 'pdf-lib';
 import path from 'node:path';
 import {pdfFontPath} from './pdf-fonts';
 import type {SignatureField} from './document-signing-pdf';
@@ -66,7 +66,7 @@ export async function generateGuarantorDeed(form:Record<string,any>,tenancy:Guar
   const y=doc.y;doc.strokeColor('#b6a7c3').lineWidth(.6).rect(left,y,260,44).stroke();
   fields.push({type:'signature',recipient_id,page:pageIndex,x:left/595.28,y:y/841.89,width:260/595.28,height:44/841.89});
   doc.y=y+51;doc.font('body').fontSize(10).text('Dated Signed:',left,doc.y,{lineBreak:false});
-  fields.push({type:'date',recipient_id,page:pageIndex,x:(left+70)/595.28,y:(y+49)/841.89,width:180/595.28,height:22/841.89});
+  fields.push({type:'date',recipient_id,page:pageIndex,x:(left+72)/595.28,y:(y+50)/841.89,width:178/595.28,height:18/841.89});
   doc.y=y+77;
  };
  signingBlock('guarantor',1);signingBlock('witness',2);
@@ -78,11 +78,4 @@ export async function generateGuarantorDeed(form:Record<string,any>,tenancy:Guar
  return {pdf:Buffer.from(await pdf.save()),fields,html,version:template.version,tenancyHash:executionHash(unsignedTenancy)};
 }
 
-export async function markUnsignedTenancy(bytes:Buffer){
- const pdf=await PDFDocument.load(bytes),font=await pdf.embedFont(StandardFonts.HelveticaBold);
- for(const page of pdf.getPages()){
-  const {width,height}=page.getSize();page.drawRectangle({x:0,y:height-19,width,height:19,color:rgb(1,.96,.84)});
-  page.drawText('UNSIGNED TENANCY AGREEMENT - SUPPLIED WITH DEED OF GUARANTEE',{x:25,y:height-13,size:8,font,color:rgb(.4,.2,.1)});
- }
- return Buffer.from(await pdf.save());
-}
+export async function markUnsignedTenancy(bytes:Buffer){return Buffer.from(bytes);}

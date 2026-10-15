@@ -1,9 +1,11 @@
-import {PDFDocument,StandardFonts,rgb,pushGraphicsState,popGraphicsState,concatTransformationMatrix} from 'pdf-lib';
+import {PDFDocument,rgb,pushGraphicsState,popGraphicsState,concatTransformationMatrix} from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import {cropSignature} from './signature-image';
 import {appendSigningCertificate} from './signing-certificate';
 import sanitizeHtml from 'sanitize-html';
 import fs from 'node:fs/promises';import os from 'node:os';import path from 'node:path';
 import {execFile} from 'node:child_process';import {promisify} from 'node:util';import {pathToFileURL} from 'node:url';
+import {pdfFontPath} from './pdf-fonts';
 const exec=promisify(execFile);
 export type SignatureField={type?:'signature'|'initials'|'date';recipient_id:number;page:number;x:number;y:number;width:number;height:number};
 export function validateSignatureFields(fields:any,pages:any[],recipients:any[],draft=false):SignatureField[]{
@@ -36,7 +38,7 @@ export async function prepareSigningPdf(input:Buffer,extension:string){
 }
 export async function signingPagePng(bytes:Buffer,page:number){const dir=await fs.mkdtemp(path.join(os.tmpdir(),'sign-preview-'));try{await fs.writeFile(path.join(dir,'source.pdf'),bytes);await exec('pdftoppm',['-cropbox','-f',String(page+1),'-l',String(page+1),'-singlefile','-scale-to','1200','-png',path.join(dir,'source.pdf'),path.join(dir,'page')],{timeout:30000,maxBuffer:1024*1024});return await fs.readFile(path.join(dir,'page.png'));}finally{await fs.rm(dir,{recursive:true,force:true});}}
 export async function completeSigningPdf(bytes:Buffer,fields:SignatureField[],recipients:any[],sourceHash:string,options:{includeCertificate?:boolean;certificatePageNumbers?:boolean}={}){
- const pdf=await PDFDocument.load(bytes),font=await pdf.embedFont(StandardFonts.Helvetica);
+ const pdf=await PDFDocument.load(bytes);pdf.registerFontkit(fontkit);const font=await pdf.embedFont(await fs.readFile(pdfFontPath()),{subset:false});
  for(const r of recipients){
   const signature=await pdf.embedPng(await cropSignature(r.signature));
   const initials=fields.some(f=>f.recipient_id===Number(r.id)&&f.type==='initials')?await pdf.embedPng(await cropSignature(r.initials)):null;
@@ -46,7 +48,7 @@ export async function completeSigningPdf(bytes:Buffer,fields:SignatureField[],re
    p.pushOperators(pushGraphicsState(),concatTransformationMatrix(...transform));
    if(f.type==='date'){
     const date=new Date(r.signed_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'Europe/London'}),size=Math.min(12,f.height*h*.65,(f.width*w)/font.widthOfTextAtSize(date,1));
-    p.drawText(date,{x:f.x*w,y:h-(f.y+f.height)*h+(f.height*h-size)/2,size,font,color:rgb(0,0,0)});
+    p.drawText(date,{x:f.x*w,y:h-(f.y+f.height)*h+(f.height*h-size)/2+size*.2,size,font,color:rgb(0,0,0)});
    }else{
     const image=f.type==='initials'?initials!:signature,legacy=!f.type,fit=image.scaleToFit(f.width*w,Math.max(8,f.height*h-(legacy?18:0)));
     p.drawImage(image,{x:f.x*w,y:h-f.y*h-fit.height,width:fit.width,height:fit.height});
