@@ -743,7 +743,7 @@
     </style>
 <link rel="stylesheet" href="/form-typography.css">
 <link rel="stylesheet" href="/signature-controls.css"><script src="/form-capitalisation.js" defer></script><link rel="stylesheet" href="/mandatory-document.css?v=20261014">
-</head>
+<script src="/postcode-format.js" defer></script></head>
 <body>
     <div class="container" id="app">
         <!-- Header -->
@@ -879,7 +879,7 @@
                     </div>
 
                     <p id="step-2-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(1)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(9)">Continue</button></div>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(1)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(9)">Continue →</button></div>
                 </div>
             </div>
 
@@ -888,7 +888,7 @@
                     <div class="two-col"><div class="input-group"><label>Next of Kin Full Name *</label><input type="text" id="f_nok_name" required /></div><div class="input-group"><label>Relationship *</label><input type="text" id="f_nok_rel" required /></div><div class="input-group full-width"><label>Address *</label><input type="text" id="f_nok_address" required /></div><div class="input-group"><label>Postcode *</label><input type="text" id="f_nok_postcode" oninput="formatPostcode(this)" required /></div><div class="input-group"><label>Contact Number *</label><input type="tel" id="f_nok_phone" required /></div><div class="input-group full-width"><label>Email *</label><input type="email" id="f_nok_email" required /></div></div>
 
                     <p id="step-9-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(2)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(3)">Continue</button></div>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(2)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(3)">Continue →</button></div>
             </div></div>
 
             <!-- STEP 3: Address history and residency -->
@@ -926,7 +926,7 @@
                         <div class="input-group"><label>Do you authorise us to contact your current landlord / agent? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_landlord_contact_authority" data-value="yes" onclick="setYesNo('f_landlord_contact_authority','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_landlord_contact_authority" data-value="no" onclick="setYesNo('f_landlord_contact_authority','no')">No</button></div><input type="hidden" id="f_landlord_contact_authority" data-required-choice="true" /></div>
                     </div>
                     <p id="step-3-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(9)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(4)">Continue</button></div>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(9)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(4)">Continue →</button></div>
                 </div>
             </div>
 
@@ -1010,7 +1010,7 @@
                     <div class="input-group"><label>Will you have a guarantor for this application? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_has_guarantor" data-value="yes" onclick="setYesNo('f_has_guarantor','yes'); toggleGuarantorSection()">Yes</button><button type="button" class="choice-button" data-choice-for="f_has_guarantor" data-value="no" onclick="setYesNo('f_has_guarantor','no'); toggleGuarantorSection()">No</button></div><input type="hidden" id="f_has_guarantor" data-required-choice="true" /></div>
                     <div id="guarantor-fields" class="conditional-panel" style="display:none;"><div class="two-col"><div class="input-group"><label>Full Name *</label><input type="text" id="f_guarantor_name" /></div><div class="input-group"><label>Contact Number *</label><input type="tel" id="f_guarantor_phone" /></div><div class="input-group"><label>Email *</label><input type="email" id="f_guarantor_email" /></div><div class="input-group"><label>Address *</label><input type="text" id="f_guarantor_address" /></div><div class="input-group"><label>Annual Income (&pound;) *</label><input type="text" inputmode="decimal" id="f_guarantor_income" oninput="formatMoney(this)" /></div><div class="input-group"><label>Employment Type *</label><select id="f_guarantor_employment"><option value="">Select...</option><option>Employed</option><option>Part-time Employed</option><option>Self-Employed</option><option>Retired</option><option>Other</option></select></div></div><div class="input-group"><label>May we contact this guarantor? *</label><div class="choice-group"><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="yes" onclick="setYesNo('f_guarantor_consent','yes')">Yes</button><button type="button" class="choice-button" data-choice-for="f_guarantor_consent" data-value="no" onclick="setYesNo('f_guarantor_consent','no')">No</button></div><input type="hidden" id="f_guarantor_consent" data-required-choice="true" /></div></div>
                     <p id="step-5-error" class="error-text" style="display:none;"></p>
-                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(4)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(6)">Continue</button></div>
+                    <div class="button-group"><button type="button" class="btn btn-secondary" onclick="goToStep(4)">👈 Back</button><button type="button" class="btn btn-primary" onclick="goToStep(6)">Continue →</button></div>
                 </div>
             </div>
             <!-- STEP 6: Tenancy details -->

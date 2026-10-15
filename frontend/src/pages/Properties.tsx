@@ -544,7 +544,7 @@ function PropertyAddModal({ landlords, form, setForm, llDropOpen, setLlDropOpen,
         <Input label="Address line 1 *" value={form.address} onChange={address => setForm(f => ({...f,address}))} />
         <Input label="Address line 2 (optional)" value={form.address_line_2} onChange={address_line_2 => setForm(f => ({...f,address_line_2}))} />
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Town / City *" value={form.city} onChange={city => setForm(f => ({...f,city}))} />
+          <Input label="Town/City *" value={form.city} onChange={city => setForm(f => ({...f,city}))} />
           <Input label="Postcode *" value={form.postcode} onChange={postcode => setForm(f => ({...f,postcode:postcode.toUpperCase()}))} />
         </div>
         <div className="grid grid-cols-2 gap-3">

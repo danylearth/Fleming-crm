@@ -773,7 +773,7 @@ export default function PropertyDetail() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <Input label="Address line 1 *" value={form.address} onChange={address => setForm({...form,address})} />
                     <Input label="Address line 2 (optional)" value={form.address_line_2} onChange={address_line_2 => setForm({...form,address_line_2})} />
-                    <Input label="Town / City *" value={form.city} onChange={city => setForm({...form,city})} />
+                    <Input label="Town/City *" value={form.city} onChange={city => setForm({...form,city})} />
                     <Input label="Postcode *" value={form.postcode} onChange={postcode => setForm({...form,postcode})} />
 
                     <Select label="Type" value={form.property_type} onChange={(v: string) => setForm({ ...form, property_type: v })}

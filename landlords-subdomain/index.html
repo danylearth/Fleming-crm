@@ -760,7 +760,9 @@
 .step[data-step="1"] .button-group{margin-top:24px}
 @media(max-width:540px){.registration-choices{gap:10px!important}.registration-choices .radio-option label{min-height:170px;padding:18px 8px}.registration-choices svg{width:36px;height:36px}.registration-choices strong{font-size:18px}.registration-choices span{font-size:12px}}
 @media(max-width:420px){.registration-choices:has(#company){grid-template-columns:1fr}.registration-choices:has(#company) .radio-option label{min-height:100px;display:grid;grid-template-columns:40px 1fr;text-align:left;column-gap:16px}.registration-choices:has(#company) svg{grid-row:span 2}.registration-choices:has(#company) span{grid-column:2}}
-</style></head>
+</style><script src="/select-position.js"></script>
+<style>.custom-select-options{overscroll-behavior:contain;touch-action:pan-y}.custom-select-options.opens-above{border-top:2px solid #DC006D;border-bottom:0;border-radius:10px 10px 0 0}.custom-select-options.modal-mode{max-height:min(70dvh,calc(100dvh - 24px))}</style>
+<script src="/postcode-format.js" defer></script></head>
 <body>
     <div class="container">
         <!-- Header -->
@@ -800,7 +802,7 @@
                     </div>
 
                     <div class="button-group">
-                        <button type="button" class="btn btn-primary" onclick="nextStep()">Continue</button>
+                        <button type="button" class="btn btn-primary" onclick="nextStep()">Continue →</button>
                     </div>
                 </div>
 
@@ -825,7 +827,7 @@
 
                         <div class="input-group">
                             <label>Registered Office Address *</label>
-                            <input type="text" name="company_address" id="companyAddress" required></div><div class="input-group"><label>Company City / Town *</label><input type="text" name="companyCity" required></div><div class="input-group"><label>Company Postcode *</label><input type="text" name="companyPostcode" required></div><div class="input-group"><label>Ultimate beneficial owners *</label><textarea name="beneficial_owners" required placeholder="Full names and ownership percentages of the people who ultimately own or control the company"></textarea>
+                            <input type="text" name="company_address" id="companyAddress" required></div><div class="input-group"><label>Company Town/City *</label><input type="text" name="companyCity" required></div><div class="input-group"><label>Company Postcode *</label><input type="text" name="companyPostcode" required></div><div class="input-group"><label>Ultimate beneficial owners *</label><textarea name="beneficial_owners" required placeholder="Full names and ownership percentages of the people who ultimately own or control the company"></textarea>
                         </div>
                     </div>
 
@@ -878,7 +880,7 @@
 
                     <div class="input-group">
                         <label>Home Address <span class="required">*</span></label>
-                        <input type="text" name="address" required></div><div class="input-group"><label>Address line 2 (optional)</label><input type="text" name="address_line_2"></div><div class="input-group"><label>City / Town *</label><input type="text" name="city" required>
+                        <input type="text" name="address" required></div><div class="input-group"><label>Address line 2 (optional)</label><input type="text" name="address_line_2"></div><div class="input-group"><label>Town/City *</label><input type="text" name="city" required>
                     </div>
 
                     <div class="two-col">
@@ -935,7 +937,7 @@
 
                         <div class="input-group">
                             <label>Home Address <span class="required">*</span></label>
-                            <input type="text" name="address2" disabled></div><div class="input-group"><label>Address line 2 (optional)</label><input type="text" name="address_line_22" disabled></div><div class="input-group"><label>City / Town *</label><input type="text" name="city2" disabled>
+                            <input type="text" name="address2" disabled></div><div class="input-group"><label>Address line 2 (optional)</label><input type="text" name="address_line_22" disabled></div><div class="input-group"><label>Town/City *</label><input type="text" name="city2" disabled>
                         </div>
 
                         <div class="two-col">
@@ -965,7 +967,7 @@
                         <div class="two-col">
                             <div class="input-group">
                                 <label>Rental Property Address <span class="required">*</span></label>
-                                <input type="text" name="propertyAddress" required></div><div class="input-group"><label>Address line 2 (optional)</label><input type="text" name="propertyAddress2"></div><div class="input-group"><label>City / Town *</label><input type="text" name="propertyCity" required>
+                                <input type="text" name="propertyAddress" required></div><div class="input-group"><label>Address line 2 (optional)</label><input type="text" name="propertyAddress2"></div><div class="input-group"><label>Town/City *</label><input type="text" name="propertyCity" required>
                             </div>
                             <div class="input-group">
                                 <label>Property Postcode <span class="required">*</span></label>
@@ -1804,11 +1806,8 @@
                             dropdown.classList.add('modal-mode');
                             document.body.appendChild(dropdown);
                         } else {
-                            const rect = trigger.getBoundingClientRect();
-                            dropdown.style.top = rect.bottom + 'px';
-                            dropdown.style.left = rect.left + 'px';
-                            dropdown.style.width = rect.width + 'px';
                             document.body.appendChild(dropdown);
+                            positionPublicSelect(dropdown, trigger);
                         }
                         dropdown.classList.add('open');
                         if (isSearchable) setTimeout(() => dropdown.querySelector('.custom-select-search input').focus(), 50);
@@ -1821,8 +1820,8 @@
         }
         function closeAllCustomSelects() {
             document.querySelectorAll('body > .custom-select-options').forEach(d => {
-                d.classList.remove('open', 'modal-mode');
-                d.style.top = ''; d.style.left = ''; d.style.width = '';
+                d.classList.remove('open', 'modal-mode', 'opens-above');
+                d.style.top = ''; d.style.left = ''; d.style.width = ''; d.style.maxHeight = '';
                 const si = d.querySelector('.custom-select-search input');
                 if (si) { si.value = ''; d.querySelectorAll('.custom-select-option').forEach(o => o.style.display = ''); }
             });
