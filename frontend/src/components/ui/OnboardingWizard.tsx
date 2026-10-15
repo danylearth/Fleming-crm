@@ -170,6 +170,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
   const [agreementParking, setAgreementParking] = useState(initialAgreementDraft?.parking??'');
   const [paymentReference,setPaymentReference]=useState(()=>{if(initialAgreementDraft?.paymentReference)return initialAgreementDraft.paymentReference;const property=properties.find(p=>Number(p.id)===Number(enquiry.linked_property_id));return (String(property?.address||enquiry.property_address||'').match(/^\s*\d+[A-Za-z]?/)?.[0]?.trim()||'PROPERTY')+' '+String(property?.postcode||enquiry.property_postcode||'').replace(/\s/g,'').toUpperCase()+' - '+String(enquiry.last_name_1||'TENANT').toUpperCase();});
   const [showAgreementData,setShowAgreementData]=useState(false);
+  const [previewingAgreement,setPreviewingAgreement]=useState(false);
   const [showCompanyAccounts,setShowCompanyAccounts]=useState(false);
   const [clientDetailsReady,setClientDetailsReady]=useState(false);
   const [serviceGate,setServiceGate]=useState<{propertyId:number}|null>(null);
@@ -394,6 +395,16 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
       if(download){const link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}
       else setDocumentPreview({url,name,mimeType:blob.type});
     }catch(e){setReviewError(e instanceof Error?e.message:'Agreement could not be opened');}
+  };
+  const previewProposedAgreement=async()=>{
+    if(!token)return;
+    setPreviewingAgreement(true);setReviewError('');
+    try{
+      const response=await fetch(`${API_URL}/api/tenant-enquiries/${enquiryId}/tenancy-agreement/preview-pdf`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({tenancy_start_date:agreementStartDate,rent:agreementRent,deposit:agreementDeposit,permitted_occupiers:agreementOccupiers,shared_facilities:agreementFacilities,parking:agreementParking,payment_reference:paymentReference})});
+      if(!response.ok){const data=await response.json().catch(()=>null);throw Error(data?.error||'The proposed agreement could not be previewed');}
+      const blob=await response.blob();setDocumentPreview({url:URL.createObjectURL(blob),name:'Proposed Assured Periodic Tenancy.pdf',mimeType:blob.type});
+    }catch(error){setReviewError(error instanceof Error?error.message:'The proposed agreement could not be previewed');}
+    finally{setPreviewingAgreement(false);}
   };
 
   const updateApplicationReview = async (status: 'approved' | 'changes_requested') => {
@@ -1477,7 +1488,7 @@ export default function OnboardingWizard({ enquiryId, enquiry, properties, users
         previewOnly
       />
 
-      {showAgreementData&&<AgreementDataPreview context={{agreementType:agreementCompliance?.agreementType,serviceType:agreementCompliance?.serviceType,holdingDeposit:enquiry.holding_deposit_received_amount||enquiry.holding_deposit_amount||0,bankDetails:agreementCompliance?.initialPaymentAccount}} values={{tenancyStartDate:agreementStartDate,rent:agreementRent,deposit:agreementDeposit,permittedOccupiers:agreementOccupiers,sharedFacilities:agreementFacilities,parking:agreementParking,paymentReference}} previous={agreementCompliance?.defaults||{}} onClose={()=>setShowAgreementData(false)}/>}
+      {showAgreementData&&<AgreementDataPreview context={{agreementType:agreementCompliance?.agreementType,serviceType:agreementCompliance?.serviceType,holdingDeposit:enquiry.holding_deposit_received_amount||enquiry.holding_deposit_amount||0,bankDetails:agreementCompliance?.initialPaymentAccount}} values={{tenancyStartDate:agreementStartDate,rent:agreementRent,deposit:agreementDeposit,permittedOccupiers:agreementOccupiers,sharedFacilities:agreementFacilities,parking:agreementParking,paymentReference}} previous={agreementCompliance?.defaults||{}} onViewAgreement={()=>void previewProposedAgreement()} previewingAgreement={previewingAgreement} onClose={()=>setShowAgreementData(false)}/>}
       {showCompanyAccounts&&createPortal(<div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/50 p-4"><section role="dialog" aria-modal="true" aria-labelledby="company-accounts-heading" className="w-full max-w-3xl max-h-[90dvh] overflow-y-auto rounded-2xl bg-[var(--bg-card)] text-[var(--text-primary)] p-5 space-y-4 shadow-xl"><div className="flex items-center justify-between gap-3"><h3 id="company-accounts-heading" className="text-lg font-semibold">Company Account Details</h3><button aria-label="Close company account details" onClick={()=>setShowCompanyAccounts(false)}><X size={20}/></button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{([{title:'Business Bank Account',account:agreementCompliance?.companyAccounts?.business},{title:'Client Money Account',account:agreementCompliance?.companyAccounts?.clientMoney}] as const).map(({title,account},index)=><section key={title} className="rounded-xl border border-[var(--border-input)] bg-[var(--bg-subtle)] p-4"><h4 className="text-base font-semibold mb-3">{title}</h4><dl className="space-y-2 text-sm">{[['Account Name',account?.accountName],['Bank',account?.bankName],['Sort Code',account?.sortCode],['Account Number',account?.accountNumber],...(index===1?[['CMP Number',agreementCompliance?.companyAccounts?.cmpNumber]]:[])].map(([label,value])=><div key={label}><dt className="text-xs text-[var(--text-secondary)]">{label}</dt><dd className="break-words">{value||'Not recorded'}</dd></div>)}</dl></section>)}</div><div className="flex justify-end"><Button variant="outline" onClick={()=>setShowCompanyAccounts(false)}>Close</Button></div></section></div>,document.body)}
       {documentPreview && (
         <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-[70] p-4" onClick={closeDocumentPreview}>

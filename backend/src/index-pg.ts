@@ -97,6 +97,7 @@ import {
   resolveAgreementType,
   resolvePaymentRoute,
 } from './tenancy-agreement-pdf';
+import {guarantorTenancyContext} from './guarantor-tenancy';
 import {
   completedTenancyAgreementEmail,
   finalBalanceHandoverEmail,
@@ -6001,6 +6002,19 @@ app.get('/api/tenant-enquiries/:id/tenancy-agreement/pdf', authMiddleware, async
     res.setHeader('Content-Disposition',`${req.query.download==='1'?'attachment':'inline'}; filename="${String(agreement.original_name).replace(/["\r\n]/g,'_')}"`);
     res.type('pdf').send(agreement.signed_filename?fs.readFileSync(filePath):await agreementPreviewPdf(agreement));
   }catch(error){console.error('Staff agreement PDF failed',error);res.status(500).json({error:'Agreement could not be opened'});}
+});
+
+app.post('/api/tenant-enquiries/:id/tenancy-agreement/preview-pdf', authMiddleware, requirePermission('staff'), async (req: AuthRequest, res) => {
+  const client=await pool.connect();
+  try {
+    const context=await guarantorTenancyContext(client,Number(req.params.id));
+    const start=String(req.body?.tenancy_start_date||context.input.tenancyStartDate.toISOString().slice(0,10)).slice(0,10);
+    const rent=Number(req.body?.rent??context.input.rent),deposit=Number(req.body?.deposit??context.input.deposit);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!Number.isFinite(rent)||rent<=0||!Number.isFinite(deposit)||deposit<0)return res.status(400).json({error:'Enter a valid tenancy start date, rent and security deposit before previewing the agreement'});
+    const pdf=await generateTenancyAgreementPdf({...context.input,agreementDate:new Date(start+'T12:00:00Z'),tenancyStartDate:new Date(start+'T12:00:00Z'),rent,deposit,permittedOccupiers:String(req.body?.permitted_occupiers||'').trim()||context.input.permittedOccupiers,sharedFacilities:String(req.body?.shared_facilities||'').trim()||context.input.sharedFacilities,parking:String(req.body?.parking||'').trim()||context.input.parking,paymentReference:String(req.body?.payment_reference||'').trim()||context.input.paymentReference});
+    res.setHeader('Content-Disposition','inline; filename="proposed-tenancy-agreement.pdf"');res.type('application/pdf').send(pdf);
+  }catch(error){res.status(400).json({error:error instanceof Error?error.message:'The proposed agreement could not be previewed'});}
+  finally{client.release();}
 });
 
 app.post('/api/tenant-enquiries/:id/tenancy-agreement/email-preview', authMiddleware, async (req: AuthRequest, res) => {
