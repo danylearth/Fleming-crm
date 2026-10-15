@@ -1,3 +1,4 @@
+import {agreementSentence} from './agreement-text';
 import { generateSourceTenancyPdf } from './tenancy-template';
 import type {CompanySettings} from './company-settings-values';
 import PDFDocument from 'pdfkit';
@@ -349,11 +350,11 @@ export function generateTenancyAgreementPdf(input: TenancyAgreementPdfInput): Pr
     paragraph('A rent increase requires a formal notice under Section 13 of the Housing Act 1988 (as amended). Rent can only be increased once per year, and you may refer a proposed increase to the First-tier Tribunal if you consider it above market rate.');
 
     heading('Permitted Occupiers', 2);
-    paragraph(`In addition to you/yourselves, only the following permitted occupiers may live at the property: ${input.permittedOccupiers || 'None'}. Nobody else may live there without written permission.`);
+    paragraph(`In addition to you/yourselves, only the following permitted occupiers may live at the property: ${agreementSentence(input.permittedOccupiers)} Nobody else may live there without written permission.`);
     doc.addPage();
     heading('Shared Facilities and Parking', 2);
-    paragraph(`Shared facilities and common parts: ${input.sharedFacilities || 'None specified'}.`);
-    paragraph(`Parking (if allocated): ${input.parking || 'No allocated parking'}.`);
+    paragraph(`Shared facilities and common parts: ${agreementSentence(input.sharedFacilities, 'None specified')}`);
+    paragraph(`Parking (if allocated): ${agreementSentence(input.parking, 'No allocated parking')}`);
     heading('Utilities and Council Tax', 2);
     paragraph('Rent does not include utilities, communication services, Council Tax or any similar charge. You are responsible for those charges from the day you are entitled to possession until the tenancy ends.');
 

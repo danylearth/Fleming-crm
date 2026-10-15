@@ -1,3 +1,4 @@
+import {normalizePropertyAddress} from './property-address';
 import type {PoolClient} from 'pg';
 import {isDeepStrictEqual} from 'node:util';
 import {guarantorTenancyContext} from './guarantor-tenancy';
@@ -19,9 +20,16 @@ export async function assertCurrentGuarantorTerms(client:PoolClient,verification
  const row=(await client.query('SELECT g.enquiry_id,x.tenancy_snapshot FROM guarantor_verifications g JOIN guarantor_executions x ON x.id=g.execution_id WHERE g.id=$1',[verificationId])).rows[0];
  if(!row?.tenancy_snapshot?.agreementInput)return;
  const current=await guarantorTenancyContext(client,row.enquiry_id),stored=row.tenancy_snapshot;
- // Formatting and generated timestamps are not obligations; the frozen agreement
+ // Formatting, contact channels and generated timestamps are not obligations; the frozen agreement
  // inputs and particulars otherwise have to match the reviewed source.
- const normalized=(input:any)=>{const copy=JSON.parse(JSON.stringify(input));delete copy.enquiryId;delete copy.agreementDate;return copy;};
+ const normalized=(input:any)=>{
+  const copy=JSON.parse(JSON.stringify(input));delete copy.enquiryId;delete copy.agreementDate;
+  copy.propertyAddress=normalizePropertyAddress(copy.propertyAddress);
+  for(const party of [...(copy.tenants||[]),copy.landlord,copy.companySettings]){
+   if(party){delete party.email;delete party.phone;delete party.emergencyContact;}
+  }
+  return copy;
+ };
  if(!isDeepStrictEqual(normalized(current.input),normalized(stored.agreementInput)))throw Error('The proposed tenancy has changed since this deed was prepared. The office must arrange an updated deed before signing');
 }
 
@@ -31,11 +39,11 @@ export async function assertIssuedAgreementMatchesGuarantees(client:PoolClient,i
  const text=(value:any)=>String(value||'').trim().replace(/\s+/g,' ').toLowerCase();
  for(const row of rows){
   await assertCurrentGuarantorTerms(client,row.id);
-  const saved=row.tenancy_snapshot,source=saved.agreementInput;
+  const saved=row.tenancy_snapshot;
   // The deed fixes the tenancy's parties, address, start date, rent and deposit.
   // The issued APT completes the tenant-signing presentation and may add the
   // occupier, facilities and parking particulars. Payment-display fields are
   // not terms of the guarantee and must never prevent that APT being issued.
-  if(saved.startDate!==details.tenancyStartDate||Number(saved.monthlyRent)!==Number(details.rent)||Number(saved.deposit)!==Number(details.deposit)||text(saved.landlord)!==text(details.landlordName)||text(saved.propertyAddress)!==text(propertyAddress)||JSON.stringify([...saved.tenantNames].map(text).sort())!==JSON.stringify([...tenantNames].map(text).sort()))throw Error('The tenancy agreement differs from the terms in the signed guarantee. Arrange an updated guarantee before issuing this agreement');
+  if(saved.startDate!==details.tenancyStartDate||Number(saved.monthlyRent)!==Number(details.rent)||Number(saved.deposit)!==Number(details.deposit)||text(saved.landlord)!==text(details.landlordName)||text(normalizePropertyAddress(saved.propertyAddress))!==text(normalizePropertyAddress(propertyAddress))||JSON.stringify([...saved.tenantNames].map(text).sort())!==JSON.stringify([...tenantNames].map(text).sort()))throw Error('The tenancy agreement differs from the terms in the signed guarantee. Arrange an updated guarantee before issuing this agreement');
  }
 }

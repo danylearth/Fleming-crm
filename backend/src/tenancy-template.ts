@@ -1,3 +1,4 @@
+import {agreementSentence} from './agreement-text';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -413,7 +414,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         RENT_DAY: isClient ? date(input.tenancyStartDate).split(' ')[0] : input.tenancyStartDate.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'Europe/London' }),
         TENANT_NAMES: names, PROPERTY_ADDRESS: input.propertyAddress,
         RENT: input.rent.toLocaleString('en-GB',{minimumFractionDigits:2}), DEPOSIT: input.deposit.toLocaleString('en-GB',{minimumFractionDigits:2}), PAYMENT_REFERENCE: input.paymentReference,
-        OCCUPIERS: input.permittedOccupiers || 'None', SHARED_FACILITIES: input.sharedFacilities || 'None', PARKING: input.parking || 'None',
+        OCCUPIERS: agreementSentence(input.permittedOccupiers), SHARED_FACILITIES: agreementSentence(input.sharedFacilities), PARKING: agreementSentence(input.parking),
         TENANT_EMAILS: input.tenants.map(t => t.email).filter(Boolean).join('; '),
         TENANT_PHONES: input.tenants.map(t => t.phone).filter(Boolean).join('; '),
         TENANT_ADDRESSES: input.tenants.map(t => `${t.name}: ${t.address || 'Not supplied'}`).join('\n'),

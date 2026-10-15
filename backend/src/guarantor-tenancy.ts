@@ -1,3 +1,4 @@
+import {normalizePropertyAddress} from './property-address';
 import type {PoolClient} from 'pg';
 import {getCompanySettings} from './company-settings';
 import {clientAgreementContext,validateClientDetails} from './client-agreement-details';
@@ -23,7 +24,7 @@ export async function guarantorTenancyContext(client:PoolClient,enquiryId:number
  const landlord=agreementType==='internal'?{name:company.legalName,email:company.email,phone:company.phone,address:company.registeredAddress,serviceAddress:company.registeredAddress,emergencyContact:company.phone}:context?{name:context.details.landlordName,email:context.details.landlordEmail,phone:context.details.landlordPhone,address:context.details.landlordAddress,serviceAddress:context.details.serviceAddress,emergencyContact:context.details.emergencyContact,companyNumber:context.details.companyNumber,signingName:context.details.directorName}:null;
  if(!landlord)throw Error('Confirm the landlord details before preparing the deed');
  const bankDetails=context?.paymentAccount||bankDetailsForRoute(paymentRoute,{sortCode:context?.bank?.sort_code,accountNumber:context?.bank?.account_number,accountName:context?.bank?.account_name,bankName:context?.bank?.bank_name},company);
- const input:TenancyAgreementPdfInput={companySettings:company,enquiryId,agreementType,serviceType:e.service_type,agreementDate:new Date(start+'T12:00:00Z'),tenancyStartDate:new Date(start+'T12:00:00Z'),rent,deposit,propertyAddress:[e.property_address,e.property_postcode].filter(Boolean).join(', '),hasGas:Boolean(e.has_gas),landlord,tenants,
+ const input:TenancyAgreementPdfInput={companySettings:company,enquiryId,agreementType,serviceType:e.service_type,agreementDate:new Date(start+'T12:00:00Z'),tenancyStartDate:new Date(start+'T12:00:00Z'),rent,deposit,propertyAddress:normalizePropertyAddress(e.property_address,e.property_postcode),hasGas:Boolean(e.has_gas),landlord,tenants,
   holdingDeposit:e.source_tenant_id?0:Number(e.holding_deposit_received_amount||e.holding_deposit_amount||0),depositScheme:context?.details.depositScheme||'',
   permittedOccupiers:'To be confirmed during tenancy onboarding',sharedFacilities:'To be confirmed during tenancy onboarding',parking:'To be confirmed during tenancy onboarding',
   paymentReference:`${String(e.property_address||'').match(/^\s*\d+[A-Za-z]?/)?.[0]?.trim()||'PROPERTY'} ${String(e.property_postcode||'').replace(/\s/g,'').toUpperCase()} - ${String(e.last_name_1||'TENANT').toUpperCase()}`,bankDetails,paymentRoute,complianceDocuments:[]};

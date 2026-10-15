@@ -1,3 +1,5 @@
+import {normalizePropertyAddress} from './property-address';
+export {normalizePropertyAddress} from './property-address';
 import {prepareEmailHtml} from './email-presentation';
 import {addEmailFooter} from './email-footer';
 import {emailPreferencesUrl} from './email-preferences';
@@ -256,20 +258,6 @@ export function handoverAppointmentEmail(input: HandoverAppointmentEmailInput): 
   };
 }
 
-export function normalizePropertyAddress(address: string, postcode?: string | null, city?: string | null): string {
-  let cleanAddress = String(address || '').trim().replace(/,\s*$/, '');
-  if(city?.trim()&&!cleanAddress.split(',').some(part=>part.trim().toLowerCase()===city.trim().toLowerCase())) {
-    const parts=cleanAddress.split(',').map(p=>p.trim()).filter(Boolean);
-    const last=parts[parts.length-1];
-    if(postcode&&last?.replace(/\s/g,'').toLowerCase()===postcode.replace(/\s/g,'').toLowerCase())parts.pop();
-    cleanAddress=[...parts,city.trim()].join(', ');
-  }
-  const cleanPostcode = String(postcode || '').trim();
-  if (!cleanPostcode) return cleanAddress;
-  const compactAddress = cleanAddress.replace(/\s/g, '').toLowerCase();
-  const compactPostcode = cleanPostcode.replace(/\s/g, '').toLowerCase();
-  return compactAddress.endsWith(compactPostcode) ? cleanAddress : `${cleanAddress}, ${cleanPostcode}`;
-}
 
 export function applicationChangesRequestedEmail(name: string, changes: string, applicationUrl: string): { subject: string; html: string } {
   return {
