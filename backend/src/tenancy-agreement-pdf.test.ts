@@ -9,7 +9,7 @@ import {
   resolvePaymentRoute,
   type TenancyAgreementPdfInput,
 } from './tenancy-agreement-pdf';
-import {formatSignatureSpacing} from './tenancy-template';
+import {formatSignatureSpacing,placeCompanySignatureBelowLandlordLabels} from './tenancy-template';
 
 const baseInput: TenancyAgreementPdfInput = {
   enquiryId: 42,
@@ -55,10 +55,15 @@ describe('tenancy agreement routing', () => {
 });
 
 describe('tenancy agreement PDFs', () => {
-  it('keeps the company signature drawing in Fleming-owned APTs', () => {
-    const signingBlock='<w:p><w:r><w:t>Signed as an agreement</w:t></w:r></w:p><w:p><w:r><w:t>Signature:</w:t><w:drawing><wp:inline/></w:drawing></w:r></w:p>';
-    expect(formatSignatureSpacing(signingBlock,true)).toContain('<w:drawing>');
-    expect(formatSignatureSpacing(signingBlock,false)).not.toContain('<w:drawing>');
+  it('puts the company signature below each landlord label in Fleming-owned APTs', () => {
+    const labels='<w:p><w:r><w:t>Landlords Signature:</w:t></w:r></w:p><w:p><w:r><w:t>Tenants Signature:</w:t></w:r></w:p><w:p><w:r><w:t>Landlords Signature:</w:t></w:r></w:p>';
+    const output=placeCompanySignatureBelowLandlordLabels(labels,'<w:drawing><wp:inline><wp:docPr id="1" name="Picture 1"/><pic:cNvPr id="1" name="Picture 1"/></wp:inline></w:drawing>');
+    expect(formatSignatureSpacing('<w:p><w:r><w:t>Signed as an agreement</w:t></w:r></w:p><w:p><w:r><w:t>Signature:</w:t><w:drawing/></w:r></w:p>',true)).not.toContain('<w:drawing');
+    expect(output.match(/<w:drawing>/g)).toHaveLength(2);
+    expect(output).toMatch(/Landlords Signature:<\/w:t>[\s\S]*?<w:drawing>/);
+    expect(output).toContain('Fleming company signature 900');
+    expect(output).toContain('Fleming company signature 901');
+    expect(output).toMatch(/<pic:cNvPr\s+id="900"\s+name="Fleming company signature 900"\/>/);
   });
 
   it.each([

@@ -4,6 +4,39 @@ import {COMPANY_DEFAULTS,type CompanySettings} from './company-settings-values';
 const escape=(s:string)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const decode=(s:string)=>s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
 
+/** Lay out the supplied office address without ever splitting a UK postcode. */
+export function letterheadAddressLines(address:string,maxCharacters=36):string[] {
+  const lines:string[]=[];
+  const parts=address.split(/,\s*|\r?\n/).map(value=>value.trim()).filter(Boolean);
+  for(const [,part] of parts.entries()){
+    if(part.length<=maxCharacters){
+      const current=lines.length?lines[lines.length-1]:undefined;
+      if(!current)lines.push(part);
+      else if(current.length+2+part.length<=maxCharacters)lines[lines.length-1]=`${current}, ${part}`;
+      else {lines[lines.length-1]=`${current},`;lines.push(part);}
+      continue;
+    }
+    const words=part.split(/\s+/).filter(Boolean);
+    const tokens:string[]=[];
+    for(let index=0;index<words.length;index++){
+      const postcodeStart=/^[A-Za-z]{1,2}\d[A-Za-z\d]?$/.test(words[index]);
+      const postcodeEnd=/^\d[A-Za-z]{2}$/.test(words[index+1]||'');
+      if(postcodeStart&&postcodeEnd){tokens.push(`${words[index]} ${words[++index]}`.toUpperCase());continue;}
+      tokens.push(words[index]);
+    }
+    for(const token of tokens){
+      const current=lines.length?lines[lines.length-1]:undefined;
+      if(!current||current.length+1+token.length>maxCharacters){
+        if(current)lines[lines.length-1]=`${current},`;
+        lines.push(token);
+      }
+      else lines[lines.length-1]=`${current} ${token}`;
+    }
+  }
+  if(parts.length&&lines.length&&lines[lines.length-1].endsWith(','))lines[lines.length-1]=lines[lines.length-1].slice(0,-1);
+  return lines;
+}
+
 /** Replace literals even when Word splits them over runs, preserving drawings and styles. */
 export function replaceCompanyText(xml:string,values:Record<string,string>):string {
   const keys=Object.keys(values).sort((a,b)=>b.length-a.length);
@@ -67,21 +100,23 @@ export async function applyCompanyImages(zip:PizZip,c:CompanySettings,hasCompany
   }
   for(const relName of Object.keys(zip.files).filter(n=>/^word\/_rels\/(header|footer)\d+\.xml\.rels$/.test(n))){
     const header=relName.includes('/header'),rel=zip.file(relName)!.asText();
-    if(header&&c.registeredAddress==="Creative Industries Centre, Glaisher Drive, Wolverhampton Science Park, Wolverhampton, West Midlands, WV10 9TG")continue;
+    if(header&&c.registeredAddress===COMPANY_DEFAULTS.registeredAddress)continue;
     if(!header&&c.phone===COMPANY_DEFAULTS.phone&&c.email===COMPANY_DEFAULTS.email&&c.website===COMPANY_DEFAULTS.website)continue;
     const target=rel.match(/Target="(media\/[^"]+)"/)?.[1];if(!target)continue;
     const image=zip.file('word/'+target);if(!image)continue;
     const bytes=image.asNodeBuffer(),meta=await sharp(bytes).metadata(),w=meta.width!,h=meta.height!;
     let svg:string;
     if(header){
-      const lines:string[]=[];for(const part of c.registeredAddress.split(/,\s*|\n/)){for(const word of part.split(/\s+/)){if(!lines.length||lines[lines.length-1].length+word.length>32)lines.push(word);else lines[lines.length-1]+=' '+word;}}
-      const x=Math.floor(w*.62),font=Math.min(w*.016,h*.7/Math.max(lines.length,1));
+      const lines=letterheadAddressLines(c.registeredAddress);
+      const x=Math.floor(w*.62),font=Math.min(w*.0145,h*.7/Math.max(lines.length,1));
       const {data,info}=await sharp(bytes).removeAlpha().extract({left:Math.floor(w*.5),top:0,width:1,height:h}).raw().toBuffer({resolveWithObject:true});
       const background=data.subarray(Math.floor(h*.5)*info.channels,Math.floor(h*.5)*info.channels+3);
       // The source letterhead includes a white bottom margin. Preserve it when
       // replacing the address, otherwise the right-hand edge extends below the logo.
       let bottom=h;while(bottom>h/2&&background.some((v,c)=>Math.abs(data[(bottom-1)*info.channels+c]-v)>8))bottom--;
-      svg=`<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg"><rect x="${x}" width="${w-x}" height="${bottom}" fill="rgb(${background[0]},${background[1]},${background[2]})"/><text fill="white" font-family="Arial" font-size="${font}">${lines.map((line,i)=>`<tspan x="${x+15}" y="${h*.15+(i+1)*font*1.2}">${escape(line)}</tspan>`).join('')}</text></svg>`;
+      const lineHeight=font*1.2;
+      const firstBaseline=bottom/2-((lines.length-1)*lineHeight)/2+font*.35;
+      svg=`<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg"><rect x="${x}" width="${w-x}" height="${bottom}" fill="rgb(${background[0]},${background[1]},${background[2]})"/><text fill="white" font-family="Arial" font-size="${font}">${lines.map((line,i)=>`<tspan x="${x+15}" y="${firstBaseline+i*lineHeight}">${escape(line)}</tspan>`).join('')}</text></svg>`;
     }else{
       svg=`<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="white"/><path d="M40 ${h*.3} H${w-40}" stroke="#DC006D" stroke-width="2"/><g fill="#26083b" font-family="Arial" font-size="${w*.015}"><text x="40" y="${h*.65}">${escape(c.phone)}</text><text x="${w*.5}" y="${h*.65}" text-anchor="middle">${escape(c.website)}</text><text x="${w-40}" y="${h*.65}" text-anchor="end">${escape(c.email)}</text></g></svg>`;
     }

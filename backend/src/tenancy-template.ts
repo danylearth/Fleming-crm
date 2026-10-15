@@ -284,8 +284,8 @@ export function formatSignatureSpacing(xml:string,preserveLandlordSignature=fals
    if(!value&&!/<w:br|<w:drawing|<w:sectPr/.test(p))return '';
    if(/^(Between the Landlord:|And you, the Tenant\(s\):)$/.test(value))return spacing(p,value.startsWith('And')?360:0,80).replace('<w:pPr>','<w:pPr><w:keepNext/>');
    if(['{{LANDLORD_SIGNATORY}}','{{TENANT_NAMES}}'].includes(value)||value.includes('(Managing Director)')){p=p.replace(/<w:sz(?:Cs)?\b[^>]*\/>/g,'').replace('<w:rPr>','<w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/>');return spacing(p,0,80).replace('<w:pPr>','<w:pPr><w:keepNext/>');}
-   if(value==='Landlord signature and date:')return spacing(p,0,900).replace('<w:pPr>','<w:pPr><w:keepNext/>');
-   if(value==='Signature:')return spacing(preserveLandlordSignature?p:p.replace(/<w:drawing\b[\s\S]*?<\/w:drawing>/g,''),0,720).replace('<w:pPr>','<w:pPr><w:keepNext/>');
+   if(value==='Landlord signature and date:')return spacing(p,0,preserveLandlordSignature?0:900).replace('<w:pPr>','<w:pPr><w:keepNext/>');
+   if(value==='Signature:')return spacing(p.replace(/<w:drawing\b[\s\S]*?<\/w:drawing>|<w:drawing\b[^>]*\/>/g,''),0,preserveLandlordSignature?0:720).replace('<w:pPr>','<w:pPr><w:keepNext/>');
    if(value==='Date:'){const date=spacing(p,0,0);return ++mainDate===1?date.replace('<w:pPr>','<w:pPr><w:keepNext/>'):date;}
   }
   if(!value&&signing&&!/<w:br|<w:drawing|<w:sectPr/.test(p))return '';
@@ -293,6 +293,31 @@ export function formatSignatureSpacing(xml:string,preserveLandlordSignature=fals
   if(value){afterName=false;if(value==='Signed:')return spacing(p,0,1080).replace(/<w:keepNext[^>]*\/>/g,'');if(/^(?:Signature:|Landlord signature and date:)$/.test(value))return spacing(p,0,0);}
   return p;
  });
+}
+
+/**
+ * Fleming-owned APTs carry Robert's standing signature in the source template.
+ * Put that signature directly below each landlord label, including the addendum,
+ * instead of retaining it in the source paragraph before the label.
+ */
+export function placeCompanySignatureBelowLandlordLabels(xml:string,drawing:string):string {
+  if(!drawing)return xml;
+  let copy=0;
+  const text=(paragraph:string)=>[...paragraph.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(match=>match[1]).join('').trim();
+  return xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,paragraph=>{
+    if(text(paragraph)!=='Landlords Signature:')return paragraph;
+    const id=900+copy++;
+    let numberedDrawing=drawing.replace(/<wp:docPr\b([^>]*)>/,(_match,attributes)=>{
+      const withId=/\bid="[^"]*"/.test(attributes)?attributes.replace(/\bid="[^"]*"/,` id="${id}"`):`${attributes} id="${id}"`;
+      return `<wp:docPr${/\bname="/.test(withId)?withId.replace(/\bname="[^"]*"/,` name="Fleming company signature ${id}"`):`${withId} name="Fleming company signature ${id}"`}>`;
+    });
+    numberedDrawing=numberedDrawing.replace(/<pic:cNvPr\b([^>]*)>/,(_match,attributes)=>{
+      const withId=/\bid="[^"]*"/.test(attributes)?attributes.replace(/\bid="[^"]*"/,` id="${id}"`):`${attributes} id="${id}"`;
+      return `<pic:cNvPr${/\bname="/.test(withId)?withId.replace(/\bname="[^"]*"/,` name="Fleming company signature ${id}"`):`${withId} name="Fleming company signature ${id}"`}>`;
+    });
+    const signatureParagraph='<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="280" w:line="276" w:lineRule="auto"/></w:pPr><w:r>'+numberedDrawing+'</w:r></w:p>';
+    return paragraph+signatureParagraph;
+  });
 }
 
 /** Preserve the supplied contract's clauses, tables, headers and page settings. */
@@ -331,6 +356,9 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         GAS_ACKNOWLEDGEMENT: input.hasGas ? 'Gas Safety Certificate' : 'Gas Safety Certificate: not applicable (no gas connection)',
       };
       let xml = zip.file('word/document.xml')!.asText();
+      // The supplied internal APT contains one image: the company signature.
+      // Capture it before repaginating so it can be placed below both labels.
+      const companySignatureDrawing=input.agreementType==='internal'?xml.match(/<w:drawing\b[\s\S]*?<\/w:drawing>/)?.[0]||'':'';
       if(isClient)xml=prepareClientPaymentTemplate(xml,input.serviceType);
       xml=isClient?formatClientContractLayout(xml):formatContractLayout(xml);
       xml=formatSignatureSpacing(formatAgreementFlow(formatAptPresentation(xml,input.hasGas),values),input.agreementType==='internal');
@@ -346,6 +374,7 @@ export async function generateSourceTenancyPdf(input: TenancyAgreementPdfInput):
         if(!label)return p;let first=true;
         return p.replace(/(<w:t(?:\s[^>]*)?>)[\s\S]*?(<\/w:t>)/g,(_m,open,close)=>{const replacement=first?label:'';first=false;return open+replacement+close;});
       });
+      if(input.agreementType==='internal')xml=placeCompanySignatureBelowLandlordLabels(xml,companySignatureDrawing);
       if(input.companySettings){xml=companyTemplateText(xml,input.companySettings,isClient?'client':'internal');await applyCompanyImages(zip,input.companySettings,!isClient);}
       xml=xml.replace(/<w:p(?:\s[^>]*[^/])?>[\s\S]*?<\/w:p>/g,paragraph=>paragraph.replace(/<[^>]+>/g,'').includes('The electronic signature certificate records each named tenant')?'':paragraph);
       xml = xml.replace(/\{\{([A-Z_]+)\}\}/g, (_match, key) => {
