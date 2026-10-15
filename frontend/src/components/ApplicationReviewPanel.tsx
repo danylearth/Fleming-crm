@@ -15,7 +15,7 @@ const capitaliseFirst=(value:string)=>value.replace(/^(\s*)(\p{L})/u,(_,space,le
 const colour=(status?:string)=>status==='approved'?'border-emerald-500/30 bg-emerald-500/10':status==='rejected'?'border-red-500/30 bg-red-500/10':status==='pending'?'border-amber-500/30 bg-amber-500/10':'border-[var(--border-input)] bg-[var(--bg-subtle)]';
 
 export default function ApplicationReviewPanel({enquiry:initial,documents:initialDocuments,onChange,onView,onDownload,apiBase}:Props){
- const api=useApi();const actionsRef=useRef<HTMLElement>(null);
+ const api=useApi();const actionsRef=useRef<HTMLElement>(null),panelRef=useRef<HTMLElement>(null);
  const revealChanges=()=>{setShowApplication(false);requestAnimationFrame(()=>actionsRef.current?.scrollIntoView({block:"nearest",behavior:"smooth"}));};
  const [enquiry,setEnquiry]=useState(initial),[documents,setDocuments]=useState(initialDocuments);
  const recordBase=apiBase||`/api/tenant-enquiries/${enquiry.id}`;
@@ -53,8 +53,8 @@ export default function ApplicationReviewPanel({enquiry:initial,documents:initia
    const failed=Object.values(result?.delivery||{}).filter((d:any)=>!d.success) as {error?:string}[];
    if(failed.length)setError('Review saved, but communication failed: '+failed.map(d=>d.error).join('; '));
    const [record,docs]=await Promise.all([api.get(apiBase?`${apiBase}/record`:recordBase),api.get(apiBase?`${apiBase}/files`:`/api/documents/tenant_enquiry/${enquiry.id}`)]);
-   setEnquiry(record);setDocuments(docs);setRejection(null);setReason('');await onChange();
-  }catch(e){setError(e instanceof Error?e.message:'The review could not be saved.');}finally{setBusy(false);}
+   setEnquiry(record);setDocuments(docs);setRejection(null);setReason('');await onChange();return true;
+  }catch(e){setError(e instanceof Error?e.message:'The review could not be saved.');return false;}finally{setBusy(false);}
  }
  const sectionReview=(section:string,status:string)=>save(async()=>{
   const result=await api.put(`${recordBase}/section-review`,{section,status,reason});
@@ -64,7 +64,7 @@ export default function ApplicationReviewPanel({enquiry:initial,documents:initia
  });
  const documentReview=(id:number,status:string)=>save(async()=>{const result=await api.put(`${documentBase(id)}/review`,{status,notes:status==='rejected'?reason:null});if(status==='rejected')revealChanges();return result;});
  const deleteDocument=(id:number)=>save(()=>api.delete(documentBase(id)));
- const finish=(status:string)=>save(async()=>{const result=await api.post(`${recordBase}/application-review`,{status,notes:notes||null,changes_required:status==='changes_requested'?changes:null,send_email:status==='changes_requested'&&email,send_sms:status==='changes_requested'&&sms,...(sms?{sms_message:smsText}:{})});setNotes('');return result;});
+ const finish=async(status:string)=>{const saved=await save(async()=>{const result=await api.post(`${recordBase}/application-review`,{status,notes:notes||null,changes_required:status==='changes_requested'?changes:null,send_email:status==='changes_requested'&&email,send_sms:status==='changes_requested'&&sms,...(sms?{sms_message:smsText}:{})});setNotes('');return result;});if(saved&&status==='changes_requested')requestAnimationFrame(()=>{let parent=panelRef.current?.parentElement;while(parent){if(parent.scrollHeight>parent.clientHeight){parent.scrollTo({top:0,behavior:'smooth'});break;}parent=parent.parentElement;}panelRef.current?.scrollIntoView({block:'start',behavior:'smooth'});});};
  const openDocument=async(doc:RecordData,download=false)=>{try{await (download?onDownload:onView)(doc.id,doc.original_name);}catch(e){setError(e instanceof Error?e.message:'Document could not be opened.');}};
  const reject=(value:{section?:string;document?:number;label:string},existing?:string|null)=>{setReason(existing||'');setRejection(value);};
  const modal=(title:string,close:()=>void,body:React.ReactNode)=>createPortal(<div role="dialog" aria-modal="true" aria-label={`${name} — ${title}`} className="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 p-4" onClick={close}><div className="application-review-modal w-full max-w-3xl max-h-[88dvh] overflow-hidden rounded-2xl bg-[var(--bg-card)] text-[var(--text-primary)] flex flex-col" onClick={e=>e.stopPropagation()}><div className="flex items-center justify-between gap-4 border-b border-[var(--border-input)] p-5"><h3 className="text-lg font-semibold">{name} — {title}</h3><button aria-label="Close review" onClick={close}><X size={20}/></button></div><div className="overflow-y-auto p-5 space-y-4">{body}</div></div></div>,document.body);
@@ -76,7 +76,7 @@ export default function ApplicationReviewPanel({enquiry:initial,documents:initia
      {!hasRejections&&<Button size="sm" variant="primary" className="review-final-action review-primary-action" disabled={busy||!allSections||!allDocuments} onClick={()=>void finish('approved')}>Approve Application</Button>}
     </div>
    </aside>}</>);
- return <section aria-label={`${name} application review`} className={`min-w-0 rounded-xl border p-3 space-y-4 application-review-rows ${approved?'border-emerald-500/30 bg-emerald-500/5':hasRejections&&!waiting?'border-red-500/30 bg-red-500/5':enquiry.application_form_completed?'border-amber-500/30 bg-amber-500/10':'border-[var(--border-input)]'}`}>
+ return <section ref={panelRef} aria-label={`${name} application review`} className={`min-w-0 rounded-xl border p-3 space-y-4 application-review-rows ${approved?'border-emerald-500/30 bg-emerald-500/5':hasRejections&&!waiting?'border-red-500/30 bg-red-500/5':enquiry.application_form_completed?'border-amber-500/30 bg-amber-500/10':'border-[var(--border-input)]'}`}>
   <div className="flex flex-wrap items-center justify-between gap-2"><h5 className="font-semibold text-base">{name}</h5><span className={`ml-auto rounded-full border px-3 py-1 text-xs font-medium ${statusClass}`}>{approved?'Completed':awaitingTenant?(enquiry.applicant_type==='guarantor'?'Waiting on Guarantor':'Waiting on Tenant'):hasRejections?'Changes Required':'Ready for Review'}</span></div>
   {!enquiry.application_form_completed?<p className="text-sm">Waiting for this applicant to submit their form and documents.</p>:<div className="space-y-4"><div className="min-w-0 space-y-4">
    {waiting&&<p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">Review will reopen when this applicant resubmits. Approved sections stay locked.</p>}
