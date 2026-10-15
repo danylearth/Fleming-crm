@@ -7170,9 +7170,10 @@ async function applicantSmsHistory(id:number) {
   const applicant=await queryOne('SELECT phone_1 FROM tenant_enquiries WHERE id=$1',[id]);
   const phone=String(applicant?.phone_1||'').replace(/[^0-9]/g,'').slice(-10);
   return query(`SELECT DISTINCT ON (COALESCE(twilio_sid,'row-'||id::text),message_body,created_at) * FROM sms_messages
-    WHERE (enquiry_id=ANY($1::int[]) OR (entity_type='tenant_enquiry' AND entity_id=ANY($1::int[])))
-    AND $2<>'' AND RIGHT(REGEXP_REPLACE(CASE WHEN direction='inbound' THEN COALESCE(from_phone,'') ELSE COALESCE(to_phone,'') END,'[^0-9]','','g'),10)=$2
-    ORDER BY COALESCE(twilio_sid,'row-'||id::text),message_body,created_at,id DESC`,[ids,phone]);
+    WHERE enquiry_id=$3 OR (entity_type='tenant_enquiry' AND entity_id=$3)
+      OR ((enquiry_id=ANY($1::int[]) OR (entity_type='tenant_enquiry' AND entity_id=ANY($1::int[])))
+        AND $2<>'' AND RIGHT(REGEXP_REPLACE(CASE WHEN direction='inbound' THEN COALESCE(from_phone,'') ELSE COALESCE(to_phone,'') END,'[^0-9]','','g'),10)=$2)
+    ORDER BY COALESCE(twilio_sid,'row-'||id::text),message_body,created_at,id DESC`,[ids,phone,id]);
 }
 app.get('/api/sms/enquiry/:enquiryId',authMiddleware,async(req,res)=>{
   const rows=await applicantSmsHistory(Number(req.params.enquiryId));rows.sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime());res.json(rows);
@@ -7196,8 +7197,12 @@ app.get('/api/email-history/:entityType/:entityId', authMiddleware, async (req: 
     }
     const recipient = entityType === 'tenant_enquiry' ? await queryOne('SELECT email_1 FROM tenant_enquiries WHERE id=$1',[req.params.entityId]) : null;
     const messages = await query(
-      `SELECT * FROM email_messages WHERE entity_type = $1 AND entity_id = ANY($2::int[]) AND ($1<>'tenant_enquiry' OR lower($3)=ANY(regexp_split_to_array(lower(to_email),',\\s*'))) ORDER BY created_at DESC`,
-      [entityType, ids,recipient?.email_1 || '']
+      `SELECT * FROM email_messages WHERE entity_type = $1 AND (
+        $1<>'tenant_enquiry' AND entity_id=ANY($2::int[])
+        OR $1='tenant_enquiry' AND LEFT(COALESCE(template,''),10)='guarantor_' AND entity_id=$4
+        OR $1='tenant_enquiry' AND LEFT(COALESCE(template,''),10)<>'guarantor_' AND entity_id=ANY($2::int[]) AND lower($3)=ANY(regexp_split_to_array(lower(to_email),',\\s*'))
+      ) ORDER BY created_at DESC`,
+      [entityType, ids,recipient?.email_1 || '',Number(req.params.entityId)]
     );
     res.json(messages);
   } catch (err) {

@@ -163,6 +163,13 @@ export function registerGuarantorApplication(app:Express,uploadsDir:string){
    if(!file)throw Error('Choose a current supporting document');await saveReview(client,g,{...g.workflow,reviewStatus:'pending'});await audit(client,req,g.enquiry_id,'guarantor_document_review',{file_id:file.id,status});
   });res.json({success:true});
  }));
+ app.delete(base+'/files/:fileId',...staff,handle(async(req,res)=>{
+  await transaction(async client=>{const {g}=await officeReview(client,Number(req.params.id));
+   const file=(await client.query("UPDATE guarantor_verification_files SET current=FALSE WHERE id=$1 AND verification_id=$2 AND current=TRUE AND category=ANY($3::text[]) AND review_status<>'approved' RETURNING id,category,original_name",[req.params.fileId,g.id,guarantorEvidenceCategories])).rows[0];
+   if(!file)throw Error('Only a pending or rejected supporting document can be deleted');
+   await saveReview(client,g,{...g.workflow,reviewStatus:'pending'});await audit(client,req,g.enquiry_id,'guarantor_document_deleted',{file_id:file.id,category:file.category,original_name:file.original_name});
+  });res.json({success:true});
+ }));
  app.put(base+'/files/:fileId/category',...staff,handle(async(req,res)=>{
   await transaction(async client=>{const {g}=await officeReview(client,Number(req.params.id)),category=String(req.body.doc_type||'');
    if(![...guarantorEvidenceCategories,'Other'].includes(category))throw Error('Choose a supporting evidence category');
