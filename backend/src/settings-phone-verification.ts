@@ -43,7 +43,7 @@ export async function issuePhoneChallenge(req:AuthRequest,purpose:Purpose,payloa
     if(deliveryMethod==='email'&&(purpose!=='login'||!user?.email))throw Error('Email verification is not available for this request.');
     if(deliveryMethod==='phone'&&purpose!=='trusted-phone'&&!user?.trusted_phone)throw Error('A trusted number is required. Ask an administrator to set up your number.');
     const recent=(await c.query("SELECT COUNT(*)::int AS count,MAX(created_at) AS latest FROM settings_phone_challenges WHERE user_id=$1 AND created_at>NOW()-INTERVAL '15 minutes'",[req.user.id])).rows[0];
-    const cooldownSeconds=purpose==='login'?LOGIN_CODE_RESEND_SECONDS:60;
+    const cooldownSeconds=purpose==='login'?LOGIN_CODE_RESEND_SECONDS:['trusted-phone','staff-trusted-phone'].includes(purpose)?120:60;
     if(recent.latest&&Date.now()-new Date(recent.latest).getTime()<cooldownSeconds*1000)throw Error(purpose==='login'?'Please wait five minutes after your last code before requesting a new one.':'Please wait before requesting another code.');
     if(recent.count>=3)throw Error('Please wait before requesting another code. Maximum three requests in 15 minutes.');
     const phones=deliveryMethod==='email'?[user.email]:purpose!=='trusted-phone'?[user.trusted_phone]:[...(user.trusted_phone?[user.trusted_phone]:[]),newPhone];
@@ -60,7 +60,7 @@ export async function issuePhoneChallenge(req:AuthRequest,purpose:Purpose,payloa
     }
     const loginLimits=purpose==='login'?await loginCodeSent(c,{...user,id:req.user.id}):{};
     await c.query('COMMIT');committed=true;
-    return {challengeId:id,destinations:deliveryMethod==='email'?phones:phones.map(maskPhone),methods:phones.map(phone=>deliveryMethod==='email'?'email':phone.startsWith('+447')?'text message':'voice call'),expiresInSeconds:VERIFICATION_CODE_SECONDS,...(purpose==='login'?{resendAfterSeconds:LOGIN_CODE_RESEND_SECONDS,...loginLimits}:{})};
+    return {challengeId:id,destinations:deliveryMethod==='email'?phones:phones.map(maskPhone),methods:phones.map(phone=>deliveryMethod==='email'?'email':phone.startsWith('+447')?'text message':'voice call'),expiresInSeconds:VERIFICATION_CODE_SECONDS,resendAfterSeconds:cooldownSeconds,...(purpose==='login'?loginLimits:{})};
   }catch(e){if(!committed)await c.query('ROLLBACK');throw e;}finally{c.release();}
 }
 
