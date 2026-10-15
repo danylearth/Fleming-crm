@@ -32,6 +32,10 @@ export async function assertIssuedAgreementMatchesGuarantees(client:PoolClient,i
  for(const row of rows){
   await assertCurrentGuarantorTerms(client,row.id);
   const saved=row.tenancy_snapshot,source=saved.agreementInput;
-  if(saved.startDate!==details.tenancyStartDate||Number(saved.monthlyRent)!==Number(details.rent)||Number(saved.deposit)!==Number(details.deposit)||text(saved.landlord)!==text(details.landlordName)||text(saved.propertyAddress)!==text(propertyAddress)||JSON.stringify([...saved.tenantNames].map(text).sort())!==JSON.stringify([...tenantNames].map(text).sort())||!isDeepStrictEqual(source.bankDetails,details.bankDetails)||text(source.paymentReference)!==text(details.paymentReference))throw Error('The tenancy agreement differs from the terms in the signed guarantee. Arrange an updated guarantee before issuing this agreement');
+  // The deed fixes the tenancy's parties, address, start date, rent and deposit.
+  // The issued APT completes the tenant-signing presentation and may add the
+  // occupier, facilities and parking particulars. Payment-display fields are
+  // not terms of the guarantee and must never prevent that APT being issued.
+  if(saved.startDate!==details.tenancyStartDate||Number(saved.monthlyRent)!==Number(details.rent)||Number(saved.deposit)!==Number(details.deposit)||text(saved.landlord)!==text(details.landlordName)||text(saved.propertyAddress)!==text(propertyAddress)||JSON.stringify([...saved.tenantNames].map(text).sort())!==JSON.stringify([...tenantNames].map(text).sort()))throw Error('The tenancy agreement differs from the terms in the signed guarantee. Arrange an updated guarantee before issuing this agreement');
  }
 }
