@@ -240,7 +240,7 @@ body { font-family:var(--user-font,'Lufga'),sans-serif; }
 .onboarding-dialog select,
 .onboarding-dialog textarea { font-size: 1rem; min-height: 44px; }
 .onboarding-dialog button { min-height: 40px; font-family: inherit; font-weight: 600; }
-.onboarding-dialog button.company-account-details-button { min-height:32px; }
+.onboarding-dialog button.onboarding-details-button { width:240px; max-width:100%; min-height:40px; height:40px; font-size:12px; line-height:16px; }
 .onboarding-dialog button.onboarding-progress-action { font-weight: 700; }
 .onboarding-dialog .onboarding-section-nav > button { height:52px; min-height:52px; padding-top:8px; padding-bottom:8px; }
 .onboarding-dialog input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; }
@@ -363,3 +363,6 @@ body { font-family:var(--user-font,'Lufga'),sans-serif; }
 .onboarding-actions h5{font-size:16px;font-weight:600}
 .onboarding-actions button{font-weight:500;min-height:40px}
 .onboarding-action-buttons button{height:auto;min-height:40px;border-radius:9999px}
+
+/* Main actions share typography and spacing throughout onboarding. */
+.onboarding-dialog button[data-variant="gradient"] { min-height:44px; height:auto; padding:10px 16px; font-size:14px; line-height:20px; font-weight:700; white-space:normal; }

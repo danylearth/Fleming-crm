@@ -54,7 +54,7 @@ export function Button({ children, onClick, variant = 'primary', size = 'md', cl
     outline: 'border border-[var(--border-input)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]',
   };
   return (
-    <button type={type} onClick={onClick} disabled={disabled}
+    <button type={type} data-variant={variant} onClick={onClick} disabled={disabled}
       className={`${base} ${sizes[size]} ${variants[variant]} ${disabled ? 'opacity-40 pointer-events-none' : ''} ${className}`}>
       {children}
     </button>
