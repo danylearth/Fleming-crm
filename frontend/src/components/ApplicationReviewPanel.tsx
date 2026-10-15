@@ -63,7 +63,7 @@ export default function ApplicationReviewPanel({enquiry:initial,documents:initia
   return result;
  });
  const documentReview=(id:number,status:string)=>save(async()=>{const result=await api.put(`${documentBase(id)}/review`,{status,notes:status==='rejected'?reason:null});if(status==='rejected')revealChanges();return result;});
- const deleteDocument=(id:number)=>save(()=>api.delete(documentBase(id)));
+ const deleteDocument=async(id:number)=>{if(await save(()=>api.delete(documentBase(id))))setDeletion(null);};
  const finish=async(status:string)=>{const saved=await save(async()=>{const result=await api.post(`${recordBase}/application-review`,{status,notes:notes||null,changes_required:status==='changes_requested'?changes:null,send_email:status==='changes_requested'&&email,send_sms:status==='changes_requested'&&sms,...(sms?{sms_message:smsText}:{})});setNotes('');return result;});if(saved&&status==='changes_requested')requestAnimationFrame(()=>{let parent=panelRef.current?.parentElement;while(parent){if(parent.scrollHeight>parent.clientHeight){parent.scrollTo({top:0,behavior:'smooth'});break;}parent=parent.parentElement;}panelRef.current?.scrollIntoView({block:'start',behavior:'smooth'});});};
  const openDocument=async(doc:RecordData,download=false)=>{try{await (download?onDownload:onView)(doc.id,doc.original_name);}catch(e){setError(e instanceof Error?e.message:'Document could not be opened.');}};
  const reject=(value:{section?:string;document?:number;label:string},existing?:string|null)=>{setReason(existing||'');setRejection(value);};
