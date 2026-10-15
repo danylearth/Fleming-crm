@@ -6,8 +6,8 @@ export interface PipelineEnquiry {
  balance_payment_requested?:number;balance_payment_received?:number;balance_follow_up_date?:string;follow_up_date?:string;
  tenancy_agreement_status?:string;tenancy_agreement_action?:boolean;credit_check_completed?:number;
  application_form_completed?:number|boolean;application_review_status?:string;application_changes_sent_at?:string;
- ready_for_review?:boolean;guarantor_required?:boolean|null;guarantor_pipeline_action?:'waiting'|'review'|'action'|'complete'|null;
- guarantor_pipeline_state?:'waiting'|'review'|'action'|null;pipeline_delivery?:Record<string,string>;
+ ready_for_review?:boolean;guarantor_required?:boolean|null;guarantor_pipeline_action?:'waiting'|'review'|'action'|'credit'|'complete'|null;
+ guarantor_pipeline_state?:'waiting'|'review'|'action'|'credit'|null;pipeline_delivery?:Record<string,string>;
  application_pipeline_state?:'send'|'waiting'|'review'|'decision'|'complete';all_credit_complete?:boolean;
  pipeline_follow_up_due?:boolean;
 }
@@ -25,7 +25,8 @@ export function guarantorPipelineState(e:PipelineEnquiry,partner?:PipelineEnquir
  const actions=applicants.filter(a=>a.guarantor_required).map(a=>a.guarantor_pipeline_action||'action');
  if(actions.includes('review'))return 'review';
  if(actions.includes('action'))return 'action';
- return actions.includes('waiting')?'waiting':null;
+ if(actions.includes('waiting'))return 'waiting';
+ return actions.includes('credit')?'credit':null;
 }
 export function tenantPipelineRecord<T extends PipelineEnquiry>(e:T,partner?:PipelineEnquiry){
  const applicants=[e,...(e.joint_partner_id&&partner?[partner]:[])];
@@ -64,7 +65,7 @@ export function tenantPipelineAction(e:PipelineEnquiry,today:string,time='23:59'
  if(e.guarantor_pipeline_state==='review')return 'Guarantor Ready for Review';
  if(e.guarantor_pipeline_state==='action')return 'Guarantor Review';
  if(e.guarantor_pipeline_state==='waiting')return wait('Guarantor');
- if(e.all_credit_complete===false)return 'Run Credit Check';
+ if(e.guarantor_pipeline_state==='credit'||e.all_credit_complete===false)return 'Run Credit Check';
  if(e.tenancy_agreement_status!=='completed'){
   if(!e.tenancy_agreement_status||e.tenancy_agreement_status==='draft')return 'Prepare Tenancy Agreement';
   if(e.tenancy_agreement_action)return 'Send / Check Agreement Delivery';

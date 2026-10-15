@@ -9,7 +9,7 @@ export const guarantorPipelineSql = `(SELECT CASE
  WHEN g.workflow->>'reviewStatus'='changes_requested' AND g.workflow->>'changesSent' IS NOT NULL
    THEN CASE WHEN g.expires_at<=NOW() OR (SELECT m.status FROM email_messages m WHERE m.entity_type='tenant_enquiry' AND m.entity_id=te.id AND m.template='guarantor_changes' ORDER BY m.id DESC LIMIT 1) IN ('failed','bounced','suppressed') THEN 'action' ELSE 'waiting' END
  WHEN g.signature IS NOT NULL AND g.submitted_at IS NOT NULL AND COALESCE(g.workflow->>'reviewStatus','pending')<>'approved' THEN 'review'
- WHEN g.signature IS NOT NULL AND COALESCE(g.workflow->'credit'->>'credit_check_completed','0') NOT IN ('true','1') THEN 'action'
+ WHEN g.signature IS NOT NULL AND COALESCE(g.workflow->'credit'->>'credit_check_completed','0') NOT IN ('true','1') THEN 'credit'
  WHEN g.signature IS NOT NULL AND x.status='awaiting_witness' THEN CASE
    WHEN x.witness_expires_at<=NOW() OR EXISTS(SELECT 1 FROM guarantor_execution_emails m WHERE m.execution_id=x.id AND m.kind='witness_request' AND (m.status IN ('failed','simulated') OR EXISTS(SELECT 1 FROM email_messages em WHERE em.resend_id=m.resend_id AND em.status IN ('bounced','suppressed','failed')))) THEN 'action' ELSE 'waiting' END
  WHEN g.signature IS NOT NULL THEN 'action'

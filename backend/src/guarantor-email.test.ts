@@ -9,6 +9,10 @@ it('renders the four approved emails without preview claims or unresolved links'
  expect(messages[2].html).toMatch(/Completed:/);
  expect(messages[2].html).not.toContain('Attached:');
  expect(messages[2].html).not.toContain('If you have any questions, reply to this email');
+ expect(messages[3].html).toContain('background:#F6F1F8');
+ expect(messages[3].html).toContain('color:#27083D');
+ expect(messages[3].html).not.toContain('All of your property needs');
+ expect(messages[3].html).not.toContain('office-help.png');
 });
 it('chooses sole/joint labels and escapes user-supplied values',()=>{
  const sole=guarantorCompletedEmail({...details,witnessName:'Morgan Reed',tenancyStartDate:'2026-11-06',completedAt:'2026-10-04T12:00:00Z'}).html;

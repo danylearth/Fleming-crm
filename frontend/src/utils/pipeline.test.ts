@@ -38,6 +38,7 @@ it('guarantors return for submissions or office actions and wait only until an a
  expect(action({guarantor_required:true,guarantor_pipeline_action:'waiting',pipeline_follow_up_due:true})).toBe('Guarantor Follow-up Due');
  expect(action({guarantor_required:true,guarantor_pipeline_action:'review',follow_up_date:'2027-01-01'})).toBe('Guarantor Ready for Review');
  expect(action({guarantor_required:true,guarantor_pipeline_action:'action'})).toBe('Guarantor Review');
+ expect(action({guarantor_required:true,guarantor_pipeline_action:'credit'})).toBe('Run Credit Check');
  expect(action({guarantor_required:true,guarantor_pipeline_action:'complete'})).toBe('Prepare Tenancy Agreement');
 });
 it('joint applicants keep office work visible without treating one submission/signature as complete',()=>{
