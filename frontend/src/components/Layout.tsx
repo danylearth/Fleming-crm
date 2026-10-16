@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
-import { Menu, LogOut, ChevronLeft, ChevronRight, X, Sun, Moon, Users, Megaphone } from 'lucide-react';
+import { Menu, LogOut, ChevronLeft, ChevronRight, X, Sun, Moon, Users, Megaphone, KeyRound } from 'lucide-react';
 import {
   DashboardIcon, EnquiriesIcon, PropertiesIcon, LandlordsIcon, TenantsIcon,
   BdmIcon, MaintenanceIcon, TasksIcon, FinancialsIcon, SettingsIcon
@@ -26,6 +26,7 @@ const navItems = [
   { to: '/maintenance', icon: MaintenanceIcon, label: 'Maintenance', roles: null },
   { to: '/tasks', icon: TasksIcon, label: 'Team Calendar', roles: null },
   { to: '/financials', icon: FinancialsIcon, label: 'Financials', roles: null },
+  { to: '/rentro', icon: KeyRound, label: 'Rentro', roles: null },
   { to: '/marketing', icon: Megaphone, label: 'Marketing', roles: ['admin','manager'] },
   { to: '/users', icon: Users, label: 'Team', roles: ['admin','manager'] }, // Admin only
   { to: '/settings', icon: SettingsIcon, label: 'Settings', roles: null },

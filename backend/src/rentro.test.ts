@@ -1,8 +1,11 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
+vi.mock('./db-pg',()=>({default:{connect:vi.fn()},query:vi.fn(),queryOne:vi.fn(),run:vi.fn()}));
+vi.mock('./email',()=>({sendEmail:vi.fn(),brandedEmailHtml:vi.fn()}));
+vi.mock('./rentro-supabase',()=>({supabaseConfigured:()=>false,supabaseAdmin:vi.fn(),supabaseIssuer:()=>'https://x/auth/v1'}));
 import {registerRentro,rentroAllowedOrigin,rentroSignupMode} from './rentro';
 
 const routes={use:new Map<string,any>(),get:new Map<string,any>()};
-const app={use:(p:string,h:any)=>routes.use.set(p,h),get:(p:string,h:any)=>routes.get.set(p,h)};
+const app={use:(p:string,h:any)=>routes.use.set(p,h),get:(p:string,...h:any[])=>routes.get.set(p,h.at(-1)),post:vi.fn(),put:vi.fn()};
 registerRentro(app as any);
 const response=()=>{const res:any={statusCode:200};res.status=vi.fn((c:number)=>{res.statusCode=c;return res;});res.json=vi.fn((d:any)=>{res.data=d;return res;});return res;};
 afterEach(()=>{delete process.env.RENTRO_ENABLED;delete process.env.RENTRO_SIGNUP;delete process.env.RENTRO_ALLOWED_ORIGINS;});

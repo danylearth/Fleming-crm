@@ -48,6 +48,7 @@ import {registerDepartments,validDepartment,contactDetails} from './departments'
 import {registerTenantReactivation} from './tenant-reactivation';
 import {registerAccountRoutes} from './account-access';
 import {registerRentro,rentroAllowedOrigin} from './rentro';
+import {registerRentroAdmin} from './rentro-admin';
 import {normalisePricePaid} from './price-paid';
 import {dashboardAlerts} from './dashboard-alerts';
 import {flemingOperatedSql,flemingOperatedRowSql} from './fleming-operated';
@@ -602,6 +603,7 @@ app.get('/', (req, res) => {
 // Serve static files (disabled in production - frontend deployed separately)
 registerAccountRoutes(app);
 registerRentro(app);
+registerRentroAdmin(app);
 registerServiceAgreements(app);
 registerCompanySettings(app);
 registerTrustedPhone(app);
