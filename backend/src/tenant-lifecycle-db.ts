@@ -2,6 +2,7 @@ import {applyDueTenancyChangeovers} from './tenancy-changeover';
 import {syncPropertyInspectionTasks} from './property-inspections';
 import { applyDueRentReviews } from './rent-review';
 import { run } from './db-pg';
+import { flemingOperatedSql } from './fleming-operated';
 
 export async function syncTenantLifecycle(): Promise<void> {
   await applyDueTenancyChangeovers();
@@ -49,7 +50,7 @@ export async function syncTenantLifecycle(): Promise<void> {
       OR p.tenancy_type IS DISTINCT FROM t.tenancy_type)`);
   await run(`WITH inserted AS (INSERT INTO tasks(title,priority,status,due_date,task_type,entity_type,entity_id)
     SELECT 'Inventory Due — ' || t.name || ' — ' || p.address,CASE WHEN t.tenancy_start_date<=CURRENT_DATE-7 THEN 'high' ELSE 'medium' END,'pending',t.tenancy_start_date,'inventory_due','tenant',t.id
-    FROM tenants t JOIN properties p ON p.id=t.property_id WHERE t.status='active' AND p.archived_at IS NULL AND t.tenancy_start_date<=CURRENT_DATE
+    FROM tenants t JOIN properties p ON p.id=t.property_id WHERE t.status='active' AND p.archived_at IS NULL AND ${flemingOperatedSql('p')} AND t.tenancy_start_date<=CURRENT_DATE
       AND NOT EXISTS(SELECT 1 FROM tenants j WHERE j.id=t.linked_tenant_id AND j.id<t.id AND j.property_id=t.property_id AND j.tenancy_start_date=t.tenancy_start_date)
       AND NOT EXISTS(SELECT 1 FROM inventories i WHERE i.property_id=t.property_id AND (i.applies_to_tenancy_start_date=t.tenancy_start_date OR (i.applies_to_tenancy_start_date IS NULL AND i.inspection_date>=t.tenancy_start_date)) AND (i.tenant_id=t.id OR i.tenant_id IN(SELECT id FROM tenants j WHERE j.id=t.linked_tenant_id AND j.property_id=t.property_id AND j.tenancy_start_date=t.tenancy_start_date)) AND (i.signed_date IS NOT NULL OR i.signed_document))
       AND NOT EXISTS(SELECT 1 FROM tasks task WHERE task.task_type='inventory_due' AND task.entity_type='tenant' AND task.entity_id=t.id AND task.due_date=t.tenancy_start_date)

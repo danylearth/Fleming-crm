@@ -6,6 +6,7 @@ import {emailPreferencesUrl} from './email-preferences';
 import { Resend } from 'resend';
 import {loginCodeEmail} from './login-code-email';
 import fs from 'fs';
+import {emailRecipientAllowed} from './recipient-allowlist';
 import path from 'path';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -294,7 +295,7 @@ export function inlineEmailImages(html: string) {
 
 // Transactional security mail must never simulate delivery or add marketing opt-out links.
 export async function sendLoginVerificationEmail(to:string,code:string,name='there'):Promise<boolean> {
-  if(!resend||process.env.ALLOW_SIMULATED_MESSAGES==='true'||!/^\d{6}$/.test(code))return false;
+  if(!resend||process.env.ALLOW_SIMULATED_MESSAGES==='true'||!/^\d{6}$/.test(code)||!emailRecipientAllowed(to))return false;
   try {
     const inline=inlineEmailImages(loginCodeEmail(name,code));
     const {data,error}=await resend.emails.send({from:`Fleming Lettings <${SECURITY_EMAIL_ADDRESS}>`,to,subject:'Your Fleming Lettings sign-in verification code',html:inline.html,attachments:inline.attachments});
@@ -315,8 +316,11 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
   }
 
   try {
-    const recipients = Array.isArray(params.to) ? params.to : [params.to];
-    if (!recipients.length) return {success:false,error:'Choose an email recipient'};
+    const requested = Array.isArray(params.to) ? params.to : [params.to];
+    if (!requested.length) return {success:false,error:'Choose an email recipient'};
+    const recipients = requested.filter(r => emailRecipientAllowed(r));
+    if (recipients.length < requested.length) console.log('[EMAIL WITHHELD] recipient not on EMAIL_RECIPIENT_ALLOWLIST', { subject: params.subject, withheld: requested.length - recipients.length });
+    if (!recipients.length) return { success: true, id: 'withheld-' + Date.now(), simulated: true };
     // Each recipient gets their own preferences link, including group messages.
     const preferences = await Promise.all(recipients.map(emailPreferencesUrl));
     let firstId: string | undefined;

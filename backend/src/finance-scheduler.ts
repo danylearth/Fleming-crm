@@ -2,6 +2,7 @@ import {applyDueTenancyChangeovers} from './tenancy-changeover';
 import pool from './db-pg';
 import {issueFinancialDocument,rentInvoiceSource,rentInvoiceSnapshot} from './financial-documents';
 import {syncFreeAgent} from './freeagent';
+import {flemingOperatedSql} from './fleming-operated';
 
 export function rentDueDates(start:string,through:string,paymentDay?:number):string[] {
   const origin=new Date(start.slice(0,10)+'T12:00:00Z');
@@ -56,14 +57,14 @@ export async function runFinanceSchedule(now=new Date()) {
       const setting=(await client.query('SELECT cutover_date::text FROM rent_tracking_settings WHERE id=1')).rows[0];
       if(setting?.cutover_date) {
         await client.query('BEGIN');
-        const tenants=(await client.query(`SELECT t.* FROM tenants t JOIN properties p ON p.id=t.property_id WHERE t.tenancy_start_date IS NOT NULL AND t.monthly_rent>0 AND p.archived_at IS NULL AND p.service_type IS DISTINCT FROM 'let_only' AND (t.status='active' OR (t.status='inactive' AND t.tenancy_end_date IS NOT NULL))
+        const tenants=(await client.query(`SELECT t.* FROM tenants t JOIN properties p ON p.id=t.property_id WHERE t.tenancy_start_date IS NOT NULL AND t.monthly_rent>0 AND p.archived_at IS NULL AND ${flemingOperatedSql('p')} AND p.service_type IS DISTINCT FROM 'let_only' AND (t.status='active' OR (t.status='inactive' AND t.tenancy_end_date IS NOT NULL))
           AND NOT EXISTS(SELECT 1 FROM tenancy_billing_profiles profile WHERE t.id=ANY(profile.tenant_ids))
           AND NOT EXISTS(SELECT 1 FROM tenants partner WHERE partner.id=t.linked_tenant_id AND partner.id<t.id AND partner.property_id=t.property_id AND partner.tenancy_start_date=t.tenancy_start_date)`)).rows;
         const profiles=(await client.query(`SELECT b.id AS tenancy_profile_id,b.tenant_id AS id,b.property_id,b.start_date AS tenancy_start_date,b.end_date AS tenancy_end_date,
           CASE WHEN t.tenancy_start_date=b.start_date THEN t.monthly_rent ELSE b.monthly_rent END AS monthly_rent,
           CASE WHEN t.tenancy_start_date=b.start_date THEN COALESCE(t.rent_due_day,b.rent_due_day) ELSE b.rent_due_day END AS rent_due_day
           FROM tenancy_billing_profiles b JOIN tenants t ON t.id=b.tenant_id JOIN properties p ON p.id=b.property_id
-          WHERE b.start_date<=$1 AND p.archived_at IS NULL AND p.service_type IS DISTINCT FROM 'let_only' ORDER BY b.start_date,b.id`,[today])).rows;
+          WHERE b.start_date<=$1 AND p.archived_at IS NULL AND ${flemingOperatedSql('p')} AND p.service_type IS DISTINCT FROM 'let_only' ORDER BY b.start_date,b.id`,[today])).rows;
         for(const tenant of [...tenants,...profiles]) {
           const monthEnd=nextRentDueDate(today,tenant.rent_due_day||Number(String(tenant.tenancy_start_date).slice(8,10)));
           // Charges entered manually before the schedule runs belong to the
@@ -86,7 +87,7 @@ export async function runFinanceSchedule(now=new Date()) {
       // Save each current or upcoming invoice once, including already-paid charges.
       const invoices=(await client.query(`SELECT r.id FROM rent_payments r JOIN tenants t ON t.id=r.tenant_id JOIN properties p ON p.id=r.property_id LEFT JOIN tenancy_billing_profiles profile ON profile.id=r.tenancy_profile_id
         WHERE r.due_date >= $1::date AND r.due_date < ($1::date + INTERVAL '2 months') AND r.amount_due>0
-        AND (t.status='active' OR (t.status='inactive' AND t.tenancy_end_date IS NOT NULL)) AND p.archived_at IS NULL AND p.service_type IS DISTINCT FROM 'let_only'
+        AND (t.status='active' OR (t.status='inactive' AND t.tenancy_end_date IS NOT NULL)) AND p.archived_at IS NULL AND ${flemingOperatedSql('p')} AND p.service_type IS DISTINCT FROM 'let_only'
         AND (CASE WHEN r.tenancy_profile_id IS NOT NULL THEN profile.end_date IS NULL OR r.due_date < profile.end_date ELSE t.tenancy_end_date IS NULL OR r.due_date < t.tenancy_end_date::date END)
         AND NOT EXISTS(SELECT 1 FROM financial_documents d WHERE d.source_key='rent:'||r.id::text)`,[today.slice(0,7)+'-01'])).rows;
       for(const invoice of invoices){const source=await rentInvoiceSource(invoice.id);if(source)await issueFinancialDocument('rent_invoice','rent:'+source.id,rentInvoiceSnapshot(source),{tenant_id:source.tenant_id,landlord_id:source.landlord_id,property_id:source.property_id,rent_payment_id:source.id},{id:null,email:'system@scheduler'});}

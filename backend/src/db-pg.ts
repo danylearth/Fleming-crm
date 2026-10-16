@@ -5,6 +5,7 @@ types.setTypeParser(1082, value => value);
 import fs from 'fs';
 import path from 'path';
 import { runInventoryMigration } from './db-inventory-migration';
+import { taskTypeCheckSql } from './task-types';
 
 // Production connects to Supabase, whose certs are signed by their own CA —
 // pin it (backend/supabase-ca.crt) and verify, instead of rejectUnauthorized:false.
@@ -354,7 +355,7 @@ export async function initDb() {
         entity_id INTEGER,
         due_date DATE,
         follow_up_date DATE,
-        task_type TEXT CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', 'viewing', 'handover', 'maintenance', NULL)),
+        task_type TEXT CHECK(${taskTypeCheckSql()}),
         notes TEXT,
         completed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1089,7 +1090,7 @@ CREATE INDEX IF NOT EXISTS property_service_overrides_lookup ON property_service
     `);
     await client.query(`
       DO $$ BEGIN
-        ALTER TABLE tasks ADD CONSTRAINT tasks_task_type_check CHECK(task_type IN ('manual', 'eicr_reminder', 'epc_reminder', 'gas_reminder', 'tenancy_end', 'rent_review', 'nok_missing', 'follow_up', 'viewing', 'handover', 'maintenance', NULL));
+        ALTER TABLE tasks ADD CONSTRAINT tasks_task_type_check CHECK(${taskTypeCheckSql()});
       EXCEPTION WHEN OTHERS THEN RAISE WARNING 'migration block failed: %', SQLERRM;
       END $$;
     `);

@@ -1,4 +1,5 @@
 import type {Express,Request,Response,NextFunction} from 'express';
+import { smsRecipientAllowed } from './recipient-allowlist';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -97,7 +98,7 @@ export function registerChat(app:Express){
     if(attachment)await db.query('UPDATE chat_files SET message_id=$1 WHERE id=$2',[claimed.id,attachment.id]);
     await db.query('COMMIT');
    }catch(e:any){await db.query('ROLLBACK');return res.status(409).json({error:e.message});}finally{db.release();}
-   try{const client=require('twilio')(process.env.TWILIO_ACCOUNT_SID,process.env.TWILIO_AUTH_TOKEN);const base=process.env.BASE_URL||'https://fleming-crm-api.fly.dev';
+   try{if(!smsRecipientAllowed(c.visitor_phone))throw Error('Recipient not on SMS_RECIPIENT_ALLOWLIST');const client=require('twilio')(process.env.TWILIO_ACCOUNT_SID,process.env.TWILIO_AUTH_TOKEN);const base=process.env.BASE_URL||'https://fleming-crm-api.fly.dev';
     const sent=await client.messages.create({from:'whatsapp:'+process.env.TWILIO_PHONE_NUMBER,to:'whatsapp:'+c.visitor_phone,...(req.body.body.trim()?{body:req.body.body.trim()}:{}),...(attachment?{mediaUrl:[whatsappMediaUrl(attachment.id,base,process.env.JWT_SECRET||'')]}:{}),statusCallback:base+'/api/public/chat/whatsapp/status'});
     await run("UPDATE chat_messages SET provider_id=$2,status='sent' WHERE id=$1",[claimed.id,sent.sid]);await run('UPDATE chat_conversations SET updated_at=NOW() WHERE id=$1',[c.id]);return res.json({...claimed,status:'sent'});
    }catch(e){await run("UPDATE chat_messages SET status='failed' WHERE id=$1",[claimed.id]);return res.status(502).json({error:'WhatsApp delivery was not confirmed. Check the message status in Twilio before retrying.'});}

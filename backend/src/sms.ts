@@ -1,6 +1,7 @@
 // Twilio SMS integration — follows the same provider-confirmed semantics as email.ts.
 
 import type { Request, Response, NextFunction } from 'express';
+import { smsRecipientAllowed } from './recipient-allowlist';
 import {VERIFICATION_CODE_MINUTES} from './verification-code-policy';
 
 let twilioClient: any = null;
@@ -67,6 +68,11 @@ export async function sendSms(params: SendSmsParams): Promise<{ success: boolean
     return { success: false, error };
   }
 
+  if (!smsRecipientAllowed(params.to)) {
+    console.log('[SMS WITHHELD] recipient not on SMS_RECIPIENT_ALLOWLIST');
+    return { success: true, sid: 'withheld-' + Date.now(), simulated: true };
+  }
+
   try {
     const createOpts: Record<string, string> = {
       body: params.body,
@@ -89,7 +95,7 @@ export async function sendSms(params: SendSmsParams): Promise<{ success: boolean
 // Normalize UK phone numbers to E.164 format (+44...)
 // Authentication messages never use the simulated messaging path.
 export async function sendSecurityCode(to:string,code:string,action:string,name='there'):Promise<boolean> {
-  if(!twilioClient||process.env.ALLOW_SIMULATED_MESSAGES==='true')return false;
+  if(!twilioClient||process.env.ALLOW_SIMULATED_MESSAGES==='true'||!smsRecipientAllowed(to))return false;
   try {
     if(to.startsWith('+447')) {
       const firstName=String(name||'').trim().split(/\s+/)[0]||'there';

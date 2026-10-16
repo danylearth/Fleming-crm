@@ -4,6 +4,7 @@ import {refreshOnsRents} from './rent-comparisons';
 import {runFinanceSchedule} from './finance-scheduler';
 import { syncTenantLifecycle } from './tenant-lifecycle-db';
 import { query, queryOne, run, insert } from './db-pg';
+import { flemingOperatedSql, flemingOperatedRowSql } from './fleming-operated';
 
 const CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour
 
@@ -90,6 +91,7 @@ async function runComplianceChecks(): Promise<number> {
         SELECT id, address, ${check.field}::text as expiry_date
         FROM properties
         WHERE ${check.field} IS NOT NULL
+        AND ${flemingOperatedSql('properties')}
         AND ${check.field} <= $1
         AND ${check.field} >= $2
       `;
@@ -147,7 +149,8 @@ async function runTenancyEndChecks(): Promise<number> {
        WHERE p.tenancy_end_date IS NOT NULL
        AND p.tenancy_end_date <= $1
        AND p.tenancy_end_date >= $2
-       AND p.has_live_tenancy = 1`,
+       AND p.has_live_tenancy = 1
+       AND ${flemingOperatedSql('p')}`,
       [targetStr, todayStr]
     );
 
@@ -187,6 +190,7 @@ async function runRentReviewChecks(): Promise<number> {
   const properties = await query(
     `SELECT p.id,p.address,COALESCE(p.rent_review_date, (MAX(t.rent_last_reviewed)+INTERVAL '1 year')::date)::text AS rent_review_date
      FROM properties p LEFT JOIN tenants t ON t.property_id=p.id AND t.status='active'
+     WHERE ${flemingOperatedSql('p')}
      GROUP BY p.id
      HAVING COALESCE(p.rent_review_date,(MAX(t.rent_last_reviewed)+INTERVAL '1 year')::date) <= $1::date`,
     [ymdLondon(in30)]
@@ -227,7 +231,8 @@ async function runNokChecks(): Promise<number> {
      FROM tenants
      WHERE created_at <= $1
      AND (nok_name IS NULL OR nok_name = '')
-     AND (nok_phone IS NULL OR nok_phone = '')`,
+     AND (nok_phone IS NULL OR nok_phone = '')
+     AND ${flemingOperatedRowSql('tenants')}`,
     [thirtyDaysAgo.toISOString()]
   );
 

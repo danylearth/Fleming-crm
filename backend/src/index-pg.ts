@@ -47,8 +47,10 @@ import {vacancyLoss} from './vacancy-loss';
 import {registerDepartments,validDepartment,contactDetails} from './departments';
 import {registerTenantReactivation} from './tenant-reactivation';
 import {registerAccountRoutes} from './account-access';
+import {registerRentro,rentroAllowedOrigin} from './rentro';
 import {normalisePricePaid} from './price-paid';
 import {dashboardAlerts} from './dashboard-alerts';
+import {flemingOperatedSql,flemingOperatedRowSql} from './fleming-operated';
 import {registerClientAgreementDetails,clientAgreementContext,validateClientDetails} from './client-agreement-details';
 import {registerPropertyInspections} from './property-inspections';
 import {registerTenantMessageTemplates} from './tenant-message-templates';
@@ -433,6 +435,7 @@ app.use(cors({
     if (process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(parsed.hostname) && parsed.protocol === 'http:') return callback(null, true);
     if (parsed.protocol === 'https:' && (parsed.hostname === 'fleminglettings.co.uk' || parsed.hostname.endsWith('.fleminglettings.co.uk'))) return callback(null, true);
     if (origin === 'https://fleming-portal.vercel.app') return callback(null, true); // exact — no *.vercel.app wildcard
+    if (rentroAllowedOrigin(origin)) return callback(null, true); // exact RENTRO_ALLOWED_ORIGINS entries
     callback(new Error('CORS: origin not allowed'));
   },
   credentials: true,
@@ -456,6 +459,7 @@ app.use('/api', (req: AuthRequest, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)
     || req.path.startsWith('/public/') || req.path.startsWith('/auth/')
     || req.path.startsWith('/feedback-agent/') || req.path.startsWith('/chat/') || req.path.startsWith('/notifications/')
+    || req.path.startsWith('/rentro/') // customer API: every Rentro route applies its own authentication
     || (req.method==='PUT' && /^\/properties\/\d+\/policies\/\d+$/.test(req.path))
     || (req.method==='POST' && /^\/tenants\/\d+\/reactivate$/.test(req.path))
     || ['/sms/status', '/sms/inbound', '/email/webhook'].includes(req.path)
@@ -597,6 +601,7 @@ app.get('/', (req, res) => {
 
 // Serve static files (disabled in production - frontend deployed separately)
 registerAccountRoutes(app);
+registerRentro(app);
 registerServiceAgreements(app);
 registerCompanySettings(app);
 registerTrustedPhone(app);
@@ -700,12 +705,12 @@ app.get('/api/dashboard', authMiddleware, async (req: AuthRequest, res) => {
     await syncTenantLifecycle();
     const cnt = (row: any) => Number(row.c);
 
-    const properties = cnt(await queryOne('SELECT COUNT(*)::integer as c FROM properties'));
-    const propertiesLet = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM properties WHERE status = 'let'"));
+    const properties = cnt(await queryOne(`SELECT COUNT(*)::integer as c FROM properties WHERE ${flemingOperatedSql('properties')}`));
+    const propertiesLet = cnt(await queryOne(`SELECT COUNT(*)::integer as c FROM properties WHERE status = 'let' AND ${flemingOperatedSql('properties')}`));
     const landlords = cnt(await queryOne('SELECT COUNT(*)::integer as c FROM landlords'));
-    const tenants = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tenants WHERE COALESCE(status, 'active') = 'active'"));
-    const activeTenancies = cnt(await queryOne("SELECT COUNT(DISTINCT property_id)::integer as c FROM tenants WHERE COALESCE(status, 'active') = 'active'"));
-    const openMaintenance = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM maintenance WHERE status IN ('open', 'in_progress')"));
+    const tenants = cnt(await queryOne(`SELECT COUNT(*)::integer as c FROM tenants WHERE COALESCE(status, 'active') = 'active' AND ${flemingOperatedRowSql('tenants')}`));
+    const activeTenancies = cnt(await queryOne(`SELECT COUNT(DISTINCT property_id)::integer as c FROM tenants WHERE COALESCE(status, 'active') = 'active' AND ${flemingOperatedRowSql('tenants')}`));
+    const openMaintenance = cnt(await queryOne(`SELECT COUNT(*)::integer as c FROM maintenance m WHERE status IN ('open', 'in_progress') AND ${flemingOperatedRowSql('m')}`));
     const bdmProspects = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM landlords_bdm WHERE status NOT IN ('onboarded', 'not_interested')"));
     const activeEnquiries = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tenant_enquiries WHERE status NOT IN ('rejected', 'converted')"));
     const tasksOverdue = cnt(await queryOne("SELECT COUNT(*)::integer as c FROM tasks WHERE status IN ('pending', 'in_progress') AND due_date < CURRENT_DATE"));
@@ -717,7 +722,7 @@ app.get('/api/dashboard', authMiddleware, async (req: AuthRequest, res) => {
       SELECT m.id, m.description, m.status, m.priority, m.assigned_to, (SELECT name FROM users WHERE id=m.assigned_to) AS assigned_name, COALESCE(p.address, 'Unknown property') as property_address
       FROM maintenance m
       LEFT JOIN properties p ON p.id = m.property_id
-      WHERE m.status IN ('open', 'in_progress') AND NOT EXISTS(SELECT 1 FROM dashboard_alert_dismissals d WHERE d.alert_key='maintenance:'||m.id::text)
+      WHERE m.status IN ('open', 'in_progress') AND ${flemingOperatedRowSql('m')} AND NOT EXISTS(SELECT 1 FROM dashboard_alert_dismissals d WHERE d.alert_key='maintenance:'||m.id::text)
       ORDER BY CASE m.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
                m.created_at DESC
     `);
