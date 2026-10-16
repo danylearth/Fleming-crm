@@ -21,6 +21,7 @@ const NotificationContext = createContext<NotificationContextValue | null>(null)
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [confirmation, setConfirmation] = useState<{ message: string; title: string } | null>(null);
+  const confirmationDialog = useRef<HTMLDialogElement>(null);
   const resolver = useRef<((accepted: boolean) => void) | null>(null);
   const nextId = useRef(1);
   const inboxAttention = useRef(createNotificationAttention());
@@ -42,6 +43,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     resolver.current = null;
     setConfirmation(null);
   };
+
+  useEffect(() => {
+    const dialog = confirmationDialog.current;
+    if (!confirmation || !dialog) return;
+    dialog.showModal();
+    return () => dialog.close();
+  }, [confirmation]);
 
   useEffect(() => {
     const nativeAlert = window.alert;
@@ -68,16 +76,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         })}
       </div>
       {confirmation && (
-        <div className="fixed inset-0 z-[130] grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="crm-confirm-title">
+        <dialog ref={confirmationDialog} className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md max-h-[90dvh] overflow-y-auto border-0 bg-transparent p-0 backdrop:bg-black/60" aria-modal="true" aria-labelledby="crm-confirm-title" onCancel={event => { event.preventDefault(); finishConfirmation(false); }}>
           <div className="w-full max-w-md rounded-2xl border border-[var(--border-input)] bg-[var(--bg-card)] p-6 shadow-2xl">
             <h2 id="crm-confirm-title" className="text-lg font-semibold text-[var(--text-primary)]">{confirmation.title}</h2>
             <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">{confirmation.message}</p>
             <div className="mt-6 flex justify-end gap-3">
-              <button className="rounded-lg border border-[var(--border-input)] px-4 py-2 text-sm text-[var(--text-secondary)]" onClick={() => finishConfirmation(false)}>Cancel</button>
+              <button autoFocus className="rounded-lg border border-[var(--border-input)] px-4 py-2 text-sm text-[var(--text-secondary)]" onClick={() => finishConfirmation(false)}>Cancel</button>
               <button className="rounded-lg bg-[#DC006D] px-4 py-2 text-sm font-semibold text-white" onClick={() => finishConfirmation(true)}>Confirm</button>
             </div>
           </div>
-        </div>
+        </dialog>
       )}
     </NotificationContext.Provider>
   );
