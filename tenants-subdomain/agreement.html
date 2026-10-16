@@ -26,7 +26,9 @@
           <label class="meta confirm"><input type="checkbox" id="confirm"> <span>I confirm that I have read and agree to the tenancy agreement.</span></label>
           <label class="meta confirm"><input type="checkbox" id="binding"> <span>I intend my electronic signature to be legally binding for the agreement and its addendum.</span></label>
           <label class="meta confirm"><input type="checkbox" id="payments"> <span>I have read and agree to the rent, deposit and payment schedule in the agreement.</span></label>
-          <button class="button primary" id="submit" type="button">Sign &amp; Attest to Agreement ✅</button>
+          <p id="submit-guidance" class="meta" role="status" aria-live="polite"></p>
+          <button class="button secondary" id="retry-preview" type="button" hidden>Retry signature preview</button>
+          <button class="button primary" id="submit" type="button" aria-describedby="submit-guidance">Sign &amp; Attest to Agreement ✅</button>
         </aside>
       </div>
     </section>
@@ -45,8 +47,14 @@
     document.getElementById('clear').onclick=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);signed=false;editor.refresh(false);document.getElementById('hint').hidden=false;sizeCanvas();clearTimeout(previewTimer);previewVersion++;previewReady=false;updateSubmit();downloadPreview();document.getElementById('pdf-status').textContent='Signature cleared.';void renderPdf(`${API}/api/public/tenancy-agreements/${token}/pdf`)};
     const editor=signatureEditor({canvas,name:()=>document.getElementById('signature-name').value,apply:(image)=>{canvas.width=image.width;canvas.height=image.height;ctx.drawImage(image,0,0);signed=true;editor.refresh(true);document.getElementById('hint').hidden=true;queuePreview();}});
     document.getElementById('generate').onclick=()=>editor.open('type');
-    let pdfVersion=0,previewVersion=0,previewTimer,observer,pdfTask,previewReady=false,previewUrl;
-    function updateSubmit(){document.getElementById('submit').disabled=!previewReady||!signed||!['confirm','binding','payments'].every(id=>document.getElementById(id).checked)}
+    let pdfVersion=0,previewVersion=0,previewTimer,observer,pdfTask,previewReady=false,previewUrl,previewError='',submitting=false;
+    function updateSubmit(){
+      const remaining=['confirm','binding','payments'].filter(id=>!document.getElementById(id).checked).length;
+      document.getElementById('submit').disabled=submitting||!previewReady||!signed||remaining>0;
+      document.getElementById('submit-guidance').textContent=submitting?'Saving your signature. Please keep this page open.':!signed?'Add your signature, then tick all three declarations above.':previewError?previewError+' Your signature is still here. Use Retry signature preview below.':!previewReady?'Preparing your signature preview. Please wait.':remaining?`Please tick the ${remaining===1?'remaining declaration':remaining+' remaining declarations'} above to enable signing.`:'Ready to sign. Press Sign & Attest to submit your agreement.';
+      document.getElementById('retry-preview').hidden=!signed||!previewError||submitting;
+    }
+    document.getElementById('retry-preview').onclick=()=>{if(signed&&!submitting)queuePreview()};
     ['confirm','binding','payments'].forEach(id=>document.getElementById(id).addEventListener('change',updateSubmit));
     function downloadPreview(bytes){if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=bytes?URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})):null;document.getElementById('open-agreement').href=previewUrl||`${API}/api/public/tenancy-agreements/${token}/pdf`}
 
@@ -75,14 +83,15 @@
       }catch{if(current()){container.textContent='Document preview could not load. Use “Open Agreement” to read the PDF.';}return false;}
     }
     function queuePreview(){
-      clearTimeout(previewTimer);const version=++previewVersion;previewReady=false;updateSubmit();
+      clearTimeout(previewTimer);const version=++previewVersion;previewReady=false;previewError='';updateSubmit();
       const status=document.getElementById('pdf-status');status.textContent='Updating signature preview…';
       previewTimer=setTimeout(async()=>{
-        try{const response=await fetch(API+'/api/public/tenancy-agreements/'+token+'/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({signature:canvas.toDataURL('image/png')})});
-          if(!response.ok)throw new Error('Preview unavailable');const bytes=new Uint8Array(await response.arrayBuffer());
+        const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);
+        try{const response=await fetch(API+'/api/public/tenancy-agreements/'+token+'/preview',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({signature:canvas.toDataURL('image/png')})});
+          if(!response.ok){const detail=await response.json().catch(()=>null);throw new Error(detail?.error||'The signature preview could not be prepared.');}const bytes=new Uint8Array(await response.arrayBuffer());
           if(version!==previewVersion)return;if(!await renderPdf(bytes,version))throw new Error('Preview unavailable');if(version!==previewVersion)return;
           downloadPreview(bytes);previewReady=true;updateSubmit();status.textContent='Draft signature shown in the agreement. It is recorded only when you press Sign & Attest.';
-        }catch{if(version===previewVersion)status.textContent='Signature preview could not update. Please apply your signature again to retry before submitting.';}
+        }catch(error){if(version===previewVersion){previewError=error.name==='AbortError'?'The signature preview took too long to load.':error.message==='Preview unavailable'?'The signature preview could not be displayed.':error.message==='Failed to fetch'?'The connection was interrupted while preparing your signature preview.':error.message||'The signature preview could not update.';status.textContent=previewError;updateSubmit();}}finally{clearTimeout(timeout);}
       },650);
     }
     function validation(message,target){const notice=document.getElementById('validation-message');notice.textContent=message;notice.style.cssText='display:block;color:#b42318;margin:10px 0;font-size:14px;line-height:1.5';const destination=target?.closest('.field,.confirm')||target||document.getElementById('submit');destination.insertAdjacentElement('afterend',notice);if(target){target.classList.add('field-error');target.setAttribute('tabindex','-1');target.scrollIntoView({behavior:'smooth',block:'center'});target.focus();}}
@@ -91,11 +100,12 @@
     function showOutstanding(id,names){const box=document.getElementById(id);if(names&&names.length){box.textContent=`Please note that we are still waiting on ${names.join(' and ')} to sign.`;box.hidden=false}}
     async function load(){try{const r=await fetch(`${API}/api/public/tenancy-agreements/${token}`),d=await r.json();if(!r.ok)throw new Error(d.error);document.getElementById('agreement-title').textContent='Assured Periodic Tenancy Agreement'+(d.property_address?' for '+d.property_address:'');if(d.signer_signed||d.status==='completed'){showOutstanding('already-outstanding',d.outstanding_signers);return show('already')}document.getElementById('open-agreement').href=`${API}/api/public/tenancy-agreements/${token}/pdf`;void renderPdf(`${API}/api/public/tenancy-agreements/${token}/pdf`);if(d.signer_role==='landlord'){document.querySelector('.notice').textContent=document.querySelector('.notice').textContent.replace('your obligations as a tenant','your obligations as the landlord');}document.getElementById('signature-name').value=d.signer_name||'';const capacity=document.getElementById('signing-capacity');capacity.textContent=d.signing_on_behalf_of?'Signing on behalf of '+d.signing_on_behalf_of:'';capacity.hidden=!d.signing_on_behalf_of;document.getElementById('signature-date').value=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'Europe/London'}).format(d.today?new Date(d.today+'T12:00:00Z'):new Date());show('content');requestAnimationFrame(sizeCanvas)}catch(e){document.getElementById('error-message').textContent=e.message||'This secure link is invalid.';show('error')}}
     document.getElementById('submit').onclick=async()=>{
+      if(submitting)return;
       const name=document.getElementById('signature-name').value.trim();
       const missing=!name?['Your legal name is missing. Contact the office to correct the agreement.',document.getElementById('signature-name')]:!signed?['Please add or generate your signature.',document.getElementById('sig')]:!document.getElementById('confirm').checked?['Please confirm you have read and agree to the tenancy agreement.',document.getElementById('confirm')]:!document.getElementById('binding').checked?['Please confirm you intend your electronic signature to be legally binding.',document.getElementById('binding')]:!document.getElementById('payments').checked?['Please confirm you agree to the rent, deposit and payment schedule.',document.getElementById('payments')]:null;
       if(missing){validation(...missing);return;}if(!previewReady){validation('Please wait until your signature is shown in the agreement.',null);return;}
-      const b=document.getElementById('submit');b.disabled=true;b.textContent='Signing…';
-      try{const r=await fetch(`${API}/api/public/tenancy-agreements/${token}/sign`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({signature_name:name,signature:canvas.toDataURL('image/png'),accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true})}),d=await r.json();if(!r.ok)throw new Error(d.error);show('success');const refreshed=await fetch(`${API}/api/public/tenancy-agreements/${token}`).then(x=>x.json()).catch(()=>null);if(refreshed)showOutstanding('success-outstanding',refreshed.outstanding_signers)}catch(e){validation(e.message||'Agreement could not be signed.',null);b.disabled=false;b.textContent='Sign & Attest to Agreement ✅';}
+      const b=document.getElementById('submit');submitting=true;updateSubmit();b.textContent='Signing…';
+      try{const r=await fetch(`${API}/api/public/tenancy-agreements/${token}/sign`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({signature_name:name,signature:canvas.toDataURL('image/png'),accepted_terms:true,accepted_binding:true,accepted_payment_schedule:true})}),d=await r.json();if(!r.ok)throw new Error(d.error);show('success');const refreshed=await fetch(`${API}/api/public/tenancy-agreements/${token}`).then(x=>x.json()).catch(()=>null);if(refreshed)showOutstanding('success-outstanding',refreshed.outstanding_signers)}catch(e){validation(e.message||'Agreement could not be signed.',null);submitting=false;updateSubmit();b.textContent='Sign & Attest to Agreement ✅';}
     };
     new ResizeObserver(sizeCanvas).observe(document.getElementById('sig'));updateSubmit();load();
   </script>
