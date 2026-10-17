@@ -13,9 +13,25 @@ This directory contains the production-ready tenant enquiry form for deployment 
 ## Quick Deploy
 
 ### Vercel (Recommended)
-```bash
-vercel --prod
+From the repository root, explicitly select this directory **and its configuration**.
+The root `vercel.json` belongs to the CRM and sends signing links to the registration page if used here.
+
+```powershell
+$publicFormRoot = (Resolve-Path tenants-subdomain).Path
+vercel --cwd $publicFormRoot --local-config "$publicFormRoot/vercel.json"
 ```
+
+Review the preview deployment before promotion. Check `/apt-routing-check-fictional`
+and `/agreement/routing-check-fictional` both have the title `Tenancy Agreement | Fleming Lettings`
+(an invalid-link message is expected for these fictional tokens), `/onboarding/routing-check-fictional`
+opens the application page, and `/` still opens registration. Check deployment inspection shows
+the rewrites from this folder, including `/apt-:slug` → `/agreement.html`.
+After approval, deploy using the same explicit paths with `--prod`, then repeat these route checks.
+Do not use a real customer's signing token for smoke tests: opening it records an access timestamp.
+
+Run `node tenants-subdomain/check-deployment.cjs https://deployment-host` before approval and
+again against `https://apply.fleminglettings.co.uk` after promotion. This compares each actual
+route with its intended HTML file; checking only `/agreement.html` is insufficient.
 
 Then add custom domain in Vercel dashboard:
 - Domain: `apply.fleminglettings.co.uk`
